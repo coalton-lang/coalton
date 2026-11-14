@@ -18,6 +18,7 @@ later passes and Lisp compilers see simpler code.")
    #:traverse-with-binding-list)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:lawnmow))
@@ -331,17 +332,105 @@ The replacement is skipped inside nested binders for the same name."
    (copy-node (node-abstraction-subexpr abstraction)
               (node-type application))))
 
-(defun node-known-application (node)
+(defun inlined-some-arg (node)
+  "If NODE is an inlined `coalton:Some` wrapper, return its argument variable node."
   (declare (type node node)
-           (values (or null parser:identifier) node-list boolean &optional))
+           (values (or null node-local-variable) &optional))
+  (when (and (node-lisp-p node)
+             (= 1 (length (node-lisp-vars node)))
+             (= 1 (length (node-lisp-form node)))
+             (tc:tapp-p (node-type node))
+             (tc:tycon-p (tc:tapp-from (node-type node)))
+             (eq 'coalton:Optional (tc:tycon-name (tc:tapp-from (node-type node)))))
+    (let ((binding (first (node-lisp-vars node)))
+          (form (first (node-lisp-form node))))
+      (when (and (consp form)
+                 (eq 'rt:cl-some (first form))
+                 (consp (cdr form))
+                 (null (cddr form))
+                 (eq (car binding) (second form)))
+        (make-node-local-variable
+         :type (tc:tapp-to (node-type node))
+         :value (cdr binding))))))
+
+(defun inlined-cons-args (node)
+  "If NODE is an inlined `coalton:Cons` wrapper, return its two argument variable nodes."
+  (declare (type node node)
+           (values list boolean &optional))
+  (when (and (node-lisp-p node)
+             (= 2 (length (node-lisp-vars node)))
+             (= 1 (length (node-lisp-form node)))
+             (tc:tapp-p (node-type node))
+             (tc:tycon-p (tc:tapp-from (node-type node)))
+             (eq 'coalton:List (tc:tycon-name (tc:tapp-from (node-type node)))))
+    (let ((car-binding (first (node-lisp-vars node)))
+          (cdr-binding (second (node-lisp-vars node)))
+          (form (first (node-lisp-form node))))
+      (when (and (consp form)
+                 (eq 'cl:cons (first form))
+                 (consp (cdr form))
+                 (consp (cddr form))
+                 (null (cdddr form))
+                 (eq (car car-binding) (second form))
+                 (eq (car cdr-binding) (third form)))
+        (values
+         (list (make-node-local-variable
+                :type (tc:tapp-to (node-type node))
+                :value (cdr car-binding))
+               (make-node-local-variable
+                :type (node-type node)
+                :value (cdr cdr-binding)))
+         t)))))
+
+(defun known-constructor-application-p (name arity env)
+  (declare (type parser:identifier name)
+           (type fixnum arity)
+           (type (or null tc:environment) env)
+           (values boolean &optional))
+  (or (and env
+           (let ((ctor (tc:lookup-constructor env name :no-error t)))
+             (and ctor
+                  (= arity (tc:constructor-entry-arity ctor))
+                  t)))
+      (and (zerop arity)
+           (member name '(coalton:None coalton:Nil coalton:True coalton:False coalton:Unit)
+                   :test #'eq)
+           t)
+      (and (= 1 arity)
+           (member name '(coalton:Some) :test #'eq)
+           t)
+      (and (= 2 arity)
+           (member name '(coalton:Cons) :test #'eq)
+           t)))
+
+(defun node-known-application (node &optional env)
+  (declare (type node node)
+           (type (or null tc:environment) env)
+           (values (or null parser:identifier) node-list boolean boolean &optional))
   (typecase node
     ((or node-application node-direct-application)
      (let ((name (node-rator-name node)))
        (if (and name (null (keyword-rands node)))
-           (values name (node-rands node) t)
-           (values nil nil nil))))
+           (let ((rands (node-rands node)))
+             (values name
+                     rands
+                     t
+                     (known-constructor-application-p name (length rands) env)))
+           (values nil nil nil nil))))
+    ((or node-local-variable node-global-variable)
+     (let ((name (node-variable-value node)))
+       (if (known-constructor-application-p name 0 env)
+           (values name nil t t)
+           (values nil nil nil nil))))
+    (node-lisp
+     (alexandria:if-let ((some-arg (inlined-some-arg node)))
+       (values 'coalton:Some (list some-arg) t t)
+       (multiple-value-bind (cons-args cons-p) (inlined-cons-args node)
+         (if cons-p
+             (values 'coalton:Cons cons-args t t)
+             (values nil nil nil nil)))))
     (t
-     (values nil nil nil))))
+     (values nil nil nil nil))))
 
 (defun literal-values-match-p (pattern-value node-value)
   (declare (values boolean &optional))
@@ -383,7 +472,7 @@ The replacement is skipped inside nested binders for the same name."
      :expr (force-value-binding-node value)
      :body body)))
 
-(defun rewrite-known-pattern-match (pattern value body)
+(defun rewrite-known-pattern-match (pattern value body &optional env)
   "Rewrite a match of known VALUE against PATTERN.
 
 Returns a status keyword and a replacement body. Status is one of:
@@ -393,6 +482,7 @@ Returns a status keyword and a replacement body. Status is one of:
   :UNKNOWN  The result depends on runtime tests."
   (declare (type pattern pattern)
            (type node value body)
+           (type (or null tc:environment) env)
            (values keyword (or null node) &optional))
   (typecase pattern
     (pattern-var
@@ -403,24 +493,45 @@ Returns a status keyword and a replacement body. Status is one of:
               body)))
 
     (pattern-wildcard
-     (values ':match (node-seq-2 value body)))
+     (multiple-value-bind (name rands known? constructor?)
+         (node-known-application value env)
+       (declare (ignore name))
+       (if (and known? constructor?)
+           (if (null rands)
+               (values ':match body)
+               (values ':match
+                       (make-node-seq
+                        :type (node-type body)
+                        :nodes (append rands (list body)))))
+           (values ':match (node-seq-2 value body)))))
 
     (pattern-literal
      (if (and (not (pattern-literal-test pattern))
-              (node-literal-p value)
-              (literal-values-match-p (pattern-literal-value pattern)
-                                      (node-literal-value value)))
-         (values ':match body)
+              (node-literal-p value))
+         (if (literal-values-match-p (pattern-literal-value pattern)
+                                     (node-literal-value value))
+             (values ':match body)
+             (values ':no-match nil))
          (values ':unknown nil)))
 
     (pattern-constructor
-     (multiple-value-bind (name rands known?) (node-known-application value)
+     (multiple-value-bind (name rands known? constructor?)
+         (node-known-application value env)
        (cond
+         ((and (not known?)
+               (typep value '(or node-local-variable node-global-variable))
+               (null (pattern-constructor-patterns pattern))
+               (eq (node-variable-value value)
+                   (pattern-constructor-name pattern)))
+          (values ':match body))
+
          ((not known?)
           (values ':unknown nil))
 
          ((not (eq name (pattern-constructor-name pattern)))
-          (values ':unknown nil))
+          (if constructor?
+              (values ':no-match nil)
+              (values ':unknown nil)))
 
          ((/= (length rands)
               (length (pattern-constructor-patterns pattern)))
@@ -431,7 +542,7 @@ Returns a status keyword and a replacement body. Status is one of:
                 :for subpattern :in (reverse (pattern-constructor-patterns pattern))
                 :for rand :in (reverse rands) :do
                   (multiple-value-bind (status new-out)
-                      (rewrite-known-pattern-match subpattern rand out)
+                      (rewrite-known-pattern-match subpattern rand out env)
                     (ecase status
                       (:match
                        (setf out new-out))
@@ -449,15 +560,18 @@ Returns a status keyword and a replacement body. Status is one of:
     (t
      (values ':unknown nil))))
 
-(defun maybe-reduce-known-match (node)
+(defun maybe-reduce-known-match (node &optional env)
   (declare (type node-match node)
+           (type (or null tc:environment) env)
            (values node boolean &optional))
   (let ((expr (node-match-expr node)))
-    (loop :for branch :in (node-match-branches node) :do
+    (loop :for branch :in (node-match-branches node)
+          :for rest-branches :on (node-match-branches node) :do
       (multiple-value-bind (status body)
           (rewrite-known-pattern-match (match-branch-pattern branch)
                                        expr
-                                       (match-branch-body branch))
+                                       (match-branch-body branch)
+                                       env)
         (ecase status
           (:match
            (return-from maybe-reduce-known-match
@@ -465,6 +579,38 @@ Returns a status keyword and a replacement body. Status is one of:
           (:no-match
            nil)
           (:unknown
+           (multiple-value-bind (name rands known? constructor?)
+               (node-known-application expr env)
+             (when (and known? constructor? (= 1 (length rands)))
+               (let* ((rand0 (first rands))
+                      (unwrapped
+                        (loop :for rem-branch :in rest-branches
+                              :for rem-pat := (match-branch-pattern rem-branch)
+                              :for rem-body := (match-branch-body rem-branch)
+                              :if (pattern-wildcard-p rem-pat)
+                                :collect (make-match-branch
+                                          :pattern (make-pattern-wildcard
+                                                    :type (node-type rand0))
+                                          :body rem-body)
+                                :and :do (loop-finish)
+                              :else :if (and (pattern-constructor-p rem-pat)
+                                             (not (eq name (pattern-constructor-name rem-pat))))
+                                      :do (progn)
+                              :else :if (and (pattern-constructor-p rem-pat)
+                                             (eq name (pattern-constructor-name rem-pat))
+                                             (= 1 (length (pattern-constructor-patterns rem-pat))))
+                                      :collect (make-match-branch
+                                                :pattern (first (pattern-constructor-patterns rem-pat))
+                                                :body rem-body)
+                              :else
+                                :do (return nil))))
+                 (when unwrapped
+                   (return-from maybe-reduce-known-match
+                     (values (make-node-match
+                              :type (node-type node)
+                              :expr rand0
+                              :branches unwrapped)
+                             t))))))
            (return-from maybe-reduce-known-match
              (values node nil))))))
     (values node nil)))
@@ -558,13 +704,15 @@ Returns a status keyword and a replacement body. Status is one of:
       (t
        (values node nil)))))
 
-(defun maybe-simplify-match (node)
+(defun maybe-simplify-match (node &optional env)
   (declare (type node-match node)
+           (type (or null tc:environment) env)
            (values node boolean &optional))
-  (try-node-rewrites
-   node
-   '(maybe-reduce-known-match
-     maybe-sink-match-into-expr)))
+  (multiple-value-bind (new-node changed?)
+      (maybe-reduce-known-match node env)
+    (if changed?
+        (values new-node t)
+        (maybe-sink-match-into-expr node))))
 
 (defun let-bound-match-scrutinee-p (name subexpr)
   (declare (type parser:identifier name)
@@ -886,9 +1034,10 @@ Returns a status keyword and a replacement body. Status is one of:
          (t
           (values node nil)))))))
 
-(defun lawnmow (node)
+(defun lawnmow (node &optional env)
   "Simplify administrative AST forms left behind by optimization passes."
   (declare (type node node)
+           (type (or null tc:environment) env)
            (values node boolean &optional))
   (let ((changed? nil)
         (*loop-step-variables* nil))
@@ -912,7 +1061,7 @@ Returns a status keyword and a replacement body. Status is one of:
              (setf changed? t)
              new-node)))
        (action (:after node-match node)
-         (multiple-value-bind (new-node new-changed?) (maybe-simplify-match node)
+         (multiple-value-bind (new-node new-changed?) (maybe-simplify-match node env)
            (when new-changed?
              (setf changed? t)
              new-node)))
