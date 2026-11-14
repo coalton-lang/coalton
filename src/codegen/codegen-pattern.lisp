@@ -106,16 +106,25 @@ EXPR-TYPE, returning (VALUES PREDICATE BINDINGS BINDING-TYPES).")
 
         ;; Check Some directly
         ((eql (pattern-constructor-name pattern) 'coalton:Some)
-         (multiple-value-bind (inner-pred inner-bindings inner-types)
-             (codegen-pattern (first (pattern-constructor-patterns pattern))
-                              `(rt:unwrap-cl-some ,expr)
-                              (tc:tapp-to expr-type)
-                              env)
-           (values
-            `(and (rt:cl-some-p ,expr)
-                  ,inner-pred)
-            inner-bindings
-            inner-types)))
+         (let* ((inner-type (tc:tapp-to expr-type))
+                (inner-lisp-type (tc:lisp-type inner-type env))
+                (unwrap-expr
+                  (if (and (not (eq inner-lisp-type 't))
+                           (ignore-errors
+                            (subtypep inner-lisp-type
+                                      '(not coalton-impl/runtime/optional::cl-optional))))
+                      expr
+                      `(rt:unwrap-cl-some ,expr))))
+           (multiple-value-bind (inner-pred inner-bindings inner-types)
+               (codegen-pattern (first (pattern-constructor-patterns pattern))
+                                unwrap-expr
+                                inner-type
+                                env)
+             (values
+              `(and (rt:cl-some-p ,expr)
+                    ,inner-pred)
+              inner-bindings
+              inner-types))))
 
         ;; Check None directly
         ((eql (pattern-constructor-name pattern) 'coalton:None)

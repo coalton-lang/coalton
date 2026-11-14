@@ -29,3 +29,7 @@ Coalton also has short `fn` syntax for compact lambdas:
 (fn (x)
   (+ x 2))
 ```
+
+## Other Notes
+
+When a `fn` is bound to a local variable in [`let`](/manual/operators/let/) or [`let*`](/manual/operators/let-star/) and does not escape its lexical scope (i.e., it is only called directly and never returned, stored in a data structure, or captured by an escaping closure), the compiler declares it `dynamic-extent` so the underlying Lisp compiler can stack-allocate the closure. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
