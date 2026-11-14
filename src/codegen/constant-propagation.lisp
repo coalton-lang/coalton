@@ -3,6 +3,8 @@
    #:cl
    #:coalton-impl/codegen/ast)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:import-from
    #:coalton-impl/codegen/traverse
@@ -29,27 +31,82 @@
           (t
            (error "Expected VAR ~S to be a constant but it is not" var)))))
 
+(defun enum-or-nil-constructor-p (name env)
+  (declare (type symbol name)
+           (type tc:environment env)
+           (values boolean &optional))
+  (or (eq name 'coalton:Nil)
+      (alexandria:when-let ((ctor (tc:lookup-constructor env name :no-error t)))
+        (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor) :no-error t)))
+          (and type (tc:type-entry-enum-repr type))))))
+
+(defun global-constant-node (env name)
+  "In release mode, if NAME is a monomorphic top-level binding whose optimized
+code is a scalar constant, return that constant node."
+  (declare (type tc:environment env)
+           (type symbol name)
+           (values (or node null) &optional))
+  (when (and (settings:coalton-release-p)
+             (not (util:dynamic-variable-name-p name)))
+    (let ((code (tc:lookup-code env name :no-error t))
+          (scheme (tc:lookup-value-type env name :no-error t)))
+      (when (and code
+                 scheme
+                 (null (tc:ty-scheme-kinds scheme))
+                 (null (tc:qualified-ty-predicates (tc:ty-scheme-type scheme))))
+        (cond
+          ((and (node-literal-p code)
+                (or (numberp (node-literal-value code))
+                    (characterp (node-literal-value code))))
+           code)
+          ((and (node-global-variable-p code)
+                (enum-or-nil-constructor-p (node-variable-value code) env))
+           code)
+          (t
+           nil))))))
+
+(defun scalar-constant-node-p (env node constant-bindings)
+  "If NODE is a scalar constant (literal or enum/Nil constructor), return its constant node."
+  (declare (type tc:environment env)
+           (type node node)
+           (type list constant-bindings)
+           (values (or node null) &optional))
+  (cond ((node-literal-p node)
+         (if (or (numberp (node-literal-value node))
+                 (characterp (node-literal-value node)))
+             node
+             nil))
+        ((node-global-variable-p node)
+         (cond ((enum-or-nil-constructor-p (node-variable-value node) env)
+                node)
+               ((alexandria:when-let ((const (global-constant-node env (node-variable-value node))))
+                  (when (tc:ty= (node-type const) (node-type node))
+                    const)))
+               (t nil)))
+        ((node-local-variable-p node)
+         (let ((val (constant-var-value (node-variable-value node) constant-bindings :no-error t)))
+           (when val
+             (scalar-constant-node-p env val nil))))
+        (t
+         nil)))
+
 (defun constant-node-p (env node constant-bindings)
   "If NODE is a constant, returns the constant value corresponding to it.
 If not, returns NIL"
   (declare (type tc:environment env)
            (type node node)
            (type list constant-bindings))
-  (cond ((node-literal-p node)
-         (if (or (numberp (node-literal-value node)) (characterp (node-literal-value node)))
+  (cond ((scalar-constant-node-p env node constant-bindings))
+        ((node-global-variable-p node)
+         (if (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
              node
              nil))
-        ((node-global-variable-p node)
-         (cond ((and (tc:ty= tc:*boolean-type* (node-type node))
-                     (member (node-variable-value node) '(coalton:True coalton:False)))
-                node)
-               ((tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
-                node)
-               (t nil)))
         ((node-local-variable-p node)
          (constant-var-value (node-variable-value node) constant-bindings :no-error t))
         ((node-lisp-p node)
-         (if (cl:constantp (node-lisp-form node))
+         (if (and (null (node-lisp-vars node))
+                  (null (cdr (node-lisp-form node)))
+                  (cl:constantp (first (node-lisp-form node))))
              node
              nil))
         ;; special support for dictionaries
@@ -71,6 +128,21 @@ If not, returns NIL"
                (if (not (null x))
                    x
                    node)))
+
+           (propagate-constants-node-bind (node constant-bindings)
+             (declare (type node-bind node))
+             (let* ((var (node-bind-name node))
+                    (propagated-value-node (funcall *traverse* (node-bind-expr node) constant-bindings))
+                    (scalar-const (scalar-constant-node-p env propagated-value-node constant-bindings)))
+               (if scalar-const
+                   (funcall *traverse*
+                            (node-bind-body node)
+                            (acons var scalar-const constant-bindings))
+                   (make-node-bind
+                    :type (node-type node)
+                    :name var
+                    :expr propagated-value-node
+                    :body (funcall *traverse* (node-bind-body node) constant-bindings)))))
 
            (propagate-constants-node-let (node constant-bindings)
              (declare (type node-let node))
@@ -136,7 +208,8 @@ If not, returns NIL"
              (let* ((new-lisp-vars nil)
                     (let-bindings
                       (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                            :for constant-value := (constant-var-value coalton-var constant-bindings :no-error t)
+                            :for constant-value := (or (constant-var-value coalton-var constant-bindings :no-error t)
+                                                       (global-constant-node env coalton-var))
                             :if constant-value
                               :collect (let ((new-coalton-var (gentemp (limit-name (symbol-name coalton-var)))))
                                          (push (cons lisp-var new-coalton-var) new-lisp-vars)
@@ -187,6 +260,7 @@ If not, returns NIL"
      (list
       (action (:after node-local-variable) #'propagate-constants-node-variable)
       (action (:after node-global-variable) #'propagate-constants-node-variable)
+      (action (:traverse node-bind) #'propagate-constants-node-bind)
       (action (:traverse node-let) #'propagate-constants-node-let)
       (action (:after node-lisp) #'propagate-constants-node-lisp)
       (action (:after node-direct-application) #'direct-application-better-infer-types))
