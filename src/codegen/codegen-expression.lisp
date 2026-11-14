@@ -81,6 +81,16 @@
                 :for type :in types
                 :collect `(type ,type ,var)))))
 
+(defun value-binding-type-declarations (name type env)
+  (declare (type symbol name)
+           (type tc:ty type)
+           (type tc:environment env)
+           (values list &optional))
+  (when (and settings:*emit-type-annotations*
+             (not (and (typep type 'tc:result-ty)
+                       (cdr (tc:result-ty-output-types type)))))
+    (list `(type ,(tc:lisp-type type env) ,name))))
+
 (defun loop-binding-declaration-table (bindings env)
   (declare (type node-for-binding-list bindings)
            (type tc:environment env)
@@ -778,7 +788,8 @@ value is returned from the `handle` form."
               ,body)))
         (t
          `(let ((,name ,(codegen-expression bound-expr env)))
-            (declare (ignorable ,name))
+            (declare (ignorable ,name)
+                     ,@(value-binding-type-declarations name (node-type bound-expr) env))
             ,(codegen-expression body env))))))
 
   )
@@ -930,7 +941,9 @@ bindings assignable storage for loop steps, including recursive closures."
              (node_ (cdr (first scc-bindings))))
 
          `(let ((,name ,(codegen-expression node_ env)))
-            ,@(let ((decls (recursive-binding-declarations (list name) binding-decl-table)))
+            ,@(let ((decls (append (recursive-binding-declarations (list name) binding-decl-table)
+                                   (unless binding-decl-table
+                                     (value-binding-type-declarations name (node-type node_) env)))))
                 (when decls
                   `((declare ,@decls))))
             ,(codegen-recursive-bindings bindings (cdr sccs) env inner-thunk

@@ -26,6 +26,11 @@ weight: 150
   a wildcard is undefined.
 - `⟨body⟩` forms an implicit `progn`.
 
+In release mode, matching on a locally constructed data type or struct—including
+values produced across local `if`, `cond`, and `match` branches—can eliminate
+the intermediate allocation and keep extracted fields in typed local bindings.
+Constructor arguments still evaluate once, in order.
+
 ## Example
 
 ```lisp

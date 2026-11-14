@@ -22,9 +22,10 @@ weight: 70
 - A struct name is conventionally written in CamelCase.
 
 In release mode, the compiler can eliminate a locally constructed struct used
-only for field access. Field initializers still run once, in order. Passing,
-returning, or capturing the struct can prevent this optimization unless inlining
-exposes its field accesses.
+only for field access or `match` destructuring, including across local `if`,
+`cond`, and `match` branches. Field initializers still run once, in order.
+Passing, returning, or capturing the struct can prevent this optimization unless
+inlining exposes its uses.
 
 ## Example
 
