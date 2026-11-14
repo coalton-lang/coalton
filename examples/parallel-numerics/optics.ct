@@ -1,0 +1,325 @@
+;;;; optics.ct
+;;;;
+;;;; Geometrical optics in a two-dimensional graded-index (GRIN) medium
+;;;; with refractive index n(x, y). By Fermat's principle, a light ray
+;;;; satisfies
+;;;;
+;;;;   d/ds (n(x, y) dr/ds) = ∇n(x, y),
+;;;;
+;;;; where s is arc length. Parameterizing the ray by the optical step τ
+;;;; with dτ = ds / n(x, y) and introducing the optical momentum
+;;;; p = n(x, y) dr/ds = dr/dτ turns the ray equation into a separable
+;;;; Hamiltonian system,
+;;;;
+;;;;   dr/dτ = p,   dp/dτ = ∇U(x, y),   U(x, y) = n(x, y)^2 / 2,
+;;;;
+;;;; on the zero-energy surface |p|^2 = n(x, y)^2 of the eikonal
+;;;; equation.
+;;;;
+;;;; The solver takes an arbitrary refractive-index function n(x, y),
+;;;; differentiates U(x, y) with a fourth-order central finite-difference
+;;;; stencil, and integrates each ray with Yoshida's fourth-order
+;;;; symplectic integrator, which preserves the symplectic form of phase
+;;;; space and keeps the eikonal invariant |p| - n(x, y) bounded without
+;;;; secular drift.
+;;;;
+;;;; In the benchmark medium,
+;;;;
+;;;;   n(x, y) = sqrt(a^2 + b^2 - x^2 - (y - b)^2),
+;;;;
+;;;; a ray emitted at the origin toward the positive x-axis traces the
+;;;; ellipse (x/a)^2 + ((y - b)/b)^2 = 1 with period 2π, while off-axis
+;;;; rays in the beam trace tilted ellipses that refocus at (0, 2b) at
+;;;; half a period and return to the origin after one full period.
+;;;; Because the rays do not interact, chunks of rays are integrated in
+;;;; parallel with identical results.
+
+(defpackage #:coalton-parallel-numerics/optics
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:arr #:coalton/lisparray)
+                    (#:math #:coalton/math)
+                    (#:par #:coalton/threads/parallel)
+                    (#:common #:coalton-parallel-numerics/common))
+  (:export #:Beam
+           #:ellipse-semi-major
+           #:ellipse-semi-minor
+           #:ellipse-period
+           #:ellipse-index
+           #:make-beam-with-index
+           #:make-beam
+           #:copy-beam
+           #:beam-count
+           #:beam-angles
+           #:beam-x
+           #:beam-y
+           #:beam-px
+           #:beam-py
+           #:simulate-with-index!
+           #:simulate!
+           #:max-eikonal-error-with-index
+           #:max-eikonal-error
+           #:max-ellipse-error))
+
+(in-package #:coalton-parallel-numerics/optics)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (define-struct Beam
+    "A bundle of `count` light rays in two dimensions, stored as one array per coordinate."
+    (count UFix)
+    ;; Initial launch angle of each ray relative to the positive x-axis.
+    (angle (arr:LispArray F64))
+    (x (arr:LispArray F64))
+    (y (arr:LispArray F64))
+    (px (arr:LispArray F64))
+    (py (arr:LispArray F64)))
+
+  (define ellipse-semi-major
+    "The semi-major axis a (along x) of the reference ellipse."
+    2d0)
+
+  (define ellipse-semi-minor
+    "The semi-minor axis b (along y) of the reference ellipse, centered at (0, b)."
+    1d0)
+
+  (define ellipse-period
+    "The optical period 2π of the elliptical orbits."
+    (* 2d0 math:pi))
+
+  (define gradient-step
+    "The finite-difference step h = 2^-13 used to differentiate the optical potential."
+    0.0001220703125d0)
+
+  ;; Weights of Yoshida's fourth-order symplectic integrator (1990):
+  ;; w1 = 1 / (2 - 2^(1/3)), w0 = 1 - 2*w1, c1 = w1 / 2, c2 = (1 - w1) / 2.
+  (define yoshida-w1 1.3512071919596578d0)
+  (define yoshida-w0 -1.7024143839193153d0)
+  (define yoshida-c1 0.6756035959798289d0)
+  (define yoshida-c2 -0.17560359597982883d0)
+
+  (inline)
+  (declare ellipse-index (F64 * F64 -> F64))
+  (define (ellipse-index x y)
+    "The refractive index n(x, y) = sqrt(a^2 + b^2 - x^2 - (y - b)^2) of a graded-index medium centered at (0, b). A ray emitted at the origin toward the positive x-axis traces the ellipse (x/a)^2 + ((y - b)/b)^2 = 1."
+    (let ((a ellipse-semi-major)
+           (b ellipse-semi-minor)
+           (dy (- y ellipse-semi-minor)))
+      (math:sqrt (max 1d-12 (- (+ (* a a) (* b b))
+                               (+ (* x x) (* dy dy)))))))
+
+  (inline)
+  (declare potential ((F64 * F64 -> F64) * F64 * F64 -> F64))
+  (define (potential n x y)
+    "The optical potential U(x, y) = n(x, y)^2 / 2."
+    (let ((nx (n x y)))
+      (* 0.5d0 (* nx nx))))
+
+  (inline)
+  (declare potential-gradient ((F64 * F64 -> F64) * F64 * F64 -> F64 * F64))
+  (define (potential-gradient n x y)
+    "The gradient ∇U(x, y) of the optical potential, by fourth-order central differences."
+    (let ((h gradient-step)
+          (h2 (* 2d0 gradient-step))
+          (inv-12h (/ 1d0 (* 12d0 gradient-step))))
+      (values (* inv-12h
+                 (- (* 8d0 (- (potential n (+ x h) y)
+                              (potential n (- x h) y)))
+                    (- (potential n (+ x h2) y)
+                       (potential n (- x h2) y))))
+              (* inv-12h
+                 (- (* 8d0 (- (potential n x (+ y h))
+                              (potential n x (- y h))))
+                    (- (potential n x (+ y h2))
+                       (potential n x (- y h2))))))))
+
+  (inline)
+  (declare step-ray ((F64 * F64 -> F64) * F64 * F64 * F64 * F64 * F64 -> F64 * F64 * F64 * F64))
+  (define (step-ray n x0 y0 px0 py0 dtau)
+    "Advance a ray at `(x0, y0)` with optical momentum `(px0, py0)` by `dtau` using Yoshida's fourth-order symplectic integrator."
+    (let ((c1 (* yoshida-c1 dtau))
+          (c2 (* yoshida-c2 dtau))
+          (d1 (* yoshida-w1 dtau))
+          (d2 (* yoshida-w0 dtau)))
+      (let ((x1 (+ x0 (* c1 px0)))
+            (y1 (+ y0 (* c1 py0))))
+        (let (values fx1 fy1) = (potential-gradient n x1 y1))
+        (let ((px1 (+ px0 (* d1 fx1)))
+              (py1 (+ py0 (* d1 fy1))))
+          (let ((x2 (+ x1 (* c2 px1)))
+                (y2 (+ y1 (* c2 py1))))
+            (let (values fx2 fy2) = (potential-gradient n x2 y2))
+            (let ((px2 (+ px1 (* d2 fx2)))
+                  (py2 (+ py1 (* d2 fy2))))
+              (let ((x3 (+ x2 (* c2 px2)))
+                    (y3 (+ y2 (* c2 py2))))
+                (let (values fx3 fy3) = (potential-gradient n x3 y3))
+                (let ((px3 (+ px2 (* d1 fx3)))
+                      (py3 (+ py2 (* d1 fy3))))
+                  (values (+ x3 (* c1 px3))
+                          (+ y3 (* c1 py3))
+                          px3
+                          py3)))))))))
+
+  (declare make-beam-with-index ((F64 * F64 -> F64) * UFix * F64 -> Beam))
+  (define (make-beam-with-index n count spread)
+    "A beam of `count` rays emitted at the origin `(0, 0)` toward the positive x-axis in a medium with refractive index `n`. Ray 0 is emitted strictly along the positive x-axis (angle 0); the remaining rays fan out symmetrically over `[-spread, +spread]`."
+    (let ((angles (arr:make count 0d0))
+          (xs (arr:make count 0d0))
+          (ys (arr:make count 0d0))
+          (pxs (arr:make count 0d0))
+          (pys (arr:make count 0d0))
+          (n0 (n 0d0 0d0))
+          (pairs (max 1 (math:div count 2))))
+      (for ((declare i UFix) (i 0 (1+ i)))
+        :repeat count
+        (let ((theta (if (== i 0)
+                         0d0
+                         (let ((k (math:div (+ i 1) 2))
+                               (sign (if (== (math:mod i 2) 1) 1d0 -1d0)))
+                           (* sign (* spread (/ (common:to-f64 k)
+                                                (common:to-f64 pairs))))))))
+          (arr:set! angles i theta)
+          (arr:set! pxs i (* n0 (math:cos theta)))
+          (arr:set! pys i (* n0 (math:sin theta)))))
+      (Beam count angles xs ys pxs pys)))
+
+  (declare make-beam (UFix * F64 -> Beam))
+  (define (make-beam count spread)
+    "A beam of `count` rays emitted at the origin in the elliptical graded-index medium."
+    (make-beam-with-index ellipse-index count spread))
+
+  (declare copy-beam (Beam -> Beam))
+  (define (copy-beam b)
+    (Beam (.count b)
+          (arr:copy (.angle b))
+          (arr:copy (.x b))
+          (arr:copy (.y b))
+          (arr:copy (.px b))
+          (arr:copy (.py b))))
+
+  (declare beam-count (Beam -> UFix))
+  (define (beam-count b) (.count b))
+
+  (declare beam-angles (Beam -> arr:LispArray F64))
+  (define (beam-angles b) (.angle b))
+
+  (declare beam-x (Beam -> arr:LispArray F64))
+  (define (beam-x b) (.x b))
+
+  (declare beam-y (Beam -> arr:LispArray F64))
+  (define (beam-y b) (.y b))
+
+  (declare beam-px (Beam -> arr:LispArray F64))
+  (define (beam-px b) (.px b))
+
+  (declare beam-py (Beam -> arr:LispArray F64))
+  (define (beam-py b) (.py b))
+
+  (inline)
+  (declare advance-rays-with-index! ((F64 * F64 -> F64) * Beam * F64 * UFix * UFix * UFix -> Void))
+  (define (advance-rays-with-index! n b dtau steps lo hi)
+    "Advance rays `lo` (inclusive) to `hi` (exclusive) through `steps` steps of length `dtau`."
+    (let ((xs (.x b))
+          (ys (.y b))
+          (pxs (.px b))
+          (pys (.py b)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (rec integrate ((step 0)
+                        (x (arr:aref xs i))
+                        (y (arr:aref ys i))
+                        (px (arr:aref pxs i))
+                        (py (arr:aref pys i)))
+          (if (== step steps)
+              (progn
+                (arr:set! xs i x)
+                (arr:set! ys i y)
+                (arr:set! pxs i px)
+                (arr:set! pys i py))
+              (progn
+                (let (values nx ny npx npy) = (step-ray n x y px py dtau))
+                (integrate (+ step 1) nx ny npx npy)))))))
+
+  (inline)
+  (declare simulate-with-index! ((F64 * F64 -> F64) * Beam * F64 * UFix * Boolean -> Void))
+  (define (simulate-with-index! n b dtau steps parallel?)
+    "Propagate all rays in `b` through a medium with refractive index `n` for `steps` steps of length `dtau`, dividing the rays among workers if `parallel?`."
+    (common:over-range parallel? 0 (.count b)
+      (fn (lo hi)
+        (advance-rays-with-index! n b dtau steps lo hi))))
+
+  (declare advance-rays! (Beam * F64 * UFix * UFix * UFix -> Void))
+  (define (advance-rays! b dtau steps lo hi)
+    "Advance rays `lo` (inclusive) to `hi` (exclusive) through `steps` steps of length `dtau` in the elliptical medium."
+    (advance-rays-with-index! ellipse-index b dtau steps lo hi))
+
+  (declare simulate! (Beam * F64 * UFix * Boolean -> Void))
+  (define (simulate! b dtau steps parallel?)
+    "Propagate all rays in `b` through the elliptical graded-index medium for `steps` steps of length `dtau`, dividing the rays among workers if `parallel?`."
+    (common:over-range parallel? 0 (.count b)
+      (fn (lo hi)
+        (advance-rays! b dtau steps lo hi))))
+
+  (inline)
+  (declare max-eikonal-error-with-index ((F64 * F64 -> F64) * Beam -> F64))
+  (define (max-eikonal-error-with-index n b)
+    "The maximum deviation ||p| - n(x, y)| from the eikonal invariant across all rays in `b`, computed in parallel."
+    (let ((xs (.x b))
+          (ys (.y b))
+          (pxs (.px b))
+          (pys (.py b)))
+      (par:map-reduce-chunks
+       0 (.count b)
+       (fn (lo hi)
+         (for ((declare i UFix)
+               (declare worst F64)
+               (i lo (1+ i))
+               (worst 0d0
+                      (let* ((px (arr:aref pxs i))
+                             (py (arr:aref pys i))
+                             (p (math:sqrt (+ (* px px) (* py py))))
+                             (ni (n (arr:aref xs i) (arr:aref ys i))))
+                        (max worst (abs (- p ni))))))
+           :returns worst
+           :repeat (- hi lo)
+           Unit))
+       max 0d0
+       :grain 64)))
+
+  (declare max-eikonal-error (Beam -> F64))
+  (define (max-eikonal-error b)
+    "The maximum eikonal invariant error ||p| - n(x, y)| across all rays in the elliptical medium."
+    (max-eikonal-error-with-index ellipse-index b))
+
+  (declare max-ellipse-error (Beam * F64 -> F64))
+  (define (max-ellipse-error b tau)
+    "The maximum Euclidean distance between the simulated rays of `b` at optical parameter `tau` and their exact analytical trajectories in the elliptical medium, computed in parallel."
+    (let ((angles (.angle b))
+          (xs (.x b))
+          (ys (.y b))
+          (a ellipse-semi-major)
+          (semi-b ellipse-semi-minor)
+          (sin-t (math:sin tau))
+          (cos-t (math:cos tau)))
+      (par:map-reduce-chunks
+       0 (.count b)
+       (fn (lo hi)
+         (for ((declare i UFix)
+               (declare worst F64)
+               (i lo (1+ i))
+               (worst 0d0
+                      (let* ((theta (arr:aref angles i))
+                             (exact-x (* (* a (math:cos theta)) sin-t))
+                             (exact-y (+ (* semi-b (- 1d0 cos-t))
+                                         (* (* a (math:sin theta)) sin-t)))
+                             (dx (- (arr:aref xs i) exact-x))
+                             (dy (- (arr:aref ys i) exact-y)))
+                        (max worst (math:sqrt (+ (* dx dx) (* dy dy)))))))
+           :returns worst
+           :repeat (- hi lo)
+           Unit))
+       max 0d0
+       :grain 64))))
