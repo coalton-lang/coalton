@@ -2,6 +2,92 @@
 
 (in-package #:coalton-tests)
 
+(deftest derived-eq-parametric-recursive-wrapper ()
+  (check-coalton-types
+   "(derive Eq)
+    (define-type (RecList :a) NilR (ConsR :a (RecList :a)))
+    (derive Eq)
+    (define-type (Boxed :a) (BoxR (RecList :a)))
+    (declare boxed-equal (Eq :a => Boxed :a * Boxed :a -> Boolean))
+    (define (boxed-equal x y) (== x y))
+    (define same-box (== (BoxR (ConsR (the Integer 1) NilR))
+                        (BoxR (ConsR (the Integer 1) NilR))))"
+   '("boxed-equal" . "(Eq :a => Boxed :a * Boxed :a -> Boolean)")
+   '("same-box" . "Boolean")))
+
+(deftest specialization-overlap-occurs-check ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (tuple (tc:type-entry-type (tc:lookup-type entry:*global-environment* 'coalton/classes:Tuple)))
+         (list-b (tc:apply-type-argument tc:*list-type* b))
+         (first-type (tc:make-function-type*
+                      (list a) (tc:apply-type-argument-list tuple (list a a))))
+         (second-type (tc:make-function-type*
+                       (list list-b) (tc:apply-type-argument-list tuple (list b list-b))))
+         (first-entry (tc:make-specialization-entry :from 'original :to 'first :to-ty first-type))
+         (second-entry (tc:make-specialization-entry :from 'original :to 'second :to-ty second-type)))
+    (signals tc:infinite-type-unification-error (tc:unify nil first-type second-type))
+    (let ((env (tc:add-specialization
+                (tc:add-specialization (tc:make-default-environment) first-entry) second-entry)))
+      (is (eq first-entry (tc:lookup-specialization env 'original 'first)))
+      (is (eq second-entry (tc:lookup-specialization env 'original 'second))))))
+
+(deftest specialization-overlap-freshens-variables ()
+  (let* ((a (tc:make-variable))
+         (first-entry (tc:make-specialization-entry
+                       :from 'original :to 'first
+                       :to-ty (tc:make-function-type* (list a) tc:*integer-type*)))
+         (second-entry (tc:make-specialization-entry
+                        :from 'original :to 'second
+                        :to-ty (tc:make-function-type*
+                                (list (tc:apply-type-argument tc:*list-type* a))
+                                tc:*integer-type*)))
+         (env (tc:add-specialization (tc:make-default-environment) first-entry)))
+    (signals tc:overlapping-specialization-error (tc:add-specialization env second-entry))))
+
+(deftest synchronize-type-variable-counter-visits-shared-structures-once ()
+  (let* ((var (tc:make-variable))
+         (env (tc:add-specialization
+               (tc:make-default-environment)
+               (tc:make-specialization-entry :from 'original :to 'specialized :to-ty var))))
+    (setf (tc:ty-alias var) (list var var))
+    (let ((coalton-impl/typechecker/types::*next-variable-id* 0))
+      (tc:synchronize-type-variable-counter env)
+      (is (> (tc:tyvar-id (tc:make-variable)) (tc:tyvar-id var))))))
+
+(deftest fundep-entail-composes-and-applies-substitutions ()
+  (let ((*package* (make-package (gensym "FUNDEP-ENTAIL-") :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let ((source (source:make-source-string "(define-class (C :a :b (:a -> :b)))")))
+           (with-open-stream (stream (source:source-stream source))
+             (let* ((env (nth-value 1 (entry:entry-point
+                                      (parser:with-reader-context stream
+                                        (parser:read-program stream source)))))
+                    (k1 (tc:make-variable))
+                    (k2 (tc:make-variable))
+                    (k3 (tc:make-variable))
+                    (a (tc:make-variable))
+                    (b (tc:make-variable))
+                    (c (tc:make-variable))
+                    (d (tc:make-variable)))
+               (flet ((pred (from to)
+                        (tc:make-ty-predicate :class (intern "C") :types (list from to))))
+                 (let ((subs (tc:fundep-entail
+                              env
+                              (list (pred k1 b) (pred k2 c) (pred k3 d))
+                              (list (pred k1 a) (pred k2 b) (pred k3 a))
+                              (list k1 k2 k3))))
+                   (dolist (var (list a b c))
+                     (is (tc:ty= d (tc:apply-substitution subs var)))))
+                 (let ((subs (tc:fundep-entail
+                              env
+                              (list (pred k1 b) (pred k2 a))
+                              (list (pred k1 a) (pred k2 c))
+                              (list k1 k2))))
+                   (is (tc:ty= b (tc:apply-substitution subs a)))
+                   (is (tc:ty= b (tc:apply-substitution subs c))))))))
+      (delete-package *package*))))
+
 (deftest context-reduction-applies-substitutions-once ()
   (let* ((a (tc:make-variable))
          (b (tc:make-variable))

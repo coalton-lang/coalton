@@ -91,9 +91,14 @@ including zero outputs (Void). Ordinary value variables cannot do so."
       (let ((entry2 (function-keyword-entry (function-ty-keyword-input-types type2)
                                             (keyword-ty-entry-keyword entry1))))
         (setf subs (unify subs (keyword-ty-entry-type entry1) (keyword-ty-entry-type entry2)))))
-    (unify subs
-           (output-types-result-type (function-ty-output-types type1))
-           (output-types-result-type (function-ty-output-types type2)))))
+    (setf subs
+          (unify subs
+                 (output-types-result-type (function-ty-output-types type1))
+                 (output-types-result-type (function-ty-output-types type2))))
+    (if (and (function-ty-origin type1)
+             (function-ty-origin type2))
+        (unify subs (function-ty-origin type1) (function-ty-origin type2))
+        subs)))
 
 (defun match-keyword-function-types (type1 type2)
   ;; Match components independently and require their source bindings to agree.

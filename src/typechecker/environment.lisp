@@ -850,10 +850,9 @@ of constraint predicates."
                             (list constraint)
                             (mapcan
                              (lambda (pred)
-                               (let ((pred (apply-substitution subs pred)))
-                                 (f pred (cons pred stack))))
+                               (f pred (cons pred stack)))
                              (set-difference
-                              (ty-class-instance-constraints inst)
+                              (apply-substitution subs (ty-class-instance-constraints inst))
                               stack
                               :test #'type-predicate=))))))
              (f base-constraint (list base-constraint)))))
@@ -1132,11 +1131,16 @@ of constraint predicates."
 Compiled environment updates can reload typechecker structures whose tyvar IDs
 were chosen in a previous image. When the fresh-variable counter is reset in a
 new image, those persisted IDs can collide with newly inferred tyvars and cause
-unrelated substitutions to alias each other."
+unrelated substitutions to alias each other. Shared type structures are scanned
+only once."
   (declare (type environment env)
            (values null &optional))
-  (let ((max-id -1))
+  (let ((max-id -1)
+        (visited (make-hash-table :test #'eq)))
     (labels ((scan (object)
+               (when (gethash object visited)
+                 (return-from scan nil))
+               (setf (gethash object visited) t)
                (typecase object
                  (null nil)
                  (tyvar
@@ -1156,6 +1160,7 @@ unrelated substitutions to alias each other."
                   (scan (ty-alias object))
                   (scan (function-ty-positional-input-types object))
                   (scan (function-ty-keyword-input-types object))
+                  (scan (function-ty-origin object))
                   (scan (function-ty-output-types object)))
                  (result-ty
                   (scan (ty-alias object))
@@ -1832,16 +1837,16 @@ predicate containing inference variables through such an instance."
                                  from
                                  index
                                  entry
-                                 #'make-specialization-environment)))))
+                                 #'make-specialization-environment))))
 
-      (handler-case
-          (progn
-            (unify nil to-ty (specialization-entry-to-ty elem))
-
-            (error 'overlapping-specialization-error
-                   :new to
-                   :existing (specialization-entry-to elem)))
-        (unification-error ())))
+        (when (handler-case
+                  (progn
+                    (unify nil to-ty (qualified-ty-type (fresh-inst scheme)))
+                    t)
+                (coalton-internal-type-error () nil))
+          (error 'overlapping-specialization-error
+                 :new to
+                 :existing (specialization-entry-to elem)))))
 
     (update-environment env
                         :specialization-environment

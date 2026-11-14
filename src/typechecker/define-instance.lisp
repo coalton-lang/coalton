@@ -286,6 +286,18 @@ must not collapse distinct variables or specialize one to a concrete type.
 
          (instance-subs (tc:predicate-match class-pred pred))
 
+         ;; Superclass fundeps can determine variables absent from the class head.
+         (instance-subs
+           (with-fundep-errors ((parser:toplevel-define-instance-head-location unparsed-instance) env)
+             (nth-value 1
+                        (tc:solve-fundeps
+                         env
+                         ;; Preserve the instance's variables when unifying dependents.
+                         (append (tc:apply-substitution instance-subs
+                                                       (tc:ty-class-superclasses class))
+                                 context)
+                         instance-subs))))
+
          ;; HACK: store this as a hash table in the environment
          ;; HACK: these should *not* be stored as schemes
          (method-table
@@ -302,30 +314,30 @@ must not collapse distinct variables or specialize one to a concrete type.
 
           :unless (tc:entail env context superclass)
 
-            :do (loop :for superclass-instance
-                        := (or (tc:lookup-class-instance
-                                env
-                                superclass
-                                :no-error t)
-                               (tc-error "Instance missing context"
-                                         (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                      "No instance for ~A"
-                                                      (type-object-string superclass env))))
-
-                      :for additional-context
-                        := (tc:apply-substitution
-                            (tc:predicate-match
-                             (tc:apply-substitution instance-subs (tc:ty-class-instance-predicate superclass-instance))
-                             superclass)
-                            (tc:ty-class-instance-constraints-expanded superclass-instance env))
-
-                      :do (loop :for pred :in additional-context
-                                :do (unless (tc:entail env context pred)
-                                      (tc-error "Instance missing context"
-                                                (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                             "No instance for ~A arising from constraints of superclasses ~A"
-                                                             (type-object-string pred env)
-                                                             (type-object-string superclass env)))))))
+            :do (let* ((superclass-instance
+                         (or (tc:lookup-class-instance env superclass :no-error t)
+                             (tc-error "Instance missing context"
+                                       (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                                    "No instance for ~A"
+                                                    (type-object-string superclass env)))))
+                       (superclass-instance-pred
+                         (tc:fresh-pred (tc:ty-class-instance-predicate superclass-instance)))
+                       (fresh-subs
+                         (tc:predicate-match (tc:ty-class-instance-predicate superclass-instance)
+                                             superclass-instance-pred))
+                       (additional-context
+                         (tc:apply-substitution
+                          (tc:predicate-match superclass-instance-pred superclass)
+                          (tc:apply-substitution
+                           fresh-subs
+                           (tc:ty-class-instance-constraints-expanded superclass-instance env)))))
+                  (loop :for pred :in additional-context
+                        :do (unless (tc:entail env context pred)
+                              (tc-error "Instance missing context"
+                                        (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                                     "No instance for ~A arising from constraints of superclasses ~A"
+                                                     (type-object-string pred env)
+                                                     (type-object-string superclass env)))))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
@@ -381,23 +393,29 @@ must not collapse distinct variables or specialize one to a concrete type.
                                            class-method-tvars)
                                    nil)
                           :for scoped-outer-method-tvars
-                            := (mapcar (lambda (tvar)
-                                         (tc:apply-substitution instance-subs tvar))
-                                       class-method-outer-tvars)
+                            := (remove-if-not
+                                (lambda (tvar)
+                                  (tc:ty= tvar (tc:apply-substitution instance-subs tvar)))
+                                class-method-outer-tvars)
                           :for class-method-constraints := (tc:qualified-ty-predicates class-method-qual-ty)
                           :for class-method-ty := (tc:qualified-ty-type class-method-qual-ty)
+                          :for scoped-subs
+                            := (instance-scoped-method-substitutions
+                                scoped-outer-method-tvars
+                                instance-scoped-tvars)
 
                           ;; NOTE: Instance methods type still do not contain the class predicate
-                          :for instance-method-context := (append context class-method-constraints)
+                          :for instance-method-context
+                            := (tc:apply-substitution
+                                scoped-subs
+                                (tc:apply-substitution instance-subs
+                                                       (append context class-method-constraints)))
                           :for instance-method-qual-ty
-                            := (let* ((qual-ty (tc:apply-substitution
-                                                instance-subs
-                                                (tc:qualify instance-method-context class-method-ty)))
-                                      (scoped-subs
-                                        (instance-scoped-method-substitutions
-                                         scoped-outer-method-tvars
-                                         instance-scoped-tvars)))
-                                 (tc:apply-substitution scoped-subs qual-ty))
+                            := (tc:qualify
+                                instance-method-context
+                                (tc:apply-substitution
+                                 scoped-subs
+                                 (tc:apply-substitution instance-subs class-method-ty)))
                           :for instance-method-scheme
                             := (if class-method-explicit-p
                                    (tc:quantify-using-tvar-order
@@ -509,13 +527,16 @@ must not collapse distinct variables or specialize one to a concrete type.
     ;; Allow definition of LispArray and Complex instances of RuntimeRepr
     (when (member *package* (list (find-package "COALTON/LISPARRAY")
                                   (find-package "COALTON/MATH/COMPLEX")))
-      (let ((types (parser:ty-predicate-types (parser:toplevel-define-instance-pred instance))))
+      (let* ((types (parser:ty-predicate-types (parser:toplevel-define-instance-pred instance)))
+             (type-head (and (= 1 (length types))
+                             (first (parser:flatten-type (first types))))))
         (when (and (= 1 (length types))
                    (parser:tapp-p (first types))
-                   (member (parser:tycon-name (parser:tapp-from (first types)))
+                   (parser:tycon-p type-head)
+                   (member (parser:tycon-name type-head)
                            (list (find-symbol "COMPLEX" *package*)
-                                 (find-symbol "LISPARRAY" *package*)))))
-        (return-from check-instance-valid)))
+                                 (find-symbol "LISPARRAY" *package*))))
+          (return-from check-instance-valid))))
 
     (when (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance))) runtime-repr)
       (tc-error "Invalid instance"

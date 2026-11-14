@@ -255,3 +255,116 @@
           (tuple-match-wildcard-eligible 10)))
   (is (== (tuple-match-wildcard-eligible 42)
           (fst (tuple-match-pair 42)))))
+
+(cl:in-package #:coalton-tests)
+
+(deftest test-superclass-fundep-concrete-instance-methods ()
+  (check-coalton-types
+   "(define-class (C :a :b (:a -> :b)))
+    (define-instance (C Integer String))
+    (define-class (C :a :b => D :a)
+      (output (:a -> :b))
+      (input (:b -> :a))
+      (local-id (forall (:b) (:a * :b -> :b))))
+    (define-instance (D Integer)
+      (define (output _) \"hello\")
+      (define (input text) (if (== text \"hello\") 1 0))
+      (define (local-id _ value) value))"))
+
+(deftest test-superclass-fundep-renamed-instance-methods ()
+  (check-coalton-types
+   "(define-class (C :a :b (:a -> :b))
+      (base (:a -> :b)))
+    (define-class (C :a :b => D :a)
+      (output (:a -> :b))
+      (same (Eq :b => :a * :b -> Boolean)))
+    (define-instance (C (List :x) :y => D (List :x))
+      (define (output xs) (base xs))
+      (define (same xs value) (== (base xs) value)))"))
+
+(deftest test-superclass-fundep-swapped-instance-methods ()
+  (check-coalton-types
+   "(define-class (C :a :b (:a -> :b)))
+    (define-class (C :a :b => D :a)
+      (output (:a -> :b))
+      (same (Eq :b => :a * :b -> Boolean)))
+    (define-instance (C (Tuple :b :c) :c => D (Tuple :b :c))
+      (define (output (Tuple _ c)) c)
+      (define (same (Tuple _ c) value) (== c value)))"))
+
+(deftest test-instance-underapplied-value-warns-once ()
+  (let ((warnings nil))
+    (handler-bind ((source:source-warning
+                    (lambda (condition)
+                      (push (princ-to-string condition) warnings)
+                      (muffle-warning condition))))
+      (check-coalton-types
+       "(define-class (C :a) (method (:a -> Integer)))
+        (define-instance (C Integer)
+          (define (method value)
+            (fn (other) (+ value other))
+            1))"))
+    (is (= 1 (count-if (lambda (warning)
+                        (search "Value may be underapplied" warning))
+                      warnings)))))
+
+(deftest test-runtime-repr-instance-exceptions-check-type-head ()
+  (dolist (package-name '("COALTON/LISPARRAY" "COALTON/MATH/COMPLEX"))
+    (let ((*package* (find-package package-name)))
+      (flet ((check-instance (type)
+               (coalton-impl/typechecker/define-instance::check-instance-valid
+                (parse-form
+                 (format nil "(define-instance (coalton/types:RuntimeRepr ~A))" type)
+                 #'coalton-impl/parser/toplevel::parse-define-instance))))
+        (is (null (check-instance (if (string= package-name "COALTON/LISPARRAY")
+                                      "(LispArray Integer)"
+                                      "(Complex Integer)"))))
+        (dolist (type '("Integer" "(List Integer)" "(Tuple Integer String)" "(:f Integer)"))
+          (signals tc:tc-error (check-instance type)))))))
+
+(deftest test-deep-constructor-pattern-analysis ()
+  (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)
+         (original (symbol-function specializer))
+         (specializations 0)
+         (warnings nil))
+    (flet ((nested (inner)
+             (dotimes (depth 16 inner)
+               (setf inner (format nil "(Layer ~A)" inner)))))
+      (unwind-protect
+           (progn
+             ;; Bound work instead of using a machine-dependent wall-clock timeout.
+             (setf (symbol-function specializer)
+                   (lambda (matrix pattern)
+                     (when (> (incf specializations) 2000)
+                       (error "Repeated constructor specialization in pattern analysis"))
+                     (funcall original matrix pattern)))
+             (handler-bind ((source:source-warning
+                             (lambda (condition)
+                               (push (princ-to-string condition) warnings)
+                               (muffle-warning condition))))
+               (let ((type (format nil "(~A -> Integer)" (nested "(Tuple Boolean Boolean)"))))
+                 (check-coalton-types
+                  (format nil
+                          "(define-type (Layer :a) (Layer :a))
+                           (declare deep-match ~A)
+                           (define (deep-match value)
+                             (match value
+                               (~A 0)
+                               (~A 1)
+                               (~A 2)
+                               (~A 3)
+                               (_ 4)))"
+                          type
+                          (nested "(Tuple (True) (True))")
+                          (nested "(Tuple (True) (False))")
+                          (nested "(Tuple (False) (True))")
+                          (nested "(Tuple (False) (False))"))
+                  (cons "deep-match" type))))
+             (is (< specializations 2000))
+             (is (= 1 (count-if (lambda (warning)
+                                 (search "useless match case" warning))
+                               warnings)))
+             (is (notany (lambda (warning)
+                           (search "non-exhaustive match" warning))
+                         warnings)))
+        (setf (symbol-function specializer) original)))))

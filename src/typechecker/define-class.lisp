@@ -541,7 +541,7 @@
                    ;; Add new type variables to the environment
                    :do (unless method-explicit-p
                          (loop :for new-method-tyvar-name
-                                 :in (set-difference method-tyvar-names var-names :test #'eq)
+                                 :in (set-difference method-tyvar-names outer-var-names :test #'eq)
                                :do (partial-type-env-add-var
                                     env
                                     new-method-tyvar-name

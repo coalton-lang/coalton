@@ -164,36 +164,9 @@
   (declare (type parser:qualified-ty unparsed-ty)
            (type (or tc:environment partial-type-env) env)
            (values tc:qualified-ty tc:tyvar-list boolean &optional))
-  (let* ((partial-env (if (typep env 'tc:environment)
-                          (make-partial-type-env :env env)
-                          env))
-         (base-env (partial-type-env-env partial-env)))
-    (multiple-value-bind (explicit-tvars explicit-p)
-        (seed-qualified-type-variables unparsed-ty partial-env)
-      (check-result-variable-positions unparsed-ty partial-env)
-      (multiple-value-bind (qual-ty ksubs)
-          (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
-
-        (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
-        (setf qual-ty (tc:make-qualified-ty
-                       :predicates (tc:qualified-ty-predicates qual-ty)
-                       :type (tc:qualified-ty-type qual-ty)))
-        (setf ksubs (tc:kind-monomorphize-subs
-                     (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
-
-        (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
-               (explicit-tvars (mapcar (lambda (tvar)
-                                         (tc:apply-ksubstitution ksubs tvar))
-                                       explicit-tvars))
-               (preds (tc:qualified-ty-predicates qual-ty))
-               (ty (tc:qualified-ty-type qual-ty))
-               (qual-ty (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))
-
-          (check-for-ambiguous-variables preds ty unparsed-ty base-env)
-          (check-for-reducible-by-fundeps preds ty unparsed-ty base-env)
-          (check-for-reducible-context preds ty unparsed-ty base-env)
-
-          (values qual-ty explicit-tvars explicit-p))))))
+  (multiple-value-bind (qual-ty explicit-tvars explicit-p)
+      (parse-qualified-type-info unparsed-ty env)
+    (values qual-ty explicit-tvars explicit-p)))
 
 (defun warn-on-unused-explicit-type-variables (unparsed-ty explicit-tvars qual-ty)
   (declare (type parser:qualified-ty unparsed-ty)
@@ -221,6 +194,17 @@
                              "quantified type variable ~S is not used in the declared type"
                              (parser:keyword-src-name unused-var))))))
   nil)
+
+(defun normalize-parser-function-output-types (output-types)
+  "Mirror TC:NORMALIZE-FUNCTION-OUTPUT-TYPES on parser output types, so
+parsed outputs stay aligned with the kind-inferred ones."
+  (declare (type (or null parser:ty-list) output-types)
+           (values (or null parser:ty-list) &optional))
+  (if (and output-types
+           (null (cdr output-types))
+           (typep (car output-types) 'parser:result-ty))
+      (parser:result-ty-output-types (car output-types))
+      output-types))
 
 (defgeneric apply-type-alias-substitutions (type parser-type env)
   (:documentation "Replace all type aliases in TYPE with the true types represented by them.")
@@ -312,10 +296,40 @@
       (loop :for entry :in (tc:function-ty-keyword-input-types type)
             :for parser-entry :in (parser:function-ty-keyword-input-types parser-type)
             :collect (apply-type-alias-substitutions entry parser-entry env)))
+     :keyword-open-p (tc:function-ty-keyword-open-p type)
      :output-types
-     (loop :for output :in (tc:function-ty-output-types type)
-           :for parser-output :in (parser:function-ty-output-types parser-type)
-           :collect (apply-type-alias-substitutions output parser-output env))))
+     (tc:normalize-function-output-types
+      (loop :for output :in (tc:function-ty-output-types type)
+            :for parser-output :in (normalize-parser-function-output-types
+                                    (parser:function-ty-output-types parser-type))
+            :collect (apply-type-alias-substitutions output parser-output env)))))
+
+  (:method ((type tc:function-ty) (parser-type parser:tapp) env)
+    (declare (type partial-type-env env)
+             (values tc:ty))
+    ;; A fully applied (Arrow A B) is parsed as a type application but
+    ;; kind inference turns it into a FUNCTION-TY.
+    (let ((flattened-parser-type (parser:flatten-type parser-type)))
+      (if (and (= 3 (length flattened-parser-type))
+               (= 1 (length (tc:function-ty-positional-input-types type)))
+               (null (tc:function-ty-keyword-input-types type))
+               (= 1 (length (tc:function-ty-output-types type))))
+          (tc:make-function-ty
+           :alias (tc:ty-alias type)
+           :positional-input-types
+           (list (apply-type-alias-substitutions
+                  (first (tc:function-ty-positional-input-types type))
+                  (second flattened-parser-type)
+                  env))
+           :keyword-input-types nil
+           :keyword-open-p (tc:function-ty-keyword-open-p type)
+           :output-types
+           (tc:normalize-function-output-types
+            (list (apply-type-alias-substitutions
+                   (first (tc:function-ty-output-types type))
+                   (third flattened-parser-type)
+                   env))))
+          type)))
 
   (:method ((type tc:result-ty) (parser-type parser:result-ty) env)
     (declare (type partial-type-env env)
@@ -444,13 +458,15 @@ being assembled."
         (setf ksubs (tc:kind-monomorphize-subs
                      (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
 
-        (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+        (let* ((qual-ty (apply-type-alias-substitutions
+                         (tc:apply-ksubstitution ksubs qual-ty)
+                         unparsed-ty
+                         partial-env))
                (explicit-tvars (mapcar (lambda (tvar)
                                          (tc:apply-ksubstitution ksubs tvar))
                                        explicit-tvars))
                (preds (tc:qualified-ty-predicates qual-ty))
-               (ty (tc:qualified-ty-type qual-ty))
-               (qual-ty (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))
+               (ty (tc:qualified-ty-type qual-ty)))
 
           (when run-context-checks-p
             (check-for-ambiguous-variables preds ty unparsed-ty base-env)
@@ -722,11 +738,12 @@ the substitution :b +-> T can be inferred.
                               (setf ksubs ksubs_)
                               entry-type))))
           (output-types
-            (loop :for output :in (parser:function-ty-output-types type)
-                  :collect (multiple-value-bind (output-type ksubs_)
-                               (infer-type-kinds output tc:+kstar+ ksubs env)
-                             (setf ksubs ksubs_)
-                             output-type))))
+            (tc:normalize-function-output-types
+             (loop :for output :in (parser:function-ty-output-types type)
+                   :collect (multiple-value-bind (output-type ksubs_)
+                                (infer-type-kinds output tc:+kstar+ ksubs env)
+                              (setf ksubs ksubs_)
+                              output-type)))))
       (values (tc:make-function-ty
                :positional-input-types positional-input-types
                :keyword-input-types keyword-input-types

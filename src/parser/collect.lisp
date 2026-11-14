@@ -53,6 +53,10 @@
      (collect-referenced-types-generic% (function-ty-keyword-input-types type))
      (collect-referenced-types-generic% (function-ty-output-types type))))
 
+  (:method ((type result-ty))
+    (declare (values tycon-list))
+    (collect-referenced-types-generic% (result-ty-output-types type)))
+
   (:method ((pred ty-predicate))
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (ty-predicate-types pred)))

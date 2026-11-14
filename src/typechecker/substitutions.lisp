@@ -129,7 +129,8 @@ Substitution returns its argument when nothing in it changes."
            :positional-input-types (list (tapp-to (tapp-from applied-type)))
            :keyword-input-types nil
            :keyword-open-p nil
-           :output-types (list (tapp-to applied-type)))
+           :output-types (normalize-function-output-types
+                          (list (tapp-to applied-type))))
           applied-type)))
   (:method (subst-list (entry keyword-ty-entry))
     (rebuild-if-changed (subst-list entry)
@@ -138,17 +139,25 @@ Substitution returns its argument when nothing in it changes."
        :keyword (keyword-ty-entry-keyword entry)
        :type type)))
   (:method (subst-list (type function-ty))
-    (rebuild-if-changed (subst-list type)
-        ((alias (ty-alias type))
-         (positional (function-ty-positional-input-types type))
-         (keyword (function-ty-keyword-input-types type))
-         (output (function-ty-output-types type) normalize-function-output-types))
-      (make-function-ty
-       :alias alias
-       :positional-input-types positional
-       :keyword-input-types keyword
-       :keyword-open-p (function-ty-keyword-open-p type)
-       :output-types output)))
+    (let* ((origin (function-ty-origin type))
+           (subst-origin (and origin (apply-substitution subst-list origin))))
+      (if (typep subst-origin 'function-ty)
+          (apply-substitution subst-list subst-origin)
+          (rebuild-if-changed (subst-list type)
+              ((alias (ty-alias type))
+               (positional (function-ty-positional-input-types type))
+               (keyword (function-ty-keyword-input-types type))
+               (new-origin (function-ty-origin type))
+               (output (function-ty-output-types type) normalize-function-output-types))
+            (make-function-ty
+             :alias alias
+             :positional-input-types positional
+             :keyword-input-types keyword
+             :keyword-open-p (function-ty-keyword-open-p type)
+             :origin (and (function-ty-keyword-open-p type)
+                          (typep new-origin '(or tyvar tgen))
+                          new-origin)
+             :output-types output)))))
   (:method (subst-list (type result-ty))
     (rebuild-if-changed (subst-list type)
         ((alias (ty-alias type))
