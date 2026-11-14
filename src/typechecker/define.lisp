@@ -52,6 +52,10 @@
 
 (defparameter *return-blocks* nil)
 
+(declaim (type (or null hash-table) *pre-inferred-builder-items*))
+(defvar *pre-inferred-builder-items* nil
+  "Maps builder element nodes to their already inferred (TYPE PREDS ACCESSORS NODE).")
+
 (declaim (type (or null parser:node) *direct-values-node*))
 (defparameter *direct-values-node* nil)
 
@@ -545,8 +549,12 @@ at LOCATION, unless the predicates involved have their own locations."
     (dolist (item items subs)
       (multiple-value-bind (item-ty preds accessors typed-item subs_)
           (infer-expression-type item (tc:make-variable) subs env)
-        (declare (ignore preds accessors typed-item))
         (setf subs subs_)
+        ;; The desugared builder contains ITEM itself; reuse this inference
+        ;; there instead of checking ITEM (and its binders) a second time.
+        (when *pre-inferred-builder-items*
+          (setf (gethash item *pre-inferred-builder-items*)
+                (list item-ty preds accessors typed-item)))
         (handler-case
             (setf subs (tc:unify subs shared-ty item-ty))
           (tc:coalton-internal-type-error ()
@@ -557,6 +565,19 @@ at LOCATION, unless the predicates involved have their own locations."
                                             first-node)))
         (unless first-node
           (setf first-node item))))))
+
+(defun monadic-type-parts (ty)
+  "Split monadic type TY, written (:m :a), into :m and :a.
+
+Substitution turns ((Arrow :r) :a) into the function type (:r -> :a), so
+unary function types are split into (Arrow :r) and :a."
+  (declare (type tc:ty ty)
+           (values tc:ty tc:ty &optional))
+  (if (and (typep ty 'tc:function-ty)
+           (tc:function-ty-positional-input-types ty))
+      (values (tc:make-tapp :from tc:*arrow-type* :to (tc:function-type-from ty))
+              (tc:function-type-to ty))
+      (values (tc:tapp-from ty) (tc:tapp-to ty))))
 
 (defun values-result-type (component-types)
   (declare (type tc:ty-list component-types)
@@ -621,6 +642,7 @@ at LOCATION, unless the predicates involved have their own locations."
    :positional-input-types positional-input-types
    :keyword-input-types (normalize-keyword-entries keyword-input-types)
    :keyword-open-p keyword-open-p
+   :origin (and keyword-open-p (tc:function-ty-origin template))
    :output-types output-types))
 
 (defun extend-function-type-keywords (type new-entries)
@@ -631,11 +653,14 @@ at LOCATION, unless the predicates involved have their own locations."
     (dolist (entry new-entries)
       (unless (function-keyword-entry type (tc:keyword-ty-entry-keyword entry))
         (push entry entries)))
-    (rebuild-function-type type
-                           (tc:function-ty-positional-input-types type)
-                           entries
-                           (tc:function-ty-keyword-open-p type)
-                           (tc:function-ty-output-types type))))
+    (tc:make-function-ty
+     :alias (tc:ty-alias type)
+     :positional-input-types (tc:function-ty-positional-input-types type)
+     :keyword-input-types (normalize-keyword-entries entries)
+     :keyword-open-p (tc:function-ty-keyword-open-p type)
+     :origin (when (tc:function-ty-keyword-open-p type)
+               (tc:make-variable))
+     :output-types (tc:function-ty-output-types type))))
 
 (defun project-function-type-keywords (type keyword-entries keyword-open-p)
   (declare (type tc:function-ty type)
@@ -665,6 +690,24 @@ determined and must not be widened."
                  (tc:type-variables scheme))
         (tc-env-replace-type env name (tc:to-scheme type)))))
   nil)
+
+(defun extend-function-type-in-substitutions (subs old-type new-type)
+  "Bind OLD-TYPE's open-function origin to NEW-TYPE in SUBS.
+
+Extending a keyword-open function type with newly discovered keywords produces
+a new type with a fresh origin. Binding OLD-TYPE's origin variable to NEW-TYPE
+causes APPLY-SUBSTITUTION to upgrade every occurrence of OLD-TYPE."
+  (declare (type tc:substitution-list subs)
+           (type tc:function-ty old-type new-type)
+           (values tc:substitution-list &optional))
+  (let ((old-origin (tc:function-ty-origin old-type)))
+    (if (and old-origin
+             (not (and (tc:function-ty-origin new-type)
+                       (tc:ty= old-origin (tc:function-ty-origin new-type)))))
+        (tc:compose-substitution-lists
+         (list (tc:make-substitution :from old-origin :to new-type))
+         subs)
+        subs)))
 
 (defun body-return-block-node (body)
   "Return BODY's outer return block when BODY is exactly a single block wrapper.
@@ -801,6 +844,7 @@ function type matching the call site shape and unify it with the operator."
                     :positional-input-types new-froms
                     :keyword-input-types (normalize-keyword-entries new-keywords)
                     :keyword-open-p keyword-open-p
+                    :origin (when keyword-open-p (tc:make-variable))
                     :output-types output-types)))
       (setf subs (tc:unify subs fun-ty new-ty))
       (values (tc:apply-substitution subs new-ty) subs))))
@@ -1166,23 +1210,32 @@ the operator of the expression, used in error messages."
                                subs
                                env)
       (declare (ignore _))
-      (multiple-value-bind (preds subs)
-          (tc:solve-fundeps (tc-env-env env) preds subs)
-        (setf accessors (tc:apply-substitution subs accessors))
-        (multiple-value-bind (accessors subs_)
-            (solve-accessors accessors (tc-env-env env))
-          (setf subs (tc:compose-substitution-lists subs subs_))
-          (when accessors
-            (tc:tc-error "Ambiguous accessor"
-                         (source:note (first accessors)
-                                      "accessor is ambiguous")))
-          (let* ((preds (tc:reduce-context (tc-env-env env) preds subs))
-                 (ty (tc:apply-substitution subs ty))
-                 (qual-ty (tc:qualify preds ty)))
-            (values
-             (tc:remove-source-info
-              (tc:quantify (tc:type-variables qual-ty) qual-ty))
-             subs)))))))
+      (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+      (setf accessors (tc:apply-substitution subs accessors))
+      (multiple-value-bind (accessors subs_)
+          (solve-accessors accessors (tc-env-env env))
+        (setf subs (tc:compose-substitution-lists subs_ subs))
+        (when accessors
+          (tc:tc-error "Ambiguous accessor"
+                       (source:note (first accessors)
+                                    "accessor is ambiguous")))
+        (setf preds (tc:apply-substitution subs preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+        (let* ((preds (remove-if
+                       ;; REDUCE-CONTEXT cannot discharge predicates whose
+                       ;; instance contexts mention variables determined only
+                       ;; by functional dependencies.
+                       (lambda (pred)
+                         (null (tc:solve-fundeps (tc-env-env env) (list pred) subs)))
+                       (tc:reduce-context (tc-env-env env)
+                                          (tc:apply-substitution subs preds)
+                                          subs)))
+               (ty (tc:apply-substitution subs ty))
+               (qual-ty (tc:qualify preds ty)))
+          (values
+           (tc:remove-source-info
+            (tc:quantify (tc:type-variables qual-ty) qual-ty))
+           subs))))))
 
 (defun rec-node-bindings-independent-p (node)
   "Return true when REC's synthetic outer init bindings do not depend on each
@@ -1590,7 +1643,7 @@ other, so they can be inferred monomorphically before the recursive body."
 
         (multiple-value-bind (binding-accessors subs__)
             (solve-accessors binding-accessors (tc-env-env env))
-          (setf subs (tc:compose-substitution-lists subs subs__))
+          (setf subs (tc:compose-substitution-lists subs__ subs))
 
           (when binding-accessors
             (tc-error "Ambiguous accessor"
@@ -1717,7 +1770,7 @@ lowered back to the ordinary nested-let representation and inferred there."
 
         (multiple-value-bind (binding-accessors subs_)
             (solve-accessors binding-accessors (tc-env-env env))
-          (setf subs (tc:compose-substitution-lists subs subs_))
+          (setf subs (tc:compose-substitution-lists subs_ subs))
 
           (when binding-accessors
             (tc-error "Ambiguous accessor"
@@ -1805,9 +1858,22 @@ lowered back to the ordinary nested-let representation and inferred there."
 
 Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (:method :around (node expected-type subs env)
-    (declare (ignore node expected-type subs))
     (with-type-string-environment (env)
-      (call-next-method)))
+      (let ((pre-inferred (and *pre-inferred-builder-items*
+                               (gethash node *pre-inferred-builder-items*))))
+        (if (null pre-inferred)
+            (call-next-method)
+            (destructuring-bind (item-ty preds accessors typed-item) pre-inferred
+              (remhash node *pre-inferred-builder-items*)
+              (handler-case
+                  (setf subs (tc:unify subs item-ty expected-type))
+                (tc:coalton-internal-type-error ()
+                  (standard-expression-type-mismatch-error node subs expected-type item-ty)))
+              (values (tc:apply-substitution subs item-ty)
+                      (tc:apply-substitution subs preds)
+                      (tc:apply-substitution subs accessors)
+                      (tc:apply-substitution subs typed-item)
+                      subs))))))
   (:method ((node parser:node-literal) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -1867,7 +1933,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :type (tc:qualify nil type)
                 :location (source:location node)
                 :name (parser:node-accessor-name node))
-               subs))))))
+               subs)))
+        (tc:coalton-internal-type-error ()
+          (standard-expression-type-mismatch-error node subs expected-type ty)))))
 
   (:method ((node parser:node-integer-literal) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1917,6 +1985,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    (setf subs subs_)
                    (when (and (not (tc:ty= effective-ty narrowed-type))
                               (typep narrowed-type 'tc:function-ty))
+                     (setf subs (extend-function-type-in-substitutions
+                                 subs
+                                 (tc:apply-substitution subs effective-ty)
+                                 narrowed-type))
                      (maybe-update-local-function-type env node narrowed-type))
                    (let ((preds (tc:apply-substitution subs preds)))
                      (values
@@ -2036,13 +2108,25 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (entry (function-keyword-entry fun-ty_ key)))
             (when (and (null entry)
                        (tc:function-ty-keyword-open-p fun-ty_))
-              (let ((new-entry (tc:make-keyword-ty-entry
-                                :keyword key
-                                :type (tc:make-variable))))
-                (setf fun-ty_ (extend-function-type-keywords fun-ty_ (list new-entry)))
+              (let* ((new-entry (tc:make-keyword-ty-entry
+                                 :keyword key
+                                 :type (tc:make-variable)))
+                     (old-fun-ty (tc:apply-substitution subs fun-ty_))
+                     (new-fun-ty (extend-function-type-keywords old-fun-ty (list new-entry))))
+                ;; Rebind every type variable bound to the open function type
+                ;; so earlier and later uses of the operator see the new keyword.
+                (setf subs (extend-function-type-in-substitutions subs old-fun-ty new-fun-ty))
+                (setf fun-ty_ new-fun-ty)
                 (maybe-update-local-function-type env
                                                   (parser:node-application-rator node)
                                                   fun-ty_)
+                (when (typep rator-node 'node-variable)
+                  (setf rator-node
+                        (make-node-variable
+                         :type (tc:qualify (tc:qualified-ty-predicates (node-type rator-node))
+                                           fun-ty_)
+                         :location (source:location rator-node)
+                         :name (node-variable-name rator-node))))
                 (setf entry (function-keyword-entry fun-ty_ key))))
             (unless entry
               (tc-error "Unknown keyword argument"
@@ -2248,8 +2332,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (body-result-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
              (*return-blocks*
                (if body-return-block
+                   ;; Returns in keyword defaults target the body's block, so
+                   ;; the body's NODE-BLOCK reuses this info.
                    (acons (parser:node-block-name body-return-block)
-                          body-result-ty
+                          (make-return-block-info :type body-result-ty)
                           *return-blocks*)
                    *return-blocks*))
              (expected-function-type (and (tc:function-type-p effective-expected-type)
@@ -2806,13 +2892,19 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-block tc:substitution-list))
 
-    (let* ((block-type (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
-           (block-info (make-return-block-info :type block-type)))
+    (let* ((existing-info (cdr (assoc (parser:node-block-name node) *return-blocks* :test #'eq)))
+           (block-type (if existing-info
+                           (return-block-info-type existing-info)
+                           (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
+           (block-info (or existing-info
+                           (make-return-block-info :type block-type))))
       (multiple-value-bind (body-ty preds accessors body-node subs)
           (let ((*return-blocks*
-                  (acons (parser:node-block-name node)
-                         block-info
-                         *return-blocks*)))
+                  (if existing-info
+                      *return-blocks*
+                      (acons (parser:node-block-name node)
+                             block-info
+                             *return-blocks*))))
             (infer-expression-type (parser:node-block-body node)
                                    block-type
                                    subs
@@ -2906,31 +2998,33 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
-    (setf subs (check-homogeneous-builder-items
-                :collection
-                (parser:node-collection-builder-elements node)
-                subs
-                env))
-    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
+    (let ((*pre-inferred-builder-items* (make-hash-table :test #'eq)))
+      (setf subs (check-homogeneous-builder-items
+                  :collection
+                  (parser:node-collection-builder-elements node)
+                  subs
+                  env))
+      (infer-expression-type (desugar-parser-builder-node node) expected-type subs env)))
 
   (:method ((node parser:node-association-builder) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
-    (setf subs (check-homogeneous-builder-items
-                :association-key
-                (mapcar #'parser:association-entry-key
-                        (parser:node-association-builder-entries node))
-                subs
-                env))
-    (setf subs (check-homogeneous-builder-items
-                :association-value
-                (mapcar #'parser:association-entry-value
-                        (parser:node-association-builder-entries node))
-                subs
-                env))
-    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
+    (let ((*pre-inferred-builder-items* (make-hash-table :test #'eq)))
+      (setf subs (check-homogeneous-builder-items
+                  :association-key
+                  (mapcar #'parser:association-entry-key
+                          (parser:node-association-builder-entries node))
+                  subs
+                  env))
+      (setf subs (check-homogeneous-builder-items
+                  :association-value
+                  (mapcar #'parser:association-entry-value
+                          (parser:node-association-builder-entries node))
+                  subs
+                  env))
+      (infer-expression-type (desugar-parser-builder-node node) expected-type subs env)))
 
   (:method ((node parser:node-collection-comprehension) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3217,7 +3311,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :else else-node)
                  subs))
             (tc:coalton-internal-type-error ()
-              (standard-expression-type-mismatch-error node subs expr-node else-ty)))))))
+              (standard-expression-type-mismatch-error node subs expected-type else-ty)))))))
 
   (:method ((node parser:node-when) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3616,7 +3710,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (multiple-value-bind (ty_ pattern subs)
           (infer-pattern-type (parser:node-do-bind-pattern node)
-                              (tc:tapp-to (tc:apply-substitution subs expr-ty)) ; this should never fail
+                              ;; this should never fail
+                              (nth-value 1 (monadic-type-parts (tc:apply-substitution subs expr-ty)))
                               subs
                               env)
         (declare (ignore ty_))
@@ -4093,9 +4188,14 @@ whether the binding permits generalization at all."
            (type tc:environment env)
            (values tc:tyvar-list &optional))
   (set-difference
-   (tc:type-variables (tc:apply-substitution subs local-tvars))
+   (remove-duplicates
+    (append (tc:type-variables (tc:apply-substitution subs local-tvars))
+            (tc:open-function-origins (tc:apply-substitution subs local-tvars)))
+    :test #'tc:ty=)
    (blocked-weak-type-variables
-    (remove-if-not #'tc:tyvar-p (tc:apply-substitution subs weak-tvars))
+    ;; A weak variable may have been substituted with a composite type (e.g.
+    ;; by builder defaulting); its variables remain weak.
+    (tc:type-variables (tc:apply-substitution subs weak-tvars))
     (tc:apply-substitution subs expr-tys)
     (tc:apply-substitution subs retained-preds)
     env)
@@ -4572,7 +4672,7 @@ as a recursive function rather than a recursive value."
 
       (multiple-value-bind (accessors subs_)
           (solve-accessors accessors (tc-env-env env))
-        (setf subs (tc:compose-substitution-lists subs subs_))
+        (setf subs (tc:compose-substitution-lists subs_ subs))
 
         (when accessors
           (tc-error "Ambiguous accessor"
@@ -4639,8 +4739,7 @@ as a recursive function rather than a recursive value."
                  ;; 1. Tvars that appear in the binding's type signature
                  ;; 2. Tvars that have been fixed by the surrounding environment
                  (known-variables
-                   (remove-if-not
-                    #'tc:tyvar-p
+                   (tc:type-variables
                     (tc:apply-substitution
                      subs
                      (append
@@ -4677,8 +4776,8 @@ as a recursive function rather than a recursive value."
                         (setf known-variables
                               (remove-duplicates
                                (append
-                                (remove-if-not #'tc:tyvar-p
-                                               (tc:apply-substitution new-subs known-variables))
+                                (tc:type-variables
+                                 (tc:apply-substitution new-subs known-variables))
                                 range-tvars)
                                :test #'tc:ty=)))
                   :finally (util:coalton-bug "Fundep chain failed to converge"))
@@ -4831,7 +4930,7 @@ value-restriction and variance logic used for implicit bindings."
 
         (multiple-value-bind (accessors subs_)
             (solve-accessors accessors (tc-env-env env))
-          (setf subs (tc:compose-substitution-lists subs subs_))
+          (setf subs (tc:compose-substitution-lists subs_ subs))
 
           (when accessors
             (tc-error "Ambiguous accessor"
@@ -4839,8 +4938,8 @@ value-restriction and variance logic used for implicit bindings."
 
           (let* ((expr-ty (tc:apply-substitution subs expr-ty))
                  (env-tvars (tc-env-bindings-variables env bound-variables))
-                 (expr-tvars (remove-duplicates (tc:type-variables expr-ty) :test #'eq))
-                 (local-tvars (set-difference expr-tvars env-tvars :test #'eq))
+                 (expr-tvars (remove-duplicates (tc:type-variables expr-ty) :test #'tc:ty=))
+                 (local-tvars (set-difference expr-tvars env-tvars :test #'tc:ty=))
                  (weak-tvars
                    (intersection
                     (weak-binding-type-variables (list synthetic-binding)
@@ -4879,7 +4978,7 @@ value-restriction and variance logic used for implicit bindings."
                          (tc:coalton-internal-type-error (e)
                            (error-ambiguous-pred (tc:ambiguous-constraint-pred e)))))
                      (retained-preds
-                       (set-difference retained-preds defaultable-preds :test #'eq))
+                       (set-difference retained-preds defaultable-preds :test #'tc:type-predicate=))
                      (restricted (not (parser:binding-function-p synthetic-binding))))
 
                 (setf subs (tc:compose-substitution-lists
@@ -5167,7 +5266,7 @@ as a recursive function rather than a recursive value."
 
         (multiple-value-bind (accessors subs_)
             (solve-accessors accessors (tc-env-env env))
-          (setf subs (tc:compose-substitution-lists subs subs_))
+          (setf subs (tc:compose-substitution-lists subs_ subs))
 
           (when accessors
             (tc-error "Ambiguous accessor"
@@ -5178,9 +5277,12 @@ as a recursive function rather than a recursive value."
                  (env-tvars
                    (tc-env-bindings-variables env bound-variables))
                  (expr-tvars
-                   (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
+                   (remove-duplicates
+                    (append (tc:type-variables expr-tys)
+                            (tc:open-function-origins expr-tys))
+                    :test #'tc:ty=))
                  (local-tvars
-                   (set-difference expr-tvars env-tvars :test #'eq))
+                   (set-difference expr-tvars env-tvars :test #'tc:ty=))
                  (weak-tvars
                    (intersection
                     (weak-binding-type-variables bindings expr-tys (tc-env-env env))
@@ -5199,14 +5301,21 @@ as a recursive function rather than a recursive value."
           (tc:default-builder-context (tc-env-env env) env-tvars preds subs))
         (setf local-tvars
               (expand-local-tvars env-tvars
-                                  (tc:type-variables (tc:apply-substitution subs local-tvars))
+                                  (remove-duplicates
+                                   (append (tc:type-variables (tc:apply-substitution subs local-tvars))
+                                           (tc:open-function-origins (tc:apply-substitution subs local-tvars)))
+                                   :test #'tc:ty=)
                                   preds
                                   (tc-env-env env)))
 
         (setf env-tvars
               (expand-local-tvars local-tvars
-                                  (tc:type-variables
-                                   (tc:apply-substitution subs env-tvars))
+                                  (remove-duplicates
+                                   (append (tc:type-variables
+                                            (tc:apply-substitution subs env-tvars))
+                                           (tc:open-function-origins
+                                            (tc:apply-substitution subs env-tvars)))
+                                   :test #'tc:ty=)
                                   preds
                                   (tc-env-env env)))
 
@@ -5218,7 +5327,7 @@ as a recursive function rather than a recursive value."
                                       (tc:coalton-internal-type-error (e)
                                         (error-ambiguous-pred (tc:ambiguous-constraint-pred e)))))
 
-                 (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
+                 (retained-preds (set-difference retained-preds defaultable-preds :test #'tc:type-predicate=))
 
                  ;; Check if the monomorphism restriction applies
                  (restricted (or (not generalize)

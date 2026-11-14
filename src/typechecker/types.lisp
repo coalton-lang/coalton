@@ -38,6 +38,9 @@
    #:function-ty-positional-input-types ; ACCESSOR
    #:function-ty-keyword-input-types    ; ACCESSOR
    #:function-ty-keyword-open-p         ; ACCESSOR
+   #:function-ty-origin                 ; ACCESSOR
+   #:*instantiate-origin-map*           ; VARIABLE
+   #:open-function-origins              ; FUNCTION
    #:function-ty-output-types           ; ACCESSOR
    #:result-ty                          ; STRUCT
    #:make-result-ty                     ; CONSTRUCTOR
@@ -207,6 +210,7 @@
   (positional-input-types nil :type ty-list                  :read-only t)
   (keyword-input-types    nil :type keyword-ty-entry-list    :read-only t)
   (keyword-open-p         nil :type boolean                  :read-only t)
+  (origin                 nil :type (or null tyvar tgen)     :read-only t)
   (output-types           nil :type (or null ty-list)        :read-only t))
 
 (defstruct (result-ty (:include ty))
@@ -289,6 +293,9 @@ TYVAR's SOURCE-NAME metadata."
 ;;; Methods
 ;;;
 
+(defvar *instantiate-origin-map* nil
+  "Alist mapping scheme open-function origins to fresh origins during a single instantiation.")
+
 (defgeneric instantiate (types type)
   (:documentation "Instantiate a type scheme by replacing generic type variables (tgen) with concrete types.
 
@@ -320,6 +327,18 @@ types from the TYPES list.")
      :positional-input-types (instantiate types (function-ty-positional-input-types type))
      :keyword-input-types (instantiate types (function-ty-keyword-input-types type))
      :keyword-open-p (function-ty-keyword-open-p type)
+     :origin (when (function-ty-keyword-open-p type)
+               (let ((old-origin (function-ty-origin type)))
+                 (etypecase old-origin
+                   (null
+                    (make-variable))
+                   (tyvar
+                    old-origin)
+                   (tgen
+                    (or (cdr (assoc (tgen-id old-origin) *instantiate-origin-map* :test #'eql))
+                        (let ((fresh (make-variable)))
+                          (push (cons (tgen-id old-origin) fresh) *instantiate-origin-map*)
+                          fresh))))))
      :output-types (normalize-function-output-types
                     (instantiate types (function-ty-output-types type)))))
   (:method (types (type result-ty))
@@ -403,6 +422,7 @@ Throws an error if applied to a malformed type application.")
    :positional-input-types (apply-ksubstitution subs (function-ty-positional-input-types type))
    :keyword-input-types (apply-ksubstitution subs (function-ty-keyword-input-types type))
    :keyword-open-p (function-ty-keyword-open-p type)
+   :origin (function-ty-origin type)
    :output-types (normalize-function-output-types
                   (apply-ksubstitution subs (function-ty-output-types type)))))
 
@@ -664,7 +684,8 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                 :positional-input-types (list (tapp-to (tapp-from applied-type)))
                 :keyword-input-types nil
                 :keyword-open-p nil
-                :output-types (list (tapp-to applied-type)))
+                :output-types (normalize-function-output-types
+                               (list (tapp-to applied-type))))
                applied-type)
            ksubs)))
     (kunify-error (e)
@@ -865,12 +886,12 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
      (append (type-variables (function-ty-positional-input-types type))
              (type-variables (function-ty-keyword-input-types type))
              (type-variables (function-ty-output-types type)))
-     :test #'equalp
+     :test #'ty=
      :from-end t))
   (:method ((type result-ty))
     (remove-duplicates
      (type-variables (result-ty-output-types type))
-     :test #'equalp
+     :test #'ty=
      :from-end t))
   ;; Otherwise, return nothing
   (:method ((type ty))
@@ -878,6 +899,31 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   ;; Allow for calling on lists
   (:method ((type-list list))
     (remove-duplicates (mapcan #'type-variables type-list) :test #'ty= :from-end t)))
+
+(defgeneric open-function-origins (type)
+  (:documentation "Return a list of open-function origin type variables in TYPE.")
+  (:method ((type tapp))
+    (remove-duplicates (append (open-function-origins (tapp-from type))
+                               (open-function-origins (tapp-to type)))
+                       :test #'ty=
+                       :from-end t))
+  (:method ((entry keyword-ty-entry))
+    (open-function-origins (keyword-ty-entry-type entry)))
+  (:method ((type function-ty))
+    (remove-duplicates
+     (append (and (typep (function-ty-origin type) 'tyvar)
+                  (list (function-ty-origin type)))
+             (open-function-origins (function-ty-positional-input-types type))
+             (open-function-origins (function-ty-keyword-input-types type))
+             (open-function-origins (function-ty-output-types type)))
+     :test #'ty=
+     :from-end t))
+  (:method ((type result-ty))
+    (open-function-origins (result-ty-output-types type)))
+  (:method ((type ty))
+    nil)
+  (:method ((type-list list))
+    (remove-duplicates (mapcan #'open-function-origins type-list) :test #'ty= :from-end t)))
 
 ;;;
 ;;; Pretty printing

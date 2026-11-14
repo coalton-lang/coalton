@@ -146,6 +146,14 @@
         t)
        ,code)))
 
+(defun discharge-fundep-preds (env preds subs)
+  "Remove PREDS that instance resolution with functional dependency improvement
+fully discharges. REDUCE-CONTEXT cannot discharge predicates whose instance
+contexts mention variables determined only by functional dependencies."
+  (remove-if (lambda (pred)
+               (null (tc:solve-fundeps env (list pred) subs)))
+             preds))
+
 (defun %expression-entry-point (node)
   (declare (type parser:node node))
 
@@ -158,52 +166,55 @@
                                   nil
                                   (tc:make-tc-env :env env))
 
-      (multiple-value-bind (preds subs)
-          (tc:solve-fundeps env preds subs)
+      (setf subs (nth-value 1 (tc:solve-fundeps env preds subs)))
 
-        (setf accessors (tc:apply-substitution subs accessors))
+      (setf accessors (tc:apply-substitution subs accessors))
 
-        (multiple-value-bind (accessors subs_)
-            (tc:solve-accessors accessors env)
-          (setf subs (tc:compose-substitution-lists subs subs_))
+      (multiple-value-bind (accessors subs_)
+          (tc:solve-accessors accessors env)
+        (setf subs (tc:compose-substitution-lists subs_ subs))
 
-          (when accessors
-            (tc:tc-error "Ambiguous accessor"
-                         (source:note (first accessors)
-                                      "accessor is ambiguous")))
+        (when accessors
+          (tc:tc-error "Ambiguous accessor"
+                       (source:note (first accessors)
+                                    "accessor is ambiguous")))
 
-          (multiple-value-setq (preds subs)
-            (tc:default-builder-context env nil preds subs))
+        (setf preds (tc:apply-substitution subs preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps env preds subs)))
+        (setf preds (tc:apply-substitution subs preds))
 
-          (let* ((preds (tc:reduce-context env preds subs))
-                 (subs (tc:compose-substitution-lists
-                        (tc:default-subs env nil preds)
-                        subs))
-                 (preds (tc:reduce-context env preds subs))
+        (multiple-value-setq (preds subs)
+          (tc:default-builder-context env nil preds subs))
 
-                 (node (tc:apply-substitution subs node))
-                 (ty (tc:apply-substitution subs ty))
+        (let* ((preds (discharge-fundep-preds env (tc:reduce-context env preds subs) subs))
+               (subs (tc:compose-substitution-lists
+                      (tc:default-subs env nil preds)
+                      subs))
+               (preds (discharge-fundep-preds env (tc:reduce-context env preds subs) subs))
 
-                 (qual-ty (tc:qualify preds ty))
-                 (scheme (tc:quantify (tc:type-variables qual-ty) qual-ty)))
+               (node (tc:apply-substitution subs node))
+               (ty (tc:apply-substitution subs ty))
 
-            (when (null preds)
-              (return-from %expression-entry-point
-                (let ((node (codegen:optimize-node
-                             (codegen:translate-expression node nil env)
-                             env)))
-                  (codegen:codegen-expression
-                   (codegen:direct-application
-                    node
-                    (codegen:make-function-table env))
-                   env))))
+               (qual-ty (tc:qualify preds ty))
+               (scheme (tc:quantify (tc:type-variables qual-ty) qual-ty)))
 
-            (tc:tc-error "Unable to codegen"
-                         (tc:tc-note node
-                                     "expression has ambiguous type ~A"
-                                     (tc:type-to-string scheme env))
-                         (tc:tc-note node
-                                     "Add a type assertion with THE to resolve ambiguity"))))))))
+          (when (null preds)
+            (return-from %expression-entry-point
+              (let ((node (codegen:optimize-node
+                           (codegen:translate-expression node nil env)
+                           env)))
+                (codegen:codegen-expression
+                 (codegen:direct-application
+                  node
+                  (codegen:make-function-table env))
+                 env))))
+
+          (tc:tc-error "Unable to codegen"
+                       (tc:tc-note node
+                                   "expression has ambiguous type ~A"
+                                   (tc:type-to-string scheme env))
+                       (tc:tc-note node
+                                   "Add a type assertion with THE to resolve ambiguity")))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."
