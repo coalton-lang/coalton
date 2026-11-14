@@ -1,5 +1,20 @@
 (cl:in-package #:coalton-native-tests)
 
+(coalton-toplevel
+  ;; An element type whose EQ dictionary records every comparison, so the
+  ;; tests below can observe that EQ short-circuits.
+  (define-struct Eq-Probe
+    (value Integer))
+
+  (define eq-probe-comparisons (cell:new (the Integer 0)))
+
+  (define-instance (Eq Eq-Probe)
+    (define (== a b)
+      (progn
+        (cell:increment! eq-probe-comparisons)
+        (match (Tuple a b)
+          ((Tuple (Eq-Probe x) (Eq-Probe y)) (== x y)))))))
+
 (define-test test-vector-constructor-equivalencies ()
   (let vec = (vector:with-capacity 10))
   (iter:for-each! (fn (x)
@@ -12,7 +27,80 @@
           vec)))
 
 (define-test test-vector-initial-element ()
-  (== (vector:make "x" "x" "x") (vector:with-initial-element 3 "x")))
+  (is (== (vector:make "x" "x" "x") (vector:with-initial-element 3 "x")))
+  ;; The one-pass constructor must preserve the invariants of the old
+  ;; WITH-CAPACITY + EXTEND! implementation: exact capacity, a fill pointer,
+  ;; and the ability to grow in place.
+  (let v = (vector:with-initial-element 4 "x"))
+  (is (== 4 (vector:length v)))
+  (is (== 4 (vector:capacity v)))
+  (is (== (Some "x") (vector:head v)))
+  (vector:push! "y" v)
+  (is (== (vector:make "x" "x" "x" "x" "y") v))
+  (is (vector:empty? (vector:with-initial-element 0 "x"))))
+
+(define-test test-vector-append-empty ()
+  (let empty = (the (Vector Integer) (vector:new)))
+  (let v = (vector:make 1 2 3))
+  (is (== (vector:make 1 2 3) (vector:append empty v)))
+  (is (== (vector:make 1 2 3) (vector:append v empty)))
+  (is (vector:empty? (vector:append empty empty)))
+  ;; APPEND must allocate one fresh, growable vector rather than a view of
+  ;; either input.
+  (let out = (vector:append v v))
+  (is (== (vector:make 1 2 3 1 2 3) out))
+  (is (== 6 (vector:capacity out)))
+  (vector:push! 4 out)
+  (is (== (vector:make 1 2 3) v))
+  (is (== (vector:make 1 2 3 1 2 3 4) out)))
+
+(define-test test-vector-extend-preserves-spare-capacity ()
+  ;; Regression: EXTEND! used to resize to LENGTH + (SIZE - REMAINING),
+  ;; shrinking a vector that already had spare capacity and forcing every
+  ;; following PUSH! to reallocate.
+  (let v = (the (Vector Integer) (vector:with-capacity 1000)))
+  (vector:push! 0 v)
+  (is (== 1000 (vector:capacity v)))
+  (vector:extend! v (iter:take! 1000 (iter:count-forever)))
+  (is (== 1001 (vector:length v)))
+  (is (== 1001 (vector:capacity v)))
+  (is (== (Some 0) (vector:head v)))
+  (is (== (Some 999) (vector:last v))))
+
+(define-test test-vector-extend-uses-size-hint ()
+  ;; EXTEND! should size its single resize from the iterator's hint even
+  ;; when that iterator yields no elements at all.
+  (let v = (the (Vector Integer) (vector:with-capacity 10)))
+  (vector:push! 0 v)
+  (vector:extend! v (iter:with-size (fn () (the (Optional Integer) None)) 100))
+  (is (== 1 (vector:length v)))
+  (is (== 101 (vector:capacity v))))
+
+(define-test test-vector-eq-basic ()
+  (is (== (vector:make 1 2 3) (vector:make 1 2 3)))
+  (is (/= (vector:make 1 2 3) (vector:make 1 2 4)))
+  (is (/= (vector:make 1 2) (vector:make 1 2 3)))
+  (is (== (the (Vector Integer) (vector:new))
+          (the (Vector Integer) (vector:new))))
+  ;; Nested vectors exercise dispatch through the element EQ dictionary.
+  (is (== (vector:make (vector:make 1 2) (vector:make 3))
+          (vector:make (vector:make 1 2) (vector:make 3))))
+  (is (/= (vector:make (vector:make 1 2) (vector:make 3))
+          (vector:make (vector:make 1 2) (vector:make 4)))))
+
+(define-test test-vector-eq-short-circuits ()
+  (let a = (vector:make (Eq-Probe 1) (Eq-Probe 2) (Eq-Probe 3)))
+  (cell:write! eq-probe-comparisons 0)
+  (is (/= a (vector:make (Eq-Probe 9) (Eq-Probe 2) (Eq-Probe 3))))
+  ;; EQ must stop at the first unequal pair rather than walking all three.
+  (is (== 1 (cell:read eq-probe-comparisons)))
+  (cell:write! eq-probe-comparisons 0)
+  (is (== a (vector:make (Eq-Probe 1) (Eq-Probe 2) (Eq-Probe 3))))
+  (is (== 3 (cell:read eq-probe-comparisons)))
+  (cell:write! eq-probe-comparisons 0)
+  ;; Differing lengths are rejected before any element is compared.
+  (is (/= a (vector:make (Eq-Probe 1))))
+  (is (== 0 (cell:read eq-probe-comparisons))))
 
 (define-test test-vector-basic-operations ()
   (let vec0 = (vector:new))
