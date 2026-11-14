@@ -726,6 +726,7 @@ show these effects. On the machine above:
 | --- | ---: | --- |
 | Ising model, 2048×2048 lattice, 200 sweeps | 16.0x | computation |
 | N-body, 8192 bodies, 10 steps | 13.9x | computation |
+| GRIN optics, 16384 rays, 2000 steps | 11.1x | computation |
 | FDTD electromagnetics, 1024×1024 grid, 1000 steps | 5.2x | memory bandwidth |
 | Path tracing, 640×360 pixels, 16 samples per pixel | 3.1x | garbage collection |
 
@@ -742,8 +743,8 @@ With 16 workers, one per core, the path tracer's speedup rises to 4.4x.
 - The [parallel numerics
   examples](https://github.com/coalton-lang/coalton/tree/main/examples/parallel-numerics)
   are complete parallel programs: an FDTD electromagnetic simulation, an
-  N-body simulation, a Monte Carlo simulation of the Ising model, and a
-  path tracer.
+  N-body simulation, a Monte Carlo simulation of the Ising model, a
+  graded-index optics simulation, and a path tracer.
 - The system `coalton/threads/benchmarks` measures the speedups of the
   parallel operations on your machine. Load it, and evaluate
   `(coalton/threads/benchmarks:run-benchmarks)`.
