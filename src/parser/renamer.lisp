@@ -1238,7 +1238,11 @@
     (declare (type algo:immutable-map ctx)
              (values toplevel-define-class))
 
-    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-class-vars toplevel)))
+    (let* ((tvars (remove-duplicates
+                   (append (mapcar #'keyword-src-name (toplevel-define-class-vars toplevel))
+                           (mapcar #'tyvar-name
+                                   (collect-type-variables (toplevel-define-class-preds toplevel))))
+                   :test #'eq))
 
            (new-bindings (make-local-vars tvars :package util:+keyword-package+))
 

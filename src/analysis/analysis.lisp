@@ -102,7 +102,6 @@
         (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance)
               :do (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)
               :do (find-underapplied-values method)
-              :do (find-underapplied-values method)
               :do (find-discarded-results method)
               :do (loop :for pattern :in (tc:binding-parameters method)
                         :do (check-pattern-exhaustiveness pattern env)))))))

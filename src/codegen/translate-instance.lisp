@@ -97,6 +97,13 @@
 
          (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
 
+         (subs (nth-value 1
+                          (tc:solve-fundeps
+                           env
+                           (append (tc:apply-substitution subs (tc:ty-class-superclasses class))
+                                   (tc:toplevel-define-instance-context instance))
+                           subs)))
+
          (superclass-preds (tc:apply-substitution subs (mapcar #'car (tc:ty-class-superclass-dict class))))
 
          ;; These will be methods with the dict arguments
