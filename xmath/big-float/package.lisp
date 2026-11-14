@@ -5,6 +5,7 @@
 (coalton/utils:defstdlib-package #:coalton/xmath/big-float
   (:nicknames #:coalton/big-float
               #:coalton-library/big-float)
+  (:shadow #:scale)
   (:use #:coalton
         #:coalton/classes
         #:coalton/functions

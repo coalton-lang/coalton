@@ -6,7 +6,9 @@
     (:use #:coalton
           #:coalton/classes
           #:coalton/utils
-          #:coalton/math/arith)
+          #:coalton/math/arith
+          #:coalton/math/integral
+          #:coalton/math/real)
   (:local-nicknames
    (#:arith #:coalton/math/arith)
    (#:types #:coalton/types)
@@ -113,7 +115,7 @@ blackboard-bold 𝕚.)"
     (inline)
     (define (== a b) (complex-equal a b)))
 
-  (define-instance (ComplexComponent :a => Num (Complex :a))
+  (define-num (ComplexComponent :a => (Complex :a))
     (inline)
     (define (+ a b) (complex-plus a b))
     (inline)
@@ -122,6 +124,15 @@ blackboard-bold 𝕚.)"
     (define (* a b) (complex-times a b))
     (inline)
     (define (fromInt n) (complex-fromint n)))
+
+  (define-instance (ComplexComponent :a => Scale :a (Complex :a))
+    (inline)
+    (define (scale k z)
+      (complex (* k (real-part z)) (* k (imag-part z)))))
+
+  (define-instance (ComplexComponent :a => Module :a (Complex :a)))
+
+  (define-instance ((ComplexComponent :a) (Reciprocable :a) => VectorSpace :a (Complex :a)))
 
   ;; BUG: This shouldn't be overlapping
   ;; (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
@@ -306,6 +317,43 @@ blackboard-bold 𝕚.)"
 (%define-native-complex-instances F64 cl:double-float)
 (%define-native-complex-instances Fraction cl:rational)
 (%define-native-complex-instances Integer cl:integer :division cl:nil)
+
+(coalton-toplevel
+  (define-instance (UnitNormal (Complex Integer))
+    (define (unit-part z)
+      (let a = (real-part z))
+      (let b = (imag-part z))
+      (cond
+        ((and (== a 0) (== b 0)) (complex 1 0))
+        ((and (> a 0) (>= b 0)) (complex 1 0))
+        ((and (<= a 0) (> b 0)) (complex 0 1))
+        ((and (< a 0) (<= b 0)) (complex -1 0))
+        (True (complex 0 -1))))
+    (define (normal-part z)
+      (let a = (real-part z))
+      (let b = (imag-part z))
+      (cond
+        ((and (== a 0) (== b 0)) z)
+        ((and (> a 0) (>= b 0)) z)
+        ((and (<= a 0) (> b 0)) (complex b (negate a)))
+        ((and (< a 0) (<= b 0)) (complex (negate a) (negate b)))
+        (True (complex (negate b) a)))))
+
+  (define-instance (EuclideanDomain (Complex Integer))
+    (define (euclidean-degree z)
+      (fromInt (square-magnitude z)))
+    (define (quotRem a b)
+      (let norm-b = (square-magnitude b))
+      (let prod = (* a (conjugate b)))
+      (let q = (complex (round/ (real-part prod) norm-b)
+                        (round/ (imag-part prod) norm-b)))
+      (values q (- a (* b q))))
+    (define (quot a b)
+      (let (values q _) = (quotRem a b))
+      q)
+    (define (rem a b)
+      (let (values _ r) = (quotRem a b))
+      r)))
 
 
 (cl:defmacro %define-standard-complex-instances (type)

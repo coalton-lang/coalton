@@ -504,10 +504,10 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                 ((None) False)))))
       (inner False)))
 
-  (declare sum! (Num :num => Iterator :num -> :num))
+  (declare sum! (Additive :num => Iterator :num -> :num))
   (define (sum! iter)
     "Add together all the elements of ITER."
-    (fold! + 0 iter))
+    (fold! + zero iter))
 
   (declare count! (Iterator :elt -> UFix))
   (define (count! iter)

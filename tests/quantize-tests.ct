@@ -46,3 +46,138 @@
          (is (== (math:floor/ a b) (floor (math:exact/ a b))))
          (is (== (math:ceiling/ a b) (ceiling (math:exact/ a b))))
          (is (== (math:floor/ a b) (math:div a b))))))))
+
+(coalton-toplevel
+  ;; 1. Vector space without Multiplicative or Num
+  (derive Eq)
+  (define-struct TestVec2
+    (vx F64)
+    (vy F64))
+
+  (define-instance (Additive TestVec2)
+    (define (+ (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (TestVec2 (+ x1 x2) (+ y1 y2)))
+    (define zero (TestVec2 0.0d0 0.0d0)))
+
+  (define-instance (AdditiveGroup TestVec2)
+    (define (- (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (TestVec2 (- x1 x2) (- y1 y2)))
+    (define (negate (TestVec2 x y))
+      (TestVec2 (negate x) (negate y))))
+
+  (define-instance (math:Scale F64 TestVec2)
+    (define (math:scale c (TestVec2 x y))
+      (TestVec2 (* c x) (* c y))))
+
+  (define-instance (math:Module F64 TestVec2))
+  (define-instance (math:VectorSpace F64 TestVec2))
+
+  (define-instance (math:InnerSpace F64 TestVec2)
+    (define (math:inner-product (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (+ (* x1 x2) (* y1 y2))))
+
+  ;; 2. Multiplicative monoid without Additive (2x2 integer matrix)
+  (derive Eq)
+  (define-struct Mat2x2
+    (m00 Integer) (m01 Integer)
+    (m10 Integer) (m11 Integer))
+
+  (define-instance (Multiplicative Mat2x2)
+    (define (* (Mat2x2 a00 a01 a10 a11) (Mat2x2 b00 b01 b10 b11))
+      (Mat2x2 (+ (* a00 b00) (* a01 b10)) (+ (* a00 b01) (* a01 b11))
+              (+ (* a10 b00) (* a11 b10)) (+ (* a10 b01) (* a11 b11))))
+    (define one (Mat2x2 1 0 0 1)))
+
+  ;; 3. Tropical min-plus Semiring (no AdditiveGroup)
+  (derive Eq)
+  (define-type TropicalMin
+    TropInf
+    (TropVal Integer))
+
+  (define-instance (Additive TropicalMin)
+    (define (+ a b)
+      (match (Tuple a b)
+        ((Tuple (TropInf) x) x)
+        ((Tuple x (TropInf)) x)
+        ((Tuple (TropVal x) (TropVal y)) (TropVal (min x y)))))
+    (define zero TropInf))
+
+  (define-instance (Multiplicative TropicalMin)
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (TropInf) _) TropInf)
+        ((Tuple _ (TropInf)) TropInf)
+        ((Tuple (TropVal x) (TropVal y)) (TropVal (+ x y)))))
+    (define one (TropVal 0)))
+
+  (define-instance (Semiring TropicalMin))
+
+  ;; 4. Ring without Eq
+  (define-type NoEqRing
+    (NoEqRing Integer))
+
+  (define-ring NoEqRing
+    (define (+ (NoEqRing a) (NoEqRing b)) (NoEqRing (+ a b)))
+    (define (- (NoEqRing a) (NoEqRing b)) (NoEqRing (- a b)))
+    (define (* (NoEqRing a) (NoEqRing b)) (NoEqRing (* a b)))
+    (define (fromInt n) (NoEqRing n)))
+
+  (declare unwrap-noeq (NoEqRing -> Integer))
+  (define (unwrap-noeq (NoEqRing n)) n))
+
+(define-test test-algebraic-hierarchy ()
+  ;; Additive, AdditiveGroup, VectorSpace, InnerSpace on TestVec2
+  (let ((u (TestVec2 1.0d0 2.0d0))
+        (v (TestVec2 3.0d0 -1.0d0)))
+    (is (== (+ u v) (TestVec2 4.0d0 1.0d0)))
+    (is (== (- u v) (TestVec2 -2.0d0 3.0d0)))
+    (is (== (negate u) (TestVec2 -1.0d0 -2.0d0)))
+    (is (== (sum (make-list u v)) (TestVec2 4.0d0 1.0d0)))
+    (is (== (sum (the (List TestVec2) Nil)) zero))
+    (is (== (math:scale 2.5d0 u) (TestVec2 2.5d0 5.0d0)))
+    (is (== (math:inner-product u v) 1.0d0)))
+
+  ;; Multiplicative binary exponentiation (^) and product on 2x2 matrices
+  (let ((fib-mat (Mat2x2 1 1 1 0)))
+    (is (== (^ fib-mat 0) one))
+    (is (== (^ fib-mat 1) fib-mat))
+    (is (== (^ fib-mat 10) (Mat2x2 89 55 55 34)))
+    (is (== (product (make-list fib-mat fib-mat fib-mat)) (^ fib-mat 3))))
+
+  ;; Tropical Semiring
+  (let ((a (TropVal 5))
+        (b (TropVal 3)))
+    (is (== (+ a b) (TropVal 3)))
+    (is (== (+ a zero) a))
+    (is (== (* a b) (TropVal 8)))
+    (is (== (* a one) a))
+    (is (== (* a zero) zero))
+    (is (== (^ a 4) (TropVal 20)))
+    (is (== (math:fromNat 0) TropInf))
+    (is (== (math:fromNat 5) (TropVal 0))))
+
+  ;; Ring without Eq
+  (let ((r1 (the NoEqRing (fromInt 7)))
+        (r2 (the NoEqRing (fromInt 3))))
+    (is (== (unwrap-noeq (+ r1 r2)) 10))
+    (is (== (unwrap-noeq (- r1 r2)) 4))
+    (is (== (unwrap-noeq (* r1 r2)) 21))
+    (is (== (unwrap-noeq (negate r1)) -7))
+    (is (== (unwrap-noeq (the NoEqRing zero)) 0))
+    (is (== (unwrap-noeq (the NoEqRing one)) 1)))
+
+  ;; EuclideanDomain and extended-gcd on Integer and Gaussian integers (Complex Integer)
+  (let (values g s t) = (math:extended-gcd -54 24))
+  (is (== g 6))
+  (is (== (+ (* s -54) (* t 24)) g))
+  (is (== (math:gcd -6 0) 6))
+
+  (let ((z1 (math:complex 11 3))
+        (z2 (math:complex 1 8)))
+    (let (values q r) = (math:quotRem z1 z2))
+    (is (== z1 (+ (* z2 q) r)))
+    (is (< (math:euclidean-degree r) (math:euclidean-degree z2)))
+    (let (values gz sz tz) = (math:extended-gcd z1 z2))
+    (is (== gz (math:gcd z1 z2)))
+    (is (== (math:normal-part gz) gz))
+    (is (== (+ (* sz z1) (* tz z2)) gz))))

@@ -122,15 +122,31 @@ value."
     (define (<=> c1 c2)
       (<=> (read c1) (read c2))))
 
-  (define-instance (Num :a => Num (Cell :a))
+  (define-instance (Additive :a => Additive (Cell :a))
     (define (+ c1 c2)
       (new (+ (read c1) (read c2))))
+    (define zero
+      (new zero)))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (Cell :a))
     (define (- c1 c2)
       (new (- (read c1) (read c2))))
+    (define (negate c)
+      (new (negate (read c)))))
+
+  (define-instance (Multiplicative :a => Multiplicative (Cell :a))
     (define (* c1 c2)
       (new (* (read c1) (read c2))))
+    (define one
+      (new one)))
+
+  (define-instance (Semiring :a => Semiring (Cell :a)))
+
+  (define-instance (Ring :a => Ring (Cell :a))
     (define (fromInt i)
       (new (fromInt i))))
+
+  (define-instance (Num :a => Num (Cell :a)))
 
   (define-instance (Semigroup :a => Semigroup (Cell :a))
     (inline)

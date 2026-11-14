@@ -434,7 +434,7 @@
       (let (values a b) = (f))
       (+ a b))"
 
-   '("example2" . "(Num :a => (Void -> :a * :a) -> :a)"))
+   '("example2" . "(Additive :a => (Void -> :a * :a) -> :a)"))
 
   (check-coalton-types
    "(declare unit-identity (Unit -> Integer))
@@ -1527,8 +1527,8 @@
     (define short-ignore ƒ_x_.x)"
    '("short-id" . "(:a -> :a)")
    '("short-zero" . "(Void -> Boolean)")
-   '("short-add" . "(Num :a => :a * :a -> :a)")
-   '("short-nested-add" . "(Num :a => :a -> :a -> :a)")
+   '("short-add" . "(Additive :a => :a * :a -> :a)")
+   '("short-nested-add" . "(Additive :a => :a -> :a -> :a)")
    '("short-ignore" . "(:a * :b * :c -> :b)"))
 
   (signals coalton-impl/parser:parse-error
@@ -1796,4 +1796,4 @@
   (check-coalton-types
    "(define f (fn (x) (fn (y) (+ x y))))"
 
-   '("f" . "(Num :a => :a -> :a -> :a)")))
+   '("f" . "(Additive :a => :a -> :a -> :a)")))

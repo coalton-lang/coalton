@@ -57,7 +57,7 @@
   (define-instance (Eq ConversionScalar)
     (define (== (ConversionScalar x) (ConversionScalar y)) (== x y)))
 
-  (define-instance (Num ConversionScalar)
+  (define-num ConversionScalar
     (define (+ (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (+ x y)))
     (define (- (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (- x y)))
     (define (* (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (* x y)))

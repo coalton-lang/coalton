@@ -13,6 +13,11 @@
   (:local-nicknames
    (#:bits #:coalton/bits))
   (:export
+   #:UnitNormal
+   #:unit-part
+   #:normal-part
+   #:EuclideanDomain
+   #:euclidean-degree
    #:Remainder
    #:Integral
    #:div
@@ -31,6 +36,8 @@
    #:^^
    #:gcd
    #:lcm
+   #:extended-gcd
+   #:factorial
    #:isqrt
    #:ilog))
 
@@ -41,30 +48,46 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Num :a => Remainder :a)
-    "Remainder is typically an integral domain satisfying:
+  (define-class (Num :a => UnitNormal :a)
+    "A `Num` where every element decomposes into a unit and a canonical associate.
 
-```
-a = (+ (* b (quot a b)) (rem a b))
-a = (+ (* b (div a b)) (mod a b))
-```
-"
+Laws:
+- Decomposition: `x == (* (unit-part x) (normal-part x))`
+- Idempotence: `(normal-part (normal-part x)) == (normal-part x)`
+- Zero: `(normal-part zero) == zero` and `(unit-part zero) == one`"
+    (unit-part (:a -> :a))
+    (normal-part (:a -> :a)))
+
+  (define-class (UnitNormal :a => EuclideanDomain :a)
+    "A domain with a degree/norm measure and Euclidean division (`quotRem`, `quot`, `rem`).
+
+Laws:
+- Division: for `b /= zero`, `a == (+ (* b (quot a b)) (rem a b))`
+- Remainder bound: `(rem a b) == zero` or `(< (euclidean-degree (rem a b)) (euclidean-degree b))`
+- Consistency: `(quotRem a b) == (values (quot a b) (rem a b))`"
+    (euclidean-degree (:a -> UFix))
     (quot (:a * :a -> :a))
     (rem (:a * :a -> :a))
-    (quotRem (:a * :a -> :a * :a))
+    (quotRem (:a * :a -> :a * :a)))
+
+  (define-class (EuclideanDomain :a => Remainder :a)
+    "A `EuclideanDomain` that also provides floored division (`div`, `mod`, `divMod`).
+
+Laws:
+- Division: for `b /= zero`, `a == (+ (* b (div a b)) (mod a b))`
+- Consistency: `(divMod a b) == (values (div a b) (mod a b))`"
     (div (:a * :a -> :a))
     (mod (:a * :a -> :a))
     (divMod (:a * :a -> :a * :a)))
 
-  (define-class ((Remainder :int) (Ord :int) => Integral :int)
-    "Integral is a number that is either even or odd where `div` and `quot`
-are floored and truncated division, respectively."
+  (define-class ((Remainder :int) (Num :int) (Ord :int) => Integral :int)
+    "An ordered integer type supporting floored (`div`) and truncated (`quot`) division and conversion to `Integer`."
     (toInteger (:int -> Integer)))
 
   (inline)
-  (declare integral->num ((Integral :a) (Num :b) => :a -> :b))
+  (declare integral->num ((Integral :a) (Ring :b) => :a -> :b))
   (define (integral->num n)
-    "Converts any Integral N into any Num."
+    "Converts any `Integral` `n` into any `Ring`."
     (fromInt (toInteger n)))
 
   (declare rsh ((Integral :n) (Bits :b) => :b * :n -> :b))
@@ -87,9 +110,9 @@ are floored and truncated division, respectively."
     "Is N odd?"
     (== 1 (mod n 2)))
 
-  (declare ^ ((Num :a) (Integral :int) => (:a * :int -> :a)))
+  (declare ^ ((Multiplicative :a) (Integral :int) => (:a * :int -> :a)))
   (define (^ base power)
-    "Exponentiate BASE to a non-negative POWER."
+    "Exponentiate `base` to a non-negative `power`."
     (let (
           ;; (g x n b) = (* (x ^ n) b)
           (g 
@@ -110,28 +133,46 @@ are floored and truncated division, respectively."
         ((== power 3) (* (* base base) base))
         ((== power 2) (* base base))
         ((== power 1) base)
-        ((== power 0) 1)
+        ((== power 0) one)
         (True (error "Can't exponentiate with a negative exponent.")))))
 
   (declare ^^ ((Reciprocable :a) (Integral :int) => (:a * :int -> :a)))
   (define (^^ base power)
-    "Exponentiate BASE to a signed POWER."
+    "Exponentiate `base` to a signed `power`."
     (if (< power 0)
-        (^ (/ 1 base) (negate power))
+        (^ (reciprocal base) (negate power))
         (^ base power)))
 
-  (declare gcd ((Remainder :a) (Ord :a) => :a * :a -> :a))
+  (declare gcd (EuclideanDomain :a => :a * :a -> :a))
   (define (gcd a b)
-    "The greatest common divisor of A and B."
-    (if (== b 0) a
-        (gcd (abs b) (abs (rem a b)))))
+    "The canonical greatest common divisor of `a` and `b`."
+    (if (== b zero)
+        (normal-part a)
+        (gcd (normal-part b) (normal-part (rem a b)))))
 
-  (declare lcm ((Remainder :a) (Ord :a) => :a * :a -> :a))
+  (declare lcm (EuclideanDomain :a => :a * :a -> :a))
   (define (lcm a b)
-    "The least common multiple of A and B."
-    (if (or (== a 0) (== b 0))
-        0
-        (* (abs a) (quot (abs b) (gcd a b)))))
+    "The canonical least common multiple of `a` and `b`."
+    (if (or (== a zero) (== b zero))
+        zero
+        (* (normal-part a) (quot (normal-part b) (gcd a b)))))
+
+  (declare extended-gcd (EuclideanDomain :a => :a * :a -> :a * :a * :a))
+  (define (extended-gcd a b)
+    "Return `(values g s t)` such that `g == (gcd a b) == (+ (* s a) (* t b))`."
+    (rec % ((old-r a) (r b)
+            (old-s one) (s zero)
+            (old-t zero) (t one))
+      (if (== r zero)
+          (let ((u (unit-part old-r)))
+            (values (normal-part old-r)
+                    (quot old-s u)
+                    (quot old-t u)))
+          (progn
+            (let (values q rem-r) = (quotRem old-r r))
+            (% r rem-r
+               s (- old-s (* q s))
+               t (- old-t (* q t)))))))
 
   (declare factorial ((Integral :int) => :int -> :int))
   (define (factorial n)
@@ -178,9 +219,24 @@ are floored and truncated division, respectively."
         ((>= x 0) x)
         (True (error "Cannot take ISQRT of a negative number."))))))
 
-(cl:defmacro %define-remainder-native (type)
+(cl:defmacro %define-remainder-native (type cl:&optional (signed cl:t))
   `(coalton-toplevel
-     (define-instance (Remainder ,type)
+     (define-instance (UnitNormal ,type)
+       (inline)
+       (define (unit-part x)
+         ,(cl:if signed
+                 `(if (< x zero) (negate one) one)
+                 `(progn x one)))
+       (inline)
+       (define (normal-part x)
+         ,(cl:if signed
+                 `(abs x)
+                 `x)))
+
+     (define-instance (EuclideanDomain ,type)
+       (inline)
+       (define (euclidean-degree x)
+         (fromInt (lisp (-> Integer) (x) (cl:values (cl:truncate (cl:abs x))))))
        (inline)
        (define (quot a n)
          (fromInt (lisp (-> Integer) (a n) (cl:truncate a n))))
@@ -191,7 +247,9 @@ are floored and truncated division, respectively."
        (define (quotRem a n)
          (let (values q r) = (lisp (-> Integer * ,type) (a n)
                                (cl:truncate a n)))
-         (values (fromInt q) r))
+         (values (fromInt q) r)))
+
+     (define-instance (Remainder ,type)
        (inline)
        (define (div a n)
          (fromInt (lisp (-> Integer) (a n) (cl:floor a n))))
@@ -213,7 +271,7 @@ are floored and truncated division, respectively."
            (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
-       (%define-remainder-native ,type)
+       (%define-remainder-native ,type ,signed)
        
        (coalton-toplevel
          (define-instance (Integral ,type)

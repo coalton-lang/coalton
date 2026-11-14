@@ -63,7 +63,7 @@ where
     (ceiling (:a -> Integer)))
 
   (define-class ((Quantizable :a) (Num :a) => Real :a)
-    "A real number that can be approximated with abs(real-approx x - x) < 2^-n."
+    "A real number that can be approximated with `abs(real-approx n x - x) < 2^-n`."
     (real-approx (UFix * :a -> Fraction)))
 
   (define-class ((Real :a) (Ord :a) => Rational :a)
@@ -260,10 +260,10 @@ remainders expressed as values of type of X."
     "Return the nearest integer to X, with ties breaking toward positive infinity."
     (floor/ (ceiling (* 2 x)) 2))
 
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
+  (declare safe/ ((Eq :a) (Additive :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
-    (if (== y 0)
+    (if (== y zero)
         None
         (Some (general/ x y))))
 

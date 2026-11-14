@@ -7,7 +7,8 @@
    #:coalton
    #:coalton/math/num-defining-macros)
   (:local-nicknames
-   (#:cls #:coalton/classes))
+   (#:cls #:coalton/classes)
+   (#:arith #:coalton/math/arith))
   (:import-from
    #:coalton/hash
    #:define-sxhash-hasher))
@@ -76,12 +77,16 @@
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
 
-  (define-instance (cls:Num Bit)
+  (cls:define-num Bit
     (inline)
     (define (cls:+ a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
           (cl:logxor a b))))
+
+    (define cls:zero
+      (coalton++:unsafe
+        (lisp (-> Bit) () 0)))
 
     (inline)
     (define (cls:- a b)
@@ -90,10 +95,18 @@
           (cl:logxor a b))))
 
     (inline)
+    (define (cls:negate a)
+      a)
+
+    (inline)
     (define (cls:* a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
           (cl:logand a b))))
+
+    (define cls:one
+      (coalton++:unsafe
+        (lisp (-> Bit) () 1)))
 
     (inline)
     (define (cls:fromInt x)
@@ -103,14 +116,24 @@ whether it's even or odd)."
         (lisp (-> Bit) (x)
           (cl:ldb (cl:byte 1 0) x)))))
 
+  (define-instance (arith:Scale Bit Bit)
+    (inline)
+    (define (arith:scale a b) (cls:* a b)))
+
+  (define-instance (arith:Module Bit Bit))
+
   ;; UFixes are unsafe and depend on implementation.
-  (define-instance (cls:Num UFix)
+  (cls:define-num UFix
     (inline)
     (define (cls:+ a b)
       (coalton++:unsafe
         (lisp (-> UFix) (a b)
           (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
             (cl:+ a b)))))
+
+    (define cls:zero
+      (coalton++:unsafe
+        (lisp (-> UFix) () 0)))
 
     (inline)
     (define (cls:- a b)
@@ -120,17 +143,34 @@ whether it's even or odd)."
             (cl:- a b)))))
 
     (inline)
+    (define (cls:negate a)
+      (coalton++:unsafe
+        (lisp (-> UFix) (a)
+          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+            (cl:- 0 a)))))
+
+    (inline)
     (define (cls:* a b)
       (coalton++:unsafe
         (lisp (-> UFix) (a b)
           (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
             (cl:* a b)))))
 
+    (define cls:one
+      (coalton++:unsafe
+        (lisp (-> UFix) () 1)))
+
     (inline)
     (define (cls:fromInt x)
       (coalton++:unsafe
         (lisp (-> UFix) (x)
           (cl:mod x #.(cl:expt 2 +fixnum-bits+))))))
+
+  (define-instance (arith:Scale UFix UFix)
+    (inline)
+    (define (arith:scale a b) (cls:* a b)))
+
+  (define-instance (arith:Module UFix UFix))
 
 
 ;;;

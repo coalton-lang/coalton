@@ -3,7 +3,7 @@
 (coalton-toplevel
   (derive Eq)
   (define-type PatternNumber (PatternNumber Integer))
-  (define-instance (Num PatternNumber)
+  (define-num PatternNumber
     (define (+ (PatternNumber a) (PatternNumber b)) (PatternNumber (+ a b)))
     (define (- (PatternNumber a) (PatternNumber b)) (PatternNumber (- a b)))
     (define (* (PatternNumber a) (PatternNumber b)) (PatternNumber (* a b)))

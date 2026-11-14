@@ -1690,6 +1690,66 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                      (poly-int->frac (poly-int-mul (poly-frac-clear-denominators a)
                                                   (poly-frac-clear-denominators b)))))
 
+  (define-instance (Eq (Poly Integer))
+    (define (== a b)
+      (== (coefficients (poly-trim-desc a))
+          (coefficients (poly-trim-desc b)))))
+
+  (define-num (Poly Integer)
+    (define (+ a b) (poly-int-add a b))
+    (define zero poly-int-zero)
+    (define (- a b) (poly-int-sub a b))
+    (define (negate a) (poly-int-neg a))
+    (define (* a b) (poly-int-mul a b))
+    (define one poly-int-one)
+    (define (fromInt n) (Poly (Cons n Nil))))
+
+  (define-instance (Scale Integer (Poly Integer))
+    (define (scale k p) (poly-int-scale k p)))
+
+  (define-instance (Module Integer (Poly Integer)))
+
+  (define-instance (Eq (Poly Fraction))
+    (define (== a b)
+      (== (coefficients (poly-frac-trim a))
+          (coefficients (poly-frac-trim b)))))
+
+  (define-num (Poly Fraction)
+    (define (+ a b) (poly-frac-add a b))
+    (define zero poly-frac-zero)
+    (define (- a b) (poly-frac-sub a b))
+    (define (negate a) (poly-frac-neg a))
+    (define (* a b) (poly-frac-mul a b))
+    (define one (Poly (Cons 1 Nil)))
+    (define (fromInt n) (Poly (Cons (fromInt n) Nil))))
+
+  (define-instance (Scale Fraction (Poly Fraction))
+    (define (scale k p) (poly-frac-scale k p)))
+
+  (define-instance (Module Fraction (Poly Fraction)))
+  (define-instance (VectorSpace Fraction (Poly Fraction)))
+
+  (define-instance (UnitNormal (Poly Fraction))
+    (define (unit-part p)
+      (let p0 = (poly-frac-trim p))
+      (if (poly-frac-zero? p0)
+          (Poly (Cons 1 Nil))
+          (Poly (Cons (poly-frac-leading p0) Nil))))
+    (define (normal-part p)
+      (poly-frac-monic p)))
+
+  (define-instance (EuclideanDomain (Poly Fraction))
+    (define (euclidean-degree p)
+      (to-ufix (poly-frac-degree p)))
+    (define (quotRem a b)
+      (match (poly-frac-divrem a b)
+        ((Tuple q r) (values q r))))
+    (define (quot a b)
+      (match (poly-frac-divrem a b)
+        ((Tuple q _) q)))
+    (define (rem a b)
+      (poly-frac-rem a b)))
+
   (declare poly-frac-pow-mod (Poly Fraction * Integer * Poly Fraction -> Poly Fraction))
   (declare poly-frac-inverse-mod (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-inverse-mod value modulus)
@@ -2095,11 +2155,13 @@ No rationality decision or coefficient-dependent precision is needed."
     (define (<=> a b)
       (compare-certified a b)))
 
-  (define-instance (Num RealAlgebraic)
+  (define-num RealAlgebraic
     (define (+ a b)
       (add-certified a b))
     (define (- a b)
       (sub-certified a b))
+    (define (negate a)
+      (affine-certified -1 0 a))
     (define (* a b)
       (mul-certified a b))
     (define (fromInt z)
@@ -2110,6 +2172,23 @@ No rationality decision or coefficient-dependent precision is needed."
       (div-certified a b))
     (define (reciprocal a)
       (reciprocal-certified a)))
+
+  (define-instance (Scale Fraction RealAlgebraic)
+    (define (scale q x)
+      (affine-certified q 0 x)))
+
+  (define-instance (Module Fraction RealAlgebraic))
+
+  (define-instance (Scale RealAlgebraic RealAlgebraic)
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance (Module RealAlgebraic RealAlgebraic))
+  (define-instance (VectorSpace RealAlgebraic RealAlgebraic))
+
+  (define-instance (InnerSpace RealAlgebraic RealAlgebraic)
+    (inline)
+    (define (inner-product a b) (* a b)))
 
   (define-instance (Radical RealAlgebraic)
     (define (sqrt x)

@@ -146,7 +146,7 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
 
   ;; utilities
 
-  (declare h (Num :t => Hyperdual :t * :t * :t * :t -> Hyperdual :t))
+  (declare h (Semiring :t => Hyperdual :t * :t * :t * :t -> Hyperdual :t))
   (define (h x f0 f1 f2)
     "Compute (f x) given f0 := (f a), f1 := (f' a), and f2 := (f'' a).
 
@@ -155,10 +155,10 @@ Note: See identity (1) in the description of this package (`coalton/xmath/hyperd
     (Hyperdual f0 (* b f1) (* c f1) (+ (* d f1) (* (* b c) f2))))
 
   (inline)
-  (declare square (Num :t => :t -> :t))
+  (declare square (Multiplicative :t => :t -> :t))
   (define (square x) (* x x))
   (inline)
-  (declare cube (Num :t => :t -> :t))
+  (declare cube (Multiplicative :t => :t -> :t))
   (define (cube x) (* (* x x) x))
 
   ;; type class instances
@@ -172,20 +172,42 @@ Note: See identity (1) in the description of this package (`coalton/xmath/hyperd
   (define-instance (Hash :t => Hash (Hyperdual :t))
     (define (hash x) (hash (.a x))))
 
-  (define-instance (Num :t => Into :t (Hyperdual :t))
-    (define (into x) (Hyperdual x 0 0 0)))
+  (define-instance (Additive :t => Into :t (Hyperdual :t))
+    (define (into x) (Hyperdual x zero zero zero)))
 
-  (define-instance (Num :t => Num (Hyperdual :t))
+  (define-instance (Additive :t => Additive (Hyperdual :t))
     (define (+ (Hyperdual ax bx cx dx) (Hyperdual ay by cy dy))
       (Hyperdual (+ ax ay) (+ bx by) (+ cx cy) (+ dx dy)))
+    (define zero (Hyperdual zero zero zero zero)))
+
+  (define-instance (AdditiveGroup :t => AdditiveGroup (Hyperdual :t))
     (define (- (Hyperdual ax bx cx dx) (Hyperdual ay by cy dy))
       (Hyperdual (- ax ay) (- bx by) (- cx cy) (- dx dy)))
+    (define (negate (Hyperdual ax bx cx dx))
+      (Hyperdual (negate ax) (negate bx) (negate cx) (negate dx))))
+
+  (define-instance (Semiring :t => Multiplicative (Hyperdual :t))
     (define (* (Hyperdual ax bx cx dx) (Hyperdual ay by cy dy))
       (Hyperdual (* ax ay)
                  (+ (* ax by) (* bx ay))
                  (+ (* ax cy) (* cx ay))
                  (+ (+ (* ax dy) (* dx ay)) (+ (* bx cy) (* cx by)))))
-    (define (fromInt x) (Hyperdual (fromInt x) 0 0 0)))
+    (define one (Hyperdual one zero zero zero)))
+
+  (define-instance (Semiring :t => Semiring (Hyperdual :t)))
+
+  (define-instance (Ring :t => Ring (Hyperdual :t))
+    (define (fromInt x) (Hyperdual (fromInt x) zero zero zero)))
+
+  (define-instance (Num :t => Num (Hyperdual :t)))
+
+  (define-instance (Multiplicative :t => Scale :t (Hyperdual :t))
+    (inline)
+    (define (scale k (Hyperdual ax bx cx dx))
+      (Hyperdual (* k ax) (* k bx) (* k cx) (* k dx))))
+
+  (define-instance (Ring :t => Module :t (Hyperdual :t)))
+  (define-instance (Reciprocable :t => VectorSpace :t (Hyperdual :t)))
 
   (define-instance (ComplexComponent :t => ComplexComponent (Hyperdual :t))
     (define (complex a b)
@@ -324,53 +346,53 @@ Note: See identity (1) in the description of this package (`coalton/xmath/hyperd
   (define-type-alias (UnOp :t) (:t -> :t))
   (define-type-alias (BinOp :t) (:t * :t -> :t))
 
-  (declare d-x (Num :t => UnOp (Hyperdual :t) * :t -> :t))
+  (declare d-x (Semiring :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-x f x)
     "Compute f'(x)."
-    (.b (f (Hyperdual x 1 1 0))))
+    (.b (f (Hyperdual x one one zero))))
 
-  (declare d-xx (Num :t => UnOp (Hyperdual :t) * :t -> :t))
+  (declare d-xx (Semiring :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-xx f x)
     "Compute f''(x)."
-    (.d (f (Hyperdual x 1 1 0))))
+    (.d (f (Hyperdual x one one zero))))
 
-  (declare partial-x (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare partial-x (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-x f x y)
     "Compute ∂f/∂x(x, y)."
-    (.b (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
+    (.b (f (Hyperdual x one zero zero) (Hyperdual y zero one zero))))
 
-  (declare partial-y (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare partial-y (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-y f x y)
     "Compute ∂f/∂y(x, y)."
-    (.c (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
+    (.c (f (Hyperdual x one zero zero) (Hyperdual y zero one zero))))
 
-  (declare gradient (Num :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
+  (declare gradient (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
   (define (gradient f x y)
     "Compute the gradient (∂f/∂x, ∂f/∂y) at the point (x, y)."
-    (match (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))
+    (match (f (Hyperdual x one zero zero) (Hyperdual y zero one zero))
       ((Hyperdual _ b c _) (Cons b (Cons c Nil)))))
 
-  (declare partial-xx (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare partial-xx (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xx f x y)
     "Compute ∂²f/∂x²(x, y)."
-    (.d (f (Hyperdual x 1 1 0) (Hyperdual y 0 0 0))))
+    (.d (f (Hyperdual x one one zero) (Hyperdual y zero zero zero))))
 
-  (declare partial-xy (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare partial-xy (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xy f x y)
     "Compute ∂²f/∂x∂y(x, y)."
-    (.d (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
+    (.d (f (Hyperdual x one zero zero) (Hyperdual y zero one zero))))
 
-  (declare partial-yy (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare partial-yy (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-yy f x y)
     "Compute ∂²f/∂y²(x, y)."
-    (.d (f (Hyperdual x 0 0 0) (Hyperdual y 1 1 0))))
+    (.d (f (Hyperdual x zero zero zero) (Hyperdual y one one zero))))
 
-  (declare laplacian (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
+  (declare laplacian (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (laplacian f x y)
     "Compute the Laplacian ∂²f/∂x² + ∂²f/∂y² at the point (x, y)."
     (+ (partial-xx f x y) (partial-yy f x y)))
 
-  (declare hessian (Num :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
+  (declare hessian (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
   (define (hessian f x y)
     "Compute the flat Hessian (∂²f/∂x², ∂²f/∂x∂y, ∂²f/∂y∂x, ∂²f/∂y²) at the point (x, y)."
     (let ((xx (partial-xx f x y))

@@ -7,6 +7,7 @@
     (:nicknames
      #:coalton/math/dyadic
      #:coalton-library/math/dyadic)
+    (:shadow #:scale)
     (:use
      #:coalton
      #:coalton/builtin
@@ -80,17 +81,27 @@
            (Dyadic (f n (lsh m (- j k))) k)
            (Dyadic (f (lsh n (- k j)) m) j)))))
 
-  (define-instance (Num Dyadic)
+  (define-num Dyadic
     (define (+ a b)
       (dyadic-group + a b))
+    (define zero (Dyadic 0 0))
     (define (- a b)
       (dyadic-group - a b))
+    (define (negate (Dyadic n k))
+      (Dyadic (negate n) k))
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (Dyadic n k)
                 (Dyadic m j))
          (Dyadic (* n m) (+ j k)))))
+    (define one (Dyadic 1 0))
     (define (fromInt x) (Dyadic x 0)))
+
+  (define-instance (coalton/math/arith:Scale Dyadic Dyadic)
+    (inline)
+    (define (coalton/math/arith:scale a b) (* a b)))
+
+  (define-instance (Module Dyadic Dyadic))
 
   (declare simplify-integer (Integer -> Dyadic))
   (define (simplify-integer n)

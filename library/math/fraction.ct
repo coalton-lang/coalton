@@ -61,19 +61,29 @@
             (cl:t
              EQ))))))
 
-  (define-instance (Num Fraction)
+  (define-num Fraction
     (define (+ p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:+ p q))))
+    (define zero
+      (coalton++:unsafe
+        (lisp (-> Fraction) () 0)))
     (define (- p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:- p q))))
+    (define (negate q)
+      (coalton++:unsafe
+        (lisp (-> Fraction) (q)
+          (cl:- q))))
     (define (* p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:* p q))))
+    (define one
+      (coalton++:unsafe
+        (lisp (-> Fraction) () 1)))
     (define (fromInt z)
       (coalton++:unsafe
         (lisp (-> Fraction) (z) z))))
@@ -85,6 +95,17 @@
     (define (reciprocal q)
       (lisp (-> Fraction) (q)
         (cl:/ q))))
+
+  (define-instance (Scale Fraction Fraction)
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance (Module Fraction Fraction))
+  (define-instance (VectorSpace Fraction Fraction))
+
+  (define-instance (InnerSpace Fraction Fraction)
+    (inline)
+    (define (inner-product a b) (* a b)))
 
   (define-instance (Dividable Integer Fraction)
     (define (general/ x y)

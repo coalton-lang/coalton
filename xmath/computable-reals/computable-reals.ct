@@ -80,13 +80,16 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 
 (coalton-toplevel
   
-  (define-instance (Num CReal)
+  (define-num CReal
     (define (+ a b)
       (lisp (-> CReal) (a b)
         (cr:+r a b)))
     (define (- a b)
       (lisp (-> CReal) (a b)
         (cr:-r a b)))
+    (define (negate a)
+      (lisp (-> CReal) (a)
+        (cr:-r a)))
     (define (* a b)
       (lisp (-> CReal) (a b)
         (cr:*r a b)))
@@ -117,7 +120,18 @@ is no guarantee that the `CReal` will be accurate to any precision*."
         (cr:/r a b)))
     (define (math:reciprocal n)
       (lisp (-> CReal) (n)
-        (cr:/r n)))))
+        (cr:/r n))))
+
+  (define-instance (math:Scale CReal CReal)
+    (inline)
+    (define (math:scale a b) (* a b)))
+
+  (define-instance (math:Module CReal CReal))
+  (define-instance (math:VectorSpace CReal CReal))
+
+  (define-instance (math:InnerSpace CReal CReal)
+    (inline)
+    (define (math:inner-product a b) (* a b))))
 
 (coalton-toplevel
 
