@@ -72,7 +72,7 @@
   (define (length s)
     "Returns the length of `s`."
     (lisp (-> UFix) (s)
-      (cl:array-dimension s 0)))
+      (cl:length s)))
 
   (inline)
   (declare set! (UFix * :a * (Slice :a) -> Void))
@@ -102,7 +102,7 @@
     "Returns an iterator that yields a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
-    (iter:with-size 
+    (iter:with-size
         (fn ()
           (let offset = (cell:read offset_))
           (when (> (+ offset size) length)
@@ -148,13 +148,13 @@
     (let length = (%length s))
     (let offset_ = (cell:new 0))
     (iter:with-size
-      (fn ()
-        (let offset = (cell:read offset_))
-        (when (> (+ offset size) length)
-          (return None))
+        (fn ()
+          (let offset = (cell:read offset_))
+          (when (> (+ offset size) length)
+            (return None))
 
-        (cell:update! ƒx.(+ size x) offset_)
-        (Some (new offset size s)))
+          (cell:update! ƒx.(+ size x) offset_)
+          (Some (new offset size s)))
       (div length size)))
 
   ;;
@@ -165,10 +165,10 @@
     (define (iter:into-iter s)
       (let idx = (cell:new 0))
       (iter:with-size
-        (fn ()
-          (let res = (index (cell:read idx) s))
-          (cell:increment! idx)
-          res)
+          (fn ()
+            (let res = (index (cell:read idx) s))
+            (cell:increment! idx)
+            res)
         (length s))))
 
   (define-instance (iter:FromIterator (Slice :a) :a)
@@ -177,13 +177,21 @@
       ;; fine, because it isn't observable with the slice API.
       (let vec = (vector:with-capacity (with-default 0 (iter:size-hint iter))))
       (vector:extend! vec iter)
+      (when (/= (vector:length vec) (vector:capacity vec))
+        ;; A SLICE cannot grow, so release unused backing capacity.
+        (vector:set-capacity! (vector:length vec) vec))
       (lisp (-> (Slice :a)) (vec) vec)))
 
   (define-instance (Eq :a => Eq (Slice :a))
     (define (== s1 s2)
-      (if (/= (length s1) (length s2))
-          False
-          (iter:every! id (iter:zip-with! == (iter:into-iter s1) (iter:into-iter s2))))))
+      (let len = (length s1))
+      (and (== len (length s2))
+           (rec % ((i 0))
+             (cond
+               ((== i len) True)
+               ((== (index-unsafe i s1) (index-unsafe i s2))
+                (% (+ i 1)))
+               (True False))))))
 
   (define-instance (Foldable Slice)
     (define (fold f init s)

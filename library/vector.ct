@@ -76,12 +76,18 @@
     (lisp (-> (Vector :a)) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type cl:t)))
 
+  (inline)
   (declare with-initial-element (UFix * :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
-    (let v = (with-capacity n))
-    (extend! v (iter:repeat-for x n))
-    v)
+    ;; Keep the fill pointer so that PUSH! and the other in-place
+    ;; operations behave as before.
+    (lisp (-> (Vector :a)) (n x)
+      (cl:make-array n
+                     :adjustable cl:t
+                     :fill-pointer n
+                     :element-type cl:t
+                     :initial-element x)))
 
   (inline)
   (declare singleton (:a -> Vector :a))
@@ -255,10 +261,18 @@ length of `v` are ignored."
   (declare append (Vector :a * Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
-    (let out = (with-capacity (+ (length v1) (length v2))))
-    (extend! out v1)
-    (extend! out v2)
-    out)
+    ;; APPEND must return a fresh, growable vector.
+    (lisp (-> (Vector :a)) (v1 v2)
+      (cl:let* ((n1 (cl:length v1))
+                (n2 (cl:length v2))
+                (n (cl:+ n1 n2))
+                (out (cl:make-array n
+                                    :adjustable cl:t
+                                    :fill-pointer n
+                                    :element-type cl:t)))
+        (cl:replace out v1)
+        (cl:replace out v2 :start1 n1)
+        out)))
 
   (declare reverse! (Vector :a -> Vector :a))
   (define (reverse! v)
@@ -320,7 +334,8 @@ length of `v` are ignored."
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
       (progn
-        (set-capacity! (+ (length vec) (- size remaining-capacity)) vec)
+        ;; Grow to LENGTH + SIZE, retaining spare capacity.
+        (set-capacity! (+ (length vec) size) vec)
         (values)))
 
     (iter:for-each!
@@ -336,9 +351,14 @@ length of `v` are ignored."
 
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
-      (if (/= (length v1) (length v2))
-          False
-          (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
+      (let len = (length v1))
+      (and (== len (length v2))
+           (rec % ((i 0))
+             (cond
+               ((== i len) True)
+               ((== (index-unsafe i v1) (index-unsafe i v2))
+                (% (+ i 1)))
+               (True False))))))
 
   (define-instance (show:Show :a => show:Show (Vector :a))
     (define (show:show-to f vec)

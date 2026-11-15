@@ -51,6 +51,69 @@
                                      (iter:filter! even?
                                                    (iter:count-forever)))))))
 
+(define-test iter-take-size-hint ()
+  ;; A sized iterator is capped by COUNT, so COLLECT! / EXTEND! can
+  ;; preallocate exactly.
+  (is (== (Some (the UFix 3))
+          (iter:size-hint (iter:take! 3 (iter:into-iter (make-list 1 2 3 4 5))))))
+  (is (== (Some (the UFix 5))
+          (iter:size-hint (iter:take! 20 (iter:into-iter (make-list 1 2 3 4 5))))))
+  ;; An unhinted iterator stays unhinted: COUNT is not a lower bound.
+  (is (== (the (Optional UFix) None)
+          (iter:size-hint (iter:take! 3 (iter:repeat 1)))))
+  (is (== (the (Optional UFix) None)
+          (iter:size-hint (iter:take! 0 (iter:repeat 1)))))
+  ;; REPEAT-FOR yields exactly COUNT elements, so it reports COUNT.
+  (is (== (Some (the UFix 4))
+          (iter:size-hint (iter:repeat-for "x" 4))))
+  (is (== (Some (the UFix 0))
+          (iter:size-hint (iter:repeat-for "x" 0))))
+  (is (== (make-list "x" "x" "x" "x")
+          (the (List String)
+               (iter:collect! (iter:repeat-for "x" 4)))))
+  (is (== (the (List String) Nil)
+          (iter:collect! (iter:repeat-for "x" 0)))))
+
+(define-test iter-take-does-not-allocate-on-hint ()
+  ;; An unhinted TAKE! must not allocate COUNT elements when the
+  ;; iterator ends early.
+  (let v = (the (Vector Integer)
+                (iter:collect! (iter:take! 1000000 (iter:up-to 1)))))
+    (is (== 1 (vector:length v)))
+    (is (== (vector:make 0) v))
+    (is (< (vector:capacity v) 100)))
+
+(define-test iter-take-does-not-over-consume ()
+  ;; TAKE! must not consume one element too many from the input.
+  (let calls = (cell:new (the Integer 0)))
+  (let source = (iter:new
+                  (fn ()
+                    (cell:increment! calls)
+                    (Some 1))))
+  (let taken = (iter:take! 2 source))
+  (is (== (the (List Integer) (make-list 1 1))
+          (iter:collect! taken)))
+  (is (== 2 (cell:read calls)))
+  ;; An exhausted TAKE! must not poke the inner iterator again.
+  (is (== None (iter:next! taken)))
+  (is (== 2 (cell:read calls))))
+
+(define-test iter-take-stops-at-inner-exhaustion ()
+  (let calls = (cell:new (the Integer 0)))
+  (let source = (iter:new
+                  (fn ()
+                    (let n = (cell:increment! calls))
+                    (if (> n 2)
+                        None
+                        (Some n)))))
+  (let taken = (iter:take! 5 source))
+  (is (== (the (List Integer) (make-list 1 2))
+          (iter:collect! taken)))
+  ;; Two yields plus the single NEXT! that reported exhaustion.
+  (is (== 3 (cell:read calls)))
+  (is (== None (iter:next! taken)))
+  (is (== 3 (cell:read calls))))
+
 (define-test iter-concat-collect-list ()
   (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9))
           (iter:collect! (iter:chain! (iter:up-to 5)
