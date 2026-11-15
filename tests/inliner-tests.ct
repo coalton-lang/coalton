@@ -465,20 +465,6 @@
                      x))")))
     (is (null (declaim-declaration-names forms 'notinline)))))
 
-(defun unwrap-administrative-code-node (node)
-  (loop
-    (typecase node
-      (ast:node-locally
-       (if (null (ast:node-locally-noinline-functions node))
-           (setf node (ast:node-locally-subexpr node))
-           (return node)))
-      (ast:node-let
-       (setf node (ast:node-let-subexpr node)))
-      (ast:node-bind
-       (setf node (ast:node-bind-body node)))
-      (t
-       (return node)))))
-
 (defun nullary-function-wrapper-p (node)
   (and (typep node 'ast:node-abstraction)
        (null (ast:node-abstraction-vars node))
@@ -486,23 +472,6 @@
        (typep (ast:node-abstraction-subexpr node)
               '(or ast:node-application
                    ast:node-direct-application))))
-
-(defun wrapped-nullary-function-wrapper-p (node)
-  (or (nullary-function-wrapper-p node)
-      (nullary-function-wrapper-p (unwrap-inline-lisp-node node))))
-
-(defun direct-variable-rand-call-to-p (node name)
-  (and (typep node '(or ast:node-application ast:node-direct-application))
-       (eq (ast:node-rator-name node) name)
-       (every (lambda (rand)
-                (typep rand '(or ast:node-local-variable
-                                 ast:node-global-variable)))
-              (ast:node-rands node))))
-
-(defun application-rands-have-no-abstractions-p (node)
-  (every (lambda (rand)
-           (not (typep (unwrap-inline-lisp-node rand) 'ast:node-abstraction)))
-         (ast:node-rands node)))
 
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
@@ -520,17 +489,13 @@
                 'coalton-native-tests::same-tu-specialized-double-float-add-caller))))))
 
 (deftest local-qualified-application-code ()
-  (let* ((body
-           (ast:node-abstraction-subexpr
-            (coalton:lookup-code
-             'coalton-native-tests::local-qualified-application-regression)))
-         (call (unwrap-administrative-code-node body)))
-    (etypecase call
-      (ast:node-direct-application
-       (is (= 2 (length (ast:node-direct-application-rands call))))
-       (is (null (ast:node-direct-application-keyword-rands call))))
-      (ast:node-lisp
-       (is call)))))
+  (let ((call
+          (ast:node-abstraction-subexpr
+           (coalton:lookup-code
+            'coalton-native-tests::local-qualified-application-regression))))
+    (is (typep call 'ast:node-direct-application))
+    (is (= 2 (length (ast:node-direct-application-rands call))))
+    (is (null (ast:node-direct-application-keyword-rands call)))))
 
 (deftest keyword-call-shape-code ()
   (let ((call
@@ -548,43 +513,18 @@
   (let ((node
           (coalton:lookup-code
            'coalton-native-tests::keyword-nullary-pointfree-regression)))
-    (etypecase node
-      ((or ast:node-application ast:node-direct-application)
-       (is (application-rands-have-no-abstractions-p node)))
-      (ast:node-let
-       (is (= 1 (length (ast:node-let-bindings node))))
-       (let* ((binding (first (ast:node-let-bindings node)))
-              (bound-value (cdr binding))
-              (call (ast:node-let-subexpr node)))
-         (is (typep bound-value '(or ast:node-local-variable
-                                     ast:node-global-variable)))
-         (is (not (typep bound-value 'ast:node-abstraction)))
-         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
+    (is (typep node '(or ast:node-application ast:node-direct-application)))
+    (let ((rand (first (ast:node-rands node))))
+      (is (typep rand '(or ast:node-local-variable ast:node-global-variable)))
+      (is (not (typep rand 'ast:node-abstraction))))))
 
 (deftest constrained-keyword-nullary-pointfree-code ()
   (let ((node
           (coalton:lookup-code
            'coalton-native-tests::constrained-keyword-nullary-pointfree-regression)))
-    (etypecase node
-      ((or ast:node-application ast:node-direct-application)
-       (let ((rand (first (ast:node-rands node))))
-         (is (or (wrapped-nullary-function-wrapper-p rand)
-                 (direct-variable-rand-call-to-p
-                  node
-                  'coalton-native-tests::constrained-keyword-nullary-pointfree-target)))))
-      (ast:node-let
-       (is (= 1 (length (ast:node-let-bindings node))))
-       (let* ((binding (first (ast:node-let-bindings node)))
-              (bound-value (cdr binding))
-              (call (ast:node-let-subexpr node)))
-         (is (not (typep bound-value 'ast:node-abstraction)))
-         (is (or (wrapped-nullary-function-wrapper-p bound-value)
-                 (and (typep bound-value '(or ast:node-local-variable
-                                              ast:node-global-variable))
-                      (direct-variable-rand-call-to-p
-                       call
-                       'coalton-native-tests::constrained-keyword-nullary-pointfree-target))))
-         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
+    (is (typep node '(or ast:node-application ast:node-direct-application)))
+    (let ((rand (first (ast:node-rands node))))
+      (is (nullary-function-wrapper-p rand)))))
 
 (deftest nullary-method-alias-inline-code ()
   (let ((call
@@ -592,9 +532,7 @@
            (coalton:lookup-code
             'coalton-native-tests::nullary-method-alias-inline-regression))))
     (is (not (tc:function-type-p (ast:node-type call))))
-    (is (typep call '(or ast:node-let
-                         ast:node-application
-                         ast:node-direct-application)))
+    (is (typep call '(or ast:node-application ast:node-direct-application)))
     ;; Read the initialized function binding. Copying its Lisp initializer
     ;; into the call would evaluate that initializer again on every call.
     (let ((target (unwrap-inline-lisp-node call)))

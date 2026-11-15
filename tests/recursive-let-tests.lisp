@@ -288,9 +288,6 @@
 (deftest rec-reduction-preserves-development-method-redefinition ()
   (unless (coalton-impl/settings:coalton-release-p)
     (with-codegen-test-environment
-      ;; Keep this method call dynamic even when heuristic inlining is enabled.
-      ;; Copied method bodies have the same redefinition behavior as any other
-      ;; inlined function; dictionary reduction must preserve the explicit call.
       (codegen-test-compile
        "(define-class (Step :a) (step (:a -> :a)))
         (define-instance (Step Integer) (define (step x) (+ x 1)))
@@ -299,7 +296,7 @@
           (rec next ((i count) (total 0))
             (if (== i 0)
                 total
-                (next (- i 1) (noinline (step total))))))")
+                (next (- i 1) (step total)))))")
       (is (equal '(2) (rec-test-local-function-arities "RUN")))
       (let ((caller (fdefinition (intern "RUN"))))
         (is (= 4 (funcall caller 4)))
@@ -307,32 +304,6 @@
          "(define-instance (Step Integer) (define (step x) (+ x 2)))")
         (is (eq caller (fdefinition (intern "RUN"))))
         (is (= 8 (funcall caller 4)))))))
-
-(deftest rec-reduction-matches-ordinary-method-redefinition ()
-  (unless (coalton-impl/settings:coalton-release-p)
-    (with-codegen-test-environment
-      (codegen-test-compile
-       "(define-class (Step :a) (step (:a -> :a)))
-        (define-instance (Step Integer) (define (step x) (+ x 1)))
-        (declare once (Integer -> Integer))
-        (define (once value) (step value))
-        (declare run (UFix -> Integer))
-        (define (run count)
-          (rec next ((i count) (total 0))
-            (if (== i 0) total (next (- i 1) (step total)))))")
-      (is (equal '(2) (rec-test-local-function-arities "RUN")))
-      (let ((caller (fdefinition (intern "RUN")))
-            (ordinary (fdefinition (intern "ONCE"))))
-        (is (= 4 (funcall caller 4)))
-        (codegen-test-compile
-         "(define-instance (Step Integer) (define (step x) (+ x 2)))")
-        (is (= 2 (codegen-test-eval "(step (the Integer 0))")))
-        ;; Use the same previously compiled callers. Heuristic inlining may
-        ;; copy the old method into either body; REC must agree with ordinary
-        ;; calls without imposing a particular inlining decision.
-        (let ((expected 0))
-          (dotimes (iteration 4) (setf expected (funcall ordinary expected)))
-          (is (= expected (funcall caller 4))))))))
 
 (deftest recursive-let-constant-propagation ()
   "Test that constant let bindings are propagated to the other bindings. See GitHub issue #1442."

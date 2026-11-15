@@ -8,7 +8,6 @@
   (:export
    #:coalton-release-p                  ; FUNCTION
    #:*coalton-disable-specialization*   ; VARIABLE
-   #:*coalton-heuristic-inlining*       ; VARIABLE
    #:*coalton-print-unicode*            ; VARIABLE
    #:*coalton-type-printing-mode*       ; VARIABLE
    #:*emit-type-annotations*            ; VARIABLE
@@ -34,9 +33,6 @@
 ;;;        - COALTON_DISABLE_SPECIALIZATION: Whether to disable
 ;;;          function specialization.
 ;;;
-;;;        - COALTON_HEURISTIC_INLINING: Whether to enable automatic
-;;;          inlining.
-;;;
 ;;;    2. When Coalton is compiled, configuration on properties of the
 ;;;    :COALTON-CONFIG symbol are inquired. These are secondary to the
 ;;;    environment variables.
@@ -51,7 +47,6 @@
       :print-unicode                    ; [boolean] print unicode?
       :type-printing-mode               ; [member :types :aliases :types-and-aliases] type printing mode
       :perform-specialization           ; [boolean] use specializations?
-      :perform-heuristic-inlining       ; [boolean] automatic inlining?
       :emit-type-annotations            ; [boolean] emit type annotations?
       :print-types                      ; [boolean] print types when compiling?
       :print-rewrites                   ; [boolean] print rewriting that occurs (specialization/inlining)?
@@ -116,16 +111,6 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
      ;; NOT because this variable disables specializations.
      (not (config ':perform-specialization :default t)))))
 
-(declaim (type boolean *coalton-heuristic-inlining*))
-(defvar *coalton-heuristic-inlining*
-  (cond
-    ((find (uiop:getenv "COALTON_HEURISTIC_INLINING")
-           '("t" "true" "1")
-           :test #'string-equal)
-     t)
-    (t
-     (config ':perform-heuristic-inlining :default nil))))
-
 (declaim (type boolean *emit-type-annotations*))
 (defvar *emit-type-annotations* (config ':emit-type-annotations :default t)
   "Configure the backend to insert or remove type annotations from the generated code.")
@@ -164,5 +149,4 @@ A warning will still be issued showing the affected functions.")
 
 (format t "~&;; COALTON starting in ~:[development~;release~] mode~%" (coalton-release-p))
 (format t "~&;; COALTON starting with specializations ~:[enabled~;disabled~]~%" *coalton-disable-specialization*)
-(format t "~&;; COALTON starting with heuristic inlining ~:[disabled~;enabled~]~%" *coalton-heuristic-inlining*)
 (format t "~&;; COALTON will~:[ not~;~] emit type annotations~%" *emit-type-annotations*)

@@ -15,7 +15,6 @@ The `:coalton-config` keyword's symbol-plist is inspected just before the Coalto
 (let ((config '((:compiler-mode                   "development")
                 (:print-unicode                   t)
                 (:perform-specialization          nil)
-                (:perform-heuristic-inlining      nil)
                 (:emit-type-annotations           nil)
                 (:print-types                     t)
                 (:print-rewrites                  nil)
@@ -32,7 +31,6 @@ This ensures Coalton is in development mode, turns off various optimizations, bu
 (let ((config '((:compiler-mode                 "release")
                 (:print-unicode                 t)
                 (:perform-specialization        t)
-                (:perform-heuristic-inlining    t)
                 (:emit-type-annotations         t)
                 (:print-types                   t)
                 (:print-rewrites                t))))
@@ -41,7 +39,7 @@ This ensures Coalton is in development mode, turns off various optimizations, bu
         :do (setf (get ':coalton-config key) value)))
 ```
 
-This puts Coalton in release mode, tells Coalton to perform heuristic inlining and specialization, tells Coalton to type-annotate all generated Lisp code, and tells Coalton to print information about what rewriting it's doing. This code will be very inflexible, and may take longer to compile, but may help diagnose issues pertaining to optimization and high performance.
+This puts Coalton in release mode, tells Coalton to perform specialization, tells Coalton to type-annotate all generated Lisp code, and tells Coalton to print information about what rewriting it's doing. This code will be very inflexible, and may take longer to compile, but may help diagnose issues pertaining to optimization and high performance.
 
 ## Options for `:coalton-config`
 
@@ -67,14 +65,6 @@ This controls whether specialization is performed. Certain functions in Coalton 
 
 Allowed options:
 - `t`: Allow Coalton to specialize function calls.
-- `nil`: Don't.
-
-### `:perform-heuristic-inlining`
-
-This controls whether *heuristic* inlining is performed. Heuristic inlining allows Coalton to decide what and when to inline. Coalton will respect `(inline)` directives regardless of this configuration option. This option may significantly increase compile time or code size.
-
-Allowed options:
-- `t`: Allow Coalton to perform heuristic inlining.
 - `nil`: Don't.
 
 ### `:emit-type-annotations`

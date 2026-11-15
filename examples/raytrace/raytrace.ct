@@ -16,7 +16,6 @@
   '#.(cl:list :mode (cl:if (coalton-impl/settings:coalton-release-p) :release :development)
               :annotations coalton-impl/settings:*emit-type-annotations*
               :specialization (cl:not coalton-impl/settings:*coalton-disable-specialization*)
-              :heuristic-inlining coalton-impl/settings:*coalton-heuristic-inlining*
               :block-compile #+sbcl sb-ext:*block-compile-default* #-sbcl cl:nil)
   "Compiler settings captured when the renderer was compiled.")
 

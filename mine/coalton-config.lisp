@@ -5,7 +5,6 @@
 (let ((config '((:compiler-mode              "development")
                 (:print-unicode              t)
                 (:perform-specialization     t)
-                (:perform-heuristic-inlining nil)
                 (:emit-type-annotations      t)
                 (:print-types                t)
                 (:print-rewrites             nil)

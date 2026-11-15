@@ -30,7 +30,7 @@ weight: 75
 
 - **As a top-level or method attribute**:
   - `(inline)` takes no arguments and must appear immediately before [`declare`](/manual/operators/declare/), [`define`](/manual/operators/define/), or a method definition inside [`define-instance`](/manual/operators/define-instance/).
-  - It marks the function or method for inlining across all saturated call sites, regardless of the heuristic size limit.
+  - It marks the function or method for inlining across all saturated call sites.
   - Dynamic variables (`*name*`) cannot be marked `inline`.
 - **As an expression**:
   - `inline` has type `(:a -> :a)` and returns the value of its argument unchanged.
@@ -63,7 +63,6 @@ weight: 75
 
 ## Other Notes
 
-- Coalton can also perform optional heuristic inlining on small functions when `coalton-impl/settings:*coalton-heuristic-inlining*` is enabled (off by default; configurable via `(:perform-heuristic-inlining t)` in `:coalton-config`).
 - Inlining small higher-order helpers and constructors often exposes local `Cell`s, structs, and `Optional`/`Result` values to unboxing and scalar replacement in release mode. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
 - Use [`noinline`](/manual/operators/noinline/) at a call site to prevent inlining of a specific call.
 
