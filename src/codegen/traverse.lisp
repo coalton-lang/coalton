@@ -7,7 +7,6 @@
    (#:util #:coalton-impl/util))
   (:export
    #:action
-   #:count-applications
    #:count-nodes
    #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
@@ -597,25 +596,6 @@ gets called."
          (incf counter)
          (values))
        )))
-    counter))
-
-(defun count-applications (node)
-  "Count the number of function application nodes in the AST
-corresponding to `node`."
-  (declare (type node node)
-           (values (integer 0) &optional))
-  (let ((counter 0))
-    (traverse
-     node
-     (list
-      (action (:after node-application _node)
-        (declare (ignore _node))
-        (incf counter)
-        (values))
-      (action (:after node-direct-application _node)
-        (declare (ignore _node))
-        (incf counter)
-        (values))))
     counter))
 
 (defun print-node-traversal-order (node)

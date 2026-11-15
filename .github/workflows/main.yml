@@ -19,7 +19,6 @@ jobs:
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
-        HEURISTIC_INLINING: ["1", "0"]
         exclude:
           # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
@@ -48,7 +47,6 @@ jobs:
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
@@ -64,7 +62,6 @@ jobs:
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
           (ql:quickload :coalton/tests)
@@ -79,7 +76,6 @@ jobs:
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
           ;; This must be set before loading Coalton.

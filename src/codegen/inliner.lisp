@@ -13,10 +13,6 @@
   (:export
    #:*inliner-max-depth*                ; VARIABLE
    #:*inliner-max-unroll*               ; VARIABLE
-   #:*inliner-heuristic*                ; VARIABLE
-   #:null-heuristic                     ; FUNCTION
-   #:gentle-heuristic                   ; FUNCTION
-   #:aggresive-heuristic                ; FUNCTION
    #:inline-applications                ; FUNCTION
    #:function-declared-inline-p         ; FUNCTION
    ))
@@ -29,9 +25,6 @@
   "Limit depth to unroll recursive functions to.")
 (defparameter *inliner-max-depth*  16
   "Limit total inliner stack depth.")
-(defparameter *inliner-heuristic*  'gentle-heuristic
-  "Heuristic to determine if a function should be inlined
-even if the user didn't explicity declare it to be.")
 
 ;;; Private Settings for Debugging
 
@@ -65,35 +58,6 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
             *print-extra-debugging-info*)
     (fresh-line)
     (apply #'format t fmt args)))
-
-;;; Heuristics
-
-(defun null-heuristic (abstraction)
-  "An inlining heuristic that doesn't inline."
-  (declare (ignore abstraction))
-  nil)
-
-(defun gentle-heuristic (abstraction)
-  "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications abstraction)
-           4)
-       (<= (traverse:count-nodes abstraction)
-           8)))
-
-(defun aggressive-heuristic (abstraction)
-  "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications abstraction)
-           8)
-       (<= (traverse:count-nodes abstraction)
-           32)))
-
-(defun heuristic-inline-p (abstraction)
-  "Determine if the node should be inlined based on heuristics."
-  (declare (type ast:node-abstraction abstraction)
-           (values boolean &optional))
-
-  (and settings:*coalton-heuristic-inlining*
-       (funcall *inliner-heuristic* abstraction)))
 
 ;;; Utilities
 
@@ -197,7 +161,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                     (binding-type actual-type))
                ;; Higher-order keyword-bearing function values use a subset-compatible
                ;; interface in the typechecker. Preserve that rule while inlining so
-               ;; heuristic inlining does not make valid calls ill-typed.
+               ;; inlining does not make valid calls ill-typed.
                (cond
                  ((and (typep expected-type 'tc:function-ty)
                        (typep actual-type 'tc:function-ty))
@@ -248,9 +212,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
             :finally (return body)))))
 
 (defun try-inline-application (application env stack noinline-functions)
-  "Try to inline an application node, checking internal traversal stack,
-heuristics, and user-supplied inline declarations to determine if it
-is appropriate."
+  "Try to inline an application node, checking internal traversal stack
+and user-supplied inline declarations to determine if it is appropriate."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type tc:environment env)
            (type list stack)
@@ -285,8 +248,7 @@ is appropriate."
               abstraction
               (not (call-marked-for-noinline-p application))
               (application-saturates-abstraction-p application abstraction)
-              (or (heuristic-inline-p abstraction)
-                  (call-marked-for-inline-p application)
+              (or (call-marked-for-inline-p application)
                   (function-declared-inline-p name env))))
        (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
@@ -305,8 +267,7 @@ is appropriate."
               (and abstraction
                    (not (call-marked-for-noinline-p application))
                    (application-saturates-abstraction-p application abstraction)
-                   (or (heuristic-inline-p abstraction)
-                       (call-marked-for-inline-p application)))))
+                   (call-marked-for-inline-p application))))
        (print-inline-success! ";; Inlining anonymous function")
        (push name *functions-inlined*)
        (inline-applications*
