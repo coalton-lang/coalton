@@ -5,55 +5,63 @@ hideMeta: true
 weight: 52
 ---
 
-`define-exception` declares an exception type that can be constructed and
-signaled with [`throw`](/manual/operators/throw/).
+`define-exception` defines an exception type whose values can be signaled with [`throw`](/manual/operators/throw/) and caught with [`catch`](/manual/operators/catch/) or [`handle`](/manual/operators/handle/).
 
 ## Syntax
 
 ```lisp
+;; Coalton-defined exception algebraic data type
 (define-exception ⟨name⟩
-  ⟨constructor⟩...)
+  ⟨docstring⟩?
+  ⟨constructor-spec⟩*)
 
+;; Existing Common Lisp condition type
 (repr :native ⟨lisp-condition-type⟩)
-(define-exception ⟨name⟩)
+(define-exception ⟨name⟩
+  ⟨docstring⟩?)
 
-;; ⟨constructor⟩ := ⟨constructor-name⟩
-;;                | (⟨constructor-name⟩ ⟨arg-type⟩ ...)
+;; ⟨constructor-spec⟩ := ⟨ctor-name⟩ ⟨docstring⟩?
+;;                     | (⟨ctor-name⟩ ⟨field-type⟩*) ⟨docstring⟩?
 ```
 
 ## Semantics
 
-- `define-exception` is a toplevel definition form.
-- Its constructor syntax matches [`define-type`](/manual/operators/define-type/)
-  closely, including optional docstrings on the type and constructors.
-- Exception types do not accept type variables.
-- Exception constructors are ordinary constructors and can be created outside
-  `throw`.
-- Every exception type is an instance of the `Exception` class, which
-  [`throw`](/manual/operators/throw/) requires. Instances of `Exception` cannot
-  be written manually, and an exception type cannot be redefined as a type
-  that is not an exception.
-- With `(repr :native ⟨lisp-condition-type⟩)`, the exception type is an
-  existing Lisp condition type instead of a new one. The Lisp type must be a
-  subtype of `cl:serious-condition`, and the exception cannot have
-  constructors. The Lisp type must be defined when the `define-exception`
-  form is compiled, so a `define-condition` in the same file must be wrapped
-  in `(eval-when (:compile-toplevel :load-toplevel :execute) ...)`. Values
-  are usually obtained by catching them with a
-  `(the ⟨name⟩ var)` branch of [`catch`](/manual/operators/catch/), or
-  constructed in a [`lisp`](/manual/operators/lisp/) form. The
-  `coalton/exception` package defines native exceptions for common standard
-  Lisp condition types.
-- `define-exception` accepts no other attributes.
+- `define-exception` is a top-level definition form valid inside [`coalton-toplevel`](/manual/operators/coalton-toplevel/).
+- Its constructor syntax matches [`define-type`](/manual/operators/define-type/), including optional docstrings on the exception type and after each constructor.
+- Exception types cannot be parameterized by type variables.
+- Exception constructors are ordinary Coalton constructors: they can be called to construct exception values, stored in data structures, or passed to functions before being passed to [`throw`](/manual/operators/throw/).
+- Every exception type automatically receives an instance of the marker class `Exception` (required by `throw`) and `RuntimeRepr`. Manual instances of `Exception` cannot be written, and an exception type cannot be redefined as a non-exception type.
+- **Native Lisp conditions**: With `(repr :native ⟨lisp-condition-type⟩)`:
+  - `⟨name⟩` wraps an existing Common Lisp condition type rather than defining new constructors (`⟨constructor-spec⟩*` must be empty).
+  - `⟨lisp-condition-type⟩` must be known at compile time and must be a subtype of `cl:serious-condition`. (If defined via `cl:define-condition` in the same file, wrap the `cl:define-condition` in `(eval-when (:compile-toplevel :load-toplevel :execute) ...)`.)
+  - Native exception values are caught with `((the ⟨name⟩ var) ...)` in [`catch`](/manual/operators/catch/) or [`handle`](/manual/operators/handle/) (which also matches any Common Lisp subtype of `⟨lisp-condition-type⟩`) or constructed via [`lisp`](/manual/operators/lisp/).
+- `define-exception` does not accept [`derive`](/manual/operators/derive/) or any [`repr`](/manual/operators/repr/) mode other than `:native`.
 
-## Example
+## Examples
 
 ```lisp
-(define-exception BadEgg
-  (UnCracked Egg)
-  (DeadlyEgg Egg))
+(coalton-toplevel
+  ;; Exception sum type with multiple constructors
+  (define-exception HttpError
+    "Errors raised while handling HTTP requests."
+    (NotFound String)
+    (Unauthorized String)
+    Timeout)
 
-(repr :native cl:division-by-zero)
-(define-exception DivisionByZero
-  "Lisp's DIVISION-BY-ZERO condition.")
+  ;; Bind an existing Common Lisp condition type
+  (repr :native cl:division-by-zero)
+  (define-exception DivisionByZero
+    "Common Lisp's DIVISION-BY-ZERO condition.")
+
+  (declare safe-recip (Integer -> (Optional Fraction)))
+  (define (safe-recip n)
+    (catch (Some (/ 1 (fromInt n)))
+      ((the DivisionByZero _) None))))
 ```
+
+## Other Notes
+
+- Coalton-defined exception types compile to Common Lisp condition types inheriting from `cl:error`, with a distinct condition subclass for each constructor.
+- The `coalton/exception` standard library package predefines native exception types for standard Common Lisp conditions (including `LispError` for `cl:error` and `Panic` for Coalton panics).
+- See [`throw`](/manual/operators/throw/), [`catch`](/manual/operators/catch/), and [`handle`](/manual/operators/handle/).
+

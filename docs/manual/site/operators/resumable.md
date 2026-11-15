@@ -5,36 +5,54 @@ hideMeta: true
 weight: 270
 ---
 
-`resumable` evaluates an expression in a context that can intercept named
-resumptions.
+`resumable` evaluates an expression while establishing named resumption handlers that can be invoked with [`resume-to`](/manual/operators/resume-to/).
 
 ## Syntax
 
 ```lisp
 (resumable ⟨expr⟩
-  ((⟨resumption-ctor⟩ ⟨pattern⟩ ...) ⟨handler-body⟩ ...))
+  ((⟨resumption-ctor⟩ ⟨pattern⟩*) ⟨body-element⟩* ⟨expr⟩)
+  ...)
 ```
 
 ## Semantics
 
-- The first subform is the expression that may invoke
-  [`resume-to`](/manual/operators/resume-to/).
-- Each branch must match a resumption constructor, not an arbitrary pattern.
-- Patterns on constructor fields are tried in order. If no branch matches the
-  value, it is offered to an enclosing handler for the same resumption. A
-  resumption with no matching handler signals an error.
-- When a matching resumption is signaled, control transfers to the handler body.
-- Resumptions are usually invoked by a [`handle`](/manual/operators/handle/)
-  branch that intercepts an exception thrown inside the `resumable`
-  expression.
-- The result type of each handler must agree with the result type of the whole
-  `resumable` expression.
+- If `⟨expr⟩` finishes without invoking a matching resumption, `resumable` returns the value of `⟨expr⟩`.
+- Each branch head `(⟨resumption-ctor⟩ ⟨pattern⟩*)` must be a constructor pattern for a resumption type defined with [`define-resumption`](/manual/operators/define-resumption/) (bare variable or `_` branch heads are not permitted).
+- Multiple branches may match the same resumption constructor with different field subpatterns; patterns on constructor fields are tested in source order before unwinding.
+- If [`resume-to`](/manual/operators/resume-to/) is called with a resumption value that does not match any branch of the inner `resumable`, the value is forwarded to the next enclosing `resumable` handler for that resumption type. If no enclosing `resumable` matches, a runtime error is signaled.
+- Once a branch matches, control unwinds to the `resumable` expression and evaluates the selected branch body (an implicit [`progn`](/manual/operators/progn/)).
+- The final expression of each branch body is in tail position when the `resumable` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).
+- `⟨expr⟩` and all branch bodies must unify to the same single-value result type.
 
-## Example
+## Examples
 
 ```lisp
-(define (make-breakfast-with egg)
-  (resumable (Some (cook (crack egg)))
-    ((SkipEgg) None)
-    ((ServeRaw _) (Some egg))))
+(coalton-toplevel
+  (define-exception ParseIntError
+    (BadDigit Char))
+
+  (define-resumption SkipDigit)
+  (define-resumption (SubstituteDigit Integer))
+
+  (declare parse-digit (Char -> (Optional Integer)))
+  (define (parse-digit c)
+    (resumable
+        (match c
+          (#\0 (Some 0))
+          (#\1 (Some 1))
+          (_   (throw (BadDigit c))))
+      ((SkipDigit)         None)
+      ((SubstituteDigit d) (Some d))))
+
+  (declare parse-binary-default-zero (Char -> (Optional Integer)))
+  (define (parse-binary-default-zero c)
+    (handle (parse-digit c)
+      ((BadDigit _) (resume-to (SubstituteDigit 0))))))
 ```
+
+## Other Notes
+
+- `resumable` compiles to Common Lisp `cl:restart-bind`: each distinct resumption type establishes a restart that tests branch field patterns before unwinding, chains to any outer restart of the same name on mismatch, and unwinds to execute the matching branch body upon selection.
+- See [`define-resumption`](/manual/operators/define-resumption/), [`resume-to`](/manual/operators/resume-to/), and [`handle`](/manual/operators/handle/).
+

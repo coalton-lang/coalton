@@ -5,48 +5,62 @@ hideMeta: true
 weight: 146
 ---
 
-`[=>]` is Coalton's reader syntax for association builders and association
-comprehensions.
+`[=>]` is reader syntax for finite key-value association builders and association comprehensions, overloaded across map and association types.
 
 ## Syntax
 
 ```lisp
-;; finite association
+;; Empty association builder
 [=>]
+
+;; Itemized association builder
 [⟨key-expr⟩ => ⟨value-expr⟩ ...]
 
-;; association comprehension
-[⟨key-expr⟩ => ⟨value-expr⟩ ⟨clause⟩...]
+;; Association comprehension
+[⟨key-expr⟩ => ⟨value-expr⟩ ⟨clause⟩+]
+
+;; ⟨clause⟩ := :for ⟨var-or-_⟩ :below ⟨bound-expr⟩
+;;           | :for ⟨var-or-_⟩ :in ⟨iterable-expr⟩
+;;           | :with ⟨var-or-_⟩ = ⟨expr⟩
+;;           | :when ⟨boolean-expr⟩
 ```
 
 ## Semantics
 
-- `[... => ...]` does not denote a specific, single type. It is generic across several
-  association-like types.
-- `[=>]` is an empty association builder.
-- Any other bracket form containing `=>` is an association builder or
-  association comprehension.
-- Association builders and comprehensions must be finite.
-- Keys must all have the same type, and values must all have the same type.
-- Without a more specific expected type, association builders default to
-  `Seq (Tuple :key :value)`. Key and value types are still inferred from their uses.
-- Association builders, especially empty ones, often need [`the`](/manual/operators/the/)
-  to fix the intended key and value types.
+- `[... => ...]` is polymorphic over any association collection type `:c` with key type `:k` and value type `:v`:
+  - Itemized association builders `[k1 => v1 ... kn => vn]` (and empty `[=>]`) desugar to the `FromItemizedAssociation :c :k :v :s` typeclass protocol (`begin-association-builder`, `adjoin-to-association-builder`, `finalize-association-builder`), passing the exact entry count `n` up front.
+  - Association comprehensions `[k => v ⟨clause⟩+]` desugar to the `FromAssociationComprehension :c :k :v :s` typeclass protocol (`begin-association-comprehension`, `adjoin-to-association-comprehension`, `finalize-association-comprehension`). When the first clause is `:for ⟨var⟩ :in ⟨iter⟩`, the iterator's `size-hint` is passed to `begin-association-comprehension`.
+- All `⟨key-expr⟩` forms must unify to a single key type `:k`, and all `⟨value-expr⟩` forms must unify to a single value type `:v`. Entries are evaluated left-to-right in index order.
+- **Comprehension clauses** follow the same rules as [`[]`](/manual/operators/collection-builder/):
+  - `:for ⟨var-or-_⟩ :below ⟨bound-expr⟩` iterates from `0` by `1+` while `(< i bound)` (for any type implementing `Num` and `Ord`).
+  - `:for ⟨var-or-_⟩ :in ⟨iterable-expr⟩` iterates over any `IntoIterator` source.
+  - `:with ⟨var-or-_⟩ = ⟨expr⟩` introduces a local binding for subsequent clauses and the key/value expressions.
+  - `:when ⟨boolean-expr⟩` guards entry emission with a `Boolean` condition.
+- **Type defaulting**: If the surrounding context does not fix the target type `:c`, Coalton defaults `:c` to `(Seq (Tuple :k :v))` while inferring `:k` and `:v` from the key and value expressions. Empty builders `[=>]` usually require [`the`](/manual/operators/the/) to specify the map, key, and value types.
 
-## Options
-
-- `:for ⟨var⟩ :below ⟨ufix⟩` iterates from `0` up to but not including the bound.
-- `:for ⟨var⟩ :in ⟨iter⟩` iterates over an iterator.
-- `:with ⟨var⟩ = ⟨expr⟩` introduces a lexical binding for the remaining clauses.
-- `:when ⟨expr⟩` guards emitted entries.
-- New types can opt-in to this syntax by defining instance of `FromItemizedAssociation` and `FromAssociationComprehension`.
-
-## Example
+## Examples
 
 ```lisp
-(define squares
-  [x => (* x x) :for x :below 5])
+;; Itemized HashMap construction
+(coalton
+  (the (coalton/hashmap:HashMap String Integer)
+    ["one" => 1
+     "two" => 2
+     "three" => 3]))
 
-(define empty-pairs
-  (the (HashMap String Integer) [=>]))
+;; Association comprehension building a table of squares
+(coalton
+  (the (List (Tuple UFix UFix))
+    [x => (* x x) :for x :below 5 :when (odd? x)]))
+; => (#.(TUPLE 1 1) #.(TUPLE 3 9))
+
+;; Empty association builder with explicit type
+(coalton
+  (the (coalton/hashmap:HashMap String Integer) [=>]))
 ```
+
+## Other Notes
+
+- Standard library types supporting `[=>]` are `HashMap`, `Hashtable`, `OrdMap`, `List (Tuple :k :v)`, and `Seq (Tuple :k :v)`.
+- User-defined map or association types can opt into `[=>]` syntax by implementing `FromItemizedAssociation` and `FromAssociationComprehension` from `coalton/classes`.
+

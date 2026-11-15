@@ -13,24 +13,26 @@ part of the declaration.
 ## Syntax
 
 ```lisp
-(forall (⟨binder⟩...) ⟨type⟩)
+(forall (⟨binder⟩*) ⟨qualified-type⟩)
+(∀ (⟨binder⟩*) ⟨qualified-type⟩)
 
-;; Each binder is either a keyword or a keyword with a kind annotation:
-:a
-(:a Type)
-(:f (Type -> Type))
-(:r Values)
+;; ⟨binder⟩ := :⟨var⟩
+;;           | (:⟨var⟩ ⟨kind⟩)
+;; ⟨kind⟩   := Type
+;;           | Values
+;;           | (⟨kind⟩ -> ⟨kind⟩ [-> ⟨kind⟩ ...])
 ```
 
-The body can be grouped or written as the rest of the `forall` form:
+The quantified body can be parenthesized or written as the rest of the `forall` form:
 
 ```lisp
 (forall (:a) (:a -> :a))
 (forall (:a) :a -> :a)
+(forall (:a) (Ord :a => :a * :a -> :a))
 ```
 
-`Type` and `Values` are exported symbols in the `coalton` package, not keyword
-symbols. `Values` is the same symbol as the existing `values` operator;
+`Type` and `Values` are exported symbols in the `#:coalton` package, not keyword
+symbols. `Values` is the same symbol as the [`values`](/manual/operators/values/) operator;
 its meaning here is determined by its position in a binder. Coalton also accepts
 the Unicode alias `∀` for `forall`.
 
@@ -128,8 +130,26 @@ annotated `Type`, cannot stand for zero or multiple values. For example:
 (call-one (fn () (values 42 "answer"))) ; type error
 ```
 
-Inference can still discover result polymorphism for functions without a type
-declaration. Printed schemes show result binders as `(:r Values)` and show
-ordinary arrow kinds explicitly. For example, an inferred forwarding function
-may print as `forall (:A Values). (Void -> :A) -> :A`. The dot is part of the
-type display; its declaration syntax is `(forall ((:a Values)) (Void -> :a) -> :a)`.
+## Examples
+
+```lisp
+(coalton-toplevel
+  ;; Use scoped type variable `:a` in a local `declare` and `the` expression
+  (declare pair-with-self (forall (:a) :a -> (Tuple :a (List :a))))
+  (define (pair-with-self x)
+    (let ((declare xs (List :a))
+          (xs (the (List :a) [x x])))
+      (Tuple x xs))))
+```
+
+## Other Notes
+
+- Inference can still discover result polymorphism for functions without a type
+  declaration. Printed schemes show result binders as `(:r Values)` and show
+  ordinary arrow kinds explicitly. For example, an inferred forwarding function
+  may print as `∀ (:A Values). (Void → :A) → :A` (or `forall (:A Values). (Void -> :A) -> :A` when Unicode printing is disabled). The dot is part of the
+  type display; its declaration syntax is `(forall ((:a Values)) (Void -> :a) -> :a)`.
+- Coalton uses rank-1 (prenex) polymorphism: `forall` can appear at the top of a
+  type in [`declare`](/manual/operators/declare/), [`the`](/manual/operators/the/), or a class method signature in [`define-class`](/manual/operators/define-class/),
+  not inside a function argument type (higher-rank types are not supported).
+

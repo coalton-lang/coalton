@@ -5,32 +5,29 @@ hideMeta: true
 weight: 72
 ---
 
-`monomorphize` is a toplevel optimization attribute for `declare` and `define`.
+`monomorphize` is a top-level optimization attribute that specializes polymorphic helper calls reachable from a [`declare`](/manual/operators/declare/) or [`define`](/manual/operators/define/) entry point.
 
 ## Syntax
 
 ```lisp
 (monomorphize)
-(declare ⟨name⟩ ⟨monomorphic-type⟩)
-(define (⟨name⟩ ⟨arg⟩ ...)
-  ⟨body⟩)
+(declare ⟨name⟩ ⟨type⟩)
+
+(monomorphize)
+(define (⟨name⟩ ⟨arg⟩*)
+  ⟨body⟩+)
 ```
 
 ## Semantics
 
-- `(monomorphize)` must appear immediately before a `declare` or `define`
-  form.
-- It marks the binding for Coalton's monomorphization pass during optimization.
-- This is mainly useful when the implementation is written in terms of generic
-  class-constrained operations, but the binding itself has a concrete declared
-  type.
-- In practice this often means numerically generic bodies that use operators
-  like `+`, `*`, or `<`, while the exported function is declared at a single
-  concrete type such as `Integer` or `Double-Float`.
-- `monomorphize` is an optimization hint and should not change observable
-  behavior.
+- `(monomorphize)` takes no arguments and must appear immediately before a top-level `declare` or `define` form (and may be combined with [`inline`](/manual/operators/inline/)).
+- It marks `⟨name⟩` as a root for Coalton's call-graph monomorphization pass during optimization.
+- Starting from `⟨name⟩`, the monomorphizer traverses the call graph for applications of known top-level functions (without keyword arguments) that are passed one or more statically known typeclass dictionaries alongside runtime arguments.
+- For each distinct combination of function and static dictionary arguments, the compiler generates a specialized top-level function with those dictionary parameters constant-propagated and removed, then re-runs inlining, specialization, and constant folding on the specialized body.
+- `monomorphize` is most effective on functions declared with a concrete type (or partially known types) whose implementation calls polymorphic, typeclass-constrained helpers (including recursive polymorphic functions that cannot be fully inlined).
+- `monomorphize` does not alter program semantics.
 
-## Example
+## Examples
 
 ```lisp
 (coalton-toplevel
@@ -40,9 +37,7 @@ weight: 72
     (+ (* a x) y)))
 ```
 
-Here the body is ordinary generic numeric code, which would normally compile
-into generic calls, even with the monomorphic declaration. `monomorphize` rewrites
-all of the calls to monomorphic ones, which we can observe in this ARM64 disassembly:
+Here the body uses generic typeclass methods `+` and `*`, which would otherwise pass `Num F32` dictionaries or call generic helpers. With `(monomorphize)`, the calls are specialized and inlined to unboxed single-precision floating-point instructions, as shown in this ARM64 disassembly:
 
 ```
 COALTON-USER> (disassemble #'axpy)
@@ -63,3 +58,9 @@ COALTON-USER> (disassemble #'axpy)
 ; A0:       C0035FD6         RET
 ; A4:       E00120D4         BRK #15                          ; Invalid argument count trap
 ```
+
+## Other Notes
+
+- Monomorphized helper clones are deduplicated across all `(monomorphize)` entry points within the same `coalton-toplevel` unit.
+- During monomorphization, any matching [`specialize`](/manual/operators/specialize/) rules are also applied automatically once types become concrete.
+- See [`inline`](/manual/operators/inline/), [`specialize`](/manual/operators/specialize/), and [Performance and Optimization](/manual/topics/performance-and-optimization/).

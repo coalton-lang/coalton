@@ -5,57 +5,59 @@ hideMeta: true
 weight: 265
 ---
 
-`catch` evaluates an expression and handles any thrown exception that matches
-one of its branches.
+`catch` evaluates an expression and handles any thrown exception that matches one of its branches after unwinding the stack.
 
 ## Syntax
 
 ```lisp
 (catch ⟨expr⟩
-  ((⟨exception-ctor⟩ ⟨pattern⟩ ...) ⟨handler-body⟩ ...)
-  ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨handler-body⟩ ...)
-  ...
-  (_ ⟨fallback-body⟩ ...))
+  ⟨catch-branch⟩+)
+
+;; ⟨catch-branch⟩ := ((⟨exception-ctor⟩ ⟨pattern⟩*) ⟨body-element⟩* ⟨expr⟩)
+;;                 | ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨body-element⟩* ⟨expr⟩)
+;;                 | (_ ⟨body-element⟩* ⟨expr⟩)
 ```
 
 ## Semantics
 
-- The first subform is the expression that may throw.
-- Each branch matches an exception constructor pattern, every exception of a
-  given type, or `_` as a catch-all.
-- A branch written `(the ⟨exception-type⟩ var)` catches any exception of that
-  type and binds it to `var`, which can be rethrown with
-  [`throw`](/manual/operators/throw/). For a native exception (see
-  [`define-exception`](/manual/operators/define-exception/)), this includes
-  conditions of Lisp subtypes of its condition type.
-- A `_` branch catches every Lisp `error`, including Coalton exceptions and
-  panics. A `(the coalton/exception:LispError e)` branch catches the same
-  errors and binds them. A `(the Panic p)` branch catches only panics, the
-  errors signaled by `error`, `unwrap`, `unreachable`, and failed `assert`s.
-- Patterns are tried in order, including patterns on constructor fields, at
-  the point where the exception was thrown. The first matching branch is
-  selected. If none matches, the exception propagates to enclosing handlers
-  without unwinding anything.
-- Once a branch is selected, control unwinds to the `catch` expression and the
-  branch runs there. It sees the dynamic bindings of the `catch` rather than
-  those of the code that threw, it is in tail position when the `catch` is,
-  and exceptions it throws are not caught by the same `catch`.
-- Because the branch runs after unwinding, it cannot
-  [`resume-to`](/manual/operators/resume-to/) a resumption established inside
-  the guarded expression. Use [`handle`](/manual/operators/handle/) for that.
-- All branches must agree on the result type of the `catch` expression.
+- If `⟨expr⟩` completes normally without throwing, `catch` returns the value(s) of `⟨expr⟩`.
+- Each `⟨catch-branch⟩` matches one of three pattern forms:
+  - `((⟨exception-ctor⟩ ⟨pattern⟩*) ...)`: matches a specific constructor of a Coalton exception type defined with [`define-exception`](/manual/operators/define-exception/) (including nullary constructors written `((MyException) ...)`).
+  - `((the ⟨exception-type⟩ ⟨var-or-_⟩) ...)`: matches every exception of `⟨exception-type⟩` and binds the exception value to `⟨var-or-_⟩` (which can be inspected or rethrown with [`throw`](/manual/operators/throw/)). For a `(repr :native ...)` exception, this also matches any Common Lisp condition subtype.
+  - `(_ ...)`: catches every Common Lisp `cl:error`, including all Coalton exceptions and panics. (To bind any `cl:error` to a variable, use `((the coalton/exception:LispError e) ...)`; to catch only panics from `error`, `unwrap`, `unreachable`, and `assert`, use `((the Panic p) ...)`.)
+- Branch patterns (including subpatterns on constructor fields) are tested in source order at the point where the exception is signaled. If no branch matches, the exception propagates to outer handlers without unwinding the stack.
+- Once a branch matches, the stack unwinds to the `catch` expression (running any intervening [`protect`](/manual/operators/protect/) cleanup forms and restoring dynamic bindings) before the selected branch body executes.
+- In the selected branch:
+  - Dynamic variables have the bindings in effect at the `catch` expression rather than at the [`throw`](/manual/operators/throw/) site.
+  - The final expression of the branch body is in tail position when the `catch` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).
+  - Exceptions thrown by the branch body itself are not caught by the same `catch`.
+  - Resumptions established *inside* `⟨expr⟩` have already unwound and cannot be invoked with [`resume-to`](/manual/operators/resume-to/); use [`handle`](/manual/operators/handle/) when a handler needs to resume into `⟨expr⟩`.
+- `⟨expr⟩` and all branch bodies must unify to the same result type, which may be a single value, `Void`, or multiple values.
 
-## Example
+## Examples
 
 ```lisp
-(define (crack-safely egg)
-  (catch (Ok (crack egg))
-    ((DeadlyEgg _) (Err (DeadlyEgg egg)))
-    ((UnCracked _) (Err (UnCracked egg)))))
+(coalton-toplevel
+  (define-exception BadEgg
+    (DeadlyEgg String)
+    (UnCracked Integer))
 
-(define (crack-or-rethrow egg)
-  (catch (crack egg)
-    ((the BadEgg e)
-     (trace "bad egg")
-     (throw e))))
+  (declare crack-safely ((Void -> String) -> (Result String String)))
+  (define (crack-safely attempt)
+    (catch (Ok (attempt))
+      ((DeadlyEgg reason) (Err reason))
+      ((UnCracked _)      (Err "egg did not crack"))))
+
+  (declare crack-or-rethrow ((Void -> String) -> String))
+  (define (crack-or-rethrow attempt)
+    (catch (attempt)
+      ((the BadEgg e)
+       (show "caught BadEgg, rethrowing")
+       (throw e)))))
 ```
+
+## Other Notes
+
+- `catch` compiles to Common Lisp `cl:handler-bind` inside a `cl:block`: the handler tests constructor field patterns before unwinding and, only upon a match, transfers the branch index and condition out of the inner block so the handler body executes after unwinding.
+- See [`handle`](/manual/operators/handle/), [`throw`](/manual/operators/throw/), [`define-exception`](/manual/operators/define-exception/), and [`protect`](/manual/operators/protect/).
+

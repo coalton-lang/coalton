@@ -5,87 +5,104 @@ hideMeta: true
 weight: 40
 ---
 
-`define` introduces top-level values, functions, and dynamic variables.
+`define` introduces top-level values, functions, and dynamic variables inside [`coalton-toplevel`](/manual/operators/coalton-toplevel/).
 
 ## Syntax
 
 ```lisp
 ;; Ordinary top-level value
-(define ⟨name⟩ ⟨docstring⟩? ⟨expr⟩)
+⟨opt-attribute⟩*
+(define ⟨name⟩
+  ⟨docstring⟩?
+  ⟨body-element⟩*
+  ⟨expr⟩)
 
 ;; Function
-(define (⟨name⟩ ⟨arg⟩...)
+⟨opt-attribute⟩*
+(define (⟨name⟩ ⟨arg⟩* [&key (⟨kw-var⟩ ⟨default-expr⟩)*])
   ⟨docstring⟩?
-  ⟨body⟩...)
+  ⟨body-element⟩*
+  ⟨expr⟩)
 
 ;; Dynamic variable
-(define *⟨name⟩* ⟨docstring⟩? ⟨expr⟩)
+(define *⟨name⟩*
+  ⟨docstring⟩?
+  ⟨body-element⟩*
+  ⟨expr⟩)
 
-;; ⟨arg⟩ := ⟨name⟩ | _ | ⟨pattern⟩
+;; ⟨arg⟩           := ⟨var⟩ | _ | ⟨pattern⟩
+;; ⟨opt-attribute⟩ := (inline) | (monomorphize)
 ```
 
-## Ordinary top-level values
+## Semantics
 
-- An ordinary name creates a top-level value binding.
-- A local lexical binding may shadow a top-level value.
+### Ordinary Top-Level Values
+
+- `(define ⟨name⟩ ...)` binds `⟨name⟩` as a top-level value in the current package.
+- Top-level value initializers are evaluated at load time in dependency order. Unlike local [`let`](/manual/operators/let/) bindings, top-level values cannot form recursive or mutually recursive cycles; cyclic definitions must be functions.
+- Polymorphic top-level value definitions are subject to the value restriction and monomorphism restriction: expansive initializers (such as function calls that may allocate or have effects) cannot be generalized to polymorphic types, and unresolved typeclass constraints on values are defaulted at top level.
+- A top-level value definition may evaluate to `Void` (for load-time side effects), though a standalone `Void` binding cannot have an explicit [`declare`](/manual/operators/declare/).
+- Local lexical bindings (`let`, `let*`, `fn` parameters, pattern variables) may shadow a top-level value.
+
+### Functions
+
+- `(define (⟨name⟩ ...) ...)` defines a top-level function.
+- Positional parameters `⟨arg⟩*` may be variable names, `_`, or patterns (such as `(Tuple a b)` for single-constructor types). An unused named parameter may begin with `_` (such as `_unused`) to suppress unused-variable warnings.
+- `(define (⟨name⟩) ...)` with an empty parameter list defines a nullary function of type `(Void -> ⟨return-type⟩)`.
+- Optional keyword parameters follow [`&key`](/manual/operators/keyword-tail/); each is written `(⟨kw-var⟩ ⟨default-expr⟩)`, where `⟨default-expr⟩` is evaluated when the caller omits `:⟨kw-var⟩` and may reference earlier positional and keyword parameters.
+- The function body is an implicit [`progn`](/manual/operators/progn/) (supporting shorthand `let` bindings) and introduces a return scope for [`return`](/manual/operators/return/).
+- Top-level functions in the same `coalton-toplevel` unit may be mutually recursive in any order.
+- A function can also be defined using value syntax with [`fn`](/manual/operators/fn/), such as `(define f (fn (x) ...))`.
+
+### Dynamic Variables
+
+- A name beginning and ending with `*` and containing at least one non-`*` character (such as `*config*`) defines a dynamically scoped variable.
+- Earmuffs are a syntactic rule in Coalton: ordinary lexical variables, function parameters, patterns, and method names cannot use `*...*` names, and function definition syntax `(define (*f* x) ...)` is invalid.
+- The `define` form establishes the default top-level binding. Each reference to `*⟨name⟩*` reads the value from the current dynamic environment.
+- [`dynamic-bind`](/manual/operators/dynamic-bind/) or shorthand `(let *⟨name⟩* = ⟨expr⟩)` temporarily rebinds dynamic variables for the dynamic extent of a body; all functions called within that extent observe the new value.
+- Dynamic variables may have any Coalton type, including function types (defined in value syntax with [`fn`](/manual/operators/fn/)).
+- Dynamic variables cannot be annotated with [`inline`](/manual/operators/inline/).
+
+### Declarations, Docstrings, and Attributes
+
+- Types are inferred automatically, or may be specified with a matching [`declare`](/manual/operators/declare/) in the same `coalton-toplevel`.
+- Exported definitions without a matching `declare` signal a `coalton:deprecation-warning`.
+- A string literal immediately following the name or parameter list is recorded as the docstring when followed by at least one body expression. (In `(define greeting "hello")`, `"hello"` is the value expression rather than a docstring.)
+- [`inline`](/manual/operators/inline/) and [`monomorphize`](/manual/operators/monomorphize/) attributes may precede either `define` or its `declare`.
+
+## Examples
 
 ```lisp
-(declare answer Integer)
-(define answer 42)
+(coalton-toplevel
+  ;; Top-level constant with docstring
+  (declare answer Integer)
+  (define answer
+    "The ultimate answer."
+    42)
+
+  ;; Function with pattern destructuring and keyword parameter
+  (declare scale-point ((Tuple F64 F64) &key (:factor F64) -> (Tuple F64 F64)))
+  (define (scale-point (Tuple x y) &key (factor 1.0d0))
+    (Tuple (* x factor) (* y factor)))
+
+  ;; Dynamic variable and dynamic rebinding
+  (declare *base* Integer)
+  (define *base* 10)
+
+  (declare in-base (Integer -> Integer))
+  (define (in-base x)
+    (* x *base*)))
+
+(coalton
+  (Tuple (in-base 3)
+         (dynamic-bind ((*base* 16))
+           (in-base 3))))
+; => #.(TUPLE 30 48)
 ```
 
-## Functions
+## Other Notes
 
-- Function syntax places the name and arguments in a list.
-- Arguments may be names, `_`, or patterns.
-- An unused named argument may begin with `_`, such as `_state`.
-- A direct argument pattern may be used when its type has one constructor.
-- The body is an implicit [`progn`](/manual/operators/progn/) and may use
-  [`return`](/manual/operators/return/).
-- A function may instead be defined as a value using
-  [`fn`](/manual/operators/fn/).
+- Unconstrained top-level functions compile to Common Lisp `defun` definitions with the same symbol name and arity, plus a global lexical binding so the symbol can be used both as a direct call operator and as a first-class function value.
+- Functions with typeclass constraints receive hidden dictionary parameters before their positional arguments.
+- See [`declare`](/manual/operators/declare/), [`fn`](/manual/operators/fn/), and [`dynamic-bind`](/manual/operators/dynamic-bind/).
 
-```lisp
-(declare add2 (Integer -> Integer))
-(define (add2 x)
-  (+ x 2))
-```
-
-## Dynamic variables
-
-- A name beginning and ending with `*` defines a dynamic variable. It must
-  contain at least one non-`*` character.
-- Earmuffs are syntactic: ordinary parameters, patterns, and lexical bindings
-  cannot use dynamic-variable names.
-- The definition supplies the top-level value. Each reference reads the value
-  from the current dynamic environment.
-- [`dynamic-bind`](/manual/operators/dynamic-bind/) temporarily rebinds a
-  dynamic variable. Called functions observe the rebinding.
-- A rebinding must preserve the variable's type. Multiple bindings are
-  parallel and their initializers are evaluated in the outer environment.
-- Dynamic variables may have any Coalton type, including function types.
-  Function-valued dynamic variables use value syntax with
-  [`fn`](/manual/operators/fn/); function syntax cannot use a dynamic name.
-- Dynamic variables cannot be marked [`inline`](/manual/operators/inline/).
-
-```lisp
-(declare *base* Integer)
-(define *base* 10)
-
-(define (base-value)
-  *base*)
-
-(dynamic-bind ((*base* 20))
-  (base-value))              ; => 20
-```
-
-## Common semantics
-
-- Types are inferred, but an explicit `declare` is recommended.
-- Exported definitions without a matching declaration signal a
-  `coalton:deprecation-warning`; this is planned to become an error.
-- A docstring appears after the name or argument list and before the expression
-  or body.
-- Ordinary functions may use [`inline`](/manual/operators/inline/),
-  [`monomorphize`](/manual/operators/monomorphize/), and
-  [`specialize`](/manual/operators/specialize/) optimization facilities.

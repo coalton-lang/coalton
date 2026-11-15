@@ -5,51 +5,61 @@ hideMeta: true
 weight: 267
 ---
 
-`handle` evaluates an expression and handles any thrown exception that matches
-one of its branches. Unlike [`catch`](/manual/operators/catch/), the matching
-branch runs where the exception was thrown, before anything unwinds, so it can
-resume the computation that threw.
+`handle` evaluates an expression and intercepts matching thrown exceptions in-place before unwinding the stack, allowing handler branches to invoke [`resume-to`](/manual/operators/resume-to/).
 
 ## Syntax
 
 ```lisp
 (handle ⟨expr⟩
-  ((⟨exception-ctor⟩ ⟨pattern⟩ ...) ⟨handler-body⟩ ...)
-  ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨handler-body⟩ ...)
-  ...
-  (_ ⟨fallback-body⟩ ...))
+  ⟨handle-branch⟩+)
+
+;; ⟨handle-branch⟩ := ((⟨exception-ctor⟩ ⟨pattern⟩*) ⟨body-element⟩* ⟨expr⟩)
+;;                  | ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨body-element⟩* ⟨expr⟩)
+;;                  | (_ ⟨body-element⟩* ⟨expr⟩)
 ```
 
 ## Semantics
 
-- Branches use the same patterns as `catch` and are tried in the same order.
-  If none matches, the exception propagates to enclosing handlers.
-- A matching branch runs where the exception was thrown, so it can transfer
-  control with [`resume-to`](/manual/operators/resume-to/) to a resumption
-  established by the code that threw, using
-  [`resumable`](/manual/operators/resumable/).
-- If the branch finishes normally, its value is returned from the `handle`
-  expression, as with `catch`.
-- The branch sees the dynamic bindings in effect where the exception was
-  thrown. It is not in tail position, and the code that threw stays on the
-  stack while it runs.
-- Exceptions thrown by a branch go to handlers enclosing the `handle`.
-- All branches must agree on the result type of the `handle` expression.
+- `handle` uses the same branch pattern syntax and top-to-bottom matching rules as [`catch`](/manual/operators/catch/). If no branch matches a thrown exception, the exception propagates to outer handlers without unwinding.
+- Unlike `catch`, a matching `handle` branch runs **in-place at the point where the exception was thrown**, before the stack unwinds:
+  - The branch can transfer control via [`resume-to`](/manual/operators/resume-to/) to a resumption established inside `⟨expr⟩` by [`resumable`](/manual/operators/resumable/).
+  - The branch observes the dynamic bindings ([`dynamic-bind`](/manual/operators/dynamic-bind/)) in effect at the [`throw`](/manual/operators/throw/) site.
+  - Because the signaling frames are still on the stack while the branch runs, `handle` branches are not in tail position.
+- If a matching branch completes normally (without calling `resume-to` or `throw`), the stack unwinds to the `handle` expression and the branch's value(s) are returned from `handle`.
+- Exceptions thrown inside a `handle` branch propagate to handlers enclosing the `handle`.
+- `⟨expr⟩` and all branch bodies must unify to the same result type, which may be a single value, `Void`, or multiple values.
 
-Prefer `catch` unless a branch needs to resume.
-
-## Example
+## Examples
 
 ```lisp
-(define-resumption SkipEgg)
+(coalton-toplevel
+  (define-exception BadEgg
+    (DeadlyEgg String))
 
-(declare make-breakfast-with (Egg -> (Optional Egg)))
-(define (make-breakfast-with egg)
-  (resumable (Some (cook (crack egg)))
-    ((SkipEgg) None)))
+  (define-resumption SkipEgg)
 
-(declare make-breakfast-or-skip (Egg -> (Optional Egg)))
-(define (make-breakfast-or-skip egg)
-  (handle (make-breakfast-with egg)
-    ((DeadlyEgg _) (resume-to SkipEgg))))
+  (declare make-breakfast-with (String -> (Optional String)))
+  (define (make-breakfast-with egg)
+    (resumable
+        (if (== egg "rotten")
+            (throw (DeadlyEgg egg))
+            (Some (<> "cooked " egg)))
+      ((SkipEgg) None)))
+
+  (declare make-breakfast-or-skip (String -> (Optional String)))
+  (define (make-breakfast-or-skip egg)
+    (handle (make-breakfast-with egg)
+      ((DeadlyEgg _) (resume-to SkipEgg)))))
+
+(coalton
+  (Tuple (make-breakfast-or-skip "fresh")
+         (make-breakfast-or-skip "rotten")))
+; => #.(TUPLE "cooked fresh" #.NONE)
 ```
+
+## Other Notes
+
+- Prefer [`catch`](/manual/operators/catch/) unless a handler branch needs to invoke [`resume-to`](/manual/operators/resume-to/) or inspect dynamic state from the throw site.
+- `handle` compiles to Common Lisp `cl:handler-bind` where the handler body runs directly inside the condition handler function and returns from the enclosing `cl:block` if it finishes normally.
+- See [`catch`](/manual/operators/catch/), [`resumable`](/manual/operators/resumable/), [`resume-to`](/manual/operators/resume-to/), and [`throw`](/manual/operators/throw/).
+
