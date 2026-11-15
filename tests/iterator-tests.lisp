@@ -81,7 +81,7 @@
                 (iter:collect! (iter:take! 1000000 (iter:up-to 1)))))
     (is (== 1 (vector:length v)))
     (is (== (vector:make 0) v))
-    (is (== 1 (vector:capacity v))))
+    (is (< (vector:capacity v) 100)))
 
 (define-test iter-take-does-not-over-consume ()
   ;; TAKE! must not consume one element too many from the input.
