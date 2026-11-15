@@ -5,27 +5,27 @@ hideMeta: true
 weight: 95
 ---
 
-`specialize` is a toplevel directive for type-matched call
-rewriting.
+`specialize` is a top-level directive that registers a type-directed rewrite rule replacing calls to a general function with a more specific implementation when static types match.
 
 ## Syntax
 
 ```lisp
-(specialize ⟨generic-fun⟩ ⟨specialized-fun⟩ ⟨specialized-ty⟩)
+(specialize ⟨generic-fn⟩ ⟨specialized-fn⟩ ⟨specialized-type⟩)
 ```
 
 ## Semantics
 
-- `⟨generic-fun⟩` is the name of the general function callers normally use.
-- `⟨specialized-fun⟩` is a more specific implementation with the declared
-  `⟨specialized-ty⟩`.
-- When a call site has matching known types at compile-time, Coalton may rewrite the call to
-  use the specialized function.
-- Specialization is not guaranteed, so specialized code must behave the same as
-  the original definition.
-- Specialization, when it exists, is automatically invoked during monomorphization.
+- `specialize` is a top-level form valid inside [`coalton-toplevel`](/manual/operators/coalton-toplevel/). It does not accept attributes.
+- Both `⟨generic-fn⟩` and `⟨specialized-fn⟩` must name existing top-level value or function definitions (not constructors or types).
+- `⟨specialized-type⟩` must be an unconstrained type (without [`=>`](/manual/operators/constraint-arrow/) or [`forall`](/manual/operators/forall/)) that:
+  - Matches the type scheme of `⟨specialized-fn⟩` (which may still be polymorphic over unconstrained type variables, such as `List :a -> List :a`).
+  - Is strictly more specific than the unconstrained type of `⟨generic-fn⟩` (obtained by substituting one or more type variables of `⟨generic-fn⟩`).
+- Two specializations for the same `⟨generic-fn⟩` whose `⟨specialized-type⟩` patterns overlap (unify) are rejected at compile time.
+- During compilation, when a call to `⟨generic-fn⟩` has statically known types matching `⟨specialized-type⟩`, the optimizer rewrites the call to `⟨specialized-fn⟩` and drops any dictionary arguments that `⟨generic-fn⟩` would have required.
+- Specialization is an optimization only and is not guaranteed to fire when types remain abstract; `⟨specialized-fn⟩` must have the same observable behavior as `⟨generic-fn⟩` on all inputs of `⟨specialized-type⟩`.
+- Specialization is skipped when rewriting a call would discard constraints involving classes with [`overlap`](/manual/operators/overlap/) instances (or their subclasses), preserving dynamic dictionary selection.
 
-## Example
+## Examples
 
 ```lisp
 (coalton-toplevel
@@ -33,13 +33,18 @@ rewriting.
   (define (inc x)
     (+ x 1))
 
-  (declare inc-int (Integer -> Integer))
-  (define (inc-int x)
-    (+ x 1))
+  (declare inc-ufix (UFix -> UFix))
+  (define (inc-ufix x)
+    (lisp (-> UFix) (x)
+      (cl:1+ x)))
 
-  (specialize inc inc-int (Integer -> Integer)))
+  (specialize inc inc-ufix (UFix -> UFix)))
 
-;; Calls to `inc` will be replaced with `inc-int`
-;; when it is statically known to be operating on
-;; `Integer`.
+;; A call `(inc (the UFix 10))` is rewritten at compile time to `(inc-ufix 10)`.
 ```
+
+## Other Notes
+
+- Specialization rules are applied both during initial optimization and after [`monomorphize`](/manual/operators/monomorphize/) or [`inline`](/manual/operators/inline/) exposes concrete types at inner call sites.
+- Use [`print-specializations`](/manual/operators/print-specializations/) at the Common Lisp REPL to list all active specialization rules.
+

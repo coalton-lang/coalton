@@ -5,40 +5,47 @@ hideMeta: true
 weight: 260
 ---
 
-`throw` signals an exception value to the nearest enclosing
-[`catch`](/manual/operators/catch/) or [`handle`](/manual/operators/handle/)
-that matches it, or invokes the debugger otherwise.
+`throw` signals an exception value, transferring control to the nearest matching [`catch`](/manual/operators/catch/) or [`handle`](/manual/operators/handle/) branch.
 
 ## Syntax
 
 ```lisp
-(throw ⟨expr⟩)
+(throw ⟨exception-expr⟩)
 ```
 
 ## Semantics
 
-- The argument's type must be an instance of the `Exception` class, which
-  holds exactly for types defined with
-  [`define-exception`](/manual/operators/define-exception/). `throw` has the
-  type `Exception :e => :e -> :a`, so functions that throw a value of unknown
-  type are polymorphic over exception types.
-- Control transfers out of the current computation until a matching `catch`
-  or `handle` branch is found.
-- Exception values can be constructed before they are thrown, and a caught
-  exception can be rethrown unchanged.
-- `coalton/result:try` converts an exception thrown by a function into a
-  `Result`, and `coalton/result:ok-or-throw` does the reverse.
+- `⟨exception-expr⟩` must have a type `:e` that is an instance of the `Exception` type class (which holds exclusively for types defined with [`define-exception`](/manual/operators/define-exception/)).
+- `throw` has the polymorphic behavior `Exception :e => :e -> :a` (and unifies with any expected return type, including `Void` or multiple values, because it never returns normally).
+- Evaluating `(throw ⟨exception-expr⟩)` evaluates `⟨exception-expr⟩` and signals the resulting condition, searching dynamically enclosing [`catch`](/manual/operators/catch/) and [`handle`](/manual/operators/handle/) forms from innermost to outermost.
+- If no enclosing handler matches the thrown exception, the unhandled condition reaches the host Common Lisp condition system (typically invoking the interactive debugger).
+- Exception values are ordinary first-class Coalton values: they can be constructed in advance, stored in data structures, passed to helper functions, or bound in a `catch`/`handle` branch and rethrown.
 
-## Example
+## Examples
 
 ```lisp
-(define (crack egg)
-  (match egg
-    ((Xenomorph)
-     (throw (DeadlyEgg egg)))
-    (_ egg)))
+(coalton-toplevel
+  (define-exception ParseError
+    EmptyInput
+    (InvalidToken String))
 
-;; Inferred type: Exception :e => :e -> :a
-(define (rethrow e)
-  (throw e))
+  (declare parse-token (String -> String))
+  (define (parse-token s)
+    (cond
+      ((== s "") (throw EmptyInput))
+      ((== s "?") (throw (InvalidToken s)))
+      (True s)))
+
+  ;; Polymorphic helper that logs and rethrows any exception
+  (declare trace-and-rethrow ((Exception :e) (Show :e) => :e -> :a))
+  (define (trace-and-rethrow e)
+    (show e)
+    (throw e)))
 ```
+
+## Other Notes
+
+- `throw` compiles directly to `(cl:error ⟨exception-expr⟩)`.
+- To convert between thrown exceptions and `Result` values, use `coalton/result:try` (which catches exceptions into `Result`) and `coalton/result:ok-or-throw` (which unwraps `Ok` or `throw`s the `Err` payload).
+- See [`define-exception`](/manual/operators/define-exception/), [`catch`](/manual/operators/catch/), [`handle`](/manual/operators/handle/), and [`protect`](/manual/operators/protect/).
+

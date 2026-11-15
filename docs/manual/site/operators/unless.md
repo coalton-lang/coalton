@@ -5,27 +5,37 @@ hideMeta: true
 weight: 220
 ---
 
-`unless` is the negated counterpart to `when`.
+`unless` evaluates its body for side effects when a `Boolean` test is `False`, and returns `Void` (zero values).
 
 ## Syntax
 
 ```lisp
-(unless ⟨test⟩
-  ⟨expr⟩...)
+(unless ⟨test-expr⟩
+  ⟨body-element⟩*
+  ⟨expr⟩)
 ```
 
 ## Semantics
 
-- `unless` is a convenience form for one-sided conditional code for effect.
-- Expressions in the body are sequenced as an implicit `progn`. Any results
-  are discarded; the `unless` expression returns `Void` (zero values).
-- A final body expression that already returns `Void` retains tail position
-  when the `unless` expression is in tail position, including calls in `rec`.
-- Use `when` for the negated form.
+- `⟨test-expr⟩` must have type `Boolean`, and at least one body expression is required.
+- If `⟨test-expr⟩` evaluates to `False`, the body is evaluated sequentially as an implicit [`progn`](/manual/operators/progn/) (supporting multiple expressions and shorthand [`let`](/manual/operators/let/) bindings).
+- If `⟨test-expr⟩` evaluates to `True`, the body is not evaluated.
+- Any value(s) produced by the final `⟨expr⟩` of the body are discarded; the `unless` expression always has type `Void` (zero values).
+- When the final body expression already has type `Void`, it remains in tail position if the `unless` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).
 
-## Example
+## Examples
 
 ```lisp
-(unless ready?
-  (error "Not ready"))
+(coalton-toplevel
+  (declare checked-divide (Integer * Integer -> (Optional Integer)))
+  (define (checked-divide a b)
+    (unless (/= b 0)
+      (return None))
+    (Some (coalton/math:div a b))))
 ```
+
+## Other Notes
+
+- Because `unless` returns `Void` (zero values) rather than `Unit`, a function declared `(Foo -> Unit)` that ends with an `unless` form should follow `unless` with `Unit` (or be declared `(Foo -> Void)`).
+- Use [`when`](/manual/operators/when/) for the positive counterpart.
+

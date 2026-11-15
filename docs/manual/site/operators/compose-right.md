@@ -5,26 +5,35 @@ hideMeta: true
 weight: 260
 ---
 
-`.<` is a macro that builds a unary composed
-function by composing its inputs from right to left.
+`.<` is an expression macro that composes one or more unary functions in right-to-left (mathematical) order.
 
 ## Syntax
 
 ```lisp
-(.< ⟨expr⟩...)
+(.< ⟨fn-expr⟩+)
 ```
 
 ## Semantics
 
-- `(.< f g h)` expands to a unary function equivalent to
-  `(fn (x) (f (g (h x))))`.
-- It follows the same order as ordinary mathematical composition.
-- Because it is a macro, it is syntax for building a function, not itself a
-  first-class function value.
-- It works in the opposite direction as `.>`.
+- Requires at least one `⟨fn-expr⟩`.
+- `(.< f1 f2 ... fn)` expands to `(fn (x) (nest f1 f2 ... fn x))`, which further expands to `(fn (x) (f1 (f2 (... (fn x)))))` for a fresh parameter `x`.
+- When the resulting function is applied to an argument `x`, `fn` is called first on `x`, and `f1` is called last.
+- With a single argument, `(.< f)` expands to `(fn (x) (f x))`.
+- Because `.<` is a macro rather than an ordinary function, it can compose an arbitrary number of stages into a single lambda without allocating intermediate composed closures, and cannot itself be passed unapplied as a higher-order function value.
 
-## Example
+## Examples
 
 ```lisp
-(.< show reverse sort)
+(coalton
+  (map (.< show-as-string
+           ƒx.(* x x)
+           ƒx.(+ x 1))
+       (the (List Integer) [1 2 3 4])))
+; => ("4" "9" "16" "25")
 ```
+
+## Other Notes
+
+- `.<` is the point-free counterpart of [`nest`](/manual/operators/nest/), and composes functions in the same right-to-left order as the standard library binary function `compose` (and the opposite order of [`.>`](/manual/operators/compose-left/)).
+- When you need a first-class binary composition function value `(B -> C) * (A -> B) -> (A -> C)`, use `compose` from the standard library.
+

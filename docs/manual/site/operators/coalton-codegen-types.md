@@ -5,26 +5,32 @@ hideMeta: true
 weight: 335
 ---
 
-`coalton-codegen-types` is the typed variant of
-[`coalton-codegen`](/manual/operators/coalton-codegen/).
+`coalton-codegen-types` compiles top-level Coalton forms and returns the generated Common Lisp code—including all emitted Common Lisp type declarations—as a quoted s-expression.
 
 ## Syntax
 
 ```lisp
 (coalton-codegen-types
-  ⟨toplevel-form⟩ ...)
+  ⟨toplevel-form⟩*)
 ```
 
 ## Semantics
 
-- It compiles Coalton forms and returns the generated Lisp code.
-- Unlike `coalton-codegen`, it includes emitted Lisp type declarations.
-- This is useful when debugging host-compiler interop and generated declarations.
+- `coalton-codegen-types` accepts the same top-level forms as [`coalton-toplevel`](/manual/operators/coalton-toplevel/).
+- It runs the full Coalton compiler pipeline with `coalton-impl/settings:*emit-type-annotations*` bound to `t`, emitting Common Lisp `(declaim (ftype ...))`, `(declare (type ...))`, and `(the (values ...) ...)` forms.
+- It expands to a quoted Common Lisp `(progn ...)` form containing the generated code, returning it as data without executing the generated definitions or permanently modifying `*global-environment*`.
 
-## Example
+## Examples
 
 ```lisp
 (coalton-codegen-types
+  (declare double (UFix -> UFix))
   (define (double x)
     (+ x x)))
 ```
+
+## Other Notes
+
+- For formatted output printed to `*standard-output*` with local package prefixes stripped, use [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/).
+- To inspect the generated Common Lisp without type declarations, use [`coalton-codegen`](/manual/operators/coalton-codegen/) or [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/).
+
