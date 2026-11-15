@@ -7,7 +7,9 @@ weight: 62
 
 Coalton compiles to Common Lisp with static type declarations and performs several optimization passes before handing code to the host Lisp compiler. Understanding these optimizations helps when writing allocation-free inner loops and numerical code.
 
-Note that while Coalton's own AST rewrites (such as inlining, specialization, and scalar replacement) are portable across Common Lisp implementations, low-level code generation details—such as unboxed register allocation from `(declare (type ...))` and stack allocation from `(declare (dynamic-extent ...))`—depend on the host Lisp compiler. The discussion below assumes [SBCL](https://www.sbcl.org/), and not all low-level optimizations are guaranteed on every Common Lisp implementation.
+**Note:** This page covers advanced material—including compiler transformations, runtime representations, and Common Lisp code generation—and is **not required for ordinary Coalton programming**. It is intended for programmers who want to understand how Coalton compiles their code or who need to squeeze maximum time and memory performance out of critical paths.
+
+Note also that while Coalton's own AST rewrites (such as inlining, specialization, and scalar replacement) are portable across Common Lisp implementations, low-level code generation details—such as unboxed register allocation from `(declare (type ...))` and stack allocation from `(declare (dynamic-extent ...))`—depend on the host Lisp compiler. The discussion below assumes [SBCL](https://www.sbcl.org/), and not all low-level optimizations are guaranteed on every Common Lisp implementation.
 
 {{<toc>}}
 
@@ -21,6 +23,7 @@ Setting the environment variable `COALTON_ENV=release` before compiling Coalton 
 - Emits concrete Common Lisp `(declare (type ...))` annotations on function parameters, [`let`](/manual/operators/let/)/[`let*`](/manual/operators/let-star/) bindings, [`for`](/manual/operators/for/)/[`for*`](/manual/operators/for-star/) bindings, and [`match`](/manual/operators/match/) pattern variables.
 - Makes the final branch of exhaustive `match` expressions unconditional so the Lisp compiler does not synthesize a dead `nil` return path, preserving tail-call optimization and concrete return types.
 - Enables **scalar replacement** of non-escaping structs, single-constructor data types (such as `Tuple`), and branching sum types (such as `Optional` and `Result`), as well as **unboxing** of non-escaping `coalton/cell:Cell` bindings.
+- Enables **multi-entrypoint calling conventions** (`:unpacked` and `:unboxed`) so direct calls across non-inlined functions pass and return flattened struct/tuple fields, sum tags and payloads, and 64-bit numbers/floats without heap allocation.
 - Enables stack allocation (`dynamic-extent`) of freshly constructed `match` scrutinees whose pattern bindings do not escape.
 
 ## Local `Cell` Unboxing
@@ -102,6 +105,57 @@ In release mode, when a local binding is initialized across [`if`](/manual/opera
 
 In release mode, `opt`, `tup`, and `res` are all scalar-replaced into unboxed `Boolean` tags and `(unsigned-byte 64)` locals with zero heap allocation.
 
+## Calling Conventions and Multi-Entrypoint Functions
+
+Scalar replacement eliminates allocations *within* a single function body, but recursive functions, large functions, and cross-file calls cannot always be inlined. In release mode (or when explicitly annotated with [`(abi ...)`](/manual/operators/abi/)), Coalton compiles eligible top-level functions and instance methods into multiple entrypoints:
+
+1. **`:lisp` (Boxed Common Lisp Entrypoint, `f`)**:
+   - Bound to `(cl:fdefinition 'f)` and the global lexical value `f`.
+   - Uses standard boxed Common Lisp arguments and return values so higher-order calls (`(map f xs)`), first-class function values, [`call-coalton-function`](/manual/topics/lisp-interop/), keyword arguments, and REPL callers work unchanged.
+2. **`:unpacked` (Flattened Composite Entrypoint, `f%UNPACKED`)**:
+   - Portable across all Common Lisp implementations (`cl:defun` + `cl:values`).
+   - Flattens single-constructor product parameters ([`define-struct`](/manual/operators/define-struct/) and single-constructor [`define-type`](/manual/operators/define-type/) ADTs such as `Tuple`) into separate positional arguments when the parameter is only destructured inside the function.
+   - Returns single-constructor products as multiple values (`cl:values`) and non-recursive concrete sum types (such as `Optional` and `Result`) as a discriminant tag followed by payload values.
+3. **`:unboxed` (Unboxed Register Entrypoint, `f%UNBOXED`)**:
+   - Available on SBCL (`:x86-64` and `:arm64`) when type annotations are enabled.
+   - Combines the flattened `:unpacked` signature with unboxed register passing so `U64`, `I64`, `F32`, and `F64` arguments and return values remain in CPU general-purpose and floating-point registers across non-inlined and cross-file call boundaries without heap boxing.
+
+When a direct call `(f a1 ... an)` targets a function with a specialized entrypoint, the compiler calls `f%UNBOXED` (or `f%UNPACKED`) directly and cancels intermediate pack/unpack steps across chained calls and `match` expressions:
+
+```lisp
+(coalton-toplevel
+  (define-struct Vec3
+    (x F64)
+    (y F64)
+    (z F64))
+
+  (abi :unboxed)
+  (declare vec3-fma (Vec3 * F64 * Vec3 -> Vec3))
+  (define (vec3-fma a scale b)
+    (Vec3 (+ (* (.x a) scale) (.x b))
+          (+ (* (.y a) scale) (.y b))
+          (+ (* (.z a) scale) (.z b))))
+
+  (abi :unboxed)
+  (declare safe-div (U64 * U64 -> Optional U64))
+  (define (safe-div num den)
+    (if (== den 0)
+        None
+        (Some (coalton/math/integral:quot num den))))
+
+  (abi :unboxed)
+  (declare div-or-default (U64 * U64 * U64 -> U64))
+  (define (div-or-default num den fallback)
+    (match (safe-div num den)
+      ((Some q) (+ q 1))
+      ((None) fallback))))
+```
+
+In this example:
+- `vec3-fma%UNBOXED` accepts 7 unboxed `double-float` arguments in floating-point registers and returns the 3 `double-float` components of the resulting `Vec3` in registers without allocating a `Vec3` struct or boxing floats.
+- `safe-div%UNBOXED` returns its `Boolean` tag and `U64` quotient in registers, and `div-or-default%UNBOXED` branches directly on the returned tag without allocating an `Optional` wrapper or boxing 64-bit `U64` integers.
+- If a struct or tuple parameter is also used as a whole value inside a function (for example, stored into a data structure, passed to a higher-order function, or captured in the variable list of a [`lisp`](/manual/operators/lisp/) form), it is passed as a single boxed value rather than being unpacked and re-allocated inside the callee.
+
 ## Stack Allocation (`dynamic-extent`)
 
 ### Non-Escaping Local Functions
@@ -135,6 +189,7 @@ Because `step!` is only called directly and never returned or stored, `step!` is
 Coalton provides several directives for guiding the optimizer:
 
 - [`inline`](/manual/operators/inline/) and [`noinline`](/manual/operators/noinline/): Control function inlining at definition sites or individual call sites. Inlining higher-order helpers and small constructors often exposes local `Cell`s and structs to scalar replacement.
+- [`abi`](/manual/operators/abi/): Control the calling convention (`:auto`, `:lisp`, `:unpacked`, or `:unboxed`) and worker entrypoints generated for a top-level function or instance method.
 - [`specialize`](/manual/operators/specialize/): Register type-directed rewrite rules that replace generic typeclass-constrained functions with specialized implementations when concrete types are known.
 - [`monomorphize`](/manual/operators/monomorphize/): Inline and specialize a polymorphic definition at its call sites to eliminate runtime dictionary dispatch.
 - [`repr`](/manual/operators/repr/): Choose the underlying runtime representation of a `define-type` (`:enum`, `:transparent`, `:lisp`, or `:native`).

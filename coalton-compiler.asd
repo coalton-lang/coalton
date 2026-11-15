@@ -134,6 +134,9 @@
                              (:file "inliner")
                              (:file "lawnmower")
                              (:file "scalar-replacement")
+                             (:file "calling-convention")
+                             (:file "calling-convention-sbcl"
+                              :if-feature (:and :sbcl (:or :x86-64 :arm64)))
                              (:file "specializer")
                              (:file "optimizer")
 

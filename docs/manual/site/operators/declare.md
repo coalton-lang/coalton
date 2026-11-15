@@ -17,7 +17,8 @@ weight: 30
 ;; Local declaration (inside let, let*, rec, for, or for* binding list)
 (declare ⟨name⟩ ⟨qualified-type⟩)
 
-;; ⟨opt-attribute⟩ := (inline) | (monomorphize)
+;; ⟨opt-attribute⟩ := (inline) | (monomorphize) | (abi ⟨convention⟩)
+;; ⟨convention⟩    := :auto | :lisp | :unpacked | :unboxed
 ```
 
 ## Semantics
@@ -63,5 +64,5 @@ weight: 30
 ## Other Notes
 
 - Exported top-level `define` forms without a corresponding `declare` emit a `coalton:deprecation-warning` (planned to become a compile-time error in a future release).
-- Top-level optimization attributes [`inline`](/manual/operators/inline/) and [`monomorphize`](/manual/operators/monomorphize/) may be placed immediately before either the `declare` form or the `define` form.
+- Top-level optimization attributes [`inline`](/manual/operators/inline/), [`monomorphize`](/manual/operators/monomorphize/), and [`abi`](/manual/operators/abi/) may be placed immediately before either the `declare` form or the `define` form.
 

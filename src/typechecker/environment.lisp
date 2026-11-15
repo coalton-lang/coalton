@@ -124,9 +124,52 @@
    #:instance-environment-instances         ; ACCESSOR
    #:function-env-entry                     ; STRUCT
    #:make-function-env-entry                ; CONSTRUCTOR
+   #:function-env-entry-p                   ; FUNCTION
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
    #:function-env-entry-inline-p            ; ACCESSOR
+   #:function-env-entry-primary-convention  ; ACCESSOR
+   #:function-env-entry-entrypoints         ; ACCESSOR
+   #:abi-leaf                               ; STRUCT
+   #:make-abi-leaf                          ; CONSTRUCTOR
+   #:abi-leaf-p                             ; FUNCTION
+   #:abi-leaf-type                          ; ACCESSOR
+   #:abi-product                            ; STRUCT
+   #:make-abi-product                       ; CONSTRUCTOR
+   #:abi-product-p                          ; FUNCTION
+   #:abi-product-type                       ; ACCESSOR
+   #:abi-product-constructor                ; ACCESSOR
+   #:abi-product-type-name                  ; ACCESSOR
+   #:abi-product-fields                     ; ACCESSOR
+   #:abi-sum-variant                        ; STRUCT
+   #:make-abi-sum-variant                   ; CONSTRUCTOR
+   #:abi-sum-variant-p                      ; FUNCTION
+   #:abi-sum-variant-constructor            ; ACCESSOR
+   #:abi-sum-variant-tag-value              ; ACCESSOR
+   #:abi-sum-variant-field-layouts          ; ACCESSOR
+   #:abi-sum-variant-slot-indices           ; ACCESSOR
+   #:abi-sum                                ; STRUCT
+   #:make-abi-sum                           ; CONSTRUCTOR
+   #:abi-sum-p                              ; FUNCTION
+   #:abi-sum-type                           ; ACCESSOR
+   #:abi-sum-type-name                      ; ACCESSOR
+   #:abi-sum-tag-type                       ; ACCESSOR
+   #:abi-sum-payload-types                  ; ACCESSOR
+   #:abi-sum-variants                       ; ACCESSOR
+   #:abi-multi-value                        ; STRUCT
+   #:make-abi-multi-value                   ; CONSTRUCTOR
+   #:abi-multi-value-p                      ; FUNCTION
+   #:abi-multi-value-type                   ; ACCESSOR
+   #:abi-multi-value-components             ; ACCESSOR
+   #:entrypoint-spec                        ; STRUCT
+   #:make-entrypoint-spec                   ; CONSTRUCTOR
+   #:entrypoint-spec-p                      ; FUNCTION
+   #:entrypoint-spec-convention             ; ACCESSOR
+   #:entrypoint-spec-symbol                 ; ACCESSOR
+   #:entrypoint-spec-arity                  ; ACCESSOR
+   #:entrypoint-spec-input-layouts          ; ACCESSOR
+   #:entrypoint-spec-output-layout          ; ACCESSOR
+   #:entrypoint-spec-function-type          ; ACCESSOR
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -912,11 +955,141 @@ of constraint predicates."
 ;;;
 ;;; Function environment
 ;;;
+;;; A function's ABI layout tree describes how each logical Coalton parameter or
+;;; return type is lowered into physical worker parameters or return values:
+;;;
+;;;   - ABI-LEAF:        Passed or returned as a single value without structural
+;;;                      unpacking (e.g., scalars, functions, lists, type variables,
+;;;                      or composite parameters that escape as whole values).
+;;;   - ABI-PRODUCT:     A single-constructor product type (`define-struct` or
+;;;                      single-constructor `define-type` such as `Tuple`) flattened
+;;;                      into its constituent field layouts.
+;;;   - ABI-SUM:         A non-recursive multi-constructor sum return type (such as
+;;;                      `Optional` or `Result`) returned as `(values tag slot_0 ...)`
+;;;                      where variants share payload slots of identical type.
+;;;   - ABI-MULTI-VALUE: An explicit multi-output return pack (`A * B -> C * D` or
+;;;                      `Void`) lowered to the concatenation of its component layouts.
+
+(defstruct abi-leaf
+  "An ABI layout node representing a single unsplit value of Coalton type TYPE."
+  (type (util:required 'type) :type ty :read-only t))
+
+(defmethod make-load-form ((self abi-leaf) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type abi-leaf))
+
+(defstruct abi-product
+  "An ABI layout node representing a single-constructor product type flattened
+into its constituent field layouts."
+  ;; The logical Coalton type of the product (e.g., `(Tuple U64 F64)`).
+  (type        (util:required 'type)        :type ty     :read-only t)
+  ;; The single constructor symbol that builds this product (e.g., `coalton:Tuple`).
+  (constructor (util:required 'constructor) :type symbol :read-only t)
+  ;; The type constructor name (e.g., `coalton:Tuple`).
+  (type-name   (util:required 'type-name)   :type symbol :read-only t)
+  ;; Ordered list of child ABI layout nodes, one per constructor field.
+  (fields      (util:required 'fields)      :type list   :read-only t))
+
+(defmethod make-load-form ((self abi-product) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type abi-product))
+
+(defstruct abi-sum-variant
+  "Metadata for one constructor variant within an unpacked ABI-SUM return layout."
+  ;; The constructor symbol for this variant (e.g., `coalton:Some` or `coalton:None`).
+  (constructor   (util:required 'constructor)   :type symbol :read-only t)
+  ;; The runtime discriminant value emitted in the leading tag return slot:
+  ;; `'coalton:True` / `'coalton:False` for 2-variant sums, or a 0-based `UFix`
+  ;; integer index for 3-to-8-variant sums.
+  (tag-value     (util:required 'tag-value)     :type t      :read-only t)
+  ;; ABI layout nodes for the constructor's fields (each `abi-leaf` or `abi-product`).
+  (field-layouts (util:required 'field-layouts) :type list   :read-only t)
+  ;; 0-based indices into the parent `abi-sum-payload-types` vector indicating
+  ;; which shared return payload slots hold this variant's flattened leaf values.
+  (slot-indices  (util:required 'slot-indices)  :type list   :read-only t))
+
+(defmethod make-load-form ((self abi-sum-variant) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type abi-sum-variant))
+
+(defstruct abi-sum
+  "An ABI layout node for a multi-constructor sum return type lowered to
+`(cl:values tag payload_0 ... payload_{m-1})`."
+  ;; The logical Coalton sum type (e.g., `(Optional U64)` or `(Result Err (Tuple A B))`).
+  (type          (util:required 'type)          :type ty     :read-only t)
+  ;; The type constructor name (e.g., `coalton:Optional`).
+  (type-name     (util:required 'type-name)     :type symbol :read-only t)
+  ;; Coalton type of the discriminant return value (`Boolean` for 2 variants, `UFix` for 3..8).
+  (tag-type      (util:required 'tag-type)      :type ty     :read-only t)
+  ;; Flat list of concrete leaf Coalton types for the shared payload return slots.
+  ;; Variants with identical leaf types reuse the same slot index.
+  (payload-types (util:required 'payload-types) :type list   :read-only t)
+  ;; Ordered list of `abi-sum-variant` descriptors, one per constructor of `type-name`.
+  (variants      (util:required 'variants)      :type list   :read-only t))
+
+(defmethod make-load-form ((self abi-sum) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type abi-sum))
+
+(defstruct abi-multi-value
+  "An ABI layout node for an explicit multi-output function return (`result-ty`)."
+  ;; The logical `result-ty` of the function.
+  (type       (util:required 'type)       :type ty   :read-only t)
+  ;; Ordered list of child ABI layout nodes, one per output in `result-ty-output-types`
+  ;; (empty for `Void` / zero-value returns).
+  (components (util:required 'components) :type list :read-only t))
+
+(defmethod make-load-form ((self abi-multi-value) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type abi-multi-value))
+
+(defstruct entrypoint-spec
+  "Specification of one compiled worker entrypoint (e.g., `F%UNPACKED` or `F%UNBOXED`)
+associated with a top-level Coalton function."
+  ;; Calling convention keyword for this worker (e.g., `:unpacked` or `:unboxed`).
+  (convention    (util:required 'convention)    :type keyword :read-only t)
+  ;; The Common Lisp function symbol bound to this worker entrypoint.
+  (symbol        (util:required 'symbol)        :type symbol  :read-only t)
+  ;; Total number of flattened positional parameters accepted by `symbol`.
+  (arity         (util:required 'arity)         :type fixnum  :read-only t)
+  ;; List of ABI layout nodes corresponding 1-to-1 with the canonical function's
+  ;; positional parameters (including leading typeclass dictionary parameters).
+  (input-layouts (util:required 'input-layouts) :type list    :read-only t)
+  ;; ABI layout node describing how the canonical return value is unmarshaled.
+  (output-layout (util:required 'output-layout) :type t       :read-only t)
+  ;; Physical `function-ty` of the worker after flattening inputs and outputs.
+  (function-type (util:required 'function-type) :type ty      :read-only t))
+
+(defmethod make-load-form ((self entrypoint-spec) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type entrypoint-spec))
 
 (defstruct function-env-entry
-  (name     (util:required 'name)     :type symbol  :read-only t)
-  (arity    (util:required 'arity)    :type fixnum  :read-only t)
-  (inline-p (util:required 'inline-p) :type boolean :read-only t))
+  "Environment record for a compiled top-level Coalton function or instance method."
+  ;; Canonical function symbol (always bound to the `:lisp` boxed entrypoint).
+  (name               (util:required 'name)     :type symbol  :read-only t)
+  ;; Positional arity of the canonical `:lisp` entrypoint (including dictionaries).
+  (arity              (util:required 'arity)    :type fixnum  :read-only t)
+  ;; True when the function was declared `(inline)`.
+  (inline-p           (util:required 'inline-p) :type boolean :read-only t)
+  ;; Highest-priority calling convention available for this function
+  ;; (`:lisp`, `:unpacked`, or `:unboxed`).
+  (primary-convention ':lisp                    :type keyword :read-only t)
+  ;; List of specialized `entrypoint-spec`s generated for this function, ordered
+  ;; from lowest to highest priority (excluding the canonical `:lisp` entrypoint).
+  (entrypoints        nil                       :type list    :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -1199,6 +1372,27 @@ only once."
                   (scan (instance-environment-instances object)))
                  (specialization-entry
                   (scan (specialization-entry-to-ty object)))
+                 (abi-leaf
+                  (scan (abi-leaf-type object)))
+                 (abi-product
+                  (scan (abi-product-type object))
+                  (scan (abi-product-fields object)))
+                 (abi-sum-variant
+                  (scan (abi-sum-variant-field-layouts object)))
+                 (abi-sum
+                  (scan (abi-sum-type object))
+                  (scan (abi-sum-tag-type object))
+                  (scan (abi-sum-payload-types object))
+                  (scan (abi-sum-variants object)))
+                 (abi-multi-value
+                  (scan (abi-multi-value-type object))
+                  (scan (abi-multi-value-components object)))
+                 (entrypoint-spec
+                  (scan (entrypoint-spec-input-layouts object))
+                  (scan (entrypoint-spec-output-layout object))
+                  (scan (entrypoint-spec-function-type object)))
+                 (function-env-entry
+                  (scan (function-env-entry-entrypoints object)))
                  (immutable-map
                   (do-immutable-map (_ value object)
                     (declare (ignore _))
@@ -1215,6 +1409,7 @@ only once."
                   (scan (environment-struct-environment object))
                   (scan (environment-class-environment object))
                   (scan (environment-instance-environment object))
+                  (scan (environment-function-environment object))
                   (scan (environment-specialization-environment object)))
                  (cons
                   (scan (car object))

@@ -86,6 +86,9 @@
 (define-coalton-toplevel-editor-macro coalton:monomorphize ()
   "Mark a definition for monomorphization.")
 
+(define-coalton-toplevel-editor-macro coalton:abi (convention)
+  "Annotate a function declaration or definition with a calling convention (:auto, :lisp, :unpacked, or :unboxed).")
+
 
 ;;; Other Constructions
 

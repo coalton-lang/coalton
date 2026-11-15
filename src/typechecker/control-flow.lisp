@@ -163,7 +163,8 @@ FORM must be a renamed parser AST fragment."
                    :body resolved-body
                    :location (source:location binding)
                    :monomorphize (parser:toplevel-define-monomorphize binding)
-                   :inline (parser:toplevel-define-inline binding)))
+                   :inline (parser:toplevel-define-inline binding)
+                   :calling-convention (parser:toplevel-define-calling-convention binding)))
                  (parser:instance-method-definition
                   (parser:make-instance-method-definition
                    :name (parser:instance-method-definition-name binding)
@@ -172,7 +173,8 @@ FORM must be a renamed parser AST fragment."
                    :function-syntax-p (parser:instance-method-definition-function-syntax-p binding)
                    :body resolved-body
                    :location (source:location binding)
-                   :inline (parser:instance-method-definition-inline binding)))))
+                   :inline (parser:instance-method-definition-inline binding)
+                   :calling-convention (parser:instance-method-definition-calling-convention binding)))))
              (etypecase binding
                (parser:toplevel-define
                 (parser:make-toplevel-define
@@ -187,7 +189,8 @@ FORM must be a renamed parser AST fragment."
                  :body (resolve-body (parser:toplevel-define-body binding) ctx)
                  :location (source:location binding)
                  :monomorphize (parser:toplevel-define-monomorphize binding)
-                 :inline (parser:toplevel-define-inline binding)))
+                 :inline (parser:toplevel-define-inline binding)
+                 :calling-convention (parser:toplevel-define-calling-convention binding)))
                (parser:instance-method-definition
                 (parser:make-instance-method-definition
                  :name (parser:instance-method-definition-name binding)
@@ -197,7 +200,8 @@ FORM must be a renamed parser AST fragment."
                  :function-syntax-p (parser:instance-method-definition-function-syntax-p binding)
                  :body (resolve-body (parser:instance-method-definition-body binding) ctx)
                  :location (source:location binding)
-                 :inline (parser:instance-method-definition-inline binding))))))
+                 :inline (parser:instance-method-definition-inline binding)
+                 :calling-convention (parser:instance-method-definition-calling-convention binding))))))
 
        (resolve-node (node ctx)
          (declare (type (or parser:node parser:node-do-bind) node)

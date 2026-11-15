@@ -16,6 +16,7 @@
    #:*compile-print-types*              ; VARIABLE
    #:*print-specialization-occurrences* ; VARIABLE
    #:*print-inlining-occurrences*       ; VARIABLE
+   #:*print-calling-convention-occurrences* ; VARIABLE
    #:*print-optimization-passes*        ; VARIABLE
    #:*auto-continue-redefinition*       ; VARIABLE
    #:*coalton-deprecation-warnings-as-errors* ; VARIABLE
@@ -126,6 +127,10 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
 (declaim (type boolean *print-inlining-occurrences*))
 (defvar *print-inlining-occurrences* (config ':print-rewrites :default nil)
   "Print out information when an inline occurs.")
+
+(declaim (type boolean *print-calling-convention-occurrences*))
+(defvar *print-calling-convention-occurrences* (config ':print-rewrites :default nil)
+  "Print out information when specialized calling-convention entrypoints or call rewrites are generated.")
 
 (declaim (type boolean *print-optimization-passes*))
 (defvar *print-optimization-passes* (config ':print-rewrites :default nil)

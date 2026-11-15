@@ -17,12 +17,13 @@ weight: 90
 
 ;; ⟨instance-context⟩ := ⟨predicate⟩ =>
 ;;                     | (⟨predicate⟩)+ =>
-;; ⟨method-def⟩       := (inline)?
+;; ⟨method-def⟩       := ⟨method-attr⟩*
 ;;                       (define ⟨method-name⟩ ⟨body-element⟩* ⟨expr⟩)
-;;                     | (inline)?
+;;                     | ⟨method-attr⟩*
 ;;                       (define (⟨method-name⟩ ⟨arg⟩* [&key (⟨kw-var⟩ ⟨default-expr⟩)*])
 ;;                         ⟨body-element⟩*
 ;;                         ⟨expr⟩)
+;; ⟨method-attr⟩      := (inline) | (abi :auto | :lisp | :unpacked | :unboxed)
 ```
 
 ## Semantics
@@ -34,7 +35,7 @@ weight: 90
 - **Type variable scoping**: Type variables appearing in the instance head or context, as well as any explicit [`forall`](/manual/operators/forall/) binders declared on the corresponding method in [`define-class`](/manual/operators/define-class/), are in lexical scope inside the method body.
 - **No narrowing**: A method implementation must work for the full generality of the instance head; it is a compile-time error for a method body to unify two distinct instance type variables or specialize an instance type variable to a concrete type.
 - **Functional dependencies**: Instance heads and contexts are checked for consistency and coverage against all functional dependencies of `⟨class-name⟩`.
-- **Inlining**: Individual method definitions may be preceded by `(inline)` to request inlining when the instance dictionary is statically known.
+- **Inlining and ABI**: Individual method definitions may be preceded by [`(inline)`](/manual/operators/inline/) or [`(abi ...)`](/manual/operators/abi/) to control inlining and worker entrypoints when the instance dictionary is statically resolved.
 - **Overlap**: Two instances for the same class whose heads can unify are rejected unless both carry the [`overlap`](/manual/operators/overlap/) attribute.
 
 ## Examples

@@ -687,6 +687,20 @@ Returns a status keyword and a replacement body. Status is one of:
             t)
            (values node nil)))
 
+      (node-values-bind
+       ;; (match (values-bind (x...) e y) branches...)
+       ;; -> (values-bind (x...) e (match y branches...))
+       (if (identifiers-disjoint-p (node-values-bind-vars expr)
+                                   (match-free-variables node))
+           (values
+            (make-node-values-bind
+             :type (node-type node)
+             :vars (node-values-bind-vars expr)
+             :expr (node-values-bind-expr expr)
+             :body (match-with-expr node (node-values-bind-body expr)))
+            t)
+           (values node nil)))
+
       (node-seq
        ;; (match (progn e... x) branches...) -> (progn e... (match x branches...))
        (let ((nodes (node-seq-nodes expr)))
@@ -938,6 +952,27 @@ Returns a status keyword and a replacement body. Status is one of:
       (t
        (values node nil)))))
 
+(defun maybe-collapse-values-bind (node)
+  (declare (type node-values-bind node)
+           (values node boolean &optional))
+  (let ((vars (node-values-bind-vars node))
+        (expr (node-values-bind-expr node))
+        (body (node-values-bind-body node)))
+    (cond
+      ;; (values-bind (v1 ... vk) expr (values v1 ... vk)) -> expr
+      ((and (node-values-p body)
+            (= (length vars) (length (node-values-nodes body)))
+            (every (lambda (var subnode)
+                     (and (node-local-variable-p subnode)
+                          (eq var (node-variable-value subnode))))
+                   vars
+                   (node-values-nodes body))
+            (identifiers-disjoint-p vars (node-variables expr)))
+       (values (copy-node expr (node-type node)) t))
+
+      (t
+       (values node nil)))))
+
 (defun maybe-collapse-empty-let (node)
   (declare (type node-let node)
            (values node boolean &optional))
@@ -1086,6 +1121,11 @@ Returns a status keyword and a replacement body. Status is one of:
              new-node)))
        (action (:after node-bind node)
          (multiple-value-bind (new-node new-changed?) (maybe-collapse-bind node)
+           (when new-changed?
+             (setf changed? t)
+             new-node)))
+       (action (:after node-values-bind node)
+         (multiple-value-bind (new-node new-changed?) (maybe-collapse-values-bind node)
            (when new-changed?
              (setf changed? t)
              new-node)))

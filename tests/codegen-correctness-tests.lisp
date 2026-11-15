@@ -440,3 +440,354 @@
               "(for ((f (fn (x) (if (== x (the Integer 0)) 1 (f (- x 1))))
                         (fn (_) 7)))
                  :returns (f 3) :repeat 1 (values))")))))
+
+(deftest codegen-calling-convention-attributes-and-entrypoints ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-struct Pair64 (left U64) (right U64))
+
+      (abi :lisp)
+      (declare boxed-pair-sum (Pair64 -> U64))
+      (define (boxed-pair-sum p)
+        (+ (.left p) (.right p)))
+
+      (abi :unpacked)
+      (declare unpacked-pair-swap (Tuple Integer Integer -> Tuple Integer Integer))
+      (define (unpacked-pair-swap (Tuple a b))
+        (Tuple b a))
+
+      (abi :unboxed)
+      (declare unboxed-pair-sum (Pair64 -> U64))
+      (define (unboxed-pair-sum p)
+        (+ (.left p) (.right p)))
+
+      (abi :auto)
+      (declare auto-pair-sum (Pair64 -> U64))
+      (define (auto-pair-sum p)
+        (+ (.left p) (.right p)))
+
+      (define-class (PairOps :a)
+        (pair-combine (:a * :a -> Tuple :a :a)))
+
+      (define-instance (PairOps U64)
+        (abi :unboxed)
+        (define (pair-combine x y)
+          (Tuple (+ x y) (* x y))))")
+    (let* ((env entry:*global-environment*)
+           (boxed-entry (tc:lookup-function env (intern "BOXED-PAIR-SUM")))
+           (unpacked-entry (tc:lookup-function env (intern "UNPACKED-PAIR-SWAP")))
+           (unboxed-entry (tc:lookup-function env (intern "UNBOXED-PAIR-SUM"))))
+      (is (eq ':lisp (tc:function-env-entry-primary-convention boxed-entry)))
+      (is (null (tc:function-env-entry-entrypoints boxed-entry)))
+
+      (is (eq ':unpacked (tc:function-env-entry-primary-convention unpacked-entry)))
+      (is (= 1 (length (tc:function-env-entry-entrypoints unpacked-entry))))
+      (is (fboundp (intern "UNPACKED-PAIR-SWAP")))
+      (is (fboundp (intern "UNPACKED-PAIR-SWAP%UNPACKED")))
+
+      #+sbcl
+      (when (and coalton-impl/settings:*emit-type-annotations*
+                 (coalton-impl/codegen/calling-convention::sbcl-specialized-xep-available-p))
+        (is (eq ':unboxed (tc:function-env-entry-primary-convention unboxed-entry)))
+        (is (= 2 (length (tc:function-env-entry-entrypoints unboxed-entry))))
+        (is (fboundp (intern "UNBOXED-PAIR-SUM")))
+        (is (fboundp (intern "UNBOXED-PAIR-SUM%UNPACKED")))
+        (is (fboundp (intern "UNBOXED-PAIR-SUM%UNBOXED")))))
+
+    (is (= 30 (codegen-test-eval "(boxed-pair-sum (Pair64 10 20))")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (unpacked-pair-swap (Tuple 10 20)) (Tuple 20 10))")))
+    (is (= 30 (codegen-test-eval "(unboxed-pair-sum (Pair64 10 20))")))
+    (is (= 30 (codegen-test-eval "(auto-pair-sum (Pair64 10 20))")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (pair-combine (the U64 5) (the U64 10)) (Tuple 15 50))")))
+
+    ;; Verify portable fallback when :unboxed is disabled (simulating non-SBCL host)
+    (let ((coalton-impl/codegen/calling-convention:*enable-unboxed-abi* nil))
+      (codegen-test-compile
+       "(abi :unboxed)
+        (declare portable-pair-sum (Pair64 -> U64))
+        (define (portable-pair-sum p)
+          (+ (.left p) (.right p)))
+
+        (abi :unboxed)
+        (declare portable-scalar-inc (U64 -> U64))
+        (define (portable-scalar-inc x)
+          (+ x 1))")
+      (let* ((env entry:*global-environment*)
+             (pair-entry (tc:lookup-function env (intern "PORTABLE-PAIR-SUM")))
+             (scalar-entry (tc:lookup-function env (intern "PORTABLE-SCALAR-INC"))))
+        (is (eq ':unpacked (tc:function-env-entry-primary-convention pair-entry)))
+        (is (= 1 (length (tc:function-env-entry-entrypoints pair-entry))))
+        (is (eq ':lisp (tc:function-env-entry-primary-convention scalar-entry)))
+        (is (null (tc:function-env-entry-entrypoints scalar-entry))))
+      (is (= 30 (codegen-test-eval "(portable-pair-sum (Pair64 10 20))")))
+      (is (= 42 (codegen-test-eval "(portable-scalar-inc 41)"))))
+
+    ;; Verify optimization hint printing when *print-calling-convention-occurrences* is enabled
+    (let ((output
+            (with-output-to-string (*standard-output*)
+              (let ((coalton-impl/settings:*print-calling-convention-occurrences* t))
+                (codegen-test-compile
+                 "(abi :unpacked)
+                  (declare logged-swap (Tuple Integer Integer -> Tuple Integer Integer))
+                  (define (logged-swap (Tuple a b))
+                    (Tuple b a))
+
+                  (declare logged-caller (Tuple Integer Integer -> Tuple Integer Integer))
+                  (define (logged-caller p)
+                    (logged-swap p))")))))
+      (is (search "Generating :UNPACKED entrypoint" output))
+      (is (search "LOGGED-SWAP%UNPACKED" output))
+      (is (search "Calling" output))
+      (is (search "via :UNPACKED entrypoint" output)))
+
+    ;; Invalid abi attributes must signal parse errors
+    (signals parser:parse-error
+      (codegen-test-compile
+       "(abi :invalid)
+        (define (bad-fn x) x)"))
+    (signals parser:parse-error
+      (codegen-test-compile
+       "(abi :lisp)
+        (abi :unpacked)
+        (define (dup-fn x) x)"))
+    (signals parser:parse-error
+      (codegen-test-compile
+       "(abi :lisp)
+        (define *bad-val* 42)"))
+    (signals parser:parse-error
+      (codegen-test-compile
+       "(abi :lisp)
+        (define-type BadType)"))))
+
+(deftest codegen-calling-convention-composite-and-unboxed-correctness ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-struct Vec2 (vx F64) (vy F64))
+      (define-struct SharedTag (label String))
+      (define-struct TaggedVec (tag SharedTag) (vec Vec2))
+
+      (abi :unboxed)
+      (declare vec2-add (Vec2 * Vec2 -> Vec2))
+      (define (vec2-add a b)
+        (Vec2 (+ (.vx a) (.vx b))
+              (+ (.vy a) (.vy b))))
+
+      (abi :unboxed)
+      (declare vec2-dot (Vec2 * Vec2 -> F64))
+      (define (vec2-dot a b)
+        (+ (* (.vx a) (.vx b))
+           (* (.vy a) (.vy b))))
+
+      (abi :unboxed)
+      (declare safe-div-u64 (U64 * U64 -> Optional U64))
+      (define (safe-div-u64 a b)
+        (if (== b 0)
+            (return None)
+            (Some (coalton/math/integral:quot a b))))
+
+      (abi :unboxed)
+      (declare checked-step (U64 * U64 -> Result U64 (Tuple U64 U64)))
+      (define (checked-step x limit)
+        (if (>= x limit)
+            (Err x)
+            (Ok (Tuple (+ x 1) (* x 2)))))
+
+      ;; Mutual recursion across unpacked/unboxed entrypoints
+      (abi :unboxed)
+      (declare even-accum (U64 * Tuple U64 U64 -> Tuple U64 U64))
+      (define (even-accum n (Tuple a b))
+        (if (== n 0)
+            (Tuple a b)
+            (odd-accum (- n 1) (Tuple (+ a n) b))))
+
+      (abi :unboxed)
+      (declare odd-accum (U64 * Tuple U64 U64 -> Tuple U64 U64))
+      (define (odd-accum n (Tuple a b))
+        (if (== n 0)
+            (Tuple a b)
+            (even-accum (- n 1) (Tuple a (+ b n)))))
+
+      ;; Object identity preservation for parameters that escape as whole values
+      (abi :unpacked)
+      (declare retag-vec (TaggedVec * Vec2 -> TaggedVec))
+      (define (retag-vec tv new-vec)
+        (TaggedVec (.tag tv) (vec2-add (.vec tv) new-vec)))
+
+      (declare same-tag? (TaggedVec * TaggedVec -> Boolean))
+      (define (same-tag? a b)
+        (let ((ta (.tag a))
+              (tb (.tag b)))
+          (lisp (-> Boolean) (ta tb) (cl:eq ta tb))))")
+    (is (= 12.0d0
+           (codegen-test-eval
+            "(vec2-dot (vec2-add (Vec2 1.0d0 2.0d0) (Vec2 0.5d0 1.0d0))
+                       (Vec2 2.0d0 3.0d0))")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (safe-div-u64 21 3) (Some 7))")))
+    (is (eq coalton:None
+            (codegen-test-eval "(safe-div-u64 21 0)")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (checked-step 4 10) (Ok (Tuple 5 8)))")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (checked-step 10 10) (Err 10))")))
+    (is (eq coalton:True
+            (codegen-test-eval "(== (even-accum 5 (Tuple 0 0)) (Tuple 9 6))")))
+    ;; Verify physical EQ identity of SharedTag is preserved across unpacked calls
+    (is (eq coalton:True
+            (codegen-test-eval
+             "(let ((base (TaggedVec (SharedTag \"origin\") (Vec2 1.0d0 2.0d0))))
+                (same-tag? (retag-vec base (Vec2 3.0d0 4.0d0))
+                           (retag-vec base (Vec2 5.0d0 6.0d0))))")))))
+
+(deftest codegen-calling-convention-higher-order-and-interop ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(abi :unboxed)
+      (declare pair-total (Tuple U64 U64 -> U64))
+      (define (pair-total (Tuple a b))
+        (+ a b))
+
+      (declare apply-to-pairs ((Tuple U64 U64 -> U64) * List (Tuple U64 U64) -> List U64))
+      (define (apply-to-pairs f xs)
+        (map f xs))
+
+      (declare scale-with-key (Tuple U64 U64 &key (:factor U64) -> U64))
+      (define (scale-with-key p &key (factor 2))
+        (* factor (pair-total p)))")
+    ;; Direct call uses worker; higher-order call and call-coalton-function use :lisp wrapper
+    (is (= 30 (codegen-test-eval "(pair-total (Tuple 10 20))")))
+    (is (equal '(3 7 11)
+               (codegen-test-eval
+                "(apply-to-pairs pair-total (make-list (Tuple 1 2) (Tuple 3 4) (Tuple 5 6)))")))
+    (is (= 77
+           (coalton:call-coalton-function
+            (symbol-function (intern "PAIR-TOTAL"))
+            (coalton-prelude:Tuple 30 47))))
+    (is (= 60 (codegen-test-eval "(scale-with-key (Tuple 10 20))")))
+    (is (= 90 (codegen-test-eval "(scale-with-key (Tuple 10 20) :factor 3)")))))
+
+(deftest codegen-calling-convention-redefinition ()
+  (with-codegen-test-environment
+    ;; 1. Same-type redefinition updates worker and wrapper entrypoints for existing callers
+    (codegen-test-compile
+     "(abi :unboxed)
+      (declare combine-pair (Tuple U64 U64 -> U64))
+      (define (combine-pair (Tuple a b))
+        (+ a b))
+
+      (declare caller (U64 * U64 -> U64))
+      (define (caller x y)
+        (combine-pair (Tuple x y)))")
+    (is (= 15 (codegen-test-eval "(caller 5 10)")))
+    (codegen-test-compile
+     "(abi :unboxed)
+      (declare combine-pair (Tuple U64 U64 -> U64))
+      (define (combine-pair (Tuple a b))
+        (* a b))")
+    (is (= 50 (codegen-test-eval "(caller 5 10)")))
+
+    ;; 2. Type-changing redefinition installs forwarding stubs on retired worker symbols
+    (let ((old-unpacked-sym (intern "COMBINE-PAIR%UNPACKED")))
+      (is (fboundp old-unpacked-sym))
+      (let ((coalton-impl/settings:*auto-continue-redefinition* t))
+        (handler-bind ((warning #'muffle-warning))
+          (codegen-test-compile
+           "(declare combine-pair (U64 -> U64))
+            (define (combine-pair x)
+              (+ x 100))")))
+      (is (= 105 (codegen-test-eval "(combine-pair 5)")))
+      (is (fboundp old-unpacked-sym)))))
+
+#+sbcl
+(deftest codegen-calling-convention-zero-consing ()
+  (with-codegen-test-environment
+    (let ((*features* (adjoin ':coalton-release *features*))
+          (coalton-impl/settings:*emit-type-annotations* t)
+          (coalton-impl/settings:*coalton-disable-specialization* nil)
+          (sb-ext:*block-compile-default* nil))
+      (multiple-value-bind (source-file fasl-file)
+          (compile-and-load-forms
+           (list
+            `(in-package ,(package-name *package*))
+            (read-from-string
+             "(coalton-toplevel
+                (define-struct Point2I (ix I32) (iy I32))
+
+                (abi :unpacked)
+                (declare step-point-i32 (Point2I * I32 -> Point2I))
+                (define (step-point-i32 p delta)
+                  (Point2I (+ (.ix p) delta)
+                           (- (.iy p) delta)))
+
+                (abi :unpacked)
+                (declare maybe-step-i32 (I32 * I32 -> Optional I32))
+                (define (maybe-step-i32 x limit)
+                  (if (< x limit)
+                      (Some (+ x 3))
+                      None))
+
+                (abi :unpacked)
+                (declare loop-points-i32 (I32 * I32 * Point2I -> I32))
+                (define (loop-points-i32 i n acc)
+                  (match (maybe-step-i32 i n)
+                    ((Some next-i)
+                     (loop-points-i32 next-i n (step-point-i32 acc 2)))
+                    ((None)
+                     (+ (.ix acc) (.iy acc)))))
+
+                (abi :unpacked)
+                (declare run-unpacked-allocation-free-loop (I32 -> I32))
+                (define (run-unpacked-allocation-free-loop n)
+                  (loop-points-i32 0 n (Point2I 0 0)))
+
+                (define-struct Point2D (px F64) (py F64))
+
+                (abi :unboxed)
+                (declare step-point (Point2D * F64 -> Point2D))
+                (define (step-point p delta)
+                  (Point2D (+ (.px p) delta)
+                           (- (.py p) delta)))
+
+                (abi :unboxed)
+                (declare maybe-step-u64 (U64 * U64 -> Optional U64))
+                (define (maybe-step-u64 x limit)
+                  (if (< x limit)
+                      (Some (+ x 3))
+                      None))
+
+                (abi :unboxed)
+                (declare loop-points (U64 * U64 * Point2D -> F64))
+                (define (loop-points i n acc)
+                  (match (maybe-step-u64 i n)
+                    ((Some next-i)
+                     (loop-points next-i n (step-point acc 1.5d0)))
+                    ((None)
+                     (+ (.px acc) (.py acc)))))
+
+                (abi :unboxed)
+                (declare run-allocation-free-loop (U64 -> F64))
+                (define (run-allocation-free-loop n)
+                  (loop-points 0 n (Point2D 0.0d0 0.0d0))))")))
+        (unwind-protect
+             (progn
+               (let ((unpacked-fn (symbol-function (intern "RUN-UNPACKED-ALLOCATION-FREE-LOOP" *package*))))
+                 (is (= 0 (funcall unpacked-fn 300)))
+                 (let ((before (sb-ext:get-bytes-consed)))
+                   (dotimes (_ 100)
+                     (funcall unpacked-fn 3000))
+                   (let ((consed (- (sb-ext:get-bytes-consed) before)))
+                     (is (zerop consed)))))
+               (when (coalton-impl/codegen/calling-convention::sbcl-specialized-xep-available-p)
+                 (let ((fn (symbol-function (intern "RUN-ALLOCATION-FREE-LOOP" *package*))))
+                   ;; Warm up
+                   (is (= 0.0d0 (funcall fn 300)))
+                   (let ((before (sb-ext:get-bytes-consed)))
+                     (dotimes (_ 100)
+                       (funcall fn 3000))
+                     (let ((consed (- (sb-ext:get-bytes-consed) before)))
+                       (is (zerop consed)))))))
+          (delete-file source-file)
+          (delete-file fasl-file))))))
+
