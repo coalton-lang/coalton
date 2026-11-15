@@ -25,6 +25,9 @@
    #:make-attribute-derive                       ; CONSTRUCTOR
    #:attribute-derive-classes                    ; ACCESSOR
    #:make-attribute-inline                       ; CONSTRUCTOR
+   #:attribute-calling-convention                ; STRUCT
+   #:make-attribute-calling-convention           ; CONSTRUCTOR
+   #:attribute-calling-convention-type           ; ACCESSOR
    #:attribute-repr-type                         ; ACCESSOR
    #:attribute-repr-arg                          ; ACCESSOR
    #:constructor                                 ; STRUCT
@@ -72,6 +75,7 @@
    #:toplevel-declare-list                       ; TYPE
    #:toplevel-declare-monomorphize               ; ACCESSOR
    #:toplevel-declare-inline                     ; ACCESSOR
+   #:toplevel-declare-calling-convention         ; ACCESSOR
    #:toplevel-define                             ; STRUCT
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
@@ -84,6 +88,7 @@
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
    #:toplevel-define-inline                      ; ACCESSOR
+   #:toplevel-define-calling-convention          ; ACCESSOR
    #:fundep                                      ; STRUCT
    #:make-fundep                                 ; CONSTRUCTOR
    #:fundep-left                                 ; ACCESSOR
@@ -111,6 +116,7 @@
    #:instance-method-definition-function-syntax-p ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-inline           ; ACCESSOR
+   #:instance-method-definition-calling-convention ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
@@ -248,6 +254,10 @@
 (defstruct (attribute-inline
             (:include attribute)))
 
+(defstruct (attribute-calling-convention
+            (:include attribute))
+  (type (util:required 'type) :type keyword-src :read-only t))
+
 (defstruct (attribute-overlap
             (:include attribute)))
 
@@ -367,7 +377,8 @@
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
   (location     (util:required 'location)     :type source:location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil)
+  (calling-convention nil                     :type (or null attribute-calling-convention) :read-only nil))
 
 (defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
@@ -391,7 +402,8 @@
   (orig-keyword-params nil                    :type keyword-param-list                :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil)
+  (calling-convention nil                     :type (or null attribute-calling-convention) :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -460,7 +472,8 @@
   (function-syntax-p (util:required 'function-syntax-p) :type boolean :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t)
-  (inline   (util:required 'inline)   :type (or null attribute-inline) :read-only nil))
+  (inline   (util:required 'inline)   :type (or null attribute-inline) :read-only nil)
+  (calling-convention nil             :type (or null attribute-calling-convention) :read-only nil))
 
 (defmethod source:location ((self instance-method-definition))
   (instance-method-definition-location self))
@@ -913,17 +926,21 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                 (attribute-inline
                  (parse-error "Invalid target for inline attribute"
                               (source:note attribute "inline must be attached to a define or declare form")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-calling-convention
+                 (parse-error "Invalid target for abi attribute"
+                              (source:note attribute "abi must be attached to a define or declare form")
                               (source:secondary-note toplevel-form message)))))
     (ecase attribute
       ((:repr) repr)
       ((:derive) derive))))
 
 (defun consume-optimize-attribute (attribute attributes toplevel-form message)
-  "Return the unique monomorphize attribute in ATTRIBUTES, or NIL.
+  "Return the unique monomorphize, inline, or abi attribute in ATTRIBUTES, or NIL.
 If the attribute is not unique, or a repr attribute is present, signal a parse error."
-  (declare (type (member :monomorphize :inline) attribute))
+  (declare (type (member :monomorphize :inline :calling-convention) attribute))
 
-  (let (monomorphize inline)
+  (let (monomorphize inline calling-convention)
     (loop :for attribute :across attributes
           :do (etypecase attribute
                 (attribute-overlap
@@ -950,10 +967,18 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                                 (source:note attribute "inline attribute here")
                                 (source:secondary-note inline "previous attribute here")
                                 (source:secondary-note toplevel-form message)))
-                 (setf inline attribute))))
+                 (setf inline attribute))
+                (attribute-calling-convention
+                 (when calling-convention
+                   (parse-error "Duplicate abi attribute"
+                                (source:note attribute "abi attribute here")
+                                (source:secondary-note calling-convention "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf calling-convention attribute))))
     (ecase attribute
       ((:monomorphize) monomorphize)
-      ((:inline) inline))))
+      ((:inline) inline)
+      ((:calling-convention) calling-convention))))
 
 (defun forbid-inline-dynamic-variable (inline name)
   "Signal a parse error when INLINE targets the dynamic variable NAME."
@@ -962,6 +987,14 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
     (parse-error "Invalid target for inline attribute"
                  (source:note inline
                               "dynamic variables cannot be declared inline"))))
+
+(defun forbid-calling-convention-dynamic-variable (calling-convention name)
+  "Signal a parse error when CALLING-CONVENTION targets the dynamic variable NAME."
+  (when (and calling-convention
+             (util:dynamic-variable-name-p name))
+    (parse-error "Invalid target for abi attribute"
+                 (source:note calling-convention
+                              "dynamic variables cannot have an abi attribute"))))
 
 (defun forbid-attributes (attributes form source)
   "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
@@ -1029,6 +1062,10 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (vector-push-extend (parse-inline form source) attributes)
      nil)
 
+    ((coalton:abi)
+     (vector-push-extend (parse-calling-convention form source) attributes)
+     nil)
+
     ((coalton:repr)
      (vector-push-extend (parse-repr form source) attributes)
      nil)
@@ -1040,12 +1077,14 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
     ((coalton:define)
      (let* ((define (parse-define form source))
             (monomorphize (consume-optimize-attribute :monomorphize attributes define "when parsing define"))
-            (inline (consume-optimize-attribute :inline attributes define "when parsing define")))
-       (forbid-inline-dynamic-variable
-        inline
-        (node-variable-name (toplevel-define-name define)))
+            (inline (consume-optimize-attribute :inline attributes define "when parsing define"))
+            (calling-convention (consume-optimize-attribute :calling-convention attributes define "when parsing define"))
+            (name (node-variable-name (toplevel-define-name define))))
+       (forbid-inline-dynamic-variable inline name)
+       (forbid-calling-convention-dynamic-variable calling-convention name)
        (setf (toplevel-define-monomorphize define) monomorphize)
        (setf (toplevel-define-inline define) inline)
+       (setf (toplevel-define-calling-convention define) calling-convention)
        (setf (fill-pointer attributes) 0)
        (push define (program-defines program))
        t))
@@ -1053,12 +1092,14 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
     ((coalton:declare)
      (let* ((declare (parse-declare form source))
             (monomorphize (consume-optimize-attribute :monomorphize attributes declare "when parsing declare"))
-            (inline (consume-optimize-attribute :inline attributes declare "when parsing declare")))
-       (forbid-inline-dynamic-variable
-        inline
-        (identifier-src-name (toplevel-declare-name declare)))
+            (inline (consume-optimize-attribute :inline attributes declare "when parsing declare"))
+            (calling-convention (consume-optimize-attribute :calling-convention attributes declare "when parsing declare"))
+            (name (identifier-src-name (toplevel-declare-name declare))))
+       (forbid-inline-dynamic-variable inline name)
+       (forbid-calling-convention-dynamic-variable calling-convention name)
        (setf (toplevel-declare-monomorphize declare) monomorphize)
        (setf (toplevel-declare-inline declare) inline)
+       (setf (toplevel-declare-calling-convention declare) calling-convention)
        (setf (fill-pointer attributes) 0)
        (push declare (program-declares program))
        t))
@@ -1861,6 +1902,7 @@ consume all attributes")))
         (setf docstring (cst:raw (cst:third form))))
 
       (let ((methods (loop :with inline := nil
+                           :with calling-convention := nil
                            :for forms := (cst:nthrest (if docstring 3 2) form) :then (cst:rest forms)
                            :while (cst:consp forms)
                            :for method-or-attribute := (cst:first forms)
@@ -1871,14 +1913,26 @@ consume all attributes")))
                                                   (note source method-or-attribute "inline attribute here")
                                                   (source:secondary-note (attribute-inline-location inline) "previous attribute here"))
                                      (setf inline (parse-inline method-or-attribute source)))
+                           :else :if (and (cst:consp method-or-attribute)
+                                          (eq 'coalton:abi (cst:raw (cst:first method-or-attribute))))
+                             :do (if calling-convention
+                                     (parse-error "Duplicate abi attribute"
+                                                  (note source method-or-attribute "abi attribute here")
+                                                  (source:secondary-note (attribute-calling-convention-location calling-convention) "previous attribute here"))
+                                     (setf calling-convention (parse-calling-convention method-or-attribute source)))
                            :else
                              :collect (let ((method (parse-instance-method-definition method-or-attribute (cst:second form) source)))
                                         (setf (instance-method-definition-inline method) inline
-                                              inline nil)
+                                              (instance-method-definition-calling-convention method) calling-convention
+                                              inline nil
+                                              calling-convention nil)
                                         method)
                            :finally (when inline
                                       (parse-error "Inline attribute must be attached to a method definition"
-                                                   (note source method-or-attribute "inline attribute here"))))))
+                                                   (note source method-or-attribute "inline attribute here")))
+                                    (when calling-convention
+                                      (parse-error "abi attribute must be attached to a method definition"
+                                                   (note source method-or-attribute "abi attribute here"))))))
 
         (make-toplevel-define-instance
          :context context
@@ -2208,6 +2262,32 @@ consume all attributes")))
 
   (make-attribute-inline
    :location (form-location source form)))
+
+(defun parse-calling-convention (form source)
+  (declare (type cst:cst form)
+           (values attribute-calling-convention))
+
+  (assert (cst:consp form))
+
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed abi attribute"
+                 (note source form "expected calling convention keyword (:auto, :lisp, :unpacked, or :unboxed)")))
+
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed abi attribute"
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected form")))
+
+  (let ((type (parse-type-variable (cst:second form) source)))
+    (case (keyword-src-name type)
+      ((:auto :lisp :unpacked :unboxed) nil)
+      (t
+       (parse-error "Unknown abi attribute"
+                    (note source (cst:second form)
+                          "expected one of :auto, :lisp, :unpacked, or :unboxed"))))
+    (make-attribute-calling-convention
+     :type type
+     :location (form-location source form))))
 
 (defun parse-derive (form source)
   (declare (type cst:cst form)

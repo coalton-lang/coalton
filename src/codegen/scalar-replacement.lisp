@@ -39,6 +39,10 @@ calling conventions.")
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
+   #:default-node-for-type
+   #:constructed-adt
+   #:non-returning-branch-node-p
+   #:rewrite-non-returning-branch-node
    #:scalar-replace))
 
 (in-package #:coalton-impl/codegen/scalar-replacement)
@@ -1653,6 +1657,14 @@ Identifiers have already been renamed, so extending their scope is safe."
         :type (node-type body)
         :bindings (node-let-bindings expr)
         :subexpr replacement)))
+    (node-values-bind
+     (alexandria:when-let ((replacement
+                            (scalar-replace-binding name (node-values-bind-body expr) body env)))
+       (make-node-values-bind
+        :type (node-type body)
+        :vars (node-values-bind-vars expr)
+        :expr (node-values-bind-expr expr)
+        :body replacement)))
     (t
      (or (scalar-replace-branching-cell-binding name expr body env)
          (multiple-value-bind (ctor type args) (constructed-adt expr env)
@@ -1844,7 +1856,34 @@ do not escape the loop."
                                       :branches (node-match-branches node))
                                      env)))
                (incf count)
-               replacement))))))
+               replacement))))
+       (action (:after node-direct-application node)
+         (when (and (null (node-direct-application-keyword-rands node))
+                    (= 1 (length (node-direct-application-rands node)))
+                    (not (node-local-variable-p (first (node-direct-application-rands node)))))
+           (let* ((arg0 (first (node-direct-application-rands node)))
+                  (base (tc:base-type (node-type arg0)))
+                  (type-entry (and (tc:tycon-p base)
+                                   (tc:lookup-type env (tc:tycon-name base) :no-error t)))
+                  (readers (and type-entry (struct-reader-names type-entry env))))
+             (when (and readers
+                        (member (node-direct-application-rator node) readers :test #'eq))
+               (let ((temp (gensym "STRUCT-READ-")))
+                 (alexandria:when-let ((replacement
+                                        (scalar-replace-binding
+                                         temp
+                                         arg0
+                                         (make-node-direct-application
+                                          :type (node-type node)
+                                          :properties (node-direct-application-properties node)
+                                          :rator-type (node-direct-application-rator-type node)
+                                          :rator (node-direct-application-rator node)
+                                          :rands (list (make-node-local-variable
+                                                        :type (node-type arg0)
+                                                        :value temp)))
+                                         env)))
+                   (incf count)
+                   replacement))))))))
      count)))
 
 (defun scalar-replace (node env)

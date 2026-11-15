@@ -89,6 +89,8 @@
 
                       (inline-p-table (make-hash-table :test #'eq))
 
+                      (calling-convention-table (make-hash-table :test #'eq))
+
                       (translation-unit
                         (tc:make-translation-unit
                          :types type-definitions
@@ -99,33 +101,59 @@
                          :package *package*)))
 
                   (loop :for define :in (parser:program-defines program)
+                        :for name := (parser:node-variable-name (parser:toplevel-define-name define))
                         :when (parser:toplevel-define-monomorphize define)
-                          :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
-                                             monomorphize-table)
-                                    t)
+                          :do (setf (gethash name monomorphize-table) t)
                         :when (parser:toplevel-define-inline define)
-                          :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
-                                             inline-p-table)
-                                    t))
+                          :do (setf (gethash name inline-p-table) t)
+                        :when (parser:toplevel-define-calling-convention define)
+                          :do (setf (gethash name calling-convention-table)
+                                    (parser:keyword-src-name
+                                     (parser:attribute-calling-convention-type
+                                      (parser:toplevel-define-calling-convention define)))))
 
                   (loop :for declare :in (parser:program-declares program)
+                        :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
                         :when (parser:toplevel-declare-monomorphize declare)
-                          :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
-                                             monomorphize-table)
-                                    t)
+                          :do (setf (gethash name monomorphize-table) t)
                         :when (parser:toplevel-declare-inline declare)
-                          :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
-                                             inline-p-table)
-                                    t))
+                          :do (setf (gethash name inline-p-table) t)
+                        :when (parser:toplevel-declare-calling-convention declare)
+                          :do (setf (gethash name calling-convention-table)
+                                    (parser:keyword-src-name
+                                     (parser:attribute-calling-convention-type
+                                      (parser:toplevel-declare-calling-convention declare)))))
 
                   (loop :for ty-instance :in ty-instances
+                        :for parsed-instance :in all-instances
                         :for method-codegen-inline-p := (tc:ty-class-instance-method-codegen-inline-p ty-instance)
+                        :for method-codegen-syms := (tc:ty-class-instance-method-codegen-syms ty-instance)
+                        :for class := (tc:lookup-class env (tc:ty-predicate-class (tc:ty-class-instance-predicate ty-instance)))
+                        :for class-methods := (tc:ty-class-unqualified-methods class)
                         :do (loop :for (method-codegen-sym . inline-p) :in method-codegen-inline-p
-                                  :do (when inline-p (setf (gethash method-codegen-sym inline-p-table) t))))
+                                  :do (when inline-p (setf (gethash method-codegen-sym inline-p-table) t)))
+                            (loop :for class-method :in class-methods
+                                  :for method-name := (tc:ty-class-method-name class-method)
+                                  :for method-codegen-sym :in method-codegen-syms
+                                  :for parsed-method := (find method-name
+                                                              (parser:toplevel-define-instance-methods parsed-instance)
+                                                              :key (lambda (m)
+                                                                     (parser:node-variable-name
+                                                                      (parser:instance-method-definition-name m))))
+                                  :when (and parsed-method
+                                             (parser:instance-method-definition-calling-convention parsed-method))
+                                    :do (setf (gethash method-codegen-sym calling-convention-table)
+                                              (parser:keyword-src-name
+                                               (parser:attribute-calling-convention-type
+                                                (parser:instance-method-definition-calling-convention parsed-method))))))
 
                   (analysis:analyze-translation-unit translation-unit env)
 
-                  (codegen:compile-translation-unit translation-unit monomorphize-table inline-p-table env))))))))))
+                  (codegen:compile-translation-unit translation-unit
+                                                    monomorphize-table
+                                                    inline-p-table
+                                                    env
+                                                    calling-convention-table))))))))))
 
 
 (defun expression-entry-point (node)
@@ -200,14 +228,11 @@ contexts mention variables determined only by functional dependencies."
 
           (when (null preds)
             (return-from %expression-entry-point
-              (let ((node (codegen:optimize-node
-                           (codegen:translate-expression node nil env)
-                           env)))
-                (codegen:codegen-expression
-                 (codegen:direct-application
-                  node
-                  (codegen:make-function-table env))
-                 env))))
+              (codegen:codegen-expression
+               (codegen:optimize-expression-node
+                (codegen:translate-expression node nil env)
+                env)
+               env)))
 
           (tc:tc-error "Unable to codegen"
                        (tc:tc-note node

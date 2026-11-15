@@ -44,6 +44,7 @@
    #:monomorphize
    #:inline
    #:noinline
+   #:abi
    #:overlap
    #:likely
    #:unlikely

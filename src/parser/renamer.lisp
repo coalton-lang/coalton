@@ -933,7 +933,8 @@
             :body (rename-variables-generic% (toplevel-define-body toplevel) body-ctx)
             :location (source:location toplevel)
             :monomorphize (toplevel-define-monomorphize toplevel)
-            :inline (toplevel-define-inline toplevel))
+            :inline (toplevel-define-inline toplevel)
+            :calling-convention (toplevel-define-calling-convention toplevel))
            ctx)))))
 
   (:method ((method instance-method-definition) ctx)
@@ -976,7 +977,8 @@
             :function-syntax-p (instance-method-definition-function-syntax-p method)
             :body (rename-variables-generic% (instance-method-definition-body method) body-ctx)
             :location (source:location method)
-            :inline (instance-method-definition-inline method))
+            :inline (instance-method-definition-inline method)
+            :calling-convention (instance-method-definition-calling-convention method))
            ctx)))))
 
   (:method ((toplevel toplevel-define-instance) ctx)

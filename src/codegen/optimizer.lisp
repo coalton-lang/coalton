@@ -56,6 +56,13 @@
    #:coalton-impl/codegen/scalar-replacement
    #:scalar-replace)
   (:import-from
+   #:coalton-impl/codegen/calling-convention
+   #:best-function-entrypoint
+   #:compute-function-entrypoints
+   #:refine-scc-function-entrypoints
+   #:rewrite-callsite-entrypoints
+   #:synthesize-worker-abstraction)
+  (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
   (:local-nicknames
@@ -64,34 +71,46 @@
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker))
   (:export
+   #:direct-application
    #:make-function-table
    #:optimize-bindings
+   #:optimize-expression-node
    #:optimize-node))
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun update-function-env (bindings inline-p-table env)
+(defun update-function-env (bindings inline-p-table env &optional calling-convention-table)
   (declare (type binding-list bindings)
            (type tc:environment env)
+           (type (or null hash-table) calling-convention-table)
            (values tc:environment &optional))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (loop :for (name . node) :in bindings
             :if (and (node-abstraction-p node)
                      (not (util:dynamic-variable-name-p name)))
-              :collect (cons name (length (node-abstraction-vars node))) :into functions
+              :collect (list name
+                             (length (node-abstraction-vars node))
+                             node)
+                :into functions
             :else
               :collect name :into variables
             :finally (return (values functions variables)))
-    (loop :for (name . arity) :in toplevel-functions
+    (loop :for (name arity node) :in toplevel-functions
+          :for requested-conv := (and calling-convention-table
+                                      (gethash name calling-convention-table))
           :do
-             (setf env
-                   (tc:set-function
-                    env
-                    name
-                    (tc:make-function-env-entry
-                     :name name
-                     :arity arity
-                     :inline-p (gethash name inline-p-table)))))
+             (multiple-value-bind (primary-convention entrypoints)
+                 (compute-function-entrypoints name node env requested-conv)
+               (setf env
+                     (tc:set-function
+                      env
+                      name
+                      (tc:make-function-env-entry
+                       :name name
+                       :arity arity
+                       :inline-p (and (gethash name inline-p-table) t)
+                       :primary-convention primary-convention
+                       :entrypoints entrypoints)))))
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
@@ -108,21 +127,44 @@ mapping known function names to their arity."
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defun update-binding-env (bindings inline-p-table env)
+(defun update-binding-env (bindings inline-p-table env &optional calling-convention-table)
   (declare (type binding-list bindings)
            (type hash-table inline-p-table)
            (type tc:environment env)
+           (type (or null hash-table) calling-convention-table)
            (values tc:environment &optional))
   (loop :for (name . node) :in bindings
         :do (setf env (tc:set-code env name node)))
-  (update-function-env bindings inline-p-table env))
+  (update-function-env bindings inline-p-table env calling-convention-table))
 
-(defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
+(defun optimize-expression-node (node env)
+  "Optimize a standalone Coalton expression NODE, including direct-application,
+calling-convention entrypoint selection, and scalar replacement."
+  (declare (type node node)
+           (type tc:environment env)
+           (values node &optional))
+  (let* ((node (optimize-node node env))
+         (node (direct-application node (make-function-table env)))
+         (node (lawnmow-to-fixpoint
+                (rewrite-callsite-entrypoints
+                 node
+                 env
+                 :print-rewrites settings:*print-calling-convention-occurrences*)
+                env))
+         (node (if (settings:coalton-release-p)
+                   (lawnmow-to-fixpoint (scalar-replace node env) env)
+                   node)))
+    (typecheck-node node env)
+    node))
+
+(defun optimize-bindings (bindings monomorphize-table inline-p-table package env
+                          &optional calling-convention-table)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
            (type hash-table inline-p-table)
            (type package package)
            (type tc:environment env)
+           (type (or null hash-table) calling-convention-table)
            (values binding-list tc:environment))
 
   (let ((bindings
@@ -136,7 +178,7 @@ mapping known function names to their arity."
                                           :when (member (car binding) scc)
                                             :collect binding)
                 :for optimized-scc := (optimize-bindings-initial scc-bindings package env)
-                :do (setf env (update-binding-env optimized-scc inline-p-table env))
+                :do (setf env (update-binding-env optimized-scc inline-p-table env calling-convention-table))
                 :append optimized-scc)))
 
     (let* ((manager (make-candidate-manager))
@@ -172,8 +214,8 @@ mapping known function names to their arity."
                     :collect (cons name node)))
 
 
-      ;; Update function env
-      (setf env (update-binding-env bindings inline-p-table env))
+      ;; Update function env (including multi-entrypoint descriptors)
+      (setf env (update-binding-env bindings inline-p-table env calling-convention-table))
 
 
       (let ((function-table (make-function-table env)))
@@ -186,7 +228,25 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (lawnmow-to-fixpoint node env))))
 
-        (when (settings:coalton-release-p)
+        ;; Refine calling-convention entrypoints now that direct applications
+        ;; are exposed, ensuring no worker unpacks an input parameter that
+        ;; would need to be re-boxed inside the worker body.
+        (setf env (refine-scc-function-entrypoints bindings inline-p-table env calling-convention-table))
+
+        ;; Select specialized calling-convention entrypoints at direct call sites
+        (setf bindings
+              (loop :for (name . node) :in bindings
+                    :collect (cons name
+                                   (lawnmow-to-fixpoint
+                                    (rewrite-callsite-entrypoints
+                                     node
+                                     env
+                                     :print-rewrites settings:*print-calling-convention-occurrences*)
+                                    env))))
+
+        (when (or (settings:coalton-release-p)
+                  (and calling-convention-table
+                       (plusp (hash-table-count calling-convention-table))))
           (setf bindings
                 (loop :for (name . node) :in bindings
                       :collect (cons name
@@ -194,12 +254,30 @@ mapping known function names to their arity."
                                       (scalar-replace node env)
                                       env)))))
 
-        ;; Update code db
+        ;; Update code db and synthesize worker entrypoints
         (loop :for (name . node) :in bindings
-              :do (setf env (tc:set-code env name node)))
-
-        (loop :for (name . node) :in bindings
-              :do (typecheck-node node env))
+              :do (typecheck-node node env)
+              :do (setf env (tc:set-code env name node))
+              :when (node-abstraction-p node)
+                :do (let* ((entry (tc:lookup-function env name :no-error t))
+                           (primary-spec (and entry (best-function-entrypoint entry))))
+                      (when primary-spec
+                        (when settings:*print-calling-convention-occurrences*
+                          (format t "~&;; Generating ~S entrypoint ~S :: ~A~%"
+                                  (tc:entrypoint-spec-convention primary-spec)
+                                  (tc:entrypoint-spec-symbol primary-spec)
+                                  (tc:type-to-string
+                                   (tc:entrypoint-spec-function-type primary-spec)
+                                   env)))
+                        (let ((worker-node
+                                (lawnmow-to-fixpoint
+                                 (synthesize-worker-abstraction node primary-spec env)
+                                 env)))
+                          (typecheck-node worker-node env)
+                          (setf env
+                                (tc:set-code env
+                                             (tc:entrypoint-spec-symbol primary-spec)
+                                             worker-node))))))
 
         (values bindings env)))))
 

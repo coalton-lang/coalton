@@ -48,8 +48,8 @@ This puts Coalton in release mode, tells Coalton to perform specialization, tell
 This tells the Coalton compiler in which mode it should compile all code.
 
 Allowed options:
-- `"development"`: Makes most things redefinable. Disables certain optimizations that impede interactive development.
-- `"release"`: Assumes most data structures are frozen. Enables certain optimizations. Assumes program won't be interactively developed.
+- `"development"`: Makes most things redefinable. Disables certain optimizations that impede interactive development. Functions default to the `:lisp` calling convention unless an explicit `(abi ...)` attribute is provided.
+- `"release"`: Assumes most data structures are frozen. Enables certain optimizations, including automatic multi-entrypoint calling conventions (`:unpacked` and `:unboxed`) for composite and machine-typed functions. Assumes program won't be interactively developed.
 
 ### `:print-unicode`
 
@@ -101,7 +101,7 @@ Allowed options:
 
 ### `:print-rewrites`
 
-This controls whether information about how the compiler rewrites code should be printed. This is generally specialization and inlining information. This is noisy output and is used for performance debugging, typically. For example, this code:
+This controls whether information about how the compiler rewrites code should be printed. This includes specialization, inlining, and calling-convention entrypoint generation and call-site rewriting information. This is noisy output and is used for performance debugging, typically. For example, this code:
 
 ```
 (coalton-toplevel

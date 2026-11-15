@@ -31,7 +31,8 @@ weight: 40
   ⟨expr⟩)
 
 ;; ⟨arg⟩           := ⟨var⟩ | _ | ⟨pattern⟩
-;; ⟨opt-attribute⟩ := (inline) | (monomorphize)
+;; ⟨opt-attribute⟩ := (inline) | (monomorphize) | (abi ⟨convention⟩)
+;; ⟨convention⟩    := :auto | :lisp | :unpacked | :unboxed
 ```
 
 ## Semantics
@@ -61,14 +62,14 @@ weight: 40
 - The `define` form establishes the default top-level binding. Each reference to `*⟨name⟩*` reads the value from the current dynamic environment.
 - [`dynamic-bind`](/manual/operators/dynamic-bind/) or shorthand `(let *⟨name⟩* = ⟨expr⟩)` temporarily rebinds dynamic variables for the dynamic extent of a body; all functions called within that extent observe the new value.
 - Dynamic variables may have any Coalton type, including function types (defined in value syntax with [`fn`](/manual/operators/fn/)).
-- Dynamic variables cannot be annotated with [`inline`](/manual/operators/inline/).
+- Dynamic variables cannot be annotated with [`inline`](/manual/operators/inline/) or [`abi`](/manual/operators/abi/).
 
 ### Declarations, Docstrings, and Attributes
 
 - Types are inferred automatically, or may be specified with a matching [`declare`](/manual/operators/declare/) in the same `coalton-toplevel`.
 - Exported definitions without a matching `declare` signal a `coalton:deprecation-warning`.
 - A string literal immediately following the name or parameter list is recorded as the docstring when followed by at least one body expression. (In `(define greeting "hello")`, `"hello"` is the value expression rather than a docstring.)
-- [`inline`](/manual/operators/inline/) and [`monomorphize`](/manual/operators/monomorphize/) attributes may precede either `define` or its `declare`.
+- [`inline`](/manual/operators/inline/), [`monomorphize`](/manual/operators/monomorphize/), and [`abi`](/manual/operators/abi/) attributes may precede either `define` or its `declare`.
 
 ## Examples
 
@@ -104,5 +105,4 @@ weight: 40
 
 - Unconstrained top-level functions compile to Common Lisp `defun` definitions with the same symbol name and arity, plus a global lexical binding so the symbol can be used both as a direct call operator and as a first-class function value.
 - Functions with typeclass constraints receive hidden dictionary parameters before their positional arguments.
-- See [`declare`](/manual/operators/declare/), [`fn`](/manual/operators/fn/), and [`dynamic-bind`](/manual/operators/dynamic-bind/).
-
+- See [`declare`](/manual/operators/declare/), [`fn`](/manual/operators/fn/), [`abi`](/manual/operators/abi/), and [`dynamic-bind`](/manual/operators/dynamic-bind/).

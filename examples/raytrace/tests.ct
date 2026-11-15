@@ -211,7 +211,7 @@
         (bench:run-benchmark :width 8 :height 4 :samples 2 :depth 3 :trials 2)
       (cl:assert (cl:= (cl:length (cl:getf report :trials)) 2))
       (cl:assert (cl:>= (cl:getf report :median-seconds) 0))
-      #+sbcl (cl:assert (cl:> (cl:getf report :median-bytes) 0))
+      #+sbcl (cl:assert (cl:>= (cl:getf report :median-bytes) 0))
       (cl:assert (cl:equalp pixels (bench:render-frame :width 8 :height 4 :samples 2 :depth 3)))))
   (cl:assert (cl:handler-case (cl:progn (bench:run-benchmark :trials 0) cl:nil)
                (cl:error () cl:t))))

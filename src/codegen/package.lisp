@@ -8,10 +8,12 @@
   (:import-from
    #:coalton-impl/codegen/optimizer
    #:make-function-table
+   #:optimize-expression-node
    #:optimize-node
    #:direct-application)
   (:export
    #:make-function-table
+   #:optimize-expression-node
    #:optimize-node
    #:direct-application)
 
