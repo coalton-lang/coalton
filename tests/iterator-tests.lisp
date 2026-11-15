@@ -52,30 +52,44 @@
                                                    (iter:count-forever)))))))
 
 (define-test iter-take-size-hint ()
-  ;; A sized inner iterator is capped by COUNT, so COLLECT! / EXTEND! can
-  ;; preallocate exactly what TAKE! will yield.
+  ;; A sized iterator is capped by COUNT, so COLLECT! / EXTEND! can
+  ;; preallocate exactly.
   (is (== (Some (the UFix 3))
           (iter:size-hint (iter:take! 3 (iter:into-iter (make-list 1 2 3 4 5))))))
   (is (== (Some (the UFix 5))
           (iter:size-hint (iter:take! 20 (iter:into-iter (make-list 1 2 3 4 5))))))
-  ;; An inner iterator with no hint still gives TAKE! an upper bound of COUNT.
-  (is (== (Some (the UFix 3))
+  ;; An unhinted iterator stays unhinted: COUNT is not a lower bound.
+  (is (== (the (Optional UFix) None)
           (iter:size-hint (iter:take! 3 (iter:repeat 1)))))
-  (is (== (Some (the UFix 0))
+  (is (== (the (Optional UFix) None)
           (iter:size-hint (iter:take! 0 (iter:repeat 1)))))
-  ;; REPEAT-FOR is built on TAKE! and inherits the hint.
+  ;; REPEAT-FOR yields exactly COUNT elements, so it reports COUNT.
   (is (== (Some (the UFix 4))
-          (iter:size-hint (iter:repeat-for "x" 4)))))
+          (iter:size-hint (iter:repeat-for "x" 4))))
+  (is (== (Some (the UFix 0))
+          (iter:size-hint (iter:repeat-for "x" 0))))
+  (is (== (make-list "x" "x" "x" "x")
+          (the (List String)
+               (iter:collect! (iter:repeat-for "x" 4)))))
+  (is (== (the (List String) Nil)
+          (iter:collect! (iter:repeat-for "x" 0)))))
+
+(define-test iter-take-does-not-allocate-on-hint ()
+  ;; An unhinted TAKE! must not allocate COUNT elements when the
+  ;; iterator ends early.
+  (let v = (the (Vector Integer)
+                (iter:collect! (iter:take! 1000000 (iter:up-to 1)))))
+    (is (== 1 (vector:length v)))
+    (is (== (vector:make 0) v))
+    (is (== 1 (vector:capacity v))))
 
 (define-test iter-take-does-not-over-consume ()
-  ;; The old ZIP!-based TAKE! evaluated NEXT! on both sides even after the
-  ;; counter side was spent, consuming one element too many from the input.
+  ;; TAKE! must not consume one element too many from the input.
   (let calls = (cell:new (the Integer 0)))
   (let source = (iter:new
                   (fn ()
-                    (progn
-                      (cell:increment! calls)
-                      (Some 1)))))
+                    (cell:increment! calls)
+                    (Some 1))))
   (let taken = (iter:take! 2 source))
   (is (== (the (List Integer) (make-list 1 1))
           (iter:collect! taken)))

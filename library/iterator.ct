@@ -262,7 +262,15 @@ Equivalent to reversing `range-increasing`"
   (declare repeat-for (:item * UFix -> Iterator :item))
   (define (repeat-for item count)
     "Yield ITEM COUNT times, then stop."
-    (take! count (repeat item)))
+    (let ((remaining (cell:new count)))
+      (with-size
+          (fn ()
+            (if (== 0 (cell:read remaining))
+                None
+                (progn
+                  (cell:decrement! remaining)
+                  (Some item))))
+        count)))
 
   (declare once (:item -> Iterator :item))
   (define (once item)
@@ -412,28 +420,21 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
   (declare take! (UFix * Iterator :elt -> Iterator :elt))
   (define (take! count iter)
     "An `Iterator` which yields at most COUNT elements from ITER."
-    ;; Count directly instead of zipping with UP-TO. The old construction
-    ;; allocated a tuple per element and lost the size hint (UP-TO reports
-    ;; none), so COLLECT! and EXTEND! could not preallocate.
-    (let ((remaining (cell:new count))
-          (size (match (size-hint iter)
-                  ((Some n) (min n count))
-                  ((None) count))))
-      (with-size
-          (fn ()
-            (if (== 0 (cell:read remaining))
-                None
-                (match (next! iter)
-                  ((None)
-                   (progn
-                     ;; The inner iterator is spent; stop calling it.
-                     (cell:write! remaining 0)
-                     None))
-                  ((Some x)
-                   (progn
-                     (cell:decrement! remaining)
-                     (Some x))))))
-        size)))
+    (let ((remaining (cell:new count)))
+      (%Iterator
+       (fn ()
+         (if (== 0 (cell:read remaining))
+             None
+             (match (next! iter)
+               ((None)
+                ;; The inner iterator is spent; stop calling it.
+                (cell:write! remaining 0)
+                None)
+               ((Some x)
+                (cell:decrement! remaining)
+                (Some x)))))
+       (do (n <- (size-hint iter))
+           (pure (min n count))))))
 
   (declare chain! (Iterator :elt * Iterator :elt -> Iterator :elt))
   (define (chain! iter1 iter2)

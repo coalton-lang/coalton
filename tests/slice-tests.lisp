@@ -1,8 +1,7 @@
 (in-package #:coalton-native-tests)
 
 (coalton-toplevel
-  ;; A second probe type, local to this file, so slice EQ short-circuiting
-  ;; can be observed without depending on load order.
+  ;; A probe type local to this file, independent of load order.
   (define-struct Slice-Eq-Probe
     (value Integer))
 
@@ -10,10 +9,9 @@
 
   (define-instance (Eq Slice-Eq-Probe)
     (define (== a b)
-      (progn
-        (cell:increment! slice-eq-probe-comparisons)
-        (match (Tuple a b)
-          ((Tuple (Slice-Eq-Probe x) (Slice-Eq-Probe y)) (== x y)))))))
+      (cell:increment! slice-eq-probe-comparisons)
+      (match (Tuple a b)
+        ((Tuple (Slice-Eq-Probe x) (Slice-Eq-Probe y)) (== x y))))))
 
 (define-test test-slice-basic ()
   (let ((v (the
@@ -180,10 +178,8 @@
       (is (== 1 (cell:read slice-eq-probe-comparisons))))
 
 (define-test test-slice-collect-with-oversized-hint ()
-  ;; A size hint is only an upper bound: TAKE! 3 over UP-TO 1 reports 3 but
-  ;; yields one element. COLLECT! preallocates from that hint, so the backing
-  ;; vector has spare capacity. The resulting Slice must expose only the
-  ;; elements actually collected.
+  ;; A size hint is only an upper bound: the resulting Slice must
+  ;; expose only the collected elements.
   (let s = (the (slice:Slice Integer)
                 (iter:collect! (iter:take! 3 (iter:up-to 1)))))
     (is (== 1 (slice:length s)))
@@ -191,14 +187,31 @@
     (is (== None (slice:index 1 s)))
     (is (== (make-list 0)
             (the (List Integer) (iter:collect! (iter:into-iter s)))))
+    (is (== 1 (lisp (-> UFix) (s) (cl:array-dimension s 0))))
     ;; An exact hint must still produce the full length.
     (let t = (the (slice:Slice Integer)
                   (iter:collect! (iter:take! 3 (iter:up-to 3)))))
       (is (== 3 (slice:length t)))
       (is (== (make-list 0 1 2)
               (the (List Integer) (iter:collect! (iter:into-iter t)))))
+      (is (== 3 (lisp (-> UFix) (t) (cl:array-dimension t 0))))
     ;; An empty iterator with an oversized hint yields an empty Slice.
     (let e = (the (slice:Slice Integer)
                   (iter:collect! (iter:take! 0 (iter:up-to 1)))))
       (is (== 0 (slice:length e)))
       (is (== None (slice:index 0 e))))
+
+(define-test test-slice-collect-trims-capacity ()
+  ;; A SLICE cannot grow, so excess capacity from an unhinted
+  ;; iterator must not stay allocated.
+  (let s = (the (slice:Slice Integer)
+                (iter:collect! (iter:up-to 5))))
+    (is (== 5 (slice:length s)))
+    (is (== 5 (lisp (-> UFix) (s) (cl:array-dimension s 0))))
+    ;; An oversized hint is trimmed just the same.
+    (let t = (the (slice:Slice Integer)
+                  (iter:collect! (iter:with-size
+                                  (fn () (the (Optional Integer) None))
+                                  100))))
+      (is (== 0 (slice:length t)))
+      (is (== 0 (lisp (-> UFix) (t) (cl:array-dimension t 0)))))

@@ -80,10 +80,8 @@
   (declare with-initial-element (UFix * :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
-    ;; Fill the backing array in one pass rather than allocating an empty
-    ;; vector and pushing N elements through an iterator, which costs roughly
-    ;; 700 ns per element. Keep the array adjustable and keep the fill pointer
-    ;; so that PUSH! and the other in-place operations behave as before.
+    ;; Keep the fill pointer so that PUSH! and the other in-place
+    ;; operations behave as before.
     (lisp (-> (Vector :a)) (n x)
       (cl:make-array n
                      :adjustable cl:t
@@ -263,8 +261,7 @@ length of `v` are ignored."
   (declare append (Vector :a * Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
-    ;; One allocation and two bulk copies, rather than two EXTEND! passes
-    ;; that push every element individually.
+    ;; APPEND must return a fresh, growable vector.
     (lisp (-> (Vector :a)) (v1 v2)
       (cl:let* ((n1 (cl:length v1))
                 (n2 (cl:length v2))
@@ -337,9 +334,7 @@ length of `v` are ignored."
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
       (progn
-        ;; Grow straight to LENGTH + SIZE. Basing the delta on LENGTH
-        ;; rather than CAPACITY used to shrink a vector that had spare
-        ;; capacity, forcing every subsequent PUSH! to reallocate.
+        ;; Grow to LENGTH + SIZE, retaining spare capacity.
         (set-capacity! (+ (length vec) size) vec)
         (values)))
 
@@ -356,17 +351,14 @@ length of `v` are ignored."
 
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
-      (let ((len (length v1)))
-        (if (/= len (length v2))
-            False
-            (let ((eq-fn (fn (x y) (== x y))))
-              ;; Walk the backing arrays directly instead of building two
-              ;; iterators and zipping them into per-element options.
-              (lisp (-> Boolean) (v1 v2 len eq-fn)
-                (cl:loop :for i :below len
-                         :always (cl:eq cl:t
-                                        (call-coalton-function
-                                         eq-fn (cl:aref v1 i) (cl:aref v2 i))))))))))
+      (let len = (length v1))
+      (and (== len (length v2))
+           (rec % ((i 0))
+             (cond
+               ((== i len) True)
+               ((== (index-unsafe i v1) (index-unsafe i v2))
+                (% (+ i 1)))
+               (True False))))))
 
   (define-instance (show:Show :a => show:Show (Vector :a))
     (define (show:show-to f vec)
