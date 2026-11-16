@@ -1,0 +1,379 @@
+;;;; ratio.ct
+;;;;
+;;;; Generic reduced fractions over any GcdDomain
+
+(coalton/utils:defstdlib-package #:coalton/xmath/ratio
+  (:documentation "The field of fractions $\\operatorname{Frac}(D)$ of any `GcdDomain` $D$, and symbolic decomposition and integration of univariate rational functions in $K(x) = \\operatorname{Frac}(K[x])$.
+
+Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canonical reduced form with $\\gcd(p, q) = 1$ and unit-normalized denominator $\\operatorname{unit}(q) = 1$. Addition, subtraction, multiplication, and scaling use Henrici/Brown cross-GCD cancellation—extracting $g = \\gcd(q_1, q_2)$ before forming $p_1(q_2 / g) \\pm p_2(q_1 / g)$ over $q_1(q_2 / g)$—to curb intermediate degree and coefficient swell in polynomial rational functions $\\mathbb{Q}(x)$, multivariate rational functions $\\operatorname{Frac}(\\mathbb{Z}[x][y])$, and Gaussian rationals $\\mathbb{Q}(i)$.
+
+**Rational function integration ($K(x)$ over a field $K$ of characteristic $0$).**
+- **Square-free partial fractions (`partial-fractions`):** Decomposes $r(x) = P(x)/Q(x)$ as
+  $$r(x) = p(x) + \\sum_j \\sum_{k=1}^{m_j} \\frac{c_{j,k}(x)}{q_j(x)^k}, \\qquad \\deg c_{j,k} < \\deg q_j,$$
+  where $\\prod_j q_j^{m_j}$ is Yun's square-free factorization of $Q$, by Bézout splitting across the pairwise coprime factors $q_j^{m_j}$ followed by $q_j$-adic expansion.
+- **Hermite reduction (`hermite-reduce`):** Mack's linear variant reduces multiple poles of $r(x)$ using only polynomial GCDs and Bézout identities (without factoring the denominator over an extension field), producing rational functions $g, h \\in K(x)$ such that
+  $$\\int r(x)\\,dx = g(x) + \\int h(x)\\,dx, \\qquad r = g' + h,$$
+  where $h = A / B$ is proper ($\\deg A < \\deg B$) with $B$ monic and square-free.
+- **Rothstein–Trager resultant (`rothstein-trager-resultant`):** For the remaining logarithmic integrand $h = A / B$, the resultant $R(t) = \\operatorname{res}_x\\!\\left(B(x),\\, A(x) - t B'(x)\\right) \\in K[t]$ has roots equal to the residues $c_i$ in
+  $$\\int \\frac{A(x)}{B(x)}\\,dx = \\sum_i c_i \\ln \\gcd\\!\\left(B(x),\\, A(x) - c_i B'(x)\\right).$$")
+  (:nicknames
+   #:coalton/math/ratio
+   #:coalton-library/math/ratio)
+  (:shadow
+   #:numerator
+   #:denominator)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:import-from
+   #:coalton/tuple
+   #:Tuple3)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:show #:coalton/show))
+  (:export
+   #:Ratio
+   #:make-ratio
+   #:numerator
+   #:denominator
+   #:partial-fractions
+   #:hermite-reduce
+   #:rothstein-trager-resultant))
+
+(in-package #:coalton/xmath/ratio)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (Ratio :d)
+    "A reduced fraction $p / q$ in the fraction field of a `GcdDomain`, with coprime numerator and unit-normalized denominator."
+    (%Ratio :d :d))
+
+  (inline)
+  (declare numerator (Ratio :d -> :d))
+  (define (numerator (%Ratio num _))
+    "The canonical numerator of a `Ratio`."
+    num)
+
+  (inline)
+  (declare denominator (Ratio :d -> :d))
+  (define (denominator (%Ratio _ den))
+    "The unit-normalized denominator of a `Ratio`."
+    den)
+
+  (declare make-ratio ((Eq :d) (GcdDomain :d) => :d * :d -> Ratio :d))
+  (define (make-ratio num den)
+    "Construct a canonical reduced `Ratio` representing $\\mathtt{num} / \\mathtt{den}$."
+    (when (zero? den)
+      (error "Ratio division by zero."))
+    (if (zero? num)
+        (%Ratio zero one)
+        (let ((g (gcd num den))
+              (num-red (exact-div num g))
+              (den-red (exact-div den g))
+              (u (unit-part den-red)))
+          (%Ratio (exact-div num-red u) (normal-part den-red)))))
+
+  (define-instance (Eq :d => Eq (Ratio :d))
+    (inline)
+    (define (== (%Ratio n1 d1) (%Ratio n2 d2))
+      (and (== n1 n2) (== d1 d2))))
+
+  (define-instance (show:Show :d => show:Show (Ratio :d))
+    (define (show:show-to f (%Ratio num den))
+      (f "(")
+      (show:show-to f num)
+      (f " / ")
+      (show:show-to f den)
+      (f ")")))
+
+  (declare ratio-add ((Eq :d) (GcdDomain :d) => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-add (%Ratio n1 d1) (%Ratio n2 d2))
+    (cond
+      ((zero? n1) (%Ratio n2 d2))
+      ((zero? n2) (%Ratio n1 d1))
+      (True
+       (let ((g (gcd d1 d2))
+             (d1/g (exact-div d1 g))
+             (d2/g (exact-div d2 g))
+             (num (+ (* n1 d2/g) (* n2 d1/g)))
+             (den (* d1 d2/g)))
+         (make-ratio num den)))))
+
+  (inline)
+  (declare ratio-negate (AdditiveGroup :d => Ratio :d -> Ratio :d))
+  (define (ratio-negate (%Ratio n d))
+    (%Ratio (neg n) d))
+
+  (inline)
+  (declare ratio-sub ((Eq :d) (GcdDomain :d) => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-sub a b)
+    (ratio-add a (ratio-negate b)))
+
+  (declare ratio-mul ((Eq :d) (GcdDomain :d) => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-mul (%Ratio n1 d1) (%Ratio n2 d2))
+    (if (or (zero? n1) (zero? n2))
+        (%Ratio zero one)
+        (let ((g1 (gcd n1 d2))
+              (g2 (gcd n2 d1))
+              (num (* (exact-div n1 g1) (exact-div n2 g2)))
+              (den (* (exact-div d1 g2) (exact-div d2 g1)))
+              (u (unit-part den)))
+          (%Ratio (exact-div num u) (normal-part den)))))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Additive (Ratio :d))
+    (inline)
+    (define (+ a b) (ratio-add a b))
+    (define zero (%Ratio zero one)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => AdditiveGroup (Ratio :d))
+    (inline)
+    (define (- a b) (ratio-sub a b))
+    (inline)
+    (define (neg a) (ratio-negate a)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Multiplicative (Ratio :d))
+    (inline)
+    (define (* a b) (ratio-mul a b))
+    (define one (%Ratio one one)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Semiring (Ratio :d)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Ring (Ratio :d))
+    (inline)
+    (define (from-int n) (%Ratio (from-int n) one)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Num (Ratio :d)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Reciprocable (Ratio :d))
+    (define (recip (%Ratio n d))
+      (when (zero? n)
+        (error "Reciprocal of zero Ratio."))
+      (let u = (unit-part n))
+      (%Ratio (exact-div d u) (normal-part n)))
+    (inline)
+    (define (/ a b)
+      (ratio-mul a (recip b))))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => GcdDomain (Ratio :d))
+    (inline)
+    (define (unit-part r)
+      (if (zero? r) one r))
+    (inline)
+    (define (normal-part r)
+      (if (zero? r) zero one))
+    (inline)
+    (define (exact-quot a b)
+      (if (zero? b) None (Some (/ a b))))
+    (inline)
+    (define (gcd a b)
+      (if (and (zero? a) (zero? b)) zero one)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Dividable :d (Ratio :d))
+    (inline)
+    (define (general/ a b)
+      (make-ratio a b)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Scale :d (Ratio :d))
+    (define (scale k (%Ratio n d))
+      (if (zero? k)
+          (%Ratio zero one)
+          (let ((g (gcd k d))
+                (num (* (exact-div k g) n))
+                (den (exact-div d g))
+                (u (unit-part den)))
+            (%Ratio (exact-div num u) (normal-part den))))))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Module :d (Ratio :d)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Scale (Ratio :d) (Ratio :d))
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Module (Ratio :d) (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) => VectorSpace (Ratio :d) (Ratio :d)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) (ConjugateRing :d) => ConjugateRing (Ratio :d))
+    (inline)
+    (define (conjugate r)
+      (make-ratio (conjugate (numerator r)) (conjugate (denominator r)))))
+
+  (define-instance (Multiplicative :d => Into :d (Ratio :d))
+    (inline)
+    (define (into x)
+      (%Ratio x one)))
+
+  ;;
+  ;; Partial fractions
+  ;;
+
+  (declare %solve-diophantine
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     poly:Polynomial :a * poly:Polynomial :a * poly:Polynomial :a ->
+     poly:Polynomial :a * poly:Polynomial :a))
+  (define (%solve-diophantine a b c)
+    "Solve $s a + t b = c$ for coprime $a, b$, returning `(values s t)` with $\\deg s < \\deg b$."
+    (let (values g s0 _) = (extended-gcd a b))
+    (when (/= (poly:degree g) 0)
+      (error "Diophantine equation requires coprime polynomials."))
+    (let s = (rem (exact-div (* c s0) g) b))
+    (let t0 = (exact-div (- c (* s a)) b))
+    (values s t0))
+
+  (declare %factor-product
+    (Semiring :a => List (Tuple (poly:Polynomial :a) UFix) -> poly:Polynomial :a))
+  (define (%factor-product factors)
+    (rec % ((fs factors) (acc one))
+      (match fs
+        ((Nil) acc)
+        ((Cons (Tuple q m) rest)
+         (% rest (* acc (^ q m)))))))
+
+  (declare %q-adic-terms
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     poly:Polynomial :a * poly:Polynomial :a * UFix ->
+     List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
+  (define (%q-adic-terms a q m)
+    "Expand $a / q^m$ (with $\\deg a < m \\deg q$) as $\\sum_k c_k / q^{m-k}$ with $\\deg c_k < \\deg q$, in increasing order of power."
+    (rec expand ((rest a) (power m) (acc Nil))
+      (cond
+        ((or (== power 0) (zero? rest)) acc)
+        (True
+         (let (values next ck) = (quotrem rest q))
+         (expand next
+                 (- power 1)
+                 (if (zero? ck)
+                     acc
+                     (Cons (Tuple3 ck q power) acc)))))))
+
+  (declare %coprime-split
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     poly:Polynomial :a * List (Tuple (poly:Polynomial :a) UFix) ->
+     List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
+  (define (%coprime-split a factors)
+    "Split $a / \\prod_j q_j^{m_j}$ over the pairwise coprime $q_j^{m_j}$ using Bézout identities, then expand each piece $q_j$-adically."
+    (rec split ((num a) (fs factors) (acc Nil))
+      (match fs
+        ((Nil) acc)
+        ((Cons (Tuple q m) (Nil))
+         (list:append acc (%q-adic-terms num q m)))
+        ((Cons (Tuple q m) rest)
+         (let ((fj (^ q m))
+               (rest-prod (%factor-product rest)))
+           (let (values aj _) = (%solve-diophantine rest-prod fj num))
+           (let num-rest = (exact-div (- num (* aj rest-prod)) fj))
+           (split num-rest
+                  rest
+                  (list:append acc (%q-adic-terms aj q m))))))))
+
+  (declare partial-fractions
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     Ratio (poly:Polynomial :a) ->
+     poly:Polynomial :a * List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
+  (define (partial-fractions r)
+    "Square-free partial fraction decomposition of a rational function `r` over a field of characteristic $0$.
+
+Returns `(values poly-part terms)` where each term `(Tuple3 num base power)` represents $\\frac{\\mathtt{num}(x)}{\\mathtt{base}(x)^{\\mathtt{power}}}$ with $\\deg \\mathtt{num} < \\deg \\mathtt{base}$, each `base` is a monic square-free factor from `square-free-factorization` of the denominator, and
+$$r = \\mathtt{poly\\text{-}part} + \\sum \\frac{\\mathtt{num}}{\\mathtt{base}^{\\mathtt{power}}}.$$
+
+Use `reconstruct-partial-fractions` to recombine the result."
+    (let num = (numerator r))
+    (let den = (denominator r))
+    (let (values poly-part rem-num) = (quotrem num den))
+    (cond
+      ((zero? rem-num)
+       (values poly-part Nil))
+      (True
+       (let (values lc factors) = (poly:square-free-factorization den))
+       (values poly-part
+               (%coprime-split (scale (recip lc) rem-num) factors)))))
+
+  (declare reconstruct-partial-fractions
+    ((Eq :a) (GcdDomain :a) =>
+     poly:Polynomial :a * List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix) ->
+     Ratio (poly:Polynomial :a)))
+  (define (reconstruct-partial-fractions poly-part terms)
+    "Recombine the output of `partial-fractions` into the rational function $\\mathtt{poly\\text{-}part} + \\sum \\frac{\\mathtt{num}}{\\mathtt{base}^{\\mathtt{power}}}$."
+    (rec % ((ts terms) (acc (into poly-part)))
+      (match ts
+        ((Nil) acc)
+        ((Cons (Tuple3 n base power) rest)
+         (% rest (+ acc (make-ratio n (^ base power))))))))
+
+  ;;
+  ;; Hermite reduction
+  ;;
+
+  (declare hermite-reduce
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     Ratio (poly:Polynomial :a) ->
+     Ratio (poly:Polynomial :a) * Ratio (poly:Polynomial :a)))
+  (define (hermite-reduce r)
+    "Hermite reduction of a rational function `r` over a field of characteristic $0$ (Mack's linear variant).
+
+Returns `(values g h)` such that $\\int r(x)\\,dx = g(x) + \\int h(x)\\,dx$, where $g$ is the rational part of the integral (including the antiderivative of the polynomial part of $r$), and $h$ has a square-free denominator with $\\deg(\\operatorname{num} h) < \\deg(\\operatorname{den} h)$, so that $\\int h$ is purely logarithmic. In particular, `(+ (deriv g) h) == r`."
+    (let num = (numerator r))
+    (let den = (denominator r))
+    (let (values poly-part a0) = (quotrem num den))
+    (let dm0 = (gcd den (poly:differentiate den)))
+    (let ds = (exact-div den dm0))
+    (rec reduce ((a a0)
+                 (dm dm0)
+                 (g (make-ratio (poly:integrate poly-part) one)))
+      (cond
+        ((== (poly:degree dm) 0)
+         (let (values q rr) = (quotrem a ds))
+         (values (+ g (make-ratio (poly:integrate q) one))
+                 (make-ratio rr ds)))
+        (True
+         (let ddm = (poly:differentiate dm))
+         (let dm2 = (gcd dm ddm))
+         (let dms = (exact-div dm dm2))
+         (let coef = (neg (exact-div (* ds ddm) dm)))
+         (let (values b c) = (%solve-diophantine coef dms a))
+         (reduce (- c (* (poly:differentiate b) (exact-div ds dms)))
+                 dm2
+                 (+ g (make-ratio b dm)))))))
+
+  ;;
+  ;; Rothstein-Trager resultant
+  ;;
+
+  (declare rothstein-trager-resultant
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     Ratio (poly:Polynomial :a) -> poly:Polynomial :a))
+  (define (rothstein-trager-resultant h)
+    "The monic Rothstein–Trager resultant $R(t) = \\operatorname{res}_x\\left(B(x), A(x) - t B'(x)\\right)$ of a logarithmic integrand $h = A / B$ with $B$ square-free and $\\deg A < \\deg B$ (such as the second value of `hermite-reduce`).
+
+Computed as the Sylvester resultant in $K[t][x]$ with outer indeterminate $x$ and inner indeterminate $t$. If $c_1, \\ldots, c_k$ are the distinct roots of $R(t)$, then
+$$\\int h(x)\\,dx = \\sum_{i} c_i \\ln \\gcd\\left(B(x), A(x) - c_i B'(x)\\right).$$
+
+Returns `one` when $h = 0$."
+    (let a = (numerator h))
+    (let b = (denominator h))
+    (cond
+      ((zero? a) one)
+      ((>= (poly:degree a) (poly:degree b))
+       (error "rothstein-trager-resultant requires a proper rational function."))
+      (True
+       (let ((db (poly:differentiate b))
+             (n (poly:degree b))
+             (bx (poly:polynomial (map into (poly:coefficients b))))
+             (gx (rec build ((k n) (acc Nil))
+                   (if (== k 0)
+                       (poly:polynomial acc)
+                       (let ((idx (- k 1)))
+                         (build idx
+                                (Cons (poly:polynomial
+                                       (Cons (poly:coeff a idx)
+                                             (Cons (neg (poly:coeff db idx)) Nil)))
+                                      acc)))))))
+         (normal-part (poly:resultant bx gx)))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/RATIO")

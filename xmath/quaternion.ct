@@ -1,0 +1,246 @@
+;;;; quaternion.ct
+;;;;
+;;;; Hamilton's quaternions over rings and division rings
+
+(coalton/utils:defstdlib-package #:coalton/xmath/quaternion
+  (:documentation "Hamilton's quaternion algebra $\\mathbb{H}(R)$ over rings and fields, and 3D spatial rotations.
+
+A quaternion $q = w + x\\mathbf{i} + y\\mathbf{j} + z\\mathbf{k}$ consists of a scalar part $w \\in R$ and a pure imaginary vector part $\\mathbf{v} = (x, y, z) \\in R^3$, with multiplication governed by Hamilton's relations
+$$\\mathbf{i}^2 = \\mathbf{j}^2 = \\mathbf{k}^2 = \\mathbf{i}\\mathbf{j}\\mathbf{k} = -1,$$
+or equivalently $(w_1, \\mathbf{v}_1)(w_2, \\mathbf{v}_2) = (w_1 w_2 - \\mathbf{v}_1 \\cdot \\mathbf{v}_2,\\; w_1 \\mathbf{v}_2 + w_2 \\mathbf{v}_1 + \\mathbf{v}_1 \\times \\mathbf{v}_2)$.
+
+Over any ring $R$, $\\mathbb{H}(R)$ is a non-commutative associative ring. When $R$ is a $\\ast$-ring (`ConjugateRing`), quaternion conjugation
+$$\\bar{q} = \\bar{w} - \\bar{x}\\mathbf{i} - \\bar{y}\\mathbf{j} - \\bar{z}\\mathbf{k}$$
+is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The squared norm $N(q) = q\\bar{q} = w^2 + x^2 + y^2 + z^2$ (`norm-squared`) is multiplicative ($N(pq) = N(p)N(q)$). Over any field (`Reciprocable`), every nonzero quaternion has multiplicative inverse $q^{-1} = \\bar{q} / N(q)$, making `Quaternion` a non-commutative division ring (`Reciprocable`) and a 4-dimensional `InnerSpace`.
+
+**Spatial rotations ($\\mathrm{SO}(3)$).** Identifying $R^3$ with pure quaternions ($w = 0$), a unit quaternion $q = \\cos(\\theta / 2) + \\sin(\\theta / 2)\\,\\hat{u}$ (`from-axis-angle`) acts isometrically on $\\mathbf{v} \\in R^3$ via the sandwich product $\\mathbf{v} \\mapsto q \\mathbf{v} q^{-1}$ (`rotate-vector`), rotating $\\mathbf{v}$ by angle $\\theta$ around the unit axis $\\hat{u}$ without gimbal lock.")
+  (:nicknames
+   #:coalton/math/quaternion
+   #:coalton-library/math/quaternion)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/tuple
+   #:coalton/math/arith
+   #:coalton/math/elementary
+   #:coalton/math/real)
+  (:local-nicknames
+   (#:show #:coalton/show))
+  (:export
+   #:Quaternion
+   #:quaternion
+   #:scalar-part
+   #:qi-part
+   #:qj-part
+   #:qk-part
+   #:vector-part
+   #:pure-quaternion
+   #:q-i
+   #:q-j
+   #:q-k
+   #:norm-squared
+   #:norm
+   #:normalize
+   #:rotate-vector
+   #:from-axis-angle))
+
+(in-package #:coalton/xmath/quaternion)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (Quaternion :a)
+    "A quaternion $w + x\\mathbf{i} + y\\mathbf{j} + z\\mathbf{k}$ with scalar part $w$ and imaginary components $(x, y, z)$ satisfying $\\mathbf{i}^2 = \\mathbf{j}^2 = \\mathbf{k}^2 = \\mathbf{i}\\mathbf{j}\\mathbf{k} = -1$."
+    (Quaternion :a :a :a :a))
+
+  (inline)
+  (declare scalar-part (Quaternion :a -> :a))
+  (define (scalar-part (Quaternion w _ _ _))
+    "Return the scalar (real) part $w$ of a quaternion."
+    w)
+
+  (inline)
+  (declare qi-part (Quaternion :a -> :a))
+  (define (qi-part (Quaternion _ x _ _))
+    "Return the $\\mathbf{i}$ component $x$ of a quaternion."
+    x)
+
+  (inline)
+  (declare qj-part (Quaternion :a -> :a))
+  (define (qj-part (Quaternion _ _ y _))
+    "Return the $\\mathbf{j}$ component $y$ of a quaternion."
+    y)
+
+  (inline)
+  (declare qk-part (Quaternion :a -> :a))
+  (define (qk-part (Quaternion _ _ _ z))
+    "Return the $\\mathbf{k}$ component $z$ of a quaternion."
+    z)
+
+  (inline)
+  (declare vector-part (Quaternion :a -> Tuple3 :a :a :a))
+  (define (vector-part (Quaternion _ x y z))
+    "Return the imaginary vector part $(x, y, z)$ of a quaternion as a `Tuple3`."
+    (Tuple3 x y z))
+
+  (inline)
+  (declare pure-quaternion (Additive :a => :a * :a * :a -> Quaternion :a))
+  (define (pure-quaternion x y z)
+    "Construct the pure (zero scalar part) quaternion $0 + x\\mathbf{i} + y\\mathbf{j} + z\\mathbf{k}$."
+    (Quaternion zero x y z))
+
+  (declare q-one (Semiring :a => Quaternion :a))
+  (define q-one
+    "The unit scalar quaternion $1 + 0\\mathbf{i} + 0\\mathbf{j} + 0\\mathbf{k}$."
+    (Quaternion one zero zero zero))
+
+  (declare q-i (Semiring :a => Quaternion :a))
+  (define q-i
+    "The basis unit quaternion $\\mathbf{i}$."
+    (Quaternion zero one zero zero))
+
+  (declare q-j (Semiring :a => Quaternion :a))
+  (define q-j
+    "The basis unit quaternion $\\mathbf{j}$."
+    (Quaternion zero zero one zero))
+
+  (declare q-k (Semiring :a => Quaternion :a))
+  (define q-k
+    "The basis unit quaternion $\\mathbf{k}$."
+    (Quaternion zero zero zero one))
+
+  (define-instance (Eq :a => Eq (Quaternion :a))
+    (define (== (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
+      (and (== w1 w2)
+           (== x1 x2)
+           (== y1 y2)
+           (== z1 z2))))
+
+  (define-instance (show:Show :a => show:Show (Quaternion :a))
+    (define (show:show-to f (Quaternion w x y z))
+      (f "(quaternion ")
+      (show:show-to f w)
+      (f " ")
+      (show:show-to f x)
+      (f " ")
+      (show:show-to f y)
+      (f " ")
+      (show:show-to f z)
+      (f ")")))
+
+  (define-instance (Additive :a => Additive (Quaternion :a))
+    (inline)
+    (define (+ (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
+      (Quaternion (+ w1 w2) (+ x1 x2) (+ y1 y2) (+ z1 z2)))
+    (define zero
+      (Quaternion zero zero zero zero)))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (Quaternion :a))
+    (inline)
+    (define (- (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
+      (Quaternion (- w1 w2) (- x1 x2) (- y1 y2) (- z1 z2)))
+    (inline)
+    (define (neg (Quaternion w x y z))
+      (Quaternion (neg w) (neg x) (neg y) (neg z))))
+
+  (define-instance (Ring :a => Multiplicative (Quaternion :a))
+    (define (* (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
+      (Quaternion
+       (- (- (- (* w1 w2) (* x1 x2)) (* y1 y2)) (* z1 z2))
+       (- (+ (+ (* w1 x2) (* x1 w2)) (* y1 z2)) (* z1 y2))
+       (+ (- (* w1 y2) (* x1 z2)) (+ (* y1 w2) (* z1 x2)))
+       (+ (- (+ (* w1 z2) (* x1 y2)) (* y1 x2)) (* z1 w2))))
+    (define one q-one))
+
+  (define-instance (Ring :a => Semiring (Quaternion :a)))
+
+  (define-instance (Ring :a => Ring (Quaternion :a))
+    (inline)
+    (define (from-int n)
+      (Quaternion (from-int n) zero zero zero)))
+
+  (define-instance (Num :a => Num (Quaternion :a)))
+
+  (define-instance (Additive :a => Into :a (Quaternion :a))
+    (inline)
+    (define (into w)
+      (Quaternion w zero zero zero)))
+
+  (define-instance (ConjugateRing :a => ConjugateRing (Quaternion :a))
+    (inline)
+    (define (conjugate (Quaternion w x y z))
+      (Quaternion (conjugate w)
+                  (neg (conjugate x))
+                  (neg (conjugate y))
+                  (neg (conjugate z)))))
+
+  (define-instance (Multiplicative :a => Scale :a (Quaternion :a))
+    (inline)
+    (define (scale c (Quaternion w x y z))
+      (Quaternion (* c w) (* c x) (* c y) (* c z))))
+
+  (define-instance (Ring :a => Module :a (Quaternion :a)))
+
+  (define-instance (Reciprocable :a => VectorSpace :a (Quaternion :a)))
+
+  (define-instance ((ConjugateRing :a) (Reciprocable :a) => InnerSpace :a (Quaternion :a))
+    (define (inner-product (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
+      (+ (+ (* (conjugate w1) w2)
+            (* (conjugate x1) x2))
+         (+ (* (conjugate y1) y2)
+            (* (conjugate z1) z2)))))
+
+  (declare norm-squared (Semiring :a => Quaternion :a -> :a))
+  (define (norm-squared (Quaternion w x y z))
+    "Return the squared norm $w^2 + x^2 + y^2 + z^2$ of a quaternion."
+    (+ (+ (* w w) (* x x))
+       (+ (* y y) (* z z))))
+
+  (declare norm ((Semiring :a) (Radical :a) => Quaternion :a -> :a))
+  (define (norm q)
+    "Return the Euclidean norm $\\sqrt{w^2 + x^2 + y^2 + z^2}$ of a quaternion."
+    (sqrt (norm-squared q)))
+
+  (define-instance (Reciprocable :a => Reciprocable (Quaternion :a))
+    (define (recip q)
+      (let (Quaternion w x y z) = q)
+      (scale (recip (norm-squared q))
+             (Quaternion w (neg x) (neg y) (neg z))))
+    (inline)
+    (define (/ p q)
+      (* p (recip q))))
+
+  (declare normalize ((Reciprocable :a) (Radical :a) => Quaternion :a -> Quaternion :a))
+  (define (normalize q)
+    "Normalize a non-zero quaternion `q` to unit norm."
+    (scale (recip (norm q)) q))
+
+  (declare rotate-vector (Reciprocable :a => Quaternion :a * Tuple3 :a :a :a -> Tuple3 :a :a :a))
+  (define (rotate-vector q (Tuple3 vx vy vz))
+    "Rotate the 3D vector `(Tuple3 vx vy vz)` by the non-zero quaternion `q` via the sandwich product $q v q^{-1}$."
+    (let vq = (pure-quaternion vx vy vz))
+    (vector-part (* (* q vq) (recip q))))
+
+  (declare from-axis-angle
+    ((Reciprocable :a) (Radical :a) (Trigonometric :a) => Tuple3 :a :a :a * :a -> Quaternion :a))
+  (define (from-axis-angle (Tuple3 ax ay az) angle)
+    "Construct the unit quaternion $\\cos(\\theta/2) + \\sin(\\theta/2)\\,\\hat{u}$ representing a rotation by `angle` $\\theta$ around the 3D axis $u = (a_x, a_y, a_z)$."
+    (let half = (/ angle (from-int 2)))
+    (let s = (sin half))
+    (let c = (cos half))
+    (let axis-norm = (sqrt (+ (+ (* ax ax) (* ay ay)) (* az az))))
+    (let k = (/ s axis-norm))
+    (Quaternion c (* k ax) (* k ay) (* k az)))
+
+  (define-instance (Approximable :a :b => Approximable (Quaternion :a) (Quaternion :b))
+    (inline)
+    (define (approx bits (Quaternion w x y z))
+      (Quaternion (approx bits w)
+                  (approx bits x)
+                  (approx bits y)
+                  (approx bits z)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/QUATERNION")

@@ -35,10 +35,11 @@
   (is (== (lisp (-> Integer) ()  (cl:round -0.5)) (round -0.5))))
 
 (define-test test-integer-division-quotients ()
-  (let ((cases (make-list (Tuple 7 2) (Tuple -7 2) (Tuple 7 -2) (Tuple -7 -2)
-                          (Tuple 6 3) (Tuple -6 3) (Tuple 0 5) (Tuple 1 1)
-                          (Tuple (^ 10 40) 3) (Tuple (neg (^ 10 40)) 7)
-                          (Tuple 12345 (^ 2 70)) (Tuple (neg 12345) (^ 2 70)))))
+  (let ((cases (the (List (Tuple Integer Integer))
+                    [(Tuple 7 2) (Tuple -7 2) (Tuple 7 -2) (Tuple -7 -2)
+                     (Tuple 6 3) (Tuple -6 3) (Tuple 0 5) (Tuple 1 1)
+                     (Tuple (^ 10 40) 3) (Tuple (neg (^ 10 40)) 7)
+                     (Tuple 12345 (^ 2 70)) (Tuple (neg 12345) (^ 2 70))])))
     (for ((xs cases (list:cdr xs)))
       :until (list:null? xs)
       (match (list:car xs)
@@ -135,7 +136,7 @@
     (is (== (negate u) (neg u)))
     (is (== (math:recip (the Fraction 4)) 1/4))
     (is (== (math:reciprocal (the Fraction 4)) (math:recip (the Fraction 4))))
-    (is (== (sum (make-list u v)) (TestVec2 4.0d0 1.0d0)))
+    (is (== (sum [u v]) (TestVec2 4.0d0 1.0d0)))
     (is (== (sum (the (List TestVec2) Nil)) zero))
     (is (== (math:scale 2.5d0 u) (TestVec2 2.5d0 5.0d0)))
     (is (== (math:inner-product u v) 1.0d0)))
@@ -154,7 +155,7 @@
     (is (== (^ fib-mat 0) one))
     (is (== (^ fib-mat 1) fib-mat))
     (is (== (^ fib-mat 10) (Mat2x2 89 55 55 34)))
-    (is (== (product (make-list fib-mat fib-mat fib-mat)) (^ fib-mat 3))))
+    (is (== (product [fib-mat fib-mat fib-mat]) (^ fib-mat 3))))
 
   ;; Tropical Semiring
   (let ((a (TropVal 5))
@@ -198,4 +199,3 @@
     (let l = (math:lcm (math:complex 1 1) (math:complex 1 2)))
     (is (== l (math:complex 3 1)))
     (is (== (math:normal-part l) l))))
-

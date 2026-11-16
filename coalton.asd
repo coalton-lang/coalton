@@ -155,7 +155,17 @@
                (:module "computable-reals"
                 :serial t
                 :components ((:ct-file "computable-reals")))
-               (:ct-file "real-algebraic")))
+               (:ct-file "real-algebraic")
+               (:ct-file "polynomial")
+               (:ct-file "ratio")
+               (:ct-file "power-series")
+               (:ct-file "matrix")
+               (:ct-file "differential")
+               (:ct-file "groebner")
+               (:ct-file "modular")
+               (:ct-file "recurrence")
+               (:ct-file "quaternion")
+               (:ct-file "clifford-algebra")))
 
 (asdf:defsystem "coalton/threads"
   :description "Threads, synchronization primitives, and work-stealing task parallelism for Coalton (SBCL only)."
@@ -362,6 +372,7 @@
                (:ct-file "dual-tests")
                (:ct-file "hyperdual-tests")
                (:ct-file "quantize-tests")
+               (:ct-file "xmath-tests")
                (:ct-file "real-algebraic-tests")
                (:file "hashtable-tests")
                (:file "hashmap-tests")
