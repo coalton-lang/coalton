@@ -34,7 +34,6 @@ mine:
 	env $(MINE_BUILD_ENV) CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
 		$(SBCL) \
 		--load $(QUICKLISP_SETUP) \
-		--eval '(pushnew :coalton-portable-bigfloat *features*)' \
 		--load coalton-config.lisp \
 		--eval '(asdf:load-system "mine" :verbose t)' \
 		--eval '(mine/app/executable:build)'

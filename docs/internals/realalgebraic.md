@@ -159,11 +159,9 @@ To run the benchmark after making this checkout available to ASDF:
 (realalgebraic-benchmark:run :iterations 1000 :warmup 3)
 ```
 
-On systems without MPFR, enable `:coalton-portable-bigfloat` before loading
-`coalton/xmath`. It does not alter real-algebraic arithmetic. Development and
-release builds must use separate ASDF output caches. For an old implementation
-comparison, use `:iterations 3 :warmup 1 :extended nil`; extended cases include
-previously nonterminating or prohibitively slow inputs.
+Development and release builds must use separate ASDF output caches. For an old
+implementation comparison, use `:iterations 3 :warmup 1 :extended nil`;
+extended cases include previously nonterminating or prohibitively slow inputs.
 
 The harness builds operands before timing, repeats each operation on the same
 immutable operands, excludes warmup and result printing, and reports elapsed

@@ -128,9 +128,6 @@
 
                (:file "prelude")))
 
-(cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
-  (cl:pushnew ':coalton-portable-bigfloat cl:*features*))
-
 (asdf:defsystem "coalton/xmath"
   :description "Extended mathematics library for Coalton."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -143,9 +140,7 @@
   :defsystem-depends-on ("coalton-asdf")
   :depends-on ("coalton"
                "coalton/library"
-               "computable-reals"
-               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-mpfr")
-               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-gmp"))
+               "computable-reals")
   :pathname "xmath/"
   :serial t
   :components ((:ct-file "dyadic")
@@ -155,12 +150,8 @@
                (:module "big-float"
                 :serial t
                 :components ((:file "package")
-                             (:file "portable-big-float-macros"
-                              :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))
-                             (:ct-file "impl-sbcl"
-                              :if-feature (:and (:not :coalton-portable-bigfloat) :sbcl))
-                             (:ct-file "impl-default"
-                              :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
+                             (:file "portable-big-float-macros")
+                             (:ct-file "impl-default")))
                (:module "computable-reals"
                 :serial t
                 :components ((:ct-file "computable-reals")))

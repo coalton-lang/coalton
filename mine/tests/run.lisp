@@ -9,7 +9,6 @@
   (unless (find-package "QL")
     (when (probe-file quicklisp-setup)
       (load quicklisp-setup)))
-  (pushnew ':coalton-portable-bigfloat *features*)
   (load (merge-pathnames "coalton-config.lisp" mine-directory))
   (asdf:initialize-source-registry
    `(:source-registry (:tree ,repository) :ignore-inherited-configuration))

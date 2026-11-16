@@ -771,8 +771,6 @@
                            :ignore-inherited-configuration))
                        `(setf (symbol-plist ':coalton-config)
                               ',(copy-list (symbol-plist ':coalton-config))))
-                 (when (member ':coalton-portable-bigfloat *features*)
-                   '((pushnew ':coalton-portable-bigfloat *features*)))
                  '((let ((*standard-output* *error-output*))
                      (asdf:load-system "mine/runtime"))
                    (mine/runtime/server-main:main))))
