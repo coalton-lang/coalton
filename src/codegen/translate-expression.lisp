@@ -907,7 +907,7 @@ Returns a `node'.")
                        (tc:node-abstraction-keyword-params expr)))
              (abstraction-type
                (physical-callable-type
-                (tc:merge-function-input-types
+                (prepend-codegen-hidden-input-types
                  dict-types
                  visible-type))))
         (let ((inner (translate-expression (tc:node-abstraction-body expr) ctx env)))
@@ -924,16 +924,46 @@ Returns a `node'.")
                             :pattern (translate-pattern pattern ctx env)
                             :body inner)))))
           (when (and dict-var-names
+                     (null (tc:node-abstraction-params expr))
+                     (null translated-keyword-params)
                      (tc:function-type-p visible-type)
-                     (null (tc:function-ty-positional-input-types visible-type))
-                     (null (tc:function-ty-keyword-input-types visible-type))
-                     (null translated-keyword-params))
-            (setf inner
-                  (make-node-abstraction
-                   :type visible-type
-                   :vars nil
-                   :keyword-params nil
-                   :subexpr inner)))
+                     (or (physical-callable-argument-types visible-type)
+                         (and (typep visible-type 'tc:function-ty)
+                              (tc:function-ty-keyword-input-types visible-type))))
+            (let* ((eta-arg-types (physical-callable-argument-types visible-type))
+                   (eta-vars (loop :repeat (length eta-arg-types)
+                                   :collect (gensym "ARG")))
+                   (eta-rands (loop :for var :in eta-vars
+                                    :for ty :in eta-arg-types
+                                    :collect (make-node-local-variable
+                                              :type ty
+                                              :value var)))
+                   (eta-keyword-params nil)
+                   (eta-keyword-rands nil)
+                   (body (tc:node-abstraction-body expr))
+                   (last-node (tc:node-body-last-node body)))
+              (when (typep visible-type 'tc:function-ty)
+                (multiple-value-setq (eta-keyword-params eta-keyword-rands)
+                  (make-keyword-forwarders visible-type)))
+              (setf vars (append vars eta-vars)
+                    translated-keyword-params eta-keyword-params
+                    inner (if (and (null (tc:node-body-nodes body))
+                                   (typep last-node 'tc:node-variable)
+                                   (or eta-rands eta-keyword-rands))
+                              (make-qualified-variable-application
+                               last-node
+                               (specialize-qual-type-to-context (tc:node-type last-node) ctx env)
+                               (tc:function-return-type visible-type)
+                               eta-rands
+                               eta-keyword-rands
+                               ctx
+                               env)
+                              (make-node-application
+                               :type (tc:function-return-type visible-type)
+                               :properties '()
+                               :rator inner
+                               :rands eta-rands
+                               :keyword-rands eta-keyword-rands)))))
           (make-node-abstraction
            :type abstraction-type
            :vars vars
@@ -1627,6 +1657,9 @@ dictionaries applied."
            (type pred-context ctx)
            (type tc:environment env)
            (values node))
+  (when (typep expr 'tc:node-abstraction)
+    (return-from apply-dicts
+      (translate-expression expr ctx env)))
   (let* ((qual-ty (specialize-qual-type-to-context (tc:node-type expr) ctx env))
 
          (dicts (mapcar

@@ -39,15 +39,17 @@ the Unicode alias `∀` for `forall`.
 ## Semantics
 
 - `forall` explicitly quantifies the listed type variables.
+- `forall` may appear both at the outer level of a [`declare`](/manual/operators/declare/), [`the`](/manual/operators/the/), or class method signature, and in nested type positions such as function arguments, function return types, [`define-type`](/manual/operators/define-type/) constructor fields, [`define-struct`](/manual/operators/define-struct/) fields, and [`define-type-alias`](/manual/operators/define-type-alias/) definitions (*rank-$N$ polymorphism*).
 - Those binder names are then available inside related `the`, `declare`, and
   `lisp` annotations in the corresponding body.
 - `forall` expressions inside of `define-class` are scoped to their method
   definitions in `define-instance`.
-- Without `forall`, declarations are still implicitly quantified, but the names
-  are not scoped into the body.
+- Without `forall`, top-level declarations are still implicitly quantified (rank-1),
+  but the names are not scoped into the body. Nested polymorphic types (rank-2 and
+  higher) must always be written with an explicit `forall`.
 - An inner declaration's explicit binder shadows an outer binder with the same
-  name, including its kind. Nested `forall` forms within a single type are
-  flattened into one binder list and cannot repeat a binder name.
+  name, including its kind. Directly consecutive `forall` forms within a single
+  type are flattened into one binder list and cannot repeat a binder name.
 - An explicitly quantified type may also refer to enclosing scoped variables.
   Any other type variable must appear in its binder list.
 
@@ -130,6 +132,97 @@ annotated `Type`, cannot stand for zero or multiple values. For example:
 (call-one (fn () (values 42 "answer"))) ; type error
 ```
 
+## Rank-$N$ Polymorphism
+
+A `forall` type can appear inside function inputs, function outputs, and data
+constructor or struct fields. Higher-rank functions must have an explicit type
+declaration (`declare` or `the`), while callers can pass either polymorphic
+functions or inline [`fn`](/manual/operators/fn/) lambdas without extra annotations.
+
+```lisp
+(coalton-toplevel
+  ;; A Rank-2 function that applies a polymorphic function to two different types
+  (declare apply-both ((forall (:a) (:a -> :a)) * :x * :y -> (Tuple :x :y)))
+  (define (apply-both f x y)
+    (Tuple (f x) (f y)))
+
+  ;; A Rank-2 automatic differentiation operator using Dual numbers
+  (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+  (define (differentiate f)
+    (fn (x)
+      (dual-part (f (Dual x 1)))))
+
+  ;; A Rank-2 natural transformation between type constructors :f and :g
+  (declare map-pair
+    (forall (:f :g)
+      ((forall (:a) ((:f :a) -> (:g :a)))
+       * (:f Integer)
+       * (:f String)
+       -> (Tuple (:g Integer) (:g String)))))
+  (define (map-pair nat xs ys)
+    (Tuple (nat xs) (nat ys))))
+```
+
+Coalton's higher-rank polymorphism is **predicative**: type variables and type
+constructor arguments only ever instantiate to *monotypes* (types that do not
+contain `forall`), never to *polytypes* (`forall` types).
+
+### Implications of Predicative Polymorphism
+
+Being predicative determines where `forall` types can appear and how they
+interact with generic functions:
+
+- **What is supported directly:**
+  - **Higher-rank arguments and results:** A `forall` type can be any positional
+    or keyword input or the return type of a function, nested to any depth
+    (Rank-2, Rank-3, and higher).
+  - **Unannotated callers:** When a function's parameter is declared with a
+    `forall` type, callers can pass either a named polymorphic function (such as
+    `id` or `square`) or an unannotated [`fn`](/manual/operators/fn/) lambda
+    directly, including across [`if`](/manual/operators/if/) and
+    [`match`](/manual/operators/match/) branches.
+  - **Fields of nominal types:** [`define-type`](/manual/operators/define-type/)
+    constructors and [`define-struct`](/manual/operators/define-struct/) fields
+    can hold `forall` types directly.
+  - **Type aliases for higher-rank signatures:** [`define-type-alias`](/manual/operators/define-type-alias/)
+    can name a `forall` type for reuse in function signatures and nominal type
+    fields.
+
+- **What is not supported (and how to write it instead):**
+  - **Applying a type constructor directly to a `forall` type:** A parameterized
+    type such as `List`, `Vector`, `Optional`, or `Tuple` cannot take a `forall`
+    type as a type argument (even through a `define-type-alias`). Wrap the
+    `forall` in a `define-type` or `define-struct` first:
+    ```lisp
+    ;; Rejected: List cannot be applied to a `forall` type directly
+    ;; (declare fns (List (forall (:a) (Num :a => (:a -> :a)))))
+
+    ;; Accepted: wrap the `forall` in a nominal type
+    (coalton-toplevel
+      (define-type PolyBox
+        (PolyBox (forall (:a) (Num :a => (:a -> :a)))))
+
+      (declare fns (List PolyBox))
+      (define fns
+        (make-list (PolyBox (fn (x) (+ x 1)))
+                   (PolyBox (fn (x) (* x x))))))
+    ```
+  - **Passing higher-rank values through rank-1 combinators:** Because an
+    ordinary type variable `:t` only unifies with monotypes, a rank-1 combinator
+    such as `id` (`:t -> :t`) or `pipe` cannot instantiate `:t` to a `forall`
+    type or a function taking a `forall` type. Call the higher-rank function
+    directly, or wrap it in a nominal type when storing or forwarding it through
+    generic containers.
+  - **Inferring higher-rank parameters without a declaration:** Unannotated
+    function parameters are inferred as monotypes. If a function parameter is
+    used polymorphically inside the body (for example, applied to both `Integer`
+    and `String`), the function must have an explicit [`declare`](/manual/operators/declare/)
+    or [`the`](/manual/operators/the/) annotation.
+  - **Generalizing expansive mutable allocations:** An unconstrained `forall`
+    type must satisfy Coalton's value restriction; allocating a mutable
+    container such as `(cell:new (fn (x) x))` cannot be checked at type
+    `(forall (:a) (Cell (:a -> :a)))`.
+
 ## Examples
 
 ```lisp
@@ -149,7 +242,6 @@ annotated `Type`, cannot stand for zero or multiple values. For example:
   ordinary arrow kinds explicitly. For example, an inferred forwarding function
   may print as `∀ (:A Values). (Void → :A) → :A` (or `forall (:A Values). (Void -> :A) -> :A` when Unicode printing is disabled). The dot is part of the
   type display; its declaration syntax is `(forall ((:a Values)) (Void -> :a) -> :a)`.
-- Coalton uses rank-1 (prenex) polymorphism: `forall` can appear at the top of a
-  type in [`declare`](/manual/operators/declare/), [`the`](/manual/operators/the/), or a class method signature in [`define-class`](/manual/operators/define-class/),
-  not inside a function argument type (higher-rank types are not supported).
+- Unannotated type inference remains rank-1 (Hindley–Milner), while explicit
+  `forall` annotations support arbitrary-rank (rank-$N$) predicative polymorphism.
 

@@ -1798,6 +1798,160 @@
 
    '("f" . "(Num :a => :a -> :a -> :a)")))
 
+(deftest test-rank-n-types ()
+  ;; Rank-2 polymorphic function arguments with and without constraints
+  (check-coalton-types
+   "(derive Eq)
+    (define-type (Dual :a) (Dual :a :a))
+    (define (primal-part (Dual x _)) x)
+    (define (dual-part (Dual _ dx)) dx)
+    (define-instance (Num :a => Num (Dual :a))
+      (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
+      (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
+      (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
+      (define (fromInt n) (Dual (fromInt n) (fromInt 0))))
+
+    (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+    (define (differentiate f)
+      (fn (x)
+        (dual-part (f (Dual x 1)))))
+
+    (declare val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32)))
+    (define (val-and-deriv f)
+      (fn (x)
+        (Tuple (f x) (dual-part (f (Dual x 1))))))
+
+    (declare square (Num :a => (:a -> :a)))
+    (define (square x) (* x x))
+
+    (define d-square-var (differentiate square))
+    (define d-square-fn (differentiate (fn (x) (+ (* x x) (* 2 x)))))
+    (define vd-square (val-and-deriv square))"
+
+   '("differentiate" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32))")
+   '("val-and-deriv" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32))")
+   '("d-square-var" . "(F32 -> F32)")
+   '("d-square-fn" . "(F32 -> F32)")
+   '("vd-square" . "(F32 -> Tuple F32 F32)"))
+
+  ;; Rank-2 and Rank-3 types, ADT/struct fields, natural transformations, and type aliases
+  (check-coalton-types
+   "(define-type-alias PolyId (forall (:a) (:a -> :a)))
+    (define-type-alias PolyNumFn (forall (:a) (Num :a => (:a -> :a))))
+
+    (declare apply-both (PolyId * :x * :y -> Tuple :x :y))
+    (define (apply-both f x y)
+      (Tuple (f x) (f y)))
+
+    (declare rank3 (((PolyId -> Tuple Integer String) -> Tuple Integer String)))
+    (define (rank3 k)
+      (k (fn (x) x)))
+
+    (define-type PolyBox
+      (PolyBox PolyId))
+
+    (define-struct PolyStruct
+      (poly-fn PolyId))
+
+    (declare use-box (PolyBox -> Tuple Integer String))
+    (define (use-box (PolyBox f))
+      (Tuple (f 1) (f \"a\")))
+
+    (declare use-struct (PolyStruct -> Tuple Integer String))
+    (define (use-struct s)
+      (Tuple ((.poly-fn s) 1) ((.poly-fn s) \"a\")))
+
+    (declare make-scaler (Integer -> PolyNumFn))
+    (define (make-scaler k)
+      (fn (x) (* (fromInt k) x)))
+
+    (declare apply-nat
+      (forall (:f :g)
+        ((forall (:a) ((:f :a) -> (:g :a)))
+         * (:f Integer)
+         * (:f String)
+         -> Tuple (:g Integer) (:g String))))
+    (define (apply-nat nat fi fs)
+      (Tuple (nat fi) (nat fs)))"
+
+   '("apply-both" . "((forall (:a) (:a -> :a)) * :x * :y -> Tuple :x :y)")
+   '("rank3" . "((((forall (:a) (:a -> :a)) -> Tuple Integer String) -> Tuple Integer String))")
+   '("use-box" . "(PolyBox -> Tuple Integer String)")
+   '("use-struct" . "(PolyStruct -> Tuple Integer String)")
+   '("make-scaler" . "(Integer -> (forall (:a) (Num :a => (:a -> :a))))"))
+
+  ;; Skolem escape (runST phantom type token cannot escape)
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (ST :s :a) (ST :a))
+      (define-type (STRef :s :a) (STRef :a))
+      (declare new-st-ref (:a -> (ST :s (STRef :s :a))))
+      (define (new-st-ref x) (ST (STRef x)))
+      (declare run-st ((forall (:s) (ST :s :a)) -> :a))
+      (define (run-st (ST x)) x)
+      (define leaked (run-st (new-st-ref (the Integer 42))))"))
+
+  ;; Skolem cannot unify with a concrete type inside a Rank-2 argument
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare run-id ((forall (:a) (:a -> :a)) -> Integer))
+      (define (run-id f) (f 1))
+      (define bad (run-id (fn (x) (+ x (the Integer 1)))))"))
+
+  ;; Missing predicate on Rank-2 argument is rejected
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare run-id ((forall (:a) (:a -> :a)) -> Integer))
+      (define (run-id f) (f 1))
+      (define bad (run-id (fn (x) (+ x x))))"))
+
+  ;; Impredicative type constructor arguments are rejected
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (List (forall (:a) (:a -> :a))))
+      (define bad Nil)"))
+
+  ;; Nested qualified types without an explicit forall are rejected
+  (signals parser:parse-error
+    (check-coalton-types
+     "(declare bad ((Num :a => (:a -> :a)) -> Integer))
+      (define (bad _f) 1)"))
+
+  ;; Nested forall binder scopes remain distinct during ty= and unification
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare use ((forall (:a) ((forall (:b) (:b -> :b)) -> :a)) -> Integer))
+      (define (use f) (+ 1 (f (fn (x) x))))
+      (declare apply-k2 (((forall (:a) ((forall (:b) (:b -> :a)) -> :a)) -> Integer) -> Integer))
+      (define (apply-k2 k) (k (fn (g) (g Unit))))
+      (define (bad2 _) (apply-k2 use))"))
+
+  ;; Relaxed value restriction applies to unconstrained forall expressions
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare exploit ((forall (:a) (coalton/cell:Cell (:a -> :a))) -> String))
+      (define (exploit r)
+        (let _ = (coalton/cell:write! r (the (Integer -> Integer) (fn (n) (+ n 1)))))
+        ((coalton/cell:read r) \"oops\"))
+      (define bad (exploit (coalton/cell:new (fn (x) x))))"))
+
+  ;; Impredicative type constructor arguments via type aliases are rejected
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type-alias PolyId (forall (:a) (:a -> :a)))
+      (define-type Bad (Bad (List PolyId)))"))
+
+  ;; Match and if branches propagate expected higher-rank types
+  (check-coalton-types
+   "(declare match-rank2 (Boolean -> ((forall (:a) (:a -> :a)) -> Tuple Integer String)))
+    (define (match-rank2 flag)
+      (match flag
+        ((True) (fn (f) (Tuple (f 1) (f \"true\"))))
+        ((False) (fn (f) (Tuple (f 2) (f \"false\"))))))"
+   '("match-rank2" . "(Boolean -> ((forall (:a) (:a -> :a)) -> Tuple Integer String))")))
+
+
+
 (deftest test-value-restriction-defaulted-builders ()
   ;; Defaulting [] to a Seq substitutes a weak variable with a composite type;
   ;; the variables of that type remain weak.

@@ -21,6 +21,8 @@
 ## Internals
 * [Internals](./internals/internals.md)
 * [How Typeclasses are compiled](./internals/how-typeclasses-are-compiled.md)
+* [Rank-N Polymorphism](./internals/rank-n-types.md)
+* [Weak Type Variables](./internals/weak-type-variables.md)
 
 ## Additional Resources
 * [Introducing Coalton](https://coalton-lang.github.io/20211010-introducing-coalton/) - external

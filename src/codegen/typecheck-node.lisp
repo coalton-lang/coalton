@@ -2,6 +2,9 @@
   (:use
    #:cl
    #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/codegen/resolve-instance
+   #:pred-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -11,6 +14,95 @@
    ))
 
 (in-package #:coalton-impl/codegen/typecheck-node)
+
+(defun relax-codegen-type (type env)
+  "Lower FORALL-TY nodes to physical dictionary-passing function types and relax
+rigid skolem flags so post-translation codegen typechecking can unify physical shapes."
+  (declare (type tc:ty type)
+           (type tc:environment env)
+           (values tc:ty &optional))
+  (typecase type
+    (tc:tyvar
+     (if (tc:tyvar-rigid-p type)
+         (tc:make-tyvar :alias (tc:ty-alias type)
+                        :id (tc:tyvar-id type)
+                        :kind (tc:tyvar-kind type)
+                        :allow-result-p (tc:tyvar-allow-result-p type)
+                        :rigid-p nil
+                        :source-name (tc:tyvar-source-name type))
+         type))
+    (tc:forall-ty
+     (multiple-value-bind (qual-ty _vars)
+         (tc:instantiate-forall-ty type :rigid-p nil)
+       (declare (ignore _vars))
+       (let ((dict-types
+               (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
+                     :collect (relax-codegen-type (pred-type pred env) env)))
+             (body-type
+               (relax-codegen-type (tc:qualified-ty-type qual-ty) env)))
+         (if (null dict-types)
+             body-type
+             (typecase body-type
+               (tc:function-ty
+                (tc:make-function-ty
+                 :alias (tc:ty-alias body-type)
+                 :positional-input-types
+                 (append dict-types
+                         (tc:function-ty-positional-input-types body-type))
+                 :keyword-input-types (tc:function-ty-keyword-input-types body-type)
+                 :keyword-open-p (tc:function-ty-keyword-open-p body-type)
+                 :output-types (tc:function-ty-output-types body-type)))
+               (t
+                (tc:make-function-type* dict-types body-type)))))))
+    (tc:tapp
+     (tc:make-tapp
+      :alias (tc:ty-alias type)
+      :from (relax-codegen-type (tc:tapp-from type) env)
+      :to (relax-codegen-type (tc:tapp-to type) env)))
+    (tc:function-ty
+     (tc:make-function-ty
+      :alias (tc:ty-alias type)
+      :positional-input-types
+      (mapcar (lambda (in) (relax-codegen-type in env))
+              (tc:function-ty-positional-input-types type))
+      :keyword-input-types
+      (mapcar (lambda (entry)
+                (tc:make-keyword-ty-entry
+                 :keyword (tc:keyword-ty-entry-keyword entry)
+                 :type (relax-codegen-type (tc:keyword-ty-entry-type entry) env)))
+              (tc:function-ty-keyword-input-types type))
+      :keyword-open-p (tc:function-ty-keyword-open-p type)
+      :origin (tc:function-ty-origin type)
+      :output-types
+      (mapcar (lambda (out) (relax-codegen-type out env))
+              (tc:function-ty-output-types type))))
+    (tc:result-ty
+     (tc:make-result-ty
+      :alias (tc:ty-alias type)
+      :output-types
+      (mapcar (lambda (out) (relax-codegen-type out env))
+              (tc:result-ty-output-types type))))
+    (t
+     type)))
+
+(defun unify-codegen-types (subs expected-type actual-type env)
+  (declare (type tc:substitution-list subs)
+           (type tc:ty expected-type actual-type)
+           (type tc:environment env)
+           (values tc:substitution-list &optional))
+  (let ((expected (relax-codegen-type expected-type env))
+        (actual (relax-codegen-type actual-type env)))
+    (cond
+      ((and (typep expected 'tc:function-ty)
+            (typep actual 'tc:function-ty))
+       (nth-value
+        0
+        (coalton-impl/typechecker/define::coerce-function-value-type
+         actual
+         expected
+         subs)))
+      (t
+       (tc:unify subs expected actual)))))
 
 (defun explicit-nullary-callable-p (type)
   (declare (type tc:ty type)
@@ -85,24 +177,15 @@
                             callee-type
                             site))
         (let ((arg-ty (typecheck-node (node-application-keyword-arg-value arg) env)))
-          (setf subs (tc:unify subs (tc:keyword-ty-entry-type entry) arg-ty)))))
+          (setf subs (unify-codegen-types subs (tc:keyword-ty-entry-type entry) arg-ty env)))))
     subs))
 
-(defun check-positional-argument-type (subs expected-type actual-type)
+(defun check-positional-argument-type (subs expected-type actual-type env)
   (declare (type tc:substitution-list subs)
            (type tc:ty expected-type actual-type)
+           (type tc:environment env)
            (values tc:substitution-list &optional))
-  (cond
-    ((and (typep expected-type 'tc:function-ty)
-          (typep actual-type 'tc:function-ty))
-     (nth-value
-      0
-      (coalton-impl/typechecker/define::coerce-function-value-type
-       actual-type
-       expected-type
-       subs)))
-    (t
-     (tc:unify subs expected-type actual-type))))
+  (unify-codegen-types subs expected-type actual-type env))
 
 (defgeneric typecheck-node (expr env)
   (:documentation "Check that EXPR is valid. Currently only verifies
@@ -122,7 +205,7 @@
   (:method ((expr node-application) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let* ((rator-type (typecheck-node (node-application-rator expr) env))
+    (let* ((rator-type (relax-codegen-type (typecheck-node (node-application-rator expr) env) env))
            (type rator-type)
            (subs nil))
       (loop :for arg :in (node-application-rands expr)
@@ -132,7 +215,8 @@
                       (check-positional-argument-type
                        subs
                        (tc:function-type-from type)
-                       arg-ty))
+                       arg-ty
+                       env))
                 (setf type (tc:function-type-to type))))
       (setf subs
             (tc:compose-substitution-lists
@@ -150,8 +234,9 @@
   (:method ((expr node-direct-application) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((type (node-direct-application-rator-type expr))
-          (subs nil))
+    (let* ((rator-type (relax-codegen-type (node-direct-application-rator-type expr) env))
+           (type rator-type)
+           (subs nil))
       (loop :for arg :in (node-direct-application-rands expr)
             :for arg-ty := (typecheck-node arg env) :do
               (progn
@@ -159,13 +244,14 @@
                       (check-positional-argument-type
                        subs
                        (tc:function-type-from type)
-                       arg-ty))
+                       arg-ty
+                       env))
                 (setf type (tc:function-type-to type))))
       (setf subs
             (tc:compose-substitution-lists
              (check-keyword-application
               (application-callee-type
-               (node-direct-application-rator-type expr)
+               rator-type
                (node-direct-application-rands expr)
                (node-direct-application-keyword-rands expr))
               (node-direct-application-keyword-rands expr)
@@ -179,7 +265,7 @@
              (values tc:ty))
     (let ((type (abstraction-subexpr-type expr)))
       (let ((subexpr-ty (typecheck-node (node-abstraction-subexpr expr) env)))
-        (tc:unify nil type subexpr-ty)
+        (unify-codegen-types nil type subexpr-ty env)
         (node-type expr))))
 
   (:method ((expr node-let) env)
@@ -188,7 +274,7 @@
     (loop :for (name . node) :in (node-let-bindings expr) :do
       (typecheck-node node env))
     (let ((subexpr-ty (typecheck-node (node-let-subexpr expr) env)))
-      (tc:unify nil subexpr-ty (node-type expr))
+      (unify-codegen-types nil subexpr-ty (node-type expr) env)
       subexpr-ty))
 
   (:method ((expr node-dynamic-let) env)
@@ -197,14 +283,14 @@
     (loop :for binding :in (node-dynamic-let-bindings expr) :do
       (typecheck-node (node-dynamic-binding-value binding) env))
     (let ((subexpr-ty (typecheck-node (node-dynamic-let-subexpr expr) env)))
-      (tc:unify nil subexpr-ty (node-type expr))
+      (unify-codegen-types nil subexpr-ty (node-type expr) env)
       subexpr-ty))
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env)
              (values tc:ty))
     (let ((subexpr-ty (typecheck-node (node-locally-subexpr expr) env)))
-      (tc:unify nil subexpr-ty (node-type expr))
+      (unify-codegen-types nil subexpr-ty (node-type expr) env)
       subexpr-ty))
 
   (:method ((expr node-lisp) env)
@@ -224,7 +310,7 @@
     (let ((type (node-type expr)))
       (loop :for branch :in (node-match-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (tc:unify nil type subexpr-ty))
+              (unify-codegen-types nil type subexpr-ty env))
       type))
 
   (:method ((expr catch-branch) env)
@@ -236,7 +322,7 @@
     (declare (type tc:environment env)
              (values tc:ty))
     (let ((type (node-type expr)))
-      (tc:unify nil type (typecheck-node (node-protect-expr expr) env))
+      (unify-codegen-types nil type (typecheck-node (node-protect-expr expr) env) env)
       (typecheck-node (node-protect-cleanup expr) env)
       type))
 
@@ -246,7 +332,7 @@
     (let ((type (node-type expr)))
       (loop :for branch :in (node-catch-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (tc:unify nil type subexpr-ty))
+              (unify-codegen-types nil type subexpr-ty env))
       type))
 
   (:method ((expr node-resumable) env)
@@ -255,7 +341,7 @@
     (let ((type (node-type expr)))
       (loop :for branch :in (node-resumable-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (tc:unify nil type subexpr-ty))
+              (unify-codegen-types nil type subexpr-ty env))
       type))
 
   (:method ((expr resumable-branch) env)
@@ -294,7 +380,7 @@
     (loop :for node :in (node-seq-nodes expr) :do
       (typecheck-node node env))
     (let ((last-node (car (last (node-seq-nodes expr)))))
-      (tc:unify nil (node-type expr) (node-type last-node))
+      (unify-codegen-types nil (node-type expr) (node-type last-node) env)
       (node-type last-node)))
 
   (:method ((expr node-return-from) env)
@@ -318,10 +404,11 @@
   (:method ((expr node-block) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (tc:unify
+    (unify-codegen-types
      nil
      (node-type expr)
-     (typecheck-node (node-block-body expr) env))
+     (typecheck-node (node-block-body expr) env)
+     env)
     (node-type expr))
 
   (:method ((expr node-field) env)
@@ -334,29 +421,32 @@
     (declare (type tc:environment env)
              (values tc:ty))
     (typecheck-node (node-dynamic-extent-node expr) env)
-    (tc:unify
+    (unify-codegen-types
      nil
      (node-type expr)
-     (typecheck-node (node-dynamic-extent-body expr) env))
+     (typecheck-node (node-dynamic-extent-body expr) env)
+     env)
     (node-type expr))
 
   (:method ((expr node-bind) env)
     (declare (type tc:environment env)
              (values tc:ty))
     (typecheck-node (node-bind-expr expr) env)
-    (tc:unify
+    (unify-codegen-types
      nil
      (node-type expr)
-     (typecheck-node (node-bind-body expr) env))
+     (typecheck-node (node-bind-body expr) env)
+     env)
     (node-type expr))
 
   (:method ((expr node-setq) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (tc:unify
+    (unify-codegen-types
      nil
      (node-type expr)
-     (typecheck-node (node-setq-expr expr) env))
+     (typecheck-node (node-setq-expr expr) env)
+     env)
     (node-type expr))
 
   (:method ((expr node-values) env)

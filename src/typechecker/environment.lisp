@@ -1338,6 +1338,10 @@ only once."
                  (result-ty
                   (scan (ty-alias object))
                   (scan (result-ty-output-types object)))
+                 (forall-ty
+                  (scan (ty-alias object))
+                  (scan (forall-ty-binders object))
+                  (scan (forall-ty-type object)))
                  (qualified-ty
                   (scan (qualified-ty-predicates object))
                   (scan (qualified-ty-type object)))

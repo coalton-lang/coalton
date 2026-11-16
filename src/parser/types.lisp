@@ -56,6 +56,7 @@
    #:type-variable-binding-kind         ; ACCESSOR
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
+   #:qualified-ty-p                     ; FUNCTION
    #:qualified-ty-explicit-p           ; ACCESSOR
    #:qualified-ty-explicit-variables   ; ACCESSOR
    #:qualified-ty-predicates            ; ACCESSOR
@@ -215,19 +216,16 @@
   (kind nil :type (or null kind) :read-only t))
 
 (defstruct (qualified-ty
-            (:predicate nil)
+            (:include ty)
+            (:predicate qualified-ty-p)
             (:copier nil))
   ;; True when the source type used an explicit FORALL binder list.
-  (explicit-p         nil                 :type boolean           :read-only t)
+  (explicit-p         nil                             :type boolean           :read-only t)
   ;; The explicit FORALL binders in source order, including nested FORALLs
   ;; after flattening, with original source spellings preserved.
-  (explicit-variables nil                 :type keyword-src-list  :read-only t)
-  (predicates         (util:required 'predicates) :type ty-predicate-list :read-only t)
-  (type               (util:required 'type)       :type ty                :read-only t)
-  (location           (util:required 'location)   :type source:location   :read-only t))
-
-(defmethod source:location ((self qualified-ty))
-  (qualified-ty-location self))
+  (explicit-variables nil                             :type keyword-src-list  :read-only t)
+  (predicates         (util:required 'predicates)     :type ty-predicate-list :read-only t)
+  (type               (util:required 'type)           :type ty                :read-only t))
 
 (defun parse-kind (form source &optional (allow-values-p t))
   (declare (type cst:cst form)
@@ -584,49 +582,62 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
    :output-types outputs
    :location location))
 
+(defun forall-marker-p (form)
+  (and (cst:atom form)
+       (member (cst:raw form)
+               '(coalton:forall coalton:∀)
+               :test #'eq)))
+
+(defun parse-forall-forms (forms location source)
+  (declare (type util:cst-list forms)
+           (type source:location location)
+           (values qualified-ty &optional))
+  (unless (consp (rest forms))
+    (parse-error "Malformed forall type"
+                 (source:note location "expected quantified variables")))
+  (unless (consp (cddr forms))
+    (parse-error "Malformed forall type"
+                 (source:note location "expected quantified type")))
+  (unless (cst:proper-list-p (second forms))
+    (parse-error "Malformed forall type"
+                 (note source (second forms)
+                       "expected list of quantified variables")))
+  (let* ((body-forms (cddr forms))
+         (body-form
+           (if (null (rest body-forms))
+               (first body-forms)
+               (loop :for cst :in (reverse body-forms)
+                     :for acc := (make-instance 'cst:atom-cst :raw nil :source (cst:source cst))
+                       :then acc
+                     :do (setf acc (make-instance 'cst:cons-cst
+                                                  :raw (cons (cst:raw cst) (cst:raw acc))
+                                                  :first cst
+                                                  :rest acc
+                                                  :source (cons (car (cst:source (first body-forms)))
+                                                                (cdr (cst:source (car (last body-forms)))))))
+                     :finally (return acc))))
+         (body (parse-qualified-type body-form source))
+         (explicit-variables
+           (append
+            (parse-list #'parse-forall-type-variable (second forms) source)
+            (qualified-ty-explicit-variables body))))
+    (make-qualified-ty
+     :explicit-p t
+     :explicit-variables explicit-variables
+     :predicates (qualified-ty-predicates body)
+     :type (qualified-ty-type body)
+     :location location)))
+
 (defun parse-qualified-type (form source)
   (declare (type cst:cst form))
 
   (when (and (cst:consp form)
-             (cst:atom (cst:first form))
-             (member (cst:raw (cst:first form))
-                     '(coalton:forall coalton:∀)
-                     :test #'eq))
-    (unless (cst:consp (cst:rest form))
+             (forall-marker-p (cst:first form)))
+    (unless (cst:proper-list-p form)
       (parse-error "Malformed forall type"
-                   (note source form "expected quantified variables")))
-
-    (unless (cst:consp (cst:rest (cst:rest form)))
-      (parse-error "Malformed forall type"
-                   (note source form "expected quantified type")))
-
-    (unless (cst:proper-list-p (cst:second form))
-      (parse-error "Malformed forall type"
-                   (note source (cst:second form)
-                         "expected list of quantified variables")))
-
-    (let* ((body-form
-             (if (cst:null (cst:rest (cst:nthrest 2 form)))
-                 (cst:third form)
-                 (make-instance 'cst:cons-cst
-                                :raw (nthcdr 2 (cst:raw form))
-                                :first (cst:third form)
-                                :rest (cst:nthrest 3 form)
-                                :source (cst:source form))))
-           (body (parse-qualified-type
-                  body-form
-                  source))
-           (explicit-variables
-             (append
-              (parse-list #'parse-forall-type-variable (cst:second form) source)
-              (qualified-ty-explicit-variables body))))
-      (return-from parse-qualified-type
-        (make-qualified-ty
-         :explicit-p t
-         :explicit-variables explicit-variables
-         :predicates (qualified-ty-predicates body)
-         :type (qualified-ty-type body)
-         :location (form-location source form)))))
+                   (note source form "unexpected dotted list")))
+    (return-from parse-qualified-type
+      (parse-forall-forms (cst:listify form) (form-location source form) source)))
 
   (if (cst:atom form)
 
@@ -801,6 +812,14 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 
   (let* ((source (source:location-source location))
          (arrow-forms (remove-if-not #'arrow-marker-p forms)))
+    (when (forall-marker-p (first forms))
+      (return-from parse-type-list
+        (parse-forall-forms forms location source)))
+    (when (find-if #'qualified-type-marker-p forms)
+      (parse-error "Malformed qualified type"
+                   (note source
+                         (find-if #'qualified-type-marker-p forms)
+                         "nested qualified types must be enclosed in an explicit `forall`")))
     (cond
       ;; Non-function type application
       ((null arrow-forms)

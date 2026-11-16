@@ -163,6 +163,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                ;; interface in the typechecker. Preserve that rule while inlining so
                ;; inlining does not make valid calls ill-typed.
                (cond
+                 ((typep expected-type 'tc:forall-ty)
+                  (setf binding-type expected-type))
                  ((and (typep expected-type 'tc:function-ty)
                        (typep actual-type 'tc:function-ty))
                   (multiple-value-bind (subs visible-expected-type)
@@ -187,15 +189,17 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                      substitutions)))
     (setf bindings (nreverse bindings)
           substitutions (nreverse substitutions))
-    (setf new-substitutions
-          (tc:unify new-substitutions
-                    (tc:apply-substitution
-                     new-substitutions
-                     (tc:function-return-type
-                      (ast:node-type fresh-abstraction)))
-                    (tc:apply-substitution
+    (let ((return-type (tc:apply-substitution
+                        new-substitutions
+                        (tc:function-return-type
+                         (ast:node-type fresh-abstraction))))
+          (app-type (tc:apply-substitution
                      new-substitutions
                      (ast:node-type application))))
+      (unless (or (typep return-type 'tc:forall-ty)
+                  (typep app-type 'tc:forall-ty))
+        (setf new-substitutions
+              (tc:unify new-substitutions return-type app-type))))
     (let* ((new-subexpr
              (substitutions:apply-ast-substitution
               substitutions
@@ -286,22 +290,32 @@ and user-supplied inline declarations to determine if it is appropriate."
           (debug! ";; Failed to inline ~A" name)))
        application))))
 
-(defun extract-dict (rands)
+(defun extract-dict (rands &optional env)
   (declare (type ast:node-list rands)
            (values (or null parser:identifier) ast:node-list &optional))
+  (labels ((unwrap (dict-node tail-rands)
+             (cond
+               ((ast:node-global-variable-p dict-node)
+                (values (ast:node-variable-value dict-node)
+                        tail-rands))
 
-  (cond
-    ((ast:node-global-variable-p (first rands))
-     (values (ast:node-variable-value (first rands))
-             (rest rands)))
+               ((and env (ast:node-local-variable-p dict-node))
+                (let ((code (tc:lookup-code env (ast:node-variable-value dict-node) :no-error t)))
+                  (when (and code (not (eq code dict-node)))
+                    (unwrap code tail-rands))))
 
-    ((and (ast:node-application-p (first rands))
-          (ast:node-global-variable-p (ast:node-application-rator (first rands))))
-     (values (ast:node-variable-value (ast:node-application-rator (first rands)))
-             (append (ast:node-application-rands (first rands)) (rest rands))))
+               ((and (ast:node-application-p dict-node)
+                     (ast:node-global-variable-p (ast:node-application-rator dict-node)))
+                (values (ast:node-variable-value (ast:node-application-rator dict-node))
+                        (append (ast:node-application-rands dict-node) tail-rands)))
 
-    (t
-     (values nil nil))))
+               ((ast:node-direct-application-p dict-node)
+                (values (ast:node-direct-application-rator dict-node)
+                        (append (ast:node-direct-application-rands dict-node) tail-rands)))
+
+               (t
+                (values nil nil)))))
+    (unwrap (first rands) (rest rands))))
 
 (defun inline-nullary-method-target (method-name result-type properties env direct-p)
   (declare (type symbol method-name)
@@ -362,7 +376,7 @@ and user-supplied inline declarations to determine if it is appropriate."
 
   (let ((rator (ast:node-application-rator node))
         (rands (ast:node-application-rands node)))
-    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+    (multiple-value-bind (dict inner-rands) (extract-dict rands env)
       (if (or (null dict) (not (ast:node-global-variable-p rator)))
           node
           (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
@@ -406,7 +420,7 @@ and user-supplied inline declarations to determine if it is appropriate."
     (return-from inline-direct-method node))
 
   (let ((rands (ast:node-direct-application-rands node)))
-    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+    (multiple-value-bind (dict inner-rands) (extract-dict rands env)
       (if (null dict)
           node
           (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))

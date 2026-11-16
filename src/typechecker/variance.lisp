@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/environment)
   (:export
    #:variance                            ; TYPE
@@ -158,6 +159,9 @@ treated as invariant to preserve soundness."
                (result-ty
                  (dolist (output (result-ty-output-types node))
                    (walk output (variance-compose variance ':covariant))))
+               (forall-ty
+                 (dolist (free-var (type-variables node))
+                   (record free-var ':invariant)))
                (tapp
                  (let* ((flattened (flatten-type node))
                         (head (first flattened))
