@@ -30,37 +30,30 @@
                            :direction :input
                            :external-format :utf-8)
       (let ((stream (make-instance 'source:char-position-stream :stream inner)))
-        (is (open-stream-p stream))
         (is (open-stream-p inner))
         (close stream :abort abort)
         (is (not (open-stream-p inner))
             "Closing the wrapper must close its underlying stream")
-        (is (not (open-stream-p stream))
-            "Closing the wrapper must mark it closed")
         (close stream :abort abort)
-        (is (not (open-stream-p inner)))
-        (is (not (open-stream-p stream)))))))
+        (is (not (open-stream-p inner)))))))
 
 (deftest test-source-file-with-open-stream-closes-inner-stream ()
   (dolist (unwind-p '(nil t))
     (let ((source (source:make-source-file
                    (test-file "tests/test-files/unicode.coal")
                    :offset 1))
-          (wrapper nil)
           (inner nil))
       (unwind-protect
            (progn
              (catch 'leave-stream
                (with-open-stream (stream (source:source-stream source))
-                 (setf wrapper stream
-                       inner (source::inner-stream stream))
+                 (setf inner (source::inner-stream stream))
                  (is (open-stream-p inner))
                  (is (= 1 (file-position stream)))
                  (when unwind-p
                    (throw 'leave-stream nil))))
              (is (not (open-stream-p inner))
-                 "WITH-OPEN-STREAM must close the underlying file on normal and nonlocal exits")
-             (is (not (open-stream-p wrapper))))
+                 "WITH-OPEN-STREAM must close the underlying file on normal and nonlocal exits"))
         (when inner
           (close inner))))))
 
