@@ -53,32 +53,33 @@
            (type partial-type-env env)
            (type boolean root-output-slot-p)
            (values null))
-  (labels ((walk (type output-slot-p)
+  (labels ((walk (type output-slot-p root-p shadowed)
              (typecase type
                (parser:tyvar
-                (let ((var (gethash (parser:tyvar-name type)
-                                    (partial-type-env-ty-table env))))
-                  (when (and (typep var 'tc:tyvar)
-                             (tc:tyvar-allow-result-p var)
-                             (not output-slot-p))
-                    (tc-error "Invalid Values variable"
-                              (tc-note type
-                                       "Values variable ~S must occupy an entire function or Lisp output slot"
-                                       (or (parser:tyvar-source-name type)
-                                           (parser:tyvar-name type)))))))
+                (unless (member (parser:tyvar-name type) shadowed :test #'eq)
+                  (let ((var (gethash (parser:tyvar-name type)
+                                      (partial-type-env-ty-table env))))
+                    (when (and (typep var 'tc:tyvar)
+                               (tc:tyvar-allow-result-p var)
+                               (not output-slot-p))
+                      (tc-error "Invalid Values variable"
+                                (tc-note type
+                                         "Values variable ~S must occupy an entire function or Lisp output slot"
+                                         (or (parser:tyvar-source-name type)
+                                             (parser:tyvar-name type))))))))
                (parser:tycon
                 nil)
                (parser:tapp
-                (walk (parser:tapp-from type) nil)
-                (walk (parser:tapp-to type) nil))
+                (walk (parser:tapp-from type) nil nil shadowed)
+                (walk (parser:tapp-to type) nil nil shadowed))
                (parser:keyword-ty-entry
-                (walk (parser:keyword-ty-entry-type type) nil))
+                (walk (parser:keyword-ty-entry-type type) nil nil shadowed))
                (parser:function-ty
                 (map nil (lambda (input)
-                           (walk input nil))
+                           (walk input nil nil shadowed))
                      (parser:function-ty-positional-input-types type))
                 (map nil (lambda (entry)
-                           (walk entry nil))
+                           (walk entry nil nil shadowed))
                      (parser:function-ty-keyword-input-types type))
                 (let ((outputs (parser:function-ty-output-types type)))
                   (cond
@@ -89,29 +90,35 @@
                     ;; value types, not result-pack binders.
                     ((and (null (cdr outputs))
                           (not (typep (first outputs) 'parser:result-ty)))
-                     (walk (first outputs) t))
+                     (walk (first outputs) t nil shadowed))
                     (t
                      (map nil (lambda (output)
-                                (walk output nil))
+                                (walk output nil nil shadowed))
                           outputs)))))
                (parser:result-ty
                 (map nil (lambda (output)
-                           (walk output nil))
+                           (walk output nil nil shadowed))
                      (parser:result-ty-output-types type)))
                (parser:qualified-ty
-                (map nil (lambda (pred)
-                           (walk pred nil))
-                     (parser:qualified-ty-predicates type))
-                (walk (parser:qualified-ty-type type) nil))
+                (let ((next-shadowed
+                        (if root-p
+                            shadowed
+                            (append (mapcar #'parser:keyword-src-name
+                                            (parser:qualified-ty-explicit-variables type))
+                                    shadowed))))
+                  (map nil (lambda (pred)
+                             (walk pred nil nil next-shadowed))
+                       (parser:qualified-ty-predicates type))
+                  (walk (parser:qualified-ty-type type) nil nil next-shadowed)))
                (parser:ty-predicate
                 (map nil (lambda (pred-type)
-                           (walk pred-type nil))
+                           (walk pred-type nil nil shadowed))
                      (parser:ty-predicate-types type)))
                (list
                 (map nil (lambda (elt)
-                           (walk elt nil))
+                           (walk elt nil nil shadowed))
                      type)))))
-    (walk type root-output-slot-p))
+    (walk type root-output-slot-p t nil))
   nil)
 
 (defun binder-kind (kind)
@@ -351,12 +358,87 @@ parsed outputs stay aligned with the kind-inferred ones."
                                            (parser:qualified-ty-type parser-type)
                                           env)))
 
+  (:method ((type tc:forall-ty) (parser-type parser:qualified-ty) env)
+    (declare (type partial-type-env env)
+             (values tc:ty))
+    (let* ((qual-ty (apply-type-alias-substitutions (tc:forall-ty-type type)
+                                                    parser-type
+                                                    env))
+           (preds (tc:qualified-ty-predicates qual-ty))
+           (body (tc:qualified-ty-type qual-ty))
+           (explicit-tvars (tc:forall-ty-binders type))
+           (base-env (partial-type-env-env env)))
+      (when (tc:forall-ty-explicit-p type)
+        (warn-on-unused-explicit-type-variables parser-type explicit-tvars qual-ty))
+      (check-for-ambiguous-variables preds body parser-type base-env)
+      (check-for-reducible-by-fundeps preds body parser-type base-env)
+      (check-for-reducible-context preds body parser-type base-env)
+      (let ((used-binders
+              (remove-if-not (lambda (v)
+                               (find v (tc:type-variables qual-ty) :test #'tc:ty=))
+                             explicit-tvars)))
+        (if (and (null used-binders) (null preds))
+            body
+            (tc:make-forall-ty
+             :alias (mapcar (lambda (alias)
+                              (apply-type-alias-substitutions alias parser-type env))
+                            (tc:ty-alias type))
+             :explicit-p (tc:forall-ty-explicit-p type)
+             :binders used-binders
+             :type qual-ty)))))
+
   (:method ((type tc:ty) parser-type env)
     (declare (type parser:ty parser-type)
              (type partial-type-env env)
              (ignore env)
              (values tc:ty))
     type))
+
+(defun check-no-impredicative-forall-types (type parser-node)
+  "Reject FORALL-TY inside type constructor applications, multi-value packs, or predicates
+that may have been introduced after expanding type aliases."
+  (declare (type (or tc:ty tc:qualified-ty tc:ty-predicate) type)
+           (values null &optional))
+  (labels ((walk (ty)
+             (typecase ty
+               (tc:tapp
+                (when (typep (tc:tapp-from ty) 'tc:forall-ty)
+                  (tc-error "Malformed type"
+                            (tc-note parser-node
+                                     "quantified types cannot be applied as type constructors")))
+                (when (typep (tc:tapp-to ty) 'tc:forall-ty)
+                  (tc-error "Malformed type"
+                            (tc-note parser-node
+                                     "quantified types cannot be used as type arguments")))
+                (walk (tc:tapp-from ty))
+                (walk (tc:tapp-to ty)))
+               (tc:keyword-ty-entry
+                (walk (tc:keyword-ty-entry-type ty)))
+               (tc:function-ty
+                (mapc #'walk (tc:function-ty-positional-input-types ty))
+                (mapc #'walk (tc:function-ty-keyword-input-types ty))
+                (mapc #'walk (tc:function-ty-output-types ty)))
+               (tc:result-ty
+                (dolist (out (tc:result-ty-output-types ty))
+                  (when (typep out 'tc:forall-ty)
+                    (tc-error "Malformed type"
+                              (tc-note parser-node
+                                       "quantified types cannot appear as components of a multi-value type")))
+                  (walk out)))
+               (tc:forall-ty
+                (walk (tc:forall-ty-type ty)))
+               (tc:qualified-ty
+                (mapc #'walk (tc:qualified-ty-predicates ty))
+                (walk (tc:qualified-ty-type ty)))
+               (tc:ty-predicate
+                (dolist (arg (tc:ty-predicate-types ty))
+                  (when (typep arg 'tc:forall-ty)
+                    (tc-error "Malformed type predicate"
+                              (tc-note parser-node
+                                       "quantified types cannot be used as class predicate arguments")))
+                  (walk arg))))))
+    (walk type))
+  nil)
 
 (defun parse-type (parser-ty env &optional ksubs (kind tc:+kstar+))
   (declare (type parser:ty parser-ty)
@@ -388,6 +470,7 @@ parsed outputs stay aligned with the kind-inferred ones."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
 (defun parse-output-slot-type (parser-ty env &optional ksubs (kind tc:+kstar+))
@@ -423,6 +506,7 @@ Unbound variables still denote ordinary single-value types."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
 (defun parse-qualified-type-info (unparsed-ty env &optional ksubs (run-context-checks-p t))
@@ -449,7 +533,7 @@ being assembled."
         (seed-qualified-type-variables unparsed-ty partial-env)
       (check-result-variable-positions unparsed-ty partial-env)
       (multiple-value-bind (qual-ty ksubs)
-          (infer-type-kinds unparsed-ty tc:+kstar+ ksubs partial-env)
+          (infer-top-qualified-type-kinds unparsed-ty tc:+kstar+ ksubs partial-env)
 
         (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
         (setf qual-ty (tc:make-qualified-ty
@@ -464,16 +548,37 @@ being assembled."
                          partial-env))
                (explicit-tvars (mapcar (lambda (tvar)
                                          (tc:apply-ksubstitution ksubs tvar))
-                                       explicit-tvars))
-               (preds (tc:qualified-ty-predicates qual-ty))
-               (ty (tc:qualified-ty-type qual-ty)))
+                                       explicit-tvars)))
+          ;; If a root type alias expanded to a FORALL-TY, lift its binders
+          ;; and predicates into the top-level qualified type.
+          (loop :while (typep (tc:qualified-ty-type qual-ty) 'tc:forall-ty)
+                :do (let* ((inner (tc:qualified-ty-type qual-ty))
+                           (inner-Alias (tc:ty-alias inner))
+                           (fresh-binders (mapcar #'tc:fresh-type-renamer (tc:forall-ty-binders inner)))
+                           (binder-subs (loop :for b :in (tc:forall-ty-binders inner)
+                                              :for fb :in fresh-binders
+                                              :collect (tc:make-substitution :from b :to fb)))
+                           (inner-qual (tc:apply-substitution binder-subs (tc:forall-ty-type inner)))
+                           (inner-body (tc:qualified-ty-type inner-qual)))
+                      (when inner-alias
+                        (dolist (a (reverse inner-alias))
+                          (setf inner-body (tc:push-type-alias inner-body a))))
+                      (setf explicit-tvars (append explicit-tvars fresh-binders)
+                            explicit-p (or explicit-p (tc:forall-ty-explicit-p inner))
+                            qual-ty (tc:make-qualified-ty
+                                     :predicates (append (tc:qualified-ty-predicates qual-ty)
+                                                         (tc:qualified-ty-predicates inner-qual))
+                                     :type inner-body))))
+          (let ((preds (tc:qualified-ty-predicates qual-ty))
+                (ty (tc:qualified-ty-type qual-ty)))
 
-          (when run-context-checks-p
-            (check-for-ambiguous-variables preds ty unparsed-ty base-env)
-            (check-for-reducible-by-fundeps preds ty unparsed-ty base-env)
-            (check-for-reducible-context preds ty unparsed-ty base-env))
+            (when run-context-checks-p
+              (check-no-impredicative-forall-types qual-ty unparsed-ty)
+              (check-for-ambiguous-variables preds ty unparsed-ty base-env)
+              (check-for-reducible-by-fundeps preds ty unparsed-ty base-env)
+              (check-for-reducible-context preds ty unparsed-ty base-env))
 
-          (values qual-ty explicit-tvars explicit-p ksubs))))))
+            (values qual-ty explicit-tvars explicit-p ksubs)))))))
 
 (defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
@@ -684,6 +789,16 @@ the substitution :b +-> T can be inferred.
                       (tc-note (parser:tapp-to type)
                                "Void and multi-value types cannot be used as type arguments")))
 
+          (when (typep fun-ty 'tc:forall-ty)
+            (tc-error "Malformed type"
+                      (tc-note (parser:tapp-from type)
+                               "quantified types cannot be applied as type constructors")))
+
+          (when (typep arg-ty 'tc:forall-ty)
+            (tc-error "Malformed type"
+                      (tc-note (parser:tapp-to type)
+                               "quantified types cannot be used as type arguments")))
+
           (handler-case
               (progn
                 (setf ksubs (tc:kunify fun-kind (tc:make-kfun :from arg-kind
@@ -765,6 +880,10 @@ the substitution :b +-> T can be inferred.
             (loop :for output :in (parser:result-ty-output-types type)
                   :collect (multiple-value-bind (output-type ksubs_)
                                (infer-type-kinds output tc:+kstar+ ksubs env)
+                             (when (typep output-type 'tc:forall-ty)
+                               (tc-error "Malformed type"
+                                         (tc-note output
+                                                  "quantified types cannot appear as components of a multi-value type")))
                              (setf ksubs ksubs_)
                              output-type))))
       (values (tc:output-types-result-type output-types)
@@ -774,23 +893,62 @@ the substitution :b +-> T can be inferred.
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (values tc:qualified-ty tc:ksubstitution-list &optional))
+             (values tc:forall-ty tc:ksubstitution-list &optional))
+    (handler-case
+        (setf ksubs (tc:kunify expected-kind tc:+kstar+ ksubs))
+      (tc:coalton-internal-type-error ()
+        (tc-error "Kind mismatch"
+                  (tc-note type "Expected kind '~S' but quantified types are of kind '*'"
+                           expected-kind))))
+    (let ((child-env (make-partial-type-env
+                      :env (partial-type-env-env env)
+                      :ty-table (alexandria:copy-hash-table (partial-type-env-ty-table env))
+                      :class-table (partial-type-env-class-table env))))
+      (multiple-value-bind (explicit-tvars explicit-p)
+          (seed-qualified-type-variables type child-env)
+        (check-result-variable-positions type child-env)
+        (let ((preds (loop :for pred :in (parser:qualified-ty-predicates type)
+                           :collect (multiple-value-bind (pred ksubs_)
+                                        (infer-predicate-kinds pred ksubs child-env)
+                                      (setf ksubs ksubs_)
+                                      pred))))
+          (multiple-value-bind (body-ty ksubs)
+              (infer-type-kinds (parser:qualified-ty-type type) tc:+kstar+ ksubs child-env)
+            (when (typep body-ty 'tc:result-ty)
+              (tc-error "Malformed type"
+                        (tc-note type
+                                 "cannot quantify over ~A directly; quantify over a function type instead"
+                                 (if (null (tc:result-ty-output-types body-ty))
+                                     "Void"
+                                     "a multi-value type"))))
+            (values (tc:make-forall-ty
+                     :explicit-p explicit-p
+                     :binders explicit-tvars
+                     :type (tc:make-qualified-ty :predicates preds
+                                                 :type body-ty))
+                    ksubs)))))))
 
-    ;; CCL >:(
-    (assert (equalp expected-kind tc:+kstar+))
+(defun infer-top-qualified-type-kinds (type expected-kind ksubs env)
+  (declare (type parser:qualified-ty type)
+           (type tc:kind expected-kind)
+           (type tc:ksubstitution-list ksubs)
+           (type partial-type-env env)
+           (values tc:qualified-ty tc:ksubstitution-list &optional))
 
-    (let ((preds (loop :for pred :in (parser:qualified-ty-predicates type)
-                       :collect (multiple-value-bind (pred ksubs_)
-                                    (infer-predicate-kinds pred ksubs env)
-                                  (setf ksubs ksubs_)
-                                  pred))))
+  ;; CCL >:(
+  (assert (equalp expected-kind tc:+kstar+))
 
-      (multiple-value-bind (ty ksubs)
-          (infer-type-kinds (parser:qualified-ty-type type) tc:+kstar+ ksubs
-                            env)
-        (values (tc:make-qualified-ty :predicates preds
-                                      :type ty)
-                ksubs)))))
+  (let ((preds (loop :for pred :in (parser:qualified-ty-predicates type)
+                     :collect (multiple-value-bind (pred ksubs_)
+                                  (infer-predicate-kinds pred ksubs env)
+                                (setf ksubs ksubs_)
+                                pred))))
+
+    (multiple-value-bind (ty ksubs)
+        (infer-type-kinds (parser:qualified-ty-type type) tc:+kstar+ ksubs env)
+      (values (tc:make-qualified-ty :predicates preds
+                                    :type ty)
+              ksubs))))
 
 (defun infer-predicate-kinds (pred ksubs env)
   (declare (type parser:ty-predicate pred)
@@ -812,12 +970,22 @@ the substitution :b +-> T can be inferred.
                          class-arity
                          (length (parser:ty-predicate-types pred)))))
 
-    (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
+    (let ((types (loop :for unparsed-ty :in (parser:ty-predicate-types pred)
                        :for class-ty :in (tc:ty-predicate-types class-pred)
-                       :collect (multiple-value-bind (ty ksubs_)
-                                    (parse-type ty env ksubs (tc:kind-of class-ty))
-                                  (setf ksubs ksubs_)
-                                  ty))))
+                       :collect (progn
+                                  (check-result-variable-positions unparsed-ty env)
+                                  (multiple-value-bind (ty ksubs_)
+                                      (infer-type-kinds unparsed-ty (tc:kind-of class-ty) ksubs env)
+                                    (setf ty (tc:apply-ksubstitution ksubs_ ty))
+                                    (setf ksubs_ (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs_))
+                                    (setf ty (tc:apply-ksubstitution ksubs_ ty))
+                                    (setf ty (apply-type-alias-substitutions ty unparsed-ty env))
+                                    (when (typep ty 'tc:forall-ty)
+                                      (tc-error "Malformed type predicate"
+                                                (tc-note unparsed-ty
+                                                         "quantified types cannot be used as class predicate arguments")))
+                                    (setf ksubs ksubs_)
+                                    ty)))))
       (values (tc:make-ty-predicate :class class-name
                                     :types types)
               ksubs))))

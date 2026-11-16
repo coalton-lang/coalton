@@ -12,7 +12,7 @@ weight: 100
 ```lisp
 ;; Expression type annotation
 (the ⟨type⟩ ⟨expr⟩)
-(the (forall (⟨binder⟩+) ⟨type⟩) ⟨expr⟩)
+(the (forall (⟨binder⟩+) ⟨qualified-type⟩) ⟨expr⟩)
 
 ;; Typed exception pattern in `catch` or `handle`
 ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨handler-body⟩+)
@@ -24,7 +24,7 @@ weight: 100
   - `(the ⟨type⟩ ⟨expr⟩)` unifies the inferred type of `⟨expr⟩` with `⟨type⟩` and evaluates to `⟨expr⟩` with no runtime overhead (`the` is erased after typechecking).
   - `⟨type⟩` may be a single-value type, a function type, `Void` (for zero-value expressions), or a multi-value type `T1 * T2 * ...` (for multi-value expressions).
   - `⟨type⟩` may specialize a polymorphic expression (for example, fixing the numeric type of a literal or the container type of `[]` or `[=>]`), but it cannot be *more general* than the inferred type of `⟨expr⟩` (annotating an `Integer` expression as `(the :a expr)` is a compile-time error).
-  - `the` annotations cannot include [`=>`](/manual/operators/constraint-arrow/) typeclass constraints; use [`declare`](/manual/operators/declare/) on a top-level or local binding to attach predicate constraints.
+  - `the` annotations without an explicit `forall` cannot include [`=>`](/manual/operators/constraint-arrow/) typeclass constraints; wrap constrained annotations in an explicit `(forall (⟨binder⟩+) ...)` or use [`declare`](/manual/operators/declare/) on a binding.
   - `⟨type⟩` may reference scoped type variables bound by an enclosing [`forall`](/manual/operators/forall/), or introduce its own explicit `(forall (⟨binder⟩+) ...)` whose type variables are scoped over `⟨expr⟩`.
   - When used directly around the right-hand side of an un-declared recursive binding `(let ((f (the ⟨type⟩ (fn ...)))) ...)`, the annotation is visible to recursive calls within `f`.
 - **In [`catch`](/manual/operators/catch/) and [`handle`](/manual/operators/handle/) branches**:

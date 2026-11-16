@@ -234,6 +234,8 @@
                 (write-result-ty ty context))
                (function-ty
                 (write-function-ty ty context))
+               (forall-ty
+                (write-forall-ty ty context))
                (tapp
                 (cond
                   ((function-type-p ty)
@@ -283,6 +285,35 @@
                     (write-kind (kfun-from kind)))
                 (write-string arrow-string stream)
                 (write-kind (kfun-to kind)))))
+           (write-binders-and-qualified-ty (binders qual-ty)
+             (cond
+               ((null binders)
+                (write-qualified-ty qual-ty))
+               (t
+                (write-string forall-string stream)
+                (dolist (type binders)
+                  (write-char #\Space stream)
+                  (if (or (tyvar-allow-result-p type)
+                          (not (kstar-p (kind-of type))))
+                      (write-parenthesized
+                       (lambda ()
+                         (write-ty type ':top)
+                         (write-char #\Space stream)
+                         (if (tyvar-allow-result-p type)
+                             (write-string "Values" stream)
+                             (write-parenthesized
+                              (lambda () (write-kind (kind-of type)))))))
+                      (write-ty type ':top)))
+                (write-string ". " stream)
+                (write-qualified-ty qual-ty))))
+           (write-forall-ty (ty context)
+             (flet ((body ()
+                      (with-pprint-variable-scope ()
+                        (write-binders-and-qualified-ty (forall-ty-binders ty)
+                                                        (forall-ty-type ty)))))
+               (if (eq context ':top)
+                   (body)
+                   (write-parenthesized #'body))))
            (write-scheme (scheme)
              (cond
                ((null (ty-scheme-kinds scheme))
@@ -290,22 +321,7 @@
                (t
                 (let* ((types (ty-scheme-instantiation-types scheme))
                        (new-type (instantiate types (ty-scheme-type scheme))))
-                  (write-string forall-string stream)
-                  (dolist (type types)
-                    (write-char #\Space stream)
-                    (if (or (tyvar-allow-result-p type)
-                            (not (kstar-p (kind-of type))))
-                        (write-parenthesized
-                         (lambda ()
-                           (write-ty type ':top)
-                           (write-char #\Space stream)
-                           (if (tyvar-allow-result-p type)
-                               (write-string "Values" stream)
-                               (write-parenthesized
-                                (lambda () (write-kind (kind-of type)))))))
-                        (write-ty type ':top)))
-                  (write-string ". " stream)
-                  (write-type-object new-type)))))
+                  (write-binders-and-qualified-ty types new-type)))))
            (write-class-instance (instance)
              (let ((ctx (ty-class-instance-constraints instance))
                    (pred (ty-class-instance-predicate instance)))

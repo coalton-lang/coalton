@@ -53,7 +53,13 @@ is true."
       (alexandria:when-let
           ((res (or (find (node-variable-value node) subs :key #'ast-substitution-from)
                     (find (node-variable-value node) new-subs :key #'ast-substitution-from))))
-        (ast-substitution-to res)))
+        (let ((replacement (ast-substitution-to res)))
+          (if (and (node-local-variable-p replacement)
+                   (typep (node-type replacement) 'tc:forall-ty))
+              (make-node-local-variable
+               :type (node-type node)
+               :value (node-variable-value replacement))
+              replacement))))
     (action (:after node-setq node new-subs)
       (alexandria:when-let
           ((res (or (find (node-setq-name node) subs :key #'ast-substitution-from)

@@ -104,7 +104,7 @@ Type checking relies mainly on:
 
 - substitution via `apply-substitution`, defined in `src/typechecker/substitutions.lisp` and `src/typechecker/expression.lisp`
 - unification via `mgu` and `unify`, defined in `src/typechecker/unify.lisp`
-- inference via `infer-expression-type`, defined in `src/typechecker/define.lisp`
+- inference and bidirectional Rank-$N$ checking via `infer-expression-type` and `check-forall-expression-type`, defined in `src/typechecker/define.lisp` (see [Rank-$N$ Polymorphism](./rank-n-types.md))
 
 There are other modules to handle more specific things, but the bulk of the "type calculus" is defined above.
 

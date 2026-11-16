@@ -16,8 +16,10 @@
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-source-name                  ; ACCESSOR
    #:tyvar-allow-result-p               ; ACCESSOR
+   #:tyvar-rigid-p                      ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
+   #:make-skolem                        ; FUNCTION
    #:tycon                              ; STRUCT
    #:make-tycon                         ; CONSTRUCTOR
    #:tycon-name                         ; ACCESSOR
@@ -52,6 +54,8 @@
    #:tgen-allow-result-p                ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
+   #:make-skolem                        ; FUNCTION
+   #:*next-variable-id*                 ; VARIABLE
    #:ensure-next-variable-id-at-least   ; FUNCTION
    #:fresh-type-renamer                 ; FUNCTION
    #:instantiate                        ; FUNCTION
@@ -168,14 +172,17 @@
   '(satisfies ty-list-p))
 
 (defstruct (tyvar (:include ty))
-  (id          (util:required 'id)      :type fixnum             :read-only t)
-  (kind        (util:required 'kind)    :type kind               :read-only t)
+  (id             (util:required 'id)   :type fixnum             :read-only t)
+  (kind           (util:required 'kind) :type kind               :read-only t)
   ;; True when this variable may unify with a result pack (Void or
   ;; multiple values). Ordinary value variables leave this false.
   (allow-result-p nil                   :type boolean            :read-only t)
+  ;; True when this variable is a rigid skolem constant that cannot be
+  ;; bound during unification.
+  (rigid-p        nil                   :type boolean            :read-only t)
   ;; The original programmer-written name, if this type variable originated
   ;; from source rather than anonymous inference state.
-  (source-name nil                      :type (or null symbol)   :read-only t))
+  (source-name    nil                   :type (or null symbol)   :read-only t))
 
 (defun tyvar-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -240,11 +247,12 @@
 (declaim (ftype (function (&key
                            (:kind kind)
                            (:source-name (or null symbol))
-                           (:allow-result-p boolean))
+                           (:allow-result-p boolean)
+                           (:rigid-p boolean))
                           tyvar)
                 make-variable))
 (declaim (inline make-variable))
-(defun make-variable (&key (kind +kstar+) source-name (allow-result-p nil))
+(defun make-variable (&key (kind +kstar+) source-name (allow-result-p nil) (rigid-p nil))
   "Create a fresh type variable with optional KIND and source metadata.
 
 SOURCE-NAME preserves the programmer-written binder for later pretty
@@ -255,8 +263,17 @@ when KIND and SOURCE-NAME are the same."
   (prog1 (make-tyvar :id *next-variable-id*
                      :kind kind
                      :allow-result-p allow-result-p
+                     :rigid-p rigid-p
                      :source-name source-name)
     (incf *next-variable-id*)))
+
+(declaim (inline make-skolem))
+(defun make-skolem (&key (kind +kstar+) source-name (allow-result-p nil))
+  "Create a fresh rigid skolem type variable."
+  (make-variable :kind kind
+                 :source-name source-name
+                 :allow-result-p allow-result-p
+                 :rigid-p t))
 
 (defun ensure-next-variable-id-at-least (minimum-id)
   "Advance the fresh tyvar counter so future variables have ID > MINIMUM-ID."
@@ -397,6 +414,7 @@ Throws an error if applied to a malformed type application.")
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))
    :allow-result-p (tyvar-allow-result-p type)
+   :rigid-p (tyvar-rigid-p type)
    :source-name (tyvar-source-name type)))
 
 (defmethod apply-ksubstitution (subs (type tycon))
@@ -509,6 +527,8 @@ Examples:
                  (tyvar-id type2))
          (eq (tyvar-allow-result-p type1)
              (tyvar-allow-result-p type2))
+         (eq (tyvar-rigid-p type1)
+             (tyvar-rigid-p type2))
          (equalp (tyvar-kind type1)
                  (tyvar-kind type2))))
 

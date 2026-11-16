@@ -132,9 +132,15 @@
 
   (:method ((type qualified-ty))
     (declare (values tyvar-list))
-    (nconc
-     (collect-type-variables-generic% (qualified-ty-type type))
-     (mapcan #'collect-type-variables-generic% (qualified-ty-predicates type))))
+    (let ((bound-names (mapcar #'keyword-src-name (qualified-ty-explicit-variables type)))
+          (inner-vars (nconc
+                       (collect-type-variables-generic% (qualified-ty-type type))
+                       (mapcan #'collect-type-variables-generic% (qualified-ty-predicates type)))))
+      (if bound-names
+          (remove-if (lambda (var)
+                       (member (tyvar-name var) bound-names :test #'eq))
+                     inner-vars)
+          inner-vars)))
 
   (:method ((ctor constructor))
     (declare (values tyvar-list))
@@ -444,14 +450,45 @@ in expressions. May not include all bound variables."
   (delete-duplicates (collect-referenced-classes-generic% ty) :test #'eq))
 
 (defgeneric collect-referenced-classes-generic% (ty)
+  (:method ((ty tyvar))
+    (declare (values identifier-src-list))
+    nil)
+
+  (:method ((ty tycon))
+    (declare (values identifier-src-list))
+    nil)
+
+  (:method ((ty tapp))
+    (declare (values identifier-src-list))
+    (nconc (collect-referenced-classes-generic% (tapp-from ty))
+           (collect-referenced-classes-generic% (tapp-to ty))))
+
+  (:method ((entry keyword-ty-entry))
+    (declare (values identifier-src-list))
+    (collect-referenced-classes-generic% (keyword-ty-entry-type entry)))
+
+  (:method ((ty function-ty))
+    (declare (values identifier-src-list))
+    (nconc
+     (collect-referenced-classes-generic% (function-ty-positional-input-types ty))
+     (collect-referenced-classes-generic% (function-ty-keyword-input-types ty))
+     (collect-referenced-classes-generic% (function-ty-output-types ty))))
+
+  (:method ((ty result-ty))
+    (declare (values identifier-src-list))
+    (collect-referenced-classes-generic% (result-ty-output-types ty)))
+
   (:method ((pred ty-predicate))
     (declare (values identifier-src-list))
-    (list (ty-predicate-class pred)))
+    (cons (ty-predicate-class pred)
+          (collect-referenced-classes-generic% (ty-predicate-types pred))))
 
   (:method ((qual-ty qualified-ty))
     (declare (values identifier-src-list))
-    (mapcan #'collect-referenced-classes-generic%
-            (qualified-ty-predicates qual-ty)))
+    (nconc
+     (mapcan #'collect-referenced-classes-generic%
+             (qualified-ty-predicates qual-ty))
+     (collect-referenced-classes-generic% (qualified-ty-type qual-ty))))
 
   (:method ((method method-definition))
     (declare (values identifier-src-list &optional))
