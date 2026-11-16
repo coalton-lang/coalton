@@ -62,10 +62,10 @@ permits."))
     (lisp (-> Boolean) (semaphore)
       (cl:and (backend:try-semaphore semaphore) cl:t)))
 
-  (declare wait-timeout! ((math:Rational :a) => Semaphore * :a -> Boolean))
+  (declare wait-timeout! ((math:Approximable :a Fraction) => Semaphore * :a -> Boolean))
   (define (wait-timeout! semaphore seconds)
     "Like `wait!`, but stop waiting after `seconds`. Returns `False`, without taking a permit, if the time ran out."
-    (let ((timeout (math:best-approx seconds)))
+    (let ((timeout (math:rational-approx 32 seconds)))
       (lisp (-> Boolean) (semaphore timeout)
         (cl:and (backend:wait-on-semaphore semaphore :timeout (cl:max 0 timeout)) cl:t))))
 

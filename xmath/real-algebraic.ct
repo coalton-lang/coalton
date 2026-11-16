@@ -1,19 +1,17 @@
-;;; See docs/internals/realalgebraic.md for correctness arguments,
+;;; See docs/internals/real-algebraic.md for correctness arguments,
 ;;; algorithmic complexity, and benchmark results.
 
-(coalton/utils:defstdlib-package #:coalton/xmath/realalgebraic
-  (:documentation "Certified real algebraic numbers.
+(coalton/utils:defstdlib-package #:coalton/xmath/real-algebraic
+  (:documentation "Certified real algebraic numbers $\\mathbb{R}_{\\text{alg}} = \\overline{\\mathbb{Q}} \\cap \\mathbb{R}$.
 
-A real algebraic number is represented as a square-free primitive polynomial
-over Z together with a rational isolating interval certified by Sturm's
-theorem. Arithmetic uses exact polynomial transformations and resultant
-elimination, retaining shared generators to control degree growth. All
-operations (construction, comparison, root selection) are exact.
+A real algebraic number $\\alpha$ is represented exactly by a square-free primitive polynomial $p(x) \\in \\mathbb{Z}[x]$ with $p(\\alpha) = 0$ together with a rational isolating interval $(\\ell, u) \\subset \\mathbb{Q}$ certified by Sturm's theorem to contain $\\alpha$ as the unique real root of $p$.
 
-Construct values with `root` (single root from polynomial + interval),
-`real-roots` (all roots of a polynomial), `fromInt`, or `into`. Extract
-rational values with `tryInto`. Standard numeric type class instances are
-provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
+Field operations ($\\alpha \\pm \\beta$, $\\alpha\\beta$, $\\alpha^{-1}$) and real radicals ($\\sqrt[n]{\\alpha}$) construct a defining polynomial via resultant elimination (with fraction-free Bareiss Sylvester determinants) and refine isolating intervals until Sturm root counting certifies a unique root. Rational affine transformations and reciprocals transform certificates directly, and numbers derived from a common generator $\\gamma$ retain coordinates in $\\mathbb{Q}[t]/(p_{\\gamma}(t))$ so repeated operations stay in the same number field without degree blowup.
+
+Because isolating intervals can be bisected to arbitrary precision and exact rational roots are detected via rational root bounds, `RealAlgebraic` forms an exact ordered field (`Ord`, `Reciprocable`, `Radical`) with certified integer rounding (`Quantizable`) and arbitrary-precision approximation (`Approximable`).")
+  (:nicknames
+   #:coalton/math/real-algebraic
+   #:coalton-library/math/real-algebraic)
   (:use
    #:coalton
    #:coalton/classes
@@ -25,6 +23,8 @@ provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
    #:coalton/math/real)
   (:local-nicknames
    (#:array #:coalton/lisparray)
+   (#:bf #:coalton/xmath/big-float)
+   (#:dyadic #:coalton/xmath/dyadic)
    (#:loops #:coalton/experimental/loops)
    (#:ram #:coalton/randomaccess))
   (:export
@@ -38,7 +38,7 @@ provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
    #:decimal-string
    #:rational?))
 
-(in-package #:coalton/xmath/realalgebraic)
+(in-package #:coalton/xmath/real-algebraic)
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
@@ -112,7 +112,7 @@ irreducible or minimal."
     "Return the algebraic degree of a descending coefficient polynomial."
     (match (poly-trim-desc p)
       ((Poly coeffs)
-       (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
+       (max 0 (- (to-integer (coalton/list:length coeffs)) 1)))))
 
   (declare poly-int-zero (Poly Integer))
   (define poly-int-zero
@@ -127,9 +127,9 @@ irreducible or minimal."
   (declare to-ufix (Integer -> UFix))
   (define (to-ufix n)
     "Convert a nonnegative `Integer` to `UFix`, erroring on negatives."
-    (if (< n 0)
-        (error "Internal error: expected nonnegative integer.")
-        (fromInt n)))
+    (when (< n 0)
+      (error "Internal error: expected nonnegative integer."))
+    (from-int n))
 
   (declare poly-int-zero? (Poly Integer -> Boolean))
   (define (poly-int-zero? p)
@@ -148,7 +148,7 @@ irreducible or minimal."
     "Negate all integer coefficients."
     (match p
       ((Poly coeffs)
-       (Poly (map negate coeffs)))))
+       (Poly (map neg coeffs)))))
 
   (declare poly-int-leading (Poly Integer -> Integer))
   (define (poly-int-leading p)
@@ -172,11 +172,11 @@ irreducible or minimal."
   (declare poly-int-div-by (Integer * Poly Integer -> Poly Integer))
   (define (poly-int-div-by d p)
     "Divide all coefficients by exact integer divisor `d`."
-    (if (== d 0)
-        (error "Polynomial coefficient division by zero.")
-        (match p
-          ((Poly coeffs)
-           (Poly (map ƒc.(quot c d) coeffs))))))
+    (when (== d 0)
+      (error "Polynomial coefficient division by zero."))
+    (match p
+      ((Poly coeffs)
+       (Poly (map ƒc.(quot c d) coeffs)))))
 
   (declare poly-int-primitive (Poly Integer -> Poly Integer))
   (define (poly-int-primitive p)
@@ -230,7 +230,7 @@ irreducible or minimal."
     "Return polynomial degree, with deg(0) = 0."
     (match (poly-frac-trim p)
       ((Poly coeffs)
-       (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
+       (max 0 (- (to-integer (coalton/list:length coeffs)) 1)))))
 
   (declare poly-frac-leading (Poly Fraction -> Fraction))
   (define (poly-frac-leading p)
@@ -263,7 +263,7 @@ irreducible or minimal."
     "Negate all fraction coefficients."
     (match p
       ((Poly coeffs)
-       (Poly (map negate coeffs)))))
+       (Poly (map neg coeffs)))))
 
   (declare poly-frac-add (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-add a b)
@@ -272,8 +272,8 @@ irreducible or minimal."
     (let b0 = (poly-frac-trim b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
-    (let la = (toInteger (coalton/list:length ac)))
-    (let lb = (toInteger (coalton/list:length bc)))
+    (let la = (to-integer (coalton/list:length ac)))
+    (let lb = (to-integer (coalton/list:length bc)))
     (let ax = (if (< la lb) (pad-left-frac (to-ufix (- lb la)) ac) ac))
     (let bx = (if (< lb la) (pad-left-frac (to-ufix (- la lb)) bc) bc))
     (poly-frac-trim (Poly (zip-add-frac ax bx))))
@@ -345,9 +345,9 @@ irreducible or minimal."
     (let denominator = (poly-frac-trim b))
     (let db = (poly-frac-degree denominator))
     (let lb = (poly-frac-leading denominator))
-    (if (poly-frac-zero? denominator)
-        (error "Polynomial division by zero.")
-        (poly-frac-divrem-loop denominator db lb poly-frac-zero numerator)))
+    (when (poly-frac-zero? denominator)
+      (error "Polynomial division by zero."))
+    (poly-frac-divrem-loop denominator db lb poly-frac-zero numerator))
 
   (declare poly-frac-rem (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-rem a b)
@@ -393,14 +393,14 @@ irreducible or minimal."
                    (coalton/list:reverse acc)
                    (go more
                        (- pow 1)
-                       (Cons (* (fromInt pow) c) acc))))))))))
+                       (Cons (* (from-int pow) c) acc))))))))))
 
   (declare poly-int->frac (Poly Integer -> Poly Fraction))
   (define (poly-int->frac p)
     "Embed integer coefficients into rationals."
     (match p
       ((Poly coeffs)
-       (Poly (map fromInt coeffs)))))
+       (Poly (map from-int coeffs)))))
 
   (declare poly-frac-clear-denominators (Poly Fraction -> Poly Integer))
   (declare poly-frac-denominator (Poly Fraction -> Integer))
@@ -422,12 +422,12 @@ irreducible or minimal."
         (match rest
           ((Nil) (coalton/list:reverse acc))
           ((Cons c more)
-           (if (/= (rem lden (denominator c)) 0)
-               (error "Internal error: failed to clear polynomial denominators.")
-               (scale more
-                      (Cons (* (numerator c)
-                               (quot lden (denominator c)))
-                            acc)))))))))
+           (when (/= (rem lden (denominator c)) 0)
+             (error "Internal error: failed to clear polynomial denominators."))
+           (scale more
+                  (Cons (* (numerator c)
+                           (quot lden (denominator c)))
+                        acc))))))))
 
   (declare poly-int-squarefree-nontrivial (Poly Integer -> (Result String (Poly Integer))))
   (define (poly-int-squarefree-nontrivial normalized)
@@ -484,7 +484,7 @@ needed by Sturm sequences, even when b has negative leading coefficient."
          (match rest
            ((Nil) acc)
            ((Cons c more)
-            (go more (+ (* acc x) (fromInt c)))))))))
+            (go more (+ (* acc x) (from-int c)))))))))
 
   (declare fraction-signum (Fraction -> Integer))
   (define (fraction-signum x)
@@ -606,9 +606,9 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
       ((>= i n)
        None)
       (True
-       (let ((left-w (fromInt (- n i)))
-             (right-w (fromInt i))
-             (denom (fromInt n)))
+       (let ((left-w (from-int (- n i)))
+             (right-w (from-int i))
+             (denom (from-int n)))
          (let ((cand (/ (+ (* left-w lo) (* right-w hi)) denom)))
            (cond
              ((/= (poly-sign-at poly cand) 0)
@@ -754,7 +754,7 @@ Sturm counting is needed after the initial isolation certificate."
   (declare approx-eps (UFix -> Fraction))
   (define (approx-eps bits)
     "Return 2^-bits exactly as a rational."
-    (/ 1 (fromInt (^ 2 bits))))
+    (/ 1 (from-int (^ 2 bits))))
 
   (declare from-fraction (Fraction -> RealAlgebraic))
   (define (from-fraction q)
@@ -762,7 +762,7 @@ Sturm counting is needed after the initial isolation certificate."
     ;; den*x - num = 0 has unique root q = num/den.
     (let num = (numerator q))
     (let den = (denominator q))
-    (match (root (Cons den (Cons (negate num) Nil))
+    (match (root (Cons den (Cons (neg num) Nil))
                  (- q 1)
                  (+ q 1))
       ((Ok x) x)
@@ -771,14 +771,14 @@ Sturm counting is needed after the initial isolation certificate."
   (declare from-integer (Integer -> RealAlgebraic))
   (define (from-integer z)
     "Embed an integer value as a certified real algebraic number."
-    (from-fraction (fromInt z)))
+    (from-fraction (from-int z)))
 
   (declare root (List Integer * Fraction * Fraction -> (Result String RealAlgebraic)))
   (define (root coeffs lo hi)
     "Construct a real algebraic number from a polynomial and isolating interval.
 
-COEFFS is a list of integer coefficients in descending degree order. The
-rational interval `(lo, hi)` must isolate exactly one real root of the
+`coeffs` is a list of integer coefficients in descending degree order. The
+rational interval $(\\mathtt{lo}, \\mathtt{hi})$ must isolate exactly one real root of the
 polynomial."
     (match (poly-int-squarefree-primitive (poly-trim-desc (Poly coeffs)))
       ((Err msg)
@@ -799,8 +799,8 @@ COEFFS is a list of integer coefficients in descending degree order."
            (Ok Nil)
            (let ((sturm (sturm-sequence-desc normalized))
                  (bound (root-bound-desc normalized)))
-             (let ((lo (adjust-lower-bound normalized (fromInt (negate bound))))
-                   (hi (adjust-upper-bound normalized (fromInt bound))))
+             (let ((lo (adjust-lower-bound normalized (from-int (neg bound))))
+                   (hi (adjust-upper-bound normalized (from-int bound))))
                (let ((count (root-count-open normalized sturm lo hi)))
                  (roots-from-intervals normalized
                                         sturm
@@ -929,8 +929,8 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     (let b0 = (poly-trim-desc b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
-    (let la = (toInteger (coalton/list:length ac)))
-    (let lb = (toInteger (coalton/list:length bc)))
+    (let la = (to-integer (coalton/list:length ac)))
+    (let lb = (to-integer (coalton/list:length bc)))
     (let ax = (if (< la lb) (pad-left-int (to-ufix (- lb la)) ac) ac))
     (let bx = (if (< lb la) (pad-left-int (to-ufix (- la lb)) bc) bc))
     (poly-trim-desc (Poly (zip-add-int ax bx))))
@@ -1003,20 +1003,20 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
   (declare poly-int-expt (Poly Integer * Integer -> Poly Integer))
   (define (poly-int-expt p exponent)
     "Exponentiation by squaring for integer polynomials."
-    (if (< exponent 0)
-        (error "Negative polynomial exponent not supported.")
-        (rec go ((result poly-int-one)
-                 (base (poly-trim-desc p))
-                 (e exponent))
-          (cond
-            ((== e 0) (poly-trim-desc result))
-            ((== e 1) (poly-int-mul result base))
-            (True
-             (go (if (== (rem e 2) 1)
-                      (poly-int-mul result base)
-                      result)
-                  (poly-int-mul base base)
-                  (quot e 2)))))))
+    (when (< exponent 0)
+      (error "Negative polynomial exponent not supported."))
+    (rec go ((result poly-int-one)
+             (base (poly-trim-desc p))
+             (e exponent))
+      (cond
+        ((== e 0) (poly-trim-desc result))
+        ((== e 1) (poly-int-mul result base))
+        (True
+         (go (if (== (rem e 2) 1)
+                 (poly-int-mul result base)
+                 result)
+             (poly-int-mul base base)
+             (quot e 2))))))
 
   (declare poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-div-exact a b)
@@ -1040,7 +1040,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
            ((Nil) (values))
            ((Cons c more) (array:set! r i c) (fill more (+ i 1)))))
        (loops:dotimes (i qsize)
-         (let (values c leftover) = (quotRem (array:aref r i) (poly-int-leading b0)))
+         (let (values c leftover) = (quotrem (array:aref r i) (poly-int-leading b0)))
          (when (/= leftover 0)
            (error "Non-integral quotient in exact polynomial division."))
          (array:set! q i c)
@@ -1105,7 +1105,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     "Return deg(p) for a t-polynomial in descending coefficient form."
     (match (tpoly-trim p)
       ((Poly coeffs)
-       (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
+       (max 0 (- (to-integer (coalton/list:length coeffs)) 1)))))
 
   (declare tpoly-leading (Poly (Poly Integer) -> Poly Integer))
   (define (tpoly-leading p)
@@ -1141,8 +1141,8 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     (let b0 = (tpoly-trim b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
-    (let la = (toInteger (coalton/list:length ac)))
-    (let lb = (toInteger (coalton/list:length bc)))
+    (let la = (to-integer (coalton/list:length ac)))
+    (let lb = (to-integer (coalton/list:length bc)))
     (let ax = (if (< la lb) (pad-left-zpoly (to-ufix (- lb la)) ac) ac))
     (let bx = (if (< lb la) (pad-left-zpoly (to-ufix (- la lb)) bc) bc))
     (tpoly-trim (Poly (zip-add-zpoly ax bx))))
@@ -1391,19 +1391,20 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                   (poly-int-neg det))))
            (True
             (let ((pivot0 (arr-get mat n k k)))
-              (if (poly-int-zero? pivot0)
-                  (match (arr-find-nonzero-row mat n (+ k 1) k)
-                    ((None) poly-int-zero)
-                    ((Some swap-row)
-                     (arr-swap-rows! mat n k swap-row)
-                     (go k
-                         (negate det-sign)
-                         prev)))
-                  (progn
-                    (bareiss-update-arr! mat n k pivot0 prev)
-                    (go (+ k 1)
-                        det-sign
-                        pivot0))))))))))
+              (cond
+                ((poly-int-zero? pivot0)
+                 (match (arr-find-nonzero-row mat n (+ k 1) k)
+                   ((None) poly-int-zero)
+                   ((Some swap-row)
+                    (arr-swap-rows! mat n k swap-row)
+                    (go k
+                        (neg det-sign)
+                        prev))))
+                (True
+                 (bareiss-update-arr! mat n k pivot0 prev)
+                 (go (+ k 1)
+                     det-sign
+                     pivot0))))))))))
 
   (declare resultant-tpoly (Poly (Poly Integer) * Poly (Poly Integer) -> Poly Integer))
   (define (resultant-tpoly a b)
@@ -1584,14 +1585,14 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
        (match (linear-rational-root (defining-polynomial x))
          ((Some q) (from-fraction (+ (* scale q) offset)))
          ((None)
-          (let substitution = (Poly (make-list (/ 1 scale) (/ (negate offset) scale))))
+          (let substitution = (Poly (make-list (/ 1 scale) (/ (neg offset) scale))))
           (let transformed =
             (rec go ((cs (coefficients (defining-polynomial x))) (acc poly-frac-zero))
               (match cs
                 ((Nil) acc)
                 ((Cons c more)
                  (go more (poly-frac-add (poly-frac-mul acc substitution)
-                                         (Poly (make-list (fromInt c)))))))))
+                                         (Poly (make-list (from-int c)))))))))
           (let p = (poly-int-primitive (poly-frac-clear-denominators transformed)))
           (let a = (+ (* scale (lower-bound x)) offset))
           (let b = (+ (* scale (upper-bound x)) offset))
@@ -1626,7 +1627,7 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
          ((Some q) (affine-certified -1 q y))
          ((None)
           (match (linear-rational-root (defining-polynomial y))
-            ((Some q) (affine-certified 1 (negate q) x))
+            ((Some q) (affine-certified 1 (neg q) x))
             ((None)
              (combine-certified poly-frac-sub poly-for-diff
                                 (fn (a b) (Some (interval-diff a b))) x y))))))))
@@ -1657,38 +1658,134 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
          ((Some q) (affine-certified (/ 1 q) 0 x))
          ((None)
           (match (linear-rational-root (defining-polynomial x))
-            ((Some q) (affine-certified q 0 (reciprocal-certified y)))
+            ((Some q) (affine-certified q 0 (recip-certified y)))
             ((None)
              (combine-certified
               (fn (a b)
                 (poly-frac-mul a (poly-frac-inverse-mod b (poly-int->frac (.origin-poly (.ra-origin x))))))
               poly-for-quot interval-quot x y))))))))
 
-  (declare reciprocal-certified (RealAlgebraic -> RealAlgebraic))
-  (define (reciprocal-certified x)
+  (declare recip-certified (RealAlgebraic -> RealAlgebraic))
+  (define (recip-certified x)
     "Reverse the defining polynomial and reciprocate an interval excluding zero."
-    (if (zero-ra? x)
-        (error "Division by zero: reciprocal of algebraic zero is undefined.")
-        (match (linear-rational-root (defining-polynomial x))
-          ((Some q) (from-fraction (/ 1 q)))
-          ((None)
-           (let p = (poly-int-primitive
-                     (Poly (coalton/list:reverse (coefficients (defining-polynomial x))))))
-           (rec go ((a x))
-             (let lo = (lower-bound a))
-             (let hi = (upper-bound a))
-             (if (and (<= lo 0) (>= hi 0))
-                 (go (refine-native a))
-                 (with-coordinate (from-normalized-interval p (/ 1 hi) (/ 1 lo))
-                                  (.ra-origin x)
-                                  (poly-frac-inverse-mod (.ra-coordinate x)
-                                                        (poly-int->frac (.origin-poly (.ra-origin x)))))))))))
+    (when (zero-ra? x)
+      (error "Division by zero: reciprocal of algebraic zero is undefined."))
+    (match (linear-rational-root (defining-polynomial x))
+      ((Some q) (from-fraction (/ 1 q)))
+      ((None)
+       (let p = (poly-int-primitive
+                 (Poly (coalton/list:reverse (coefficients (defining-polynomial x))))))
+       (rec go ((a x))
+         (let lo = (lower-bound a))
+         (let hi = (upper-bound a))
+         (if (and (<= lo 0) (>= hi 0))
+             (go (refine-native a))
+             (with-coordinate (from-normalized-interval p (/ 1 hi) (/ 1 lo))
+                              (.ra-origin x)
+                              (poly-frac-inverse-mod (.ra-coordinate x)
+                                                    (poly-int->frac (.origin-poly (.ra-origin x))))))))))
   (declare poly-frac-mul (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-mul a b)
     "Multiply using integer convolution and one shared denominator."
-    (poly-frac-scale (mkFraction 1 (* (poly-frac-denominator a) (poly-frac-denominator b)))
+    (poly-frac-scale (make-fraction 1 (* (poly-frac-denominator a) (poly-frac-denominator b)))
                      (poly-int->frac (poly-int-mul (poly-frac-clear-denominators a)
                                                   (poly-frac-clear-denominators b)))))
+
+  (define-instance (Eq (Poly Integer))
+    (define (== a b)
+      (== (coefficients (poly-trim-desc a))
+          (coefficients (poly-trim-desc b)))))
+
+  (define-instance (Additive (Poly Integer))
+    (inline)
+    (define (+ a b) (poly-int-add a b))
+    (define zero poly-int-zero))
+
+  (define-instance (AdditiveGroup (Poly Integer))
+    (inline)
+    (define (- a b) (poly-int-sub a b))
+    (inline)
+    (define (neg a) (poly-int-neg a)))
+
+  (define-instance (Multiplicative (Poly Integer))
+    (inline)
+    (define (* a b) (poly-int-mul a b))
+    (define one poly-int-one))
+
+  (define-instance (Semiring (Poly Integer)))
+
+  (define-instance (Ring (Poly Integer))
+    (inline)
+    (define (from-int n) (Poly (Cons n Nil))))
+
+  (define-instance (Num (Poly Integer)))
+
+  (define-instance (Scale Integer (Poly Integer))
+    (inline)
+    (define (scale k p) (poly-int-scale k p)))
+
+  (define-instance (Module Integer (Poly Integer)))
+
+  (define-instance (Eq (Poly Fraction))
+    (define (== a b)
+      (== (coefficients (poly-frac-trim a))
+          (coefficients (poly-frac-trim b)))))
+
+  (define-instance (Additive (Poly Fraction))
+    (inline)
+    (define (+ a b) (poly-frac-add a b))
+    (define zero poly-frac-zero))
+
+  (define-instance (AdditiveGroup (Poly Fraction))
+    (inline)
+    (define (- a b) (poly-frac-sub a b))
+    (inline)
+    (define (neg a) (poly-frac-neg a)))
+
+  (define-instance (Multiplicative (Poly Fraction))
+    (inline)
+    (define (* a b) (poly-frac-mul a b))
+    (define one (Poly (Cons 1 Nil))))
+
+  (define-instance (Semiring (Poly Fraction)))
+
+  (define-instance (Ring (Poly Fraction))
+    (inline)
+    (define (from-int n) (Poly (Cons (from-int n) Nil))))
+
+  (define-instance (Num (Poly Fraction)))
+
+  (define-instance (Scale Fraction (Poly Fraction))
+    (inline)
+    (define (scale k p) (poly-frac-scale k p)))
+
+  (define-instance (Module Fraction (Poly Fraction)))
+  (define-instance (VectorSpace Fraction (Poly Fraction)))
+
+  (define-instance (GcdDomain (Poly Fraction))
+    (define (unit-part p)
+      (let p0 = (poly-frac-trim p))
+      (if (poly-frac-zero? p0)
+          (Poly (Cons 1 Nil))
+          (Poly (Cons (poly-frac-leading p0) Nil))))
+    (define (normal-part p)
+      (poly-frac-monic p))
+    (define (exact-quot a b)
+      (euclidean-exact-quot a b))
+    (define (gcd a b)
+      (poly-frac-gcd a b)))
+
+  (define-instance (EuclideanDomain (Poly Fraction))
+    (define (euclidean-degree p)
+      (poly-frac-degree p))
+    (define (quotrem a b)
+      (match (poly-frac-divrem a b)
+        ((Tuple q r) (values q r))))
+    (define (quot a b)
+      (match (poly-frac-divrem a b)
+        ((Tuple q _) q)))
+    (define (rem a b)
+      (poly-frac-rem a b)))
 
   (declare poly-frac-pow-mod (Poly Fraction * Integer * Poly Fraction -> Poly Fraction))
   (declare poly-frac-inverse-mod (Poly Fraction * Poly Fraction -> Poly Fraction))
@@ -1706,9 +1803,9 @@ reciprocal at the selected root even when the origin polynomial is reducible."
               (poly-frac-rem (poly-frac-scale (/ 1 (poly-frac-leading a)) u) modulus)
               (match (poly-frac-divrem modulus a)
                 ((Tuple reduced _)
-                 (if (<= (poly-frac-degree reduced) 0)
-                     (error "No nonzero component for algebraic reciprocal.")
-                     (poly-frac-inverse-mod value reduced)))))
+                 (when (<= (poly-frac-degree reduced) 0)
+                   (error "No nonzero component for algebraic reciprocal."))
+                 (poly-frac-inverse-mod value reduced))))
           (match (poly-frac-divrem a b)
             ((Tuple q r)
              (go b r v (poly-frac-sub u (poly-frac-mul q v))))))))
@@ -1826,7 +1923,7 @@ nonzero at x's endpoints, refinement terminates for every candidate."
               ((None) (pick more)))))))))
   (declare isolating-interval (RealAlgebraic -> (Tuple Fraction Fraction)))
   (define (isolating-interval x)
-    "Return the current rational isolating interval `(lo, hi)` for `x`."
+    "Return the current rational isolating interval $(\\mathtt{lo}, \\mathtt{hi})$ for `x`."
     (Tuple (lower-bound x) (upper-bound x)))
 
   (declare degree (RealAlgebraic -> Integer))
@@ -1844,18 +1941,18 @@ nonzero at x's endpoints, refinement terminates for every candidate."
     "Refine `x` until its isolating interval width is at most `width`.
 
 `width` must be positive."
-    (if (<= width 0)
-        (error "Requested width must be positive.")
-        (rec go ((current x))
-          (if (<= (- (upper-bound current)
-                     (lower-bound current))
-                  width)
-              current
-              (go (refine-native current))))))
+    (when (<= width 0)
+      (error "Requested width must be positive."))
+    (rec go ((current x))
+      (if (<= (- (upper-bound current)
+                 (lower-bound current))
+              width)
+          current
+          (go (refine-native current)))))
 
-  (declare approx (UFix * RealAlgebraic -> Fraction))
-  (define (approx bits x)
-    "Return a rational approximation `q` such that `|q - x| < 2^-bits`."
+  (declare approx-fraction (UFix * RealAlgebraic -> Fraction))
+  (define (approx-fraction bits x)
+    "Return a rational approximation $q$ such that $\\vert q - x \\vert < 2^{-\\mathtt{bits}}$."
     (let tight = (refine-to-width (approx-eps bits) x))
     (/ (+ (lower-bound tight)
           (upper-bound tight))
@@ -1963,7 +2060,7 @@ Rounding is half-up at the final digit, computed with exact integer arithmetic."
 Agreement of rounded endpoints certifies the output. A polynomial test at
 the intervening half-integer boundary resolves exact ties without an
 unbounded refinement loop."
-    (let scale = (fromInt (pow10 digits)))
+    (let scale = (from-int (pow10 digits)))
     (match (linear-rational-root (defining-polynomial x))
       ((Some q) (rational->fixed-decimal q digits))
       ((None)
@@ -1979,10 +2076,10 @@ unbounded refinement loop."
                    (if (== left right)
                        left
                        (let ((negative (< hi 0))
-                             (mag-lo (if (< hi 0) (negate hi) lo)))
-                         (let ((boundary (/ (+ (fromInt (floor (+ (* mag-lo scale) 1/2))) 1/2)
+                             (mag-lo (if (< hi 0) (neg hi) lo)))
+                         (let ((boundary (/ (+ (from-int (floor (+ (* mag-lo scale) 1/2))) 1/2)
                                             scale)))
-                           (let ((q (if negative (negate boundary) boundary)))
+                           (let ((q (if negative (neg boundary) boundary)))
                              (if (contains-rational a q)
                                  (rational->fixed-decimal q digits)
                                  (go (refine-native a))))))))))))))
@@ -2003,14 +2100,14 @@ continued-fraction prefix without growing the call stack."
     (rec go ((l lo) (h hi) (a 1) (b 0) (c 0) (d 1))
       (let k = (floor l))
       (cond
-        ((== l (fromInt k))
-         (mkFraction (+ (* a k) b) (+ (* c k) d)))
+        ((== l (from-int k))
+         (make-fraction (+ (* a k) b) (+ (* c k) d)))
         ((< k (floor h))
          (let j = (+ k 1))
-         (mkFraction (+ (* a j) b) (+ (* c j) d)))
+         (make-fraction (+ (* a j) b) (+ (* c j) d)))
         (True
-         (go (/ 1 (- h (fromInt k)))
-             (/ 1 (- l (fromInt k)))
+         (go (/ 1 (- h (from-int k)))
+             (/ 1 (- l (from-int k)))
              (+ (* a k) b) a (+ (* c k) d) c)))))
   (declare linear-rational-root (Poly Integer -> (Optional Fraction)))
   (define (linear-rational-root p)
@@ -2019,7 +2116,7 @@ continued-fraction prefix without growing the call stack."
       ((Poly (Cons an (Cons a0 (Nil))))
        (if (== an 0)
            None
-           (Some (mkFraction (negate a0) an))))
+           (Some (make-fraction (neg a0) an))))
       (_ None)))
 
   (declare rational-certificate (RealAlgebraic -> (Optional Fraction)))
@@ -2036,7 +2133,7 @@ certifies it. This also handles polynomials with an irrelevant zero root."
       ((Some q) (Some q))
       ((None)
        (let bound = (abs (poly-int-leading p)))
-       (let tight = (refine-to-width (mkFraction 1 (* 2 (* bound bound))) x))
+       (let tight = (refine-to-width (make-fraction 1 (* 2 (* bound bound))) x))
        (let lo = (lower-bound tight))
        (let hi = (upper-bound tight))
        (let q = (simplest-rational-closed lo hi))
@@ -2070,20 +2167,20 @@ No rationality decision or coefficient-dependent precision is needed."
       (let h = (floor (upper-bound a)))
       (cond
         ((== l h) l)
-        ((and (== h (+ l 1)) (contains-rational a (fromInt h))) h)
+        ((and (== h (+ l 1)) (contains-rational a (from-int h))) h)
         (True (go (refine-native a))))))
 
   (declare ceiling-certified (RealAlgebraic -> Integer))
   (define (ceiling-certified x)
     "The ceiling is the floor, plus one unless x equals that integer."
     (let z = (floor-certified x))
-    (if (contains-rational x (fromInt z)) z (+ z 1)))
+    (if (contains-rational x (from-int z)) z (+ z 1)))
 
   (declare truncate-certified (RealAlgebraic -> Integer))
   (define (truncate-certified x)
     "Certified truncation toward zero, with one integer-boundary test."
     (let z = (floor-certified x))
-    (if (or (>= z 0) (contains-rational x (fromInt z))) z (+ z 1))))
+    (if (or (>= z 0) (contains-rational x (from-int z))) z (+ z 1))))
 (coalton-toplevel
   (define-instance (Eq RealAlgebraic)
     (define (== a b)
@@ -2092,24 +2189,83 @@ No rationality decision or coefficient-dependent precision is needed."
         (_ False))))
 
   (define-instance (Ord RealAlgebraic)
+    (inline)
     (define (<=> a b)
       (compare-certified a b)))
 
-  (define-instance (Num RealAlgebraic)
+  (define-instance (Additive RealAlgebraic)
+    (inline)
     (define (+ a b)
       (add-certified a b))
+    (define zero (from-integer 0)))
+
+  (define-instance (AdditiveGroup RealAlgebraic)
+    (inline)
     (define (- a b)
       (sub-certified a b))
+    (inline)
+    (define (neg a)
+      (affine-certified -1 0 a)))
+
+  (define-instance (Multiplicative RealAlgebraic)
+    (inline)
     (define (* a b)
       (mul-certified a b))
-    (define (fromInt z)
+    (define one (from-integer 1)))
+
+  (define-instance (Semiring RealAlgebraic))
+
+  (define-instance (Ring RealAlgebraic)
+    (inline)
+    (define (from-int z)
       (from-integer z)))
 
+  (define-instance (Num RealAlgebraic))
+
   (define-instance (Reciprocable RealAlgebraic)
+    (inline)
     (define (/ a b)
       (div-certified a b))
-    (define (reciprocal a)
-      (reciprocal-certified a)))
+    (inline)
+    (define (recip a)
+      (recip-certified a)))
+
+  (define-instance (GcdDomain RealAlgebraic)
+    (inline)
+    (define (unit-part x)
+      (if (zero-ra? x) one x))
+    (inline)
+    (define (normal-part x)
+      (if (zero-ra? x) zero one))
+    (inline)
+    (define (exact-quot a b)
+      (if (zero-ra? b) None (Some (/ a b))))
+    (inline)
+    (define (gcd a b)
+      (if (and (zero-ra? a) (zero-ra? b)) zero one)))
+
+  (define-instance (Scale Fraction RealAlgebraic)
+    (inline)
+    (define (scale q x)
+      (affine-certified q 0 x)))
+
+  (define-instance (Module Fraction RealAlgebraic))
+
+  (define-instance (Scale RealAlgebraic RealAlgebraic)
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance (Module RealAlgebraic RealAlgebraic))
+
+  (define-instance (ConjugateRing RealAlgebraic)
+    (inline)
+    (define (conjugate x) x))
+
+  (define-instance (VectorSpace RealAlgebraic RealAlgebraic))
+
+  (define-instance (InnerSpace RealAlgebraic RealAlgebraic)
+    (inline)
+    (define (inner-product a b) (* a b)))
 
   (define-instance (Radical RealAlgebraic)
     (define (sqrt x)
@@ -2134,33 +2290,59 @@ No rationality decision or coefficient-dependent precision is needed."
          (nth-root-certified-positive-index n x)))))
 
   (define-instance (Dividable Integer RealAlgebraic)
+    (inline)
     (define (general/ x y)
-      (from-fraction (mkFraction x y))))
+      (from-fraction (make-fraction x y))))
 
   (define-instance (Into Integer RealAlgebraic)
+    (inline)
     (define (into x)
       (from-integer x)))
 
   (define-instance (Into Fraction RealAlgebraic)
+    (inline)
     (define (into x)
       (from-fraction x)))
 
   (define-instance (TryInto RealAlgebraic Fraction)
-    (define (tryInto x)
+    (inline)
+    (define (try-into x)
       (try-fraction x)))
 
   (define-instance (Quantizable RealAlgebraic)
+    (inline)
     (define (floor x)
       (floor-certified x))
+    (inline)
     (define (ceiling x)
       (ceiling-certified x))
     (define (proper x)
       (let t = (truncate-certified x))
-      (values t (- x (fromInt t)))))
+      (values t (- x (from-int t)))))
 
-  (define-instance (Real RealAlgebraic)
-    (define (real-approx bits x)
-      (approx bits x))))
+  (define-instance (Approximable RealAlgebraic Fraction)
+    (inline)
+    (define (approx bits x)
+      (approx-fraction bits x)))
+
+  (define-instance (Approximable RealAlgebraic dyadic:Dyadic)
+    (define (approx bits x)
+      (approx bits (approx-fraction (+ bits 1) x))))
+
+  (define-instance (Approximable RealAlgebraic bf:BigFloat)
+    (define (approx bits x)
+      (let p = (max 1 bits))
+      (bf:with-precision (fn () (into (approx-fraction (+ p 4) x))) :precision p)))
+
+  (define-instance (Approximable RealAlgebraic F32)
+    (define (approx bits x)
+      (fromfrac (approx-fraction (max bits 24) x))))
+
+  (define-instance (Approximable RealAlgebraic F64)
+    (define (approx bits x)
+      (fromfrac (approx-fraction (max bits 53) x)))))
+
+(coalton/math/complex::%define-standard-complex-instances RealAlgebraic)
 
 ;; Specializations cover every built-in Integral exponent type. The generic
 ;; Num algorithm would repeatedly rebuild certificates; these wrappers reduce
@@ -2170,13 +2352,13 @@ No rationality decision or coefficient-dependent precision is needed."
            (signed (cl:intern (cl:format cl:nil "SIGNED-POWER-~A" type))))
     `(coalton-toplevel
        (declare ,positive (RealAlgebraic * ,type -> RealAlgebraic))
-       (define (,positive x n) (pow-ra-positive (toInteger n) x))
+       (define (,positive x n) (pow-ra-positive (to-integer n) x))
        (specialize ^ ,positive (RealAlgebraic * ,type -> RealAlgebraic))
        (declare ,signed (RealAlgebraic * ,type -> RealAlgebraic))
        (define (,signed x n)
-         (let exponent = (toInteger n))
+         (let exponent = (to-integer n))
          (if (< exponent 0)
-             (reciprocal-certified (pow-ra-positive (negate exponent) x))
+             (recip-certified (pow-ra-positive (neg exponent) x))
              (pow-ra-positive exponent x)))
        (specialize ^^ ,signed (RealAlgebraic * ,type -> RealAlgebraic)))))
 
@@ -2191,4 +2373,4 @@ No rationality decision or coefficient-dependent precision is needed."
 (define-algebraic-powers I64)
 (define-algebraic-powers Bit)
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/XMATH/REALALGEBRAIC")
+(sb-ext:lock-package "COALTON/XMATH/REAL-ALGEBRAIC")

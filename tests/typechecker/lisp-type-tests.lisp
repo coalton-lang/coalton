@@ -8,7 +8,7 @@
   (declare complex-type-fn ((Complex :t) -> (Complex :t)))
   (define (complex-type-fn x) x)
 
-  (declare complex-type-fn-1 ((Complex Double-Float) -> (Complex Double-Float)))
+  (declare complex-type-fn-1 ((Complex F64) -> (Complex F64)))
   (define (complex-type-fn-1 x) x)
 
   (declare lisp-array-fn ((coalton/lisparray:LispArray :t) -> :t))

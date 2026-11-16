@@ -57,11 +57,11 @@
   (define-instance (Eq ConversionScalar)
     (define (== (ConversionScalar x) (ConversionScalar y)) (== x y)))
 
-  (define-instance (Num ConversionScalar)
+  (define-num ConversionScalar
     (define (+ (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (+ x y)))
     (define (- (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (- x y)))
     (define (* (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (* x y)))
-    (define fromInt ConversionScalar))
+    (define from-int ConversionScalar))
 
   (define-instance (math:ComplexComponent ConversionScalar)
     (define (math:complex re im) (coalton/math/complex::%Complex re im))

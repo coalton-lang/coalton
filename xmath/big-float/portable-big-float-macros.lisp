@@ -1,6 +1,6 @@
 ;;;; portable-big-float-macros.lisp
 ;;;;
-;;;; Helper macros used by the portable Big-Float Coalton implementation.
+;;;; Helper macros used by the portable BigFloat Coalton implementation.
 
 (cl:in-package #:coalton/xmath/big-float)
 
@@ -9,21 +9,21 @@
     `(progn
        ,@(cl:loop :for integer-type :in '(Bit U8 I8 U16 I16 U32 I32 U64 I64 UFix IFix)
                   :collect
-                  `(define-instance (Into ,integer-type Big-Float)
+                  `(define-instance (Into ,integer-type BigFloat)
                      (inline)
                      (define (into a)
-                       (integer->big-float-exact (toInteger a)))))))
+                       (integer->big-float-exact (to-integer a)))))))
 
-  (cl:defmacro define-big-float-tryinto-float (coalton-float lisp-float neg-zero least-positive most-positive)
+  (cl:defmacro define-big-float-try-into-float (coalton-float lisp-float neg-zero least-positive most-positive)
     (cl:let* ((digits (cl:float-digits (cl:coerce 1 lisp-float)))
               (min-exp (cl:nth-value 1 (cl:integer-decode-float
                                         (cl:symbol-value least-positive))))
               (max-exp (cl:nth-value 1 (cl:integer-decode-float
                                         (cl:symbol-value most-positive)))))
-      `(define-instance (TryInto Big-Float ,coalton-float)
-         (define (tryInto a)
+      `(define-instance (TryInto BigFloat ,coalton-float)
+         (define (try-into a)
            (match a
-             ((BFConst f) (tryInto (f)))
+             ((BFConst f) (try-into (f)))
              ((BFInf) (Some infinity))
              ((BFNegInf) (Some negative-infinity))
              ((BFNaN) (Some nan))
@@ -47,9 +47,9 @@
               (max-exp (cl:nth-value 1 (cl:integer-decode-float
                                         (cl:symbol-value most-positive)))))
       `(progn
-         (declare ,name (Big-Float -> ,coalton-float))
+         (declare ,name (BigFloat -> ,coalton-float))
          (define (,name a)
-           "Round a Big-Float to the nearest representable native float, with ties to even."
+           "Round a BigFloat to the nearest representable native float, with ties to even."
            (match a
              ((BFConst f) (,name (f)))
              ((BFInf) infinity)

@@ -105,10 +105,10 @@
   (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
   (is (== (/ one one) 1))
   (is (== (/ 0 one) 0))
-  (is (== (math:reciprocal one) 1))
+  (is (== (math:recip one) 1))
   (let doubled = (+ sqrt2 sqrt2))
   (is (== (/ doubled doubled) 1))
-  (is (== (* (math:reciprocal doubled) doubled) 1))
+  (is (== (* (math:recip doubled) doubled) 1))
   ;; Separate origins force the general quotient resultant, so identity
   ;; shortcuts cannot hide a spurious common t factor in its inputs.
   (let numerator = (unwrap-ok (ra:root (make-list 1 0 -2 0) 1 2)))
@@ -137,28 +137,28 @@
   ;; The full fortieth-power identity is also tested below in
   ;; realalgebraic-unary-power-degree-test.
   (let lhs =
-    (^ (+ (math:sqrt (the ra:RealAlgebraic (fromInt 2)))
-          (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
+    (^ (+ (math:sqrt (the ra:RealAlgebraic (from-int 2)))
+          (math:sqrt (the ra:RealAlgebraic (from-int 3))))
        2))
   (let rhs =
-    (^ (+ (the ra:RealAlgebraic (fromInt 5))
-          (* (the ra:RealAlgebraic (fromInt 2))
-             (math:sqrt (the ra:RealAlgebraic (fromInt 6)))))
+    (^ (+ (the ra:RealAlgebraic (from-int 5))
+          (* (the ra:RealAlgebraic (from-int 2))
+             (math:sqrt (the ra:RealAlgebraic (from-int 6)))))
        1))
   (is (== lhs rhs))
   (is (== (- lhs rhs) 0)))
 
 (define-test realalgebraic-radical-test ()
-  (let two = (the ra:RealAlgebraic (fromInt 2)))
-  (let n33 = (the ra:RealAlgebraic (fromInt 33)))
+  (let two = (the ra:RealAlgebraic (from-int 2)))
+  (let n33 = (the ra:RealAlgebraic (from-int 33)))
   (let root33 = (math:nth-root 5 n33))
-  (is (== (math:sqrt (the ra:RealAlgebraic (fromInt 9)))
-          (the ra:RealAlgebraic (fromInt 3))))
+  (is (== (math:sqrt (the ra:RealAlgebraic (from-int 9)))
+          (the ra:RealAlgebraic (from-int 3))))
   (is (== (math:sqrt two) sqrt2))
-  (is (== (math:nth-root 3 (the ra:RealAlgebraic (fromInt 27)))
-          (the ra:RealAlgebraic (fromInt 3))))
-  (is (== (math:nth-root 3 (the ra:RealAlgebraic (fromInt -27)))
-          (the ra:RealAlgebraic (fromInt -3))))
+  (is (== (math:nth-root 3 (the ra:RealAlgebraic (from-int 27)))
+          (the ra:RealAlgebraic (from-int 3))))
+  (is (== (math:nth-root 3 (the ra:RealAlgebraic (from-int -27)))
+          (the ra:RealAlgebraic (from-int -3))))
   (is (== (^ root33 5) n33)))
 
 (define-test realalgebraic-radical-interval-selection-test ()
@@ -183,21 +183,21 @@
         (cl:handler-case
             (cl:progn
               (coalton:coalton
-                (math:sqrt (the ra:RealAlgebraic (fromInt -1))))
+                (math:sqrt (the ra:RealAlgebraic (from-int -1))))
               cl:nil)
           (cl:error () cl:t))))
   (is (lisp (-> Boolean) ()
         (cl:handler-case
             (cl:progn
               (coalton:coalton
-                (math:nth-root 2 (the ra:RealAlgebraic (fromInt -1))))
+                (math:nth-root 2 (the ra:RealAlgebraic (from-int -1))))
               cl:nil)
           (cl:error () cl:t))))
   (is (lisp (-> Boolean) ()
         (cl:handler-case
             (cl:progn
               (coalton:coalton
-                (math:nth-root 0 (the ra:RealAlgebraic (fromInt 1))))
+                (math:nth-root 0 (the ra:RealAlgebraic (from-int 1))))
               cl:nil)
           (cl:error () cl:t)))))
 
@@ -258,33 +258,41 @@
   (let tight = (ra:refine-to-width 1/1024 sqrt2))
   (is (<= (interval-width tight) 1/1024))
 
-  (let q = (math:real-approx 24 sqrt2))
+  (let q = (math:rational-approx 24 sqrt2))
   (is (< (abs (- (* q q) 2)) 1/100000))
+  (let q-simple = (math:simplest-fraction 10 sqrt2))
+  (is (<= (abs (- (* q-simple q-simple) 2)) 1/100))
+  (let bf-sqrt2 = (the big-float:BigFloat (approx 64 sqrt2)))
+  (is (<= (abs (- (unwrap (the (Optional Fraction) (try-into (* bf-sqrt2 bf-sqrt2)))) 2))
+          (math:^^ 2 -50)))
+  (let z-alg = (Complex sqrt2 (neg sqrt2)))
+  (let z-frac = (the (Complex Fraction) (approx 20 z-alg)))
+  (is (== (real-part z-frac) (neg (imag-part z-frac))))
 
   (let rational-root = (unwrap-ok (ra:root (make-list 2 -3) 1 2)))
   (is (ra:rational? rational-root))
   (is (not (ra:rational? sqrt2)))
   (is (ra:rational? rational-root))
-  (is (== (unwrap (the (Optional Fraction) (tryInto rational-root))) 3/2)))
+  (is (== (unwrap (the (Optional Fraction) (try-into rational-root))) 3/2)))
 
 (define-test realalgebraic-rational-reconstruction-test ()
   (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
   (is (ra:rational? one))
-  (is (== (unwrap (the (Optional Fraction) (tryInto one))) 1))
+  (is (== (unwrap (the (Optional Fraction) (try-into one))) 1))
   (is (== (floor one) 1))
   (is (== (ceiling one) 1))
   ;; Large constant: trial division formerly required about 10^20 steps.
   (let huge = (^ (the Integer 10) 20))
-  (let irrational = (unwrap-ok (ra:root (make-list 1 0 (negate (+ (* huge huge) 1)))
-                                       (fromInt huge) (fromInt (+ huge 1)))))
+  (let irrational = (unwrap-ok (ra:root (make-list 1 0 (neg (+ (* huge huge) 1)))
+                                       (from-int huge) (from-int (+ huge 1)))))
   (is (not (ra:rational? irrational)))
   (is (== (floor irrational) huge))
   ;; Nonlinear rational roots of either sign with large denominators.
   (let den = (+ huge 39))
   (let pos = (unwrap-ok (ra:root (make-list den (- 0 (+ (* 2 den) 1)) 2) 0 1)))
   (let neg = (unwrap-ok (ra:root (make-list den (+ (* 2 den) 1) 2) -1 0)))
-  (is (== (unwrap (the (Optional Fraction) (tryInto pos))) (math:general/ 1 den)))
-  (is (== (unwrap (the (Optional Fraction) (tryInto neg))) (math:general/ -1 den)))
+  (is (== (unwrap (the (Optional Fraction) (try-into pos))) (math:general/ 1 den)))
+  (is (== (unwrap (the (Optional Fraction) (try-into neg))) (math:general/ -1 den)))
   ;; A closed-interval endpoint may be the simplest rational but is not a root.
   (is (not (ra:rational? (unwrap-ok (ra:root (make-list 1 0 -2) 1 3/2))))))
 
@@ -308,7 +316,7 @@
   ;; Large leading coefficient must not force thousands of precision bits
   ;; just to determine a floor that is already nearly fixed by the interval.
   (let a = (^ (the Integer 10) 1000))
-  (let x = (unwrap-ok (ra:root (make-list a 0 (negate (+ (* 2 a) 1))) 1 2)))
+  (let x = (unwrap-ok (ra:root (make-list a 0 (neg (+ (* 2 a) 1))) 1 2)))
   (is (== (floor x) 1))
   (is (== (ceiling x) 2))
   (is
@@ -346,7 +354,7 @@
   (let hi = 125001/1000000)
   (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -1) lo hi))) "0.13"))
   (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -17 2) lo hi))) "0.13"))
-  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 17 2) (negate hi) (negate lo)))) "-0.13"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 17 2) (neg hi) (neg lo)))) "-0.13"))
   ;; Irrationals immediately to either side of the rounding discontinuity.
   (let scale = (^ (the Integer 10) 16))
   (let above = (unwrap-ok (ra:root (make-list scale 0 -156250000000001) lo hi)))
@@ -364,7 +372,7 @@
          (match (ra-fuzz-fraction seed)
            ((Tuple next-seed q)
             (let x = (the ra:RealAlgebraic (into q)))
-            (match (the (Optional Fraction) (tryInto x))
+            (match (the (Optional Fraction) (try-into x))
               ((None) False)
               ((Some qx)
                (and (ra:rational? x)
@@ -519,15 +527,15 @@
   (is (== (/ (- translated 3) 2) sqrt2))
   (is (== (+ (- 3 sqrt2) sqrt2) 3))
   (is (== (* (/ sqrt2 -3) -3) sqrt2))
-  (is (== (ra::degree (math:reciprocal sqrt2)) 2))
-  (is (== (* (math:reciprocal sqrt2) sqrt2) 1))
+  (is (== (ra::degree (math:recip sqrt2)) 2))
+  (is (== (* (math:recip sqrt2) sqrt2) 1))
   ;; Reciprocal drops an irrelevant zero root.
   (let x = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
-  (is (== (ra::degree (math:reciprocal x)) 1))
-  (is (== (math:reciprocal x) 1))
+  (is (== (ra::degree (math:recip x)) 1))
+  (is (== (math:recip x) 1))
   ;; Refine an enclosure crossing zero before inverting its endpoints.
   (let wide = (unwrap-ok (ra:root (make-list 1 -4 2) -1 1)))
-  (is (== (* (math:reciprocal wide) wide) 1))
+  (is (== (* (math:recip wide) wide) 1))
   (is (== (ra::degree (+ (the ra:RealAlgebraic (into 17/23)) (into -8/19))) 1)))
 
 (define-test realalgebraic-shared-generator-test ()
@@ -550,7 +558,7 @@
   (let x = (unwrap-ok (ra:root (make-list 1 -3 2 0) 3/2 5/2)))
   (let denominator = (- x 1))
   (is (== (/ x denominator) 2))
-  (let inverse = (math:reciprocal denominator))
+  (let inverse = (math:recip denominator))
   (is (== (* inverse denominator) 1))
   (is (<= (ra::degree (^ inverse 2)) (ra::degree inverse))))
 
@@ -561,14 +569,14 @@
    (rec go ((i (the Integer 1)))
      (if (> i 18)
          True
-         (let ((num (if (== (mod i 2) 0) i (negate i)))
+         (let ((num (if (== (mod i 2) 0) i (neg i)))
                (den 23))
            (let ((q (math:general/ num den)))
-             (let ((x (unwrap-ok (ra:root (make-list den (negate num) (* -3 den) (* 3 num))
+             (let ((x (unwrap-ok (ra:root (make-list den (neg num) (* -3 den) (* 3 num))
                                         (- q 1/100) (+ q 1/100)))))
                (let ((actual (/ x (- (^ x 2) 3)))
                      (expected (/ q (- (* q q) 3))))
-                 (and (== (unwrap (the (Optional Fraction) (tryInto actual))) expected)
+                 (and (== (unwrap (the (Optional Fraction) (try-into actual))) expected)
                       (<= (ra::degree actual) 3)
                       (go (+ i 1)))))))))))
 
@@ -593,16 +601,16 @@
   (is (== (^ negative 4) 4)))
 
 (define-test realalgebraic-performance-smoke-test ()
-  (let s2 = (math:sqrt (the ra:RealAlgebraic (fromInt 2))))
-  (let s3 = (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
+  (let s2 = (math:sqrt (the ra:RealAlgebraic (from-int 2))))
+  (let s3 = (math:sqrt (the ra:RealAlgebraic (from-int 3))))
   (let sum = (+ s2 s3))
-  (let expected = (+ (the ra:RealAlgebraic (fromInt 5))
-                     (* (the ra:RealAlgebraic (fromInt 2))
-                        (math:sqrt (the ra:RealAlgebraic (fromInt 6))))))
+  (let expected = (+ (the ra:RealAlgebraic (from-int 5))
+                     (* (the ra:RealAlgebraic (from-int 2))
+                        (math:sqrt (the ra:RealAlgebraic (from-int 6))))))
   (is (== (* sum sum) expected))
-  (is (== s2 (math:sqrt (the ra:RealAlgebraic (fromInt 2)))))
-  (is (== (^ (math:nth-root 3 (the ra:RealAlgebraic (fromInt 5))) 3)
-          (the ra:RealAlgebraic (fromInt 5)))))
+  (is (== s2 (math:sqrt (the ra:RealAlgebraic (from-int 2)))))
+  (is (== (^ (math:nth-root 3 (the ra:RealAlgebraic (from-int 5))) 3)
+          (the ra:RealAlgebraic (from-int 5)))))
 
 (define-test realalgebraic-fuzz-root-apis-test ()
   ;; Exercise both root construction and real-roots across many small polynomials.
@@ -615,19 +623,19 @@
            ((Tuple seed1 n0)
             (let ((k (math:isqrt n0))
                   (seed2 (ra-fuzz-next seed1)))
-              (let ((sq (unwrap-ok (ra:root (make-list 1 0 (negate n0))
-                                            (fromInt k)
-                                            (fromInt (+ k 1)))))
+              (let ((sq (unwrap-ok (ra:root (make-list 1 0 (neg n0))
+                                            (from-int k)
+                                            (from-int (+ k 1)))))
                     (seed3 (ra-fuzz-next seed2))
                     (a (ra-fuzz-bounded seed2 -25 25)))
                 (let ((b0 (ra-fuzz-bounded seed3 -25 25)))
                   (let ((b (if (== a b0) (+ b0 1) b0)))
-                    (let ((roots (unwrap-ok (ra:real-roots (make-list 1 (negate (+ a b)) (* a b))))))
+                    (let ((roots (unwrap-ok (ra:real-roots (make-list 1 (neg (+ a b)) (* a b))))))
                       (match roots
                         ((Cons r1 (Cons r2 Nil))
-                         (and (== (* sq sq) (fromInt n0))
+                         (and (== (* sq sq) (from-int n0))
                               (not (ra:rational? sq))
-                              (== r1 (fromInt (min a b)))
-                              (== r2 (fromInt (max a b)))
+                              (== r1 (from-int (min a b)))
+                              (== r2 (from-int (max a b)))
                               (go (+ i 1) seed3)))
                         (_ False)))))))))))))

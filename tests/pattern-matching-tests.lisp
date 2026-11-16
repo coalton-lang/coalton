@@ -3,11 +3,11 @@
 (coalton-toplevel
   (derive Eq)
   (define-type PatternNumber (PatternNumber Integer))
-  (define-instance (Num PatternNumber)
+  (define-num PatternNumber
     (define (+ (PatternNumber a) (PatternNumber b)) (PatternNumber (+ a b)))
     (define (- (PatternNumber a) (PatternNumber b)) (PatternNumber (- a b)))
     (define (* (PatternNumber a) (PatternNumber b)) (PatternNumber (* a b)))
-    (define (fromInt x) (PatternNumber x)))
+    (define (from-int x) (PatternNumber x)))
   (declare numeric-one? (Num :a => :a -> Boolean))
   (define (numeric-one? x) (match x (1 True) (_ False)))
   (declare nested-numeric-one? (Num :a => Optional :a -> Boolean))
@@ -22,7 +22,7 @@
   (is (numeric-one? 1.0))
   (is (numeric-one? 1.0d0))
   (is (numeric-one? (the Fraction 1)))
-  (is (numeric-one? (the big-float:Big-Float 1)))
+  (is (numeric-one? (the big-float:BigFloat 1)))
   (is (numeric-one? (PatternNumber 1)))
   (is (not (numeric-one? 2.0d0)))
   (is (not (numeric-one? (PatternNumber 2))))

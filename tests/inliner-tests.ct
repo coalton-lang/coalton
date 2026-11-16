@@ -7,10 +7,10 @@
 
 (coalton-toplevel
   (declare two-arg-double-float-add
-     (Double-Float * Double-Float -> Double-Float))
+     (F64 * F64 -> F64))
   (inline)
   (define (two-arg-double-float-add x y)
-    (lisp (-> Double-Float) (x y) (cl:+ x y))))
+    (lisp (-> F64) (x y) (cl:+ x y))))
 
 (coalton-toplevel
   (define (two-arg-double-float-add-caller x y)
@@ -23,13 +23,13 @@
 
 (coalton-toplevel
   (declare same-tu-inline-double-float-add
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (inline)
   (define (same-tu-inline-double-float-add x y)
-    (lisp (-> Double-Float) (x y) (cl:+ x y)))
+    (lisp (-> F64) (x y) (cl:+ x y)))
 
   (declare same-tu-inline-double-float-add-caller
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (define (same-tu-inline-double-float-add-caller x y)
     (same-tu-inline-double-float-add x y)))
 
@@ -43,19 +43,19 @@
 (coalton-toplevel
   (define-class (class-for-inline-method-test :a)
     (method-for-inline-test (:a * :a -> :a)))
-  (define-instance (class-for-inline-method-test Double-Float)
+  (define-instance (class-for-inline-method-test F64)
     (inline)
     (define (method-for-inline-test x y)
-      (lisp (-> Double-Float) (x y) (cl:+ x y)))))
+      (lisp (-> F64) (x y) (cl:+ x y)))))
 
 (coalton-toplevel
   (declare method-for-inline-test-caller
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (define (method-for-inline-test-caller x y)
     (method-for-inline-test x y))
 
   (declare method-for-inline-test-caller-callsite-noinline
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (define (method-for-inline-test-caller-callsite-noinline x y)
     (noinline (method-for-inline-test x y))))
 
@@ -139,17 +139,17 @@
     (+ x y))
 
   (declare same-tu-specialized-double-float-add
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (inline)
   (define (same-tu-specialized-double-float-add x y)
-    (lisp (-> Double-Float) (x y) (cl:+ x y)))
+    (lisp (-> F64) (x y) (cl:+ x y)))
 
   (specialize same-tu-specialized-generic-for-inline
               same-tu-specialized-double-float-add
-              (Double-Float * Double-Float -> Double-Float))
+              (F64 * F64 -> F64))
 
   (declare same-tu-specialized-double-float-add-caller
-    (Double-Float * Double-Float -> Double-Float))
+    (F64 * F64 -> F64))
   (define (same-tu-specialized-double-float-add-caller x y)
     (same-tu-specialized-generic-for-inline x y))
 
@@ -411,10 +411,10 @@
     (check-coalton-types
      "(define-class (C :a)
         (m (:a * :a -> :a)))
-      (define-instance (m Double-Float)
+      (define-instance (m F64)
         (inline m)
         (define (m x y)
-          (lisp (-> Double-Float) (x y) (cl:+ x y))))")))
+          (lisp (-> F64) (x y) (cl:+ x y))))")))
 
 (deftest function-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))

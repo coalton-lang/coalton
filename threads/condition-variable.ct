@@ -60,10 +60,10 @@ A thread that changes the state should do so, and call `notify!` or
     (lisp (-> Void) (cv mutex)
       (backend:condition-wait cv mutex)))
 
-  (declare wait-timeout! ((math:Rational :a) => ConditionVariable * mutex:Mutex * :a -> Boolean))
+  (declare wait-timeout! ((math:Approximable :a Fraction) => ConditionVariable * mutex:Mutex * :a -> Boolean))
   (define (wait-timeout! cv mutex seconds)
     "Like `wait!`, but stop waiting after `seconds`. Returns `False` if the time ran out. The calling thread holds `mutex` again when this returns, whether or not the time ran out."
-    (let ((timeout (math:best-approx seconds)))
+    (let ((timeout (math:rational-approx 32 seconds)))
       (lisp (-> Boolean) (cv mutex timeout)
         (cl:and (backend:condition-wait cv mutex :timeout (cl:max 0 timeout)) cl:t))))
 

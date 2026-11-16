@@ -434,7 +434,7 @@
       (let (values a b) = (f))
       (+ a b))"
 
-   '("example2" . "(Num :a => (Void -> :a * :a) -> :a)"))
+   '("example2" . "(Additive :a => (Void -> :a * :a) -> :a)"))
 
   (check-coalton-types
    "(declare unit-identity (Unit -> Integer))
@@ -1527,8 +1527,8 @@
     (define short-ignore ƒ_x_.x)"
    '("short-id" . "(:a -> :a)")
    '("short-zero" . "(Void -> Boolean)")
-   '("short-add" . "(Num :a => :a * :a -> :a)")
-   '("short-nested-add" . "(Num :a => :a -> :a -> :a)")
+   '("short-add" . "(Additive :a => :a * :a -> :a)")
+   '("short-nested-add" . "(Additive :a => :a -> :a -> :a)")
    '("short-ignore" . "(:a * :b * :c -> :b)"))
 
   (signals coalton-impl/parser:parse-error
@@ -1796,7 +1796,7 @@
   (check-coalton-types
    "(define f (fn (x) (fn (y) (+ x y))))"
 
-   '("f" . "(Num :a => :a -> :a -> :a)")))
+   '("f" . "(Additive :a => :a -> :a -> :a)")))
 
 (deftest test-rank-n-types ()
   ;; Rank-2 polymorphic function arguments with and without constraints
@@ -1805,11 +1805,11 @@
     (define-type (Dual :a) (Dual :a :a))
     (define (primal-part (Dual x _)) x)
     (define (dual-part (Dual _ dx)) dx)
-    (define-instance (Num :a => Num (Dual :a))
+    (define-num (Num :a => Dual :a)
       (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
       (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
       (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-      (define (fromInt n) (Dual (fromInt n) (fromInt 0))))
+      (define (from-int n) (Dual (from-int n) (from-int 0))))
 
     (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
     (define (differentiate f)
@@ -1863,7 +1863,7 @@
 
     (declare make-scaler (Integer -> PolyNumFn))
     (define (make-scaler k)
-      (fn (x) (* (fromInt k) x)))
+      (fn (x) (* (from-int k) x)))
 
     (declare apply-nat
       (forall (:f :g)

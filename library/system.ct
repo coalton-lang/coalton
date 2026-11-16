@@ -49,16 +49,14 @@
         (trivial-garbage:gc :full cl:t)
         (cl:values))))
 
-  (declare sleep ((math:Rational :a) => :a -> Void))
+  (declare sleep ((Ord :a) (Additive :a) (math:Approximable :a Fraction) => :a -> Void))
   (define (sleep n)
-    "Sleep for `n` seconds, where `n` can be of any type with an instance of `Rational`.
-
-Sleep uses type class `Rational`'s `best-approx` instead of `Real`'s `real-approx` because it handles the approximation without arbitrary precision. The only `Real` type excluded by this decision is `CReal`."
+    "Sleep for `n` seconds, where `n` can be of any type that can be approximated as a `Fraction`."
     (if (math:negative? n)
         (progn
           (error "sleep must be a nonnegative number.")
           (values))
-        (let ((frac (math:best-approx n)))
+        (let ((frac (math:rational-approx 32 n)))
           (lisp (-> Void) (frac)
             (cl:progn
               (cl:sleep frac)

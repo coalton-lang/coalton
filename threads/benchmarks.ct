@@ -44,7 +44,7 @@
 
   (declare term (UFix -> F64))
   (define (term i)
-    (math:sin (* 0.001d0 (fromInt (into i)))))
+    (math:sin (* 0.001d0 (from-int (into i)))))
 
   (declare sum-terms (UFix * UFix -> F64))
   (define (sum-terms lo hi)

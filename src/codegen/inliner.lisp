@@ -317,6 +317,39 @@ and user-supplied inline declarations to determine if it is appropriate."
                 (values nil nil)))))
     (unwrap (first rands) (rest rands))))
 
+(defun extract-literal-method-constant (code result-type)
+  "If CODE is a side-effect-free numeric or character constant, return a
+NODE-LITERAL for it so nullary class constants such as `zero` and `one` inline
+directly to immediate values."
+  (declare (type (or null ast:node) code)
+           (type tc:ty result-type)
+           (values (or null ast:node-literal) &optional))
+  (labels ((peel (node)
+             (cond
+               ((null node)
+                nil)
+               ((and (ast:node-locally-p node)
+                     (null (ast:node-locally-noinline-functions node)))
+                (peel (ast:node-locally-subexpr node)))
+               ((and (ast:node-literal-p node)
+                     (or (realp (ast:node-literal-value node))
+                         (characterp (ast:node-literal-value node))))
+                (ast:make-node-literal
+                 :type result-type
+                 :value (ast:node-literal-value node)))
+               ((and (ast:node-lisp-p node)
+                     (null (ast:node-lisp-vars node))
+                     (consp (ast:node-lisp-form node))
+                     (null (rest (ast:node-lisp-form node)))
+                     (let ((form (first (ast:node-lisp-form node))))
+                       (or (realp form) (characterp form))))
+                (ast:make-node-literal
+                 :type result-type
+                 :value (first (ast:node-lisp-form node))))
+               (t
+                nil))))
+    (peel code)))
+
 (defun inline-nullary-method-target (method-name result-type properties env direct-p)
   (declare (type symbol method-name)
            (type tc:ty result-type)
@@ -351,10 +384,13 @@ and user-supplied inline declarations to determine if it is appropriate."
       ;; Class constants and other value methods are stored in dictionaries as
       ;; plain values, not as nullary function entries.
       ((and code (not (ast:node-abstraction-p code)))
-       (if (tc:function-type-p (ast:node-type code))
-           (make-nullary-call
-            (ast:make-node-global-variable :type (ast:node-type code) :value method-name))
-           (ast:make-node-global-variable :type result-type :value method-name)))
+       (cond
+         ((tc:function-type-p (ast:node-type code))
+          (make-nullary-call
+           (ast:make-node-global-variable :type (ast:node-type code) :value method-name)))
+         ((extract-literal-method-constant code result-type))
+         (t
+          (ast:make-node-global-variable :type result-type :value method-name))))
 
       (t
        (make-nullary-call
