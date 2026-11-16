@@ -12,6 +12,7 @@
    #:make-partial-type-env              ; CONSTRUCTOR
    #:partial-type-env-env               ; ACCESSOR
    #:partial-type-env-ty-table          ; ACCESSOR
+   #:partial-type-env-class-table       ; ACCESSOR
    #:partial-type-env-vars-table        ; ACCESSOR
    #:partial-type-env-add-var           ; FUNCTION
    #:partial-type-env-ensure-var        ; FUNCTION

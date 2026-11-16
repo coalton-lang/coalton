@@ -10,10 +10,16 @@ later passes and Lisp compilers see simpler code.")
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:node-variables)
+   #:node-variables
+   #:rename-type-variables)
+  (:import-from
+   #:coalton-impl/codegen/ast-substitutions
+   #:apply-ast-substitution
+   #:make-ast-substitution)
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
+   #:count-nodes
    #:traverse
    #:traverse-with-binding-list)
   (:local-nicknames
@@ -330,17 +336,40 @@ The replacement is skipped inside nested binders for the same name."
        (identifiers-disjoint-p (node-abstraction-vars abstraction)
                                (application-argument-variables application))))
 
+(defun specialize-inlined-abstraction (application abstraction)
+  "Specialize polymorphic type variables in ABSTRACTION to APPLICATION's operand
+and result types before beta-reducing."
+  (declare (type node-application application)
+           (type node-abstraction abstraction)
+           (values node-abstraction &optional))
+  (let ((subs nil)
+        (param-types (tc:function-type-arguments (node-type abstraction))))
+    (handler-case
+        (progn
+          (loop :for param-ty :in param-types
+                :for rand :in (node-application-rands application)
+                :do (setf subs (tc:unify subs param-ty (node-type rand))))
+          (setf subs (tc:unify subs
+                               (tc:function-return-type (node-type abstraction))
+                               (node-type application)))
+          (if subs
+              (tc:apply-substitution subs abstraction)
+              abstraction))
+      (tc:coalton-internal-type-error ()
+        abstraction))))
+
 (defun inline-abstraction-application (application abstraction)
   (declare (type node-application application)
            (type node-abstraction abstraction)
            (values node &optional))
-  ;; ((fn (x...) body) args...) -> (let ((x arg)...) body)
-  (wrap-node-bindings
-   (mapcar #'cons
-           (node-abstraction-vars abstraction)
-           (node-application-rands application))
-   (copy-node (node-abstraction-subexpr abstraction)
-              (node-type application))))
+  (let ((abstraction (specialize-inlined-abstraction application abstraction)))
+    ;; ((fn (x...) body) args...) -> (let ((x arg)...) body)
+    (wrap-node-bindings
+     (mapcar #'cons
+             (node-abstraction-vars abstraction)
+             (node-application-rands application))
+     (copy-node (node-abstraction-subexpr abstraction)
+                (node-type application)))))
 
 (defun inlined-some-arg (node)
   "If NODE is an inlined `coalton:Some` wrapper, return its argument variable node."
@@ -638,13 +667,14 @@ Returns a status keyword and a replacement body. Status is one of:
                                           (match-free-variables node)))
              ;; (match ((fn (x...) body) args...) branches...)
              ;; -> (let ((x arg)...) (match body branches...))
-             (values
-              (wrap-node-bindings
-               (mapcar #'cons
-                       (node-abstraction-vars rator)
-                       (node-application-rands expr))
-               (match-with-expr node (node-abstraction-subexpr rator)))
-              t)
+             (let ((rator (specialize-inlined-abstraction expr rator)))
+               (values
+                (wrap-node-bindings
+                 (mapcar #'cons
+                         (node-abstraction-vars rator)
+                         (node-application-rands expr))
+                 (match-with-expr node (node-abstraction-subexpr rator)))
+                t))
              (values node nil))))
 
       (node-let
@@ -794,19 +824,50 @@ Returns a status keyword and a replacement body. Status is one of:
         (values))))
     count))
 
-(defun replace-direct-applications (node name rator)
+(defun freshen-abstraction (abstraction)
+  "Return a copy of ABSTRACTION with fresh type variables and fresh parameter variables."
+  (declare (type node-abstraction abstraction)
+           (values node-abstraction &optional))
+  (let* ((fresh-types-abs (rename-type-variables abstraction))
+         (old-vars (node-abstraction-vars fresh-types-abs))
+         (param-types (tc:function-type-arguments (node-type fresh-types-abs)))
+         (new-vars (loop :for v :in old-vars
+                         :collect (gensym (symbol-name v))))
+         (ast-subs (loop :for old-v :in old-vars
+                         :for new-v :in new-vars
+                         :for ty :in param-types
+                         :collect (make-ast-substitution
+                                   :from old-v
+                                   :to (make-node-local-variable :type ty :value new-v)))))
+    (make-node-abstraction
+     :type (node-type fresh-types-abs)
+     :vars new-vars
+     :keyword-params (node-abstraction-keyword-params fresh-types-abs)
+     :subexpr (apply-ast-substitution
+               ast-subs
+               (node-abstraction-subexpr fresh-types-abs)
+               t))))
+
+(defun replace-direct-applications (node name rator &key (freshen-p nil))
   (declare (type node node rator)
            (type parser:identifier name)
+           (type boolean freshen-p)
            (values node &optional))
   (traverse
    node
    (list
     (action (:after node-application node)
       (when (eq name (node-rator-name node))
-        (application-with-rator node rator)))
+        (application-with-rator node
+                                (if (and freshen-p (node-abstraction-p rator))
+                                    (freshen-abstraction rator)
+                                    rator))))
     (action (:after node-direct-application node)
       (when (eq name (node-rator-name node))
-        (application-with-rator node rator))))))
+        (application-with-rator node
+                                (if (and freshen-p (node-abstraction-p rator))
+                                    (freshen-abstraction rator)
+                                    rator)))))))
 
 (defun maybe-inline-single-use-local-function (node)
   (declare (type node-let node)
@@ -945,9 +1006,18 @@ Returns a status keyword and a replacement body. Status is one of:
             (single-value-function-p expr)
             (not (member name (node-variables expr) :test #'eq))
             (null (intersection (node-variables expr) *loop-step-variables* :test #'eq))
-            (= 1 (direct-application-occurrence-count body name))
-            (= 1 (node-name-occurrence-count body name)))
-       (values (replace-direct-applications body name expr) t))
+            (let ((direct-count (direct-application-occurrence-count body name))
+                  (total-count (node-name-occurrence-count body name)))
+              (and (plusp direct-count)
+                   (= direct-count total-count)
+                   (or (= 1 direct-count)
+                       (<= (count-nodes expr) 16)))))
+       (values (replace-direct-applications
+                body
+                name
+                expr
+                :freshen-p (> (direct-application-occurrence-count body name) 1))
+               t))
 
       (t
        (values node nil)))))

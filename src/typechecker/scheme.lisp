@@ -141,6 +141,52 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
                                      (result-ty-output-types type2)
                                      kinds1 kinds2 map12 map21)
                     (values nil map12 map21)))
+               ;; Nested forall types
+               ((typep type1 'forall-ty)
+                (if (and (typep type2 'forall-ty)
+                         (= (length (forall-ty-binders type1))
+                            (length (forall-ty-binders type2)))
+                         (kind-bag= (mapcar #'kind-of (forall-ty-binders type1))
+                                    (mapcar #'kind-of (forall-ty-binders type2))))
+                    (let* ((base-len (length kinds1))
+                           (inner-kinds1 (append kinds1 (mapcar #'kind-of (forall-ty-binders type1))))
+                           (inner-kinds2 (append kinds2 (mapcar #'kind-of (forall-ty-binders type2))))
+                           (subs1 (loop :for b :in (forall-ty-binders type1)
+                                        :for id :from base-len
+                                        :collect (make-substitution
+                                                  :from b
+                                                  :to (make-tgen :id id
+                                                                 :allow-result-p (tyvar-allow-result-p b)
+                                                                 :source-name (tyvar-source-name b)))))
+                           (subs2 (loop :for b :in (forall-ty-binders type2)
+                                        :for id :from base-len
+                                        :collect (make-substitution
+                                                  :from b
+                                                  :to (make-tgen :id id
+                                                                 :allow-result-p (tyvar-allow-result-p b)
+                                                                 :source-name (tyvar-source-name b)))))
+                           (qual1 (apply-substitution subs1 (forall-ty-type type1)))
+                           (qual2 (apply-substitution subs2 (forall-ty-type type2))))
+                      (multiple-value-bind (body-eq? m12 m21)
+                          (alpha-ty= (qualified-ty-type qual1)
+                                     (qualified-ty-type qual2)
+                                     inner-kinds1 inner-kinds2 map12 map21)
+                        (if (not body-eq?)
+                            (values nil map12 map21)
+                            (multiple-value-bind (preds-eq? m12 m21)
+                                (alpha-pred-bag= (qualified-ty-predicates qual1)
+                                                 (qualified-ty-predicates qual2)
+                                                 inner-kinds1 inner-kinds2 m12 m21)
+                              (if (and preds-eq?
+                                       (every (lambda (pair)
+                                                (eq (< (car pair) base-len)
+                                                    (< (cdr pair) base-len)))
+                                              m12))
+                                  (values t
+                                          (remove-if (lambda (pair) (>= (car pair) base-len)) m12)
+                                          (remove-if (lambda (pair) (>= (car pair) base-len)) m21))
+                                  (values nil map12 map21))))))
+                    (values nil map12 map21)))
                (t
                 (values nil map12 map21))))
 
@@ -248,11 +294,15 @@ programmer-written binders."
            (type qualified-ty type)
            (values ty-scheme))
   (make-quantified-scheme
-   (remove-if-not (lambda (var) (find var tyvars :test #'ty=))
+   (remove-if-not (lambda (var)
+                    (and (not (tyvar-rigid-p var))
+                         (find var tyvars :test #'ty=)))
                   (type-variables type))
    type
    nil
-   (remove-if-not (lambda (var) (find var tyvars :test #'ty=))
+   (remove-if-not (lambda (var)
+                    (and (not (tyvar-rigid-p var))
+                         (find var tyvars :test #'ty=)))
                   (open-function-origins type))))
 
 (defun ty-scheme-instantiation-types (ty-scheme)
@@ -288,6 +338,8 @@ and pretty printing can recover the programmer-written binders."
                   (collect-instantiation-metadata (function-ty-output-types object)))
                  (result-ty
                   (collect-instantiation-metadata (result-ty-output-types object)))
+                 (forall-ty
+                  (collect-instantiation-metadata (forall-ty-type object)))
                  (qualified-ty
                   (collect-instantiation-metadata (qualified-ty-predicates object))
                   (collect-instantiation-metadata (qualified-ty-type object)))
@@ -303,6 +355,14 @@ and pretty printing can recover the programmer-written binders."
                                     :allow-result-p (aref allow-result-flags i))))))
 
 (defgeneric to-scheme (ty)
+  (:method ((ty ty-scheme))
+    ty)
+
+  (:method ((ty forall-ty))
+    (quantify-using-tvar-order (forall-ty-binders ty)
+                               (forall-ty-type ty)
+                               (forall-ty-explicit-p ty)))
+
   (:method ((ty qualified-ty))
     (make-ty-scheme
      :explicit-p nil

@@ -68,6 +68,11 @@
     (declare (ignore ty env))
     'function)
 
+  (:method ((ty forall-ty) env)
+    (if (forall-ty-predicates ty)
+        'function
+        (lisp-type (forall-ty-body ty) env)))
+
   (:method ((ty result-ty) env)
     (let ((output-types (result-ty-output-types ty)))
       (cond
@@ -153,7 +158,9 @@
   (:method ((ty ty-scheme) env)
     (lisp-type (fresh-inst ty) env))
   (:method ((ty qualified-ty) env)
-    (lisp-type (qualified-ty-type ty) env)))
+    (if (qualified-ty-predicates ty)
+        'function
+        (lisp-type (qualified-ty-type ty) env))))
 
 
 (defun try-recurse-transparent-type (from parameter env)

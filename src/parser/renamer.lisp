@@ -1099,13 +1099,15 @@
   (:method ((qual-ty qualified-ty) ctx)
     (declare (type algo:immutable-map ctx)
              (values qualified-ty))
-
-    (make-qualified-ty
-     :explicit-p (qualified-ty-explicit-p qual-ty)
-     :explicit-variables (rename-type-variables-generic% (qualified-ty-explicit-variables qual-ty) ctx)
-     :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) ctx)
-     :type (rename-type-variables-generic% (qualified-ty-type qual-ty) ctx)
-     :location (source:location qual-ty)))
+    (let* ((tvars (mapcar #'keyword-src-name (qualified-ty-explicit-variables qual-ty)))
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+      (make-qualified-ty
+       :explicit-p (qualified-ty-explicit-p qual-ty)
+       :explicit-variables (rename-type-variables-generic% (qualified-ty-explicit-variables qual-ty) new-ctx)
+       :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) new-ctx)
+       :type (rename-type-variables-generic% (qualified-ty-type qual-ty) new-ctx)
+       :location (source:location qual-ty))))
 
   (:method ((ctor constructor) ctx)
     (declare (type algo:immutable-map ctx)

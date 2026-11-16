@@ -80,10 +80,11 @@
            (values tc:qualified-ty tc:tyvar-list boolean &optional))
   (multiple-value-bind (qual-ty explicit-tvars explicit-p)
       (parse-qualified-type-info annotation (tc-env-parser-env env))
-    (when (tc:qualified-ty-predicates qual-ty)
+    (when (and (tc:qualified-ty-predicates qual-ty)
+               (not explicit-p))
       (tc-error "Invalid type annotation"
                 (tc-note annotation
-                         "`the` annotations cannot include predicate contexts")))
+                         "`the` annotations cannot include predicate contexts without an explicit `forall`")))
     (values qual-ty explicit-tvars explicit-p)))
 
 (defmacro with-type-string-environment ((env) &body body)
@@ -1853,6 +1854,245 @@ lowered back to the ordinary nested-let representation and inferred there."
                      :last-node typed-inner-let))
              subs)))))))
 
+(defun wrap-expression-with-given-predicates (typed-node given-preds body-ty location)
+  "Attach GIVEN-PREDS to TYPED-NODE so codegen binds the corresponding dictionary
+parameters using the standard uncurried calling convention."
+  (declare (type node typed-node)
+           (type tc:ty-predicate-list given-preds)
+           (type tc:ty body-ty)
+           (type source:location location)
+           (values node &optional))
+  (cond
+    ((null given-preds)
+     typed-node)
+    ((and (typep typed-node 'node-abstraction)
+          (null (tc:qualified-ty-predicates (node-type typed-node))))
+     (make-node-abstraction
+      :type (tc:qualify given-preds (tc:qualified-ty-type (node-type typed-node)))
+      :location (source:location typed-node)
+      :params (node-abstraction-params typed-node)
+      :keyword-params (node-abstraction-keyword-params typed-node)
+      :body (node-abstraction-body typed-node)))
+    ((and (tc:function-type-p body-ty)
+          (null (tc:function-type-arguments body-ty))
+          (or (not (typep body-ty 'tc:function-ty))
+              (null (tc:function-ty-keyword-input-types body-ty))))
+     (make-node-abstraction
+      :type (tc:qualify given-preds body-ty)
+      :location location
+      :params nil
+      :keyword-params nil
+      :body (make-node-body
+             :nodes nil
+             :last-node (make-node-application
+                         :type (tc:qualify nil (tc:function-return-type body-ty))
+                         :location location
+                         :rator typed-node
+                         :rands nil
+                         :keyword-rands nil))))
+    (t
+     (make-node-abstraction
+      :type (tc:qualify given-preds body-ty)
+      :location location
+      :params nil
+      :keyword-params nil
+      :body (make-node-body
+             :nodes nil
+             :last-node typed-node)))))
+
+(defun wrap-expression-with-instantiated-predicates (typed-node raw-forall-ty inst-ty inst-preds location)
+  "Bind TYPED-NODE to a local temporary when instantiating a FORALL-TY expression
+produces runtime dictionary applications."
+  (declare (type node typed-node)
+           (type tc:ty raw-forall-ty inst-ty)
+           (type tc:ty-predicate-list inst-preds)
+           (type source:location location)
+           (values node &optional))
+  (if (null inst-preds)
+      typed-node
+      (let ((tmp-name (gensym "POLY-INST-")))
+        (make-node-progn
+         :type (tc:qualify nil inst-ty)
+         :location location
+         :body (make-node-body
+                :nodes (list (make-node-bind
+                              :pattern (make-pattern-var
+                                        :name tmp-name
+                                        :orig-name tmp-name
+                                        :type (tc:qualify nil raw-forall-ty)
+                                        :location location)
+                              :expr typed-node
+                              :location location))
+                :last-node (make-node-variable
+                            :name tmp-name
+                            :type (tc:qualify inst-preds inst-ty)
+                            :location location))))))
+
+(defun check-forall-expression-type (node expected-forall-ty subs env)
+  "Check NODE against a universally quantified type EXPECTED-FORALL-TY via skolemization."
+  (declare (type parser:node node)
+           (type tc:forall-ty expected-forall-ty)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
+  (let ((watermark tc::*next-variable-id*)
+        (outer-bound-vars (tc-env-bound-variables env)))
+    (multiple-value-bind (skolem-qual-ty skolems)
+        (tc:instantiate-forall-ty expected-forall-ty :rigid-p t)
+      (let* ((skolem-body-ty (tc:qualified-ty-type skolem-qual-ty))
+             (given-preds (tc:qualified-ty-predicates skolem-qual-ty))
+             (body-env (tc-env-extend-type-variable-scope env skolems)))
+        (multiple-value-bind (inferred-ty wanted-preds accessors typed-node subs)
+            (infer-expression-type node skolem-body-ty subs body-env)
+          (declare (ignore inferred-ty))
+          (tc:apply-substitution subs body-env)
+          (setf given-preds (tc:apply-substitution subs given-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) given-preds subs)))
+          (setf wanted-preds (tc:apply-substitution subs wanted-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) wanted-preds subs)))
+          (setf accessors (tc:apply-substitution subs accessors))
+
+          (multiple-value-bind (remaining-accessors acc-subs)
+              (solve-accessors accessors (tc-env-env env))
+            (setf subs (tc:compose-substitution-lists acc-subs subs))
+            (setf accessors (tc:apply-substitution subs remaining-accessors))
+            (let ((skolem-accessor
+                    (find-if (lambda (acc)
+                               (intersection (tc:type-variables (accessor-from acc))
+                                             skolems
+                                             :test #'tc:ty=))
+                             accessors)))
+              (when skolem-accessor
+                (tc-error "Ambiguous accessor"
+                          (tc-note skolem-accessor "accessor is ambiguous")))))
+
+          (setf given-preds (tc:apply-substitution subs given-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) given-preds subs)))
+          (setf wanted-preds (tc:apply-substitution subs wanted-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) wanted-preds subs)))
+
+          (let* ((env-tvars (tc-env-bindings-variables env outer-bound-vars))
+                 (known-variables
+                   (remove-duplicates
+                    (append (tc:type-variables (tc:apply-substitution subs skolem-body-ty))
+                            env-tvars
+                            skolems)
+                    :test #'tc:ty=)))
+            (loop :for i :below tc:+fundep-max-depth+
+                  :for new-subs := (tc:fundep-entail (tc-env-env env)
+                                                     given-preds
+                                                     wanted-preds
+                                                     known-variables)
+                  :do (when (endp new-subs)
+                        (return))
+                      (setf subs (tc:compose-substitution-lists new-subs subs))
+                      (setf given-preds (tc:apply-substitution new-subs given-preds))
+                      (setf wanted-preds (tc:apply-substitution new-subs wanted-preds))
+                      (let ((range-tvars
+                              (remove-duplicates
+                               (alexandria:mappend #'tc:type-variables
+                                                   (mapcar #'tc:substitution-to new-subs))
+                               :test #'tc:ty=)))
+                        (setf known-variables
+                              (remove-duplicates
+                               (append (tc:type-variables
+                                        (tc:apply-substitution new-subs known-variables))
+                                       range-tvars)
+                               :test #'tc:ty=)))
+                  :finally (util:coalton-bug "Fundep chain failed to converge"))
+
+            ;; Check that no skolem escaped into outer unification variables or environment bindings.
+            (dolist (s subs)
+              (when (< (tc:tyvar-id (tc:substitution-from s)) watermark)
+                (let ((target (tc:apply-substitution subs (tc:substitution-to s))))
+                  (when (intersection (tc:type-variables target) skolems :test #'tc:ty=)
+                    (tc-error "Type variable escape"
+                              (tc-note node
+                                       "quantified type variable in '~A' would escape its scope"
+                                       (type-object-string
+                                        (tc:apply-substitution subs expected-forall-ty))))))))
+            (when (intersection (tc:type-variables (tc:apply-substitution subs env-tvars))
+                                skolems
+                                :test #'tc:ty=)
+              (tc-error "Type variable escape"
+                        (tc-note node
+                                 "quantified type variable in '~A' would escape its scope"
+                                 (type-object-string
+                                  (tc:apply-substitution subs expected-forall-ty)))))
+
+            (setf wanted-preds
+                  (remove-if (lambda (p)
+                               (tc:entail (tc-env-env env) given-preds p))
+                             (tc:apply-substitution subs wanted-preds)))
+            (multiple-value-setq (wanted-preds subs)
+              (tc:default-builder-context (tc-env-env env)
+                                          (append env-tvars skolems)
+                                          wanted-preds
+                                          subs))
+            (setf wanted-preds
+                  (remove-if (lambda (p)
+                               (tc:entail (tc-env-env env)
+                                          (tc:apply-substitution subs given-preds)
+                                          p))
+                             (tc:apply-substitution subs wanted-preds)))
+            (setf wanted-preds (tc:reduce-context (tc-env-env env) wanted-preds subs))
+
+            (let ((leaked-pred
+                    (find-if (lambda (p)
+                               (intersection (tc:type-variables p) skolems :test #'tc:ty=))
+                             wanted-preds)))
+              (when leaked-pred
+                (tc-error "Explicit type is missing inferred predicate"
+                          (tc-note node
+                                   "Declared type ~A is missing inferred predicate ~A"
+                                   (type-object-string
+                                    (tc:apply-substitution subs expected-forall-ty))
+                                   (type-object-string leaked-pred)))))
+
+            ;; Enforce the relaxed value restriction on unconstrained forall expressions
+            ;; that are evaluated once rather than wrapped in a dictionary abstraction.
+            (when (and (null given-preds)
+                       skolems
+                       (not (nonexpansive-expression-p node (tc-env-env env))))
+              (let ((variances
+                      (tc:collect-tyvar-variances
+                       (tc:apply-substitution subs skolem-body-ty)
+                       (tc:make-env-variance-resolver (tc-env-env env)))))
+                (dolist (skolem skolems)
+                  (let ((v (tc:tyvar-variance variances skolem)))
+                    (unless (member v '(:covariant :absent) :test #'eq)
+                      (tc-error "Declared type is too general"
+                                (tc-note node
+                                         "expansive expression cannot be generalized to polymorphic type '~A'"
+                                         (type-object-string
+                                          (tc:apply-substitution subs expected-forall-ty)))))))))
+
+            (let* ((relax-subs
+                     (loop :for skolem :in skolems
+                           :collect (tc:make-substitution
+                                     :from skolem
+                                     :to (tc:fresh-type-renamer skolem))))
+                   (final-forall-ty (tc:apply-substitution subs expected-forall-ty))
+                   (final-body-ty (tc:apply-substitution
+                                   relax-subs
+                                   (tc:apply-substitution subs skolem-body-ty)))
+                   (final-given-preds (tc:apply-substitution
+                                       relax-subs
+                                       (tc:apply-substitution subs given-preds)))
+                   (final-node
+                     (wrap-expression-with-given-predicates
+                      (tc:apply-substitution
+                       relax-subs
+                       (tc:apply-substitution subs typed-node))
+                      final-given-preds
+                      final-body-ty
+                      (source:location node))))
+              (values final-forall-ty
+                      wanted-preds
+                      accessors
+                      final-node
+                      subs))))))))
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
@@ -1862,7 +2102,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (let ((pre-inferred (and *pre-inferred-builder-items*
                                (gethash node *pre-inferred-builder-items*))))
         (if (null pre-inferred)
-            (call-next-method)
+            (let ((effective-expected (tc:apply-substitution subs expected-type)))
+              (if (and (typep effective-expected 'tc:forall-ty)
+                       (not (typep node '(or parser:node-body
+                                             parser:node-block
+                                             parser:node-the))))
+                  (check-forall-expression-type node effective-expected subs env)
+                  (call-next-method)))
             (destructuring-bind (item-ty preds accessors typed-item) pre-inferred
               (remhash node *pre-inferred-builder-items*)
               (handler-case
@@ -2057,7 +2303,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-application tc:substitution-list &optional))
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
     (multiple-value-bind (fun-ty preds accessors rator-node subs)
         (infer-expression-type (parser:node-application-rator node)
@@ -2068,7 +2314,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (let* ((positional-rands (or (parser:node-application-rands node) nil))
              (keyword-rands (or (parser:node-application-keyword-rands node) nil))
              (fun-ty_ (tc:apply-substitution subs fun-ty))
-             (typed-rands nil)
+             (typed-rands (make-array (length positional-rands) :initial-element nil))
              (typed-keyword-rands nil))
 
         (when (tc:tyvar-p fun-ty_)
@@ -2092,16 +2338,36 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                              (type-object-string (tc:apply-substitution subs fun-ty_))
                              (tc:function-input-arity fun-ty_))))
 
-        (loop :for rand :in positional-rands
-              :for expected-rand-ty :in (tc:function-type-arguments fun-ty_)
-              :do
-                 (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                     (infer-expression-type rand expected-rand-ty subs env)
-                   (declare (ignore ty_))
-                   (setf preds (append preds preds_))
-                   (setf accessors (append accessors accessors_))
-                   (setf subs subs_)
-                   (push node_ typed-rands)))
+        (let ((expected-rand-types (tc:function-type-arguments fun-ty_)))
+          ;; First pass: infer non-forall positional arguments so outer type variables
+          ;; are determined before checking higher-rank arguments.
+          (loop :for rand :in positional-rands
+                :for expected-rand-ty :in expected-rand-types
+                :for idx :from 0
+                :unless (typep (tc:apply-substitution subs expected-rand-ty) 'tc:forall-ty)
+                  :do (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                          (infer-expression-type rand expected-rand-ty subs env)
+                        (declare (ignore ty_))
+                        (setf preds (append preds preds_))
+                        (setf accessors (append accessors accessors_))
+                        (setf subs subs_)
+                        (setf (aref typed-rands idx) node_)))
+
+          ;; Second pass: check higher-rank (FORALL-TY) positional arguments.
+          (loop :for rand :in positional-rands
+                :for expected-rand-ty :in expected-rand-types
+                :for idx :from 0
+                :when (null (aref typed-rands idx))
+                  :do (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                          (infer-expression-type rand
+                                                 (tc:apply-substitution subs expected-rand-ty)
+                                                 subs
+                                                 env)
+                        (declare (ignore ty_))
+                        (setf preds (append preds preds_))
+                        (setf accessors (append accessors accessors_))
+                        (setf subs subs_)
+                        (setf (aref typed-rands idx) node_))))
 
         (dolist (arg keyword-rands)
           (let* ((key (parser:keyword-src-name (parser:node-application-keyword-arg-keyword arg)))
@@ -2145,24 +2411,44 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                      :value node_)
                     typed-keyword-rands))))
 
-        (setf typed-rands (nreverse typed-rands)
-              typed-keyword-rands (nreverse typed-keyword-rands)
+        (setf typed-keyword-rands (nreverse typed-keyword-rands)
               fun-ty_ (tc:apply-substitution subs fun-ty_))
 
-        (let ((result-ty (tc:function-return-type fun-ty_)))
+        (let* ((raw-result-ty (tc:apply-substitution subs (tc:function-return-type fun-ty_)))
+               (effective-expected (tc:apply-substitution subs expected-type))
+               (inst-preds nil)
+               (result-ty raw-result-ty))
+          (when (and (typep raw-result-ty 'tc:forall-ty)
+                     (not (typep effective-expected 'tc:forall-ty)))
+            (let ((inst-qual (tc:instantiate-forall-ty raw-result-ty :rigid-p nil)))
+              (setf result-ty (tc:qualified-ty-type inst-qual)
+                    inst-preds (loop :for p :in (tc:qualified-ty-predicates inst-qual)
+                                     :collect (tc:make-ty-predicate
+                                               :class (tc:ty-predicate-class p)
+                                               :types (tc:ty-predicate-types p)
+                                               :location (source:location node))))))
           (handler-case
               (progn
                 (setf subs (tc:unify subs result-ty expected-type))
-                (let ((type (tc:apply-substitution subs result-ty)))
+                (let* ((type (tc:apply-substitution subs result-ty))
+                       (inst-preds (tc:apply-substitution subs inst-preds))
+                       (app-node
+                         (make-node-application
+                          :type (tc:qualify nil (if inst-preds raw-result-ty type))
+                          :location (source:location node)
+                          :rator (tc:apply-substitution subs rator-node)
+                          :rands (tc:apply-substitution subs (coerce typed-rands 'list))
+                          :keyword-rands (tc:apply-substitution subs typed-keyword-rands))))
+                  (setf preds (append preds inst-preds))
                   (values type
                           preds
                           accessors
-                          (make-node-application
-                           :type (tc:qualify nil type)
-                           :location (source:location node)
-                           :rator (tc:apply-substitution subs rator-node)
-                           :rands (tc:apply-substitution subs typed-rands)
-                           :keyword-rands (tc:apply-substitution subs typed-keyword-rands))
+                          (wrap-expression-with-instantiated-predicates
+                           app-node
+                           raw-result-ty
+                           type
+                           inst-preds
+                           (source:location node))
                           subs)))
             (tc:coalton-internal-type-error ()
               (standard-expression-type-mismatch-error node subs expected-type result-ty)))))))
@@ -2327,9 +2613,18 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            (type-object-string effective-expected-type)
                            (tc:function-input-arity effective-expected-type))))
 
-      (let* ((body-return-block
+      (let* ((expected-function-type (and (tc:function-type-p effective-expected-type)
+                                          effective-expected-type))
+             (expected-return-type
+               (and expected-function-type
+                    (tc:function-return-type expected-function-type)))
+             (body-return-block
                (body-return-block-node (parser:node-abstraction-body node)))
-             (body-result-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+             (body-result-ty
+               (if (and expected-return-type
+                        (tc:contains-forall-ty-p expected-return-type))
+                   expected-return-type
+                   (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
              (*return-blocks*
                (if body-return-block
                    ;; Returns in keyword defaults target the body's block, so
@@ -2338,8 +2633,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                           (make-return-block-info :type body-result-ty)
                           *return-blocks*)
                    *return-blocks*))
-             (expected-function-type (and (tc:function-type-p effective-expected-type)
-                                          effective-expected-type))
              (expected-keyword-table (make-hash-table :test #'eq))
              (expected-positional-input-types
                (and expected-function-type
@@ -2587,7 +2880,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (setf preds (append preds (pattern-predicates pat-node)))
                                 pat-node)))
 
-             (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+             (ret-ty
+               (if (tc:contains-forall-ty-p (tc:apply-substitution subs expected-type))
+                   (tc:apply-substitution subs expected-type)
+                   (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
 
              ;; Infer the type of each branch, unifying against ret-ty
              (branch-body-nodes
@@ -2947,6 +3243,63 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     (multiple-value-bind (declared-qual-ty explicit-tvars explicit-p)
         (parse-the-type-annotation (parser:node-the-type node) env)
+      (when (and explicit-p
+                 (or (tc:qualified-ty-predicates declared-qual-ty)
+                     (typep (tc:apply-substitution subs expected-type) 'tc:forall-ty)))
+        (let* ((used-binders
+                 (remove-if-not (lambda (v)
+                                  (find v (tc:type-variables declared-qual-ty) :test #'tc:ty=))
+                                explicit-tvars))
+               (declared-forall
+                 (tc:make-forall-ty
+                  :explicit-p t
+                  :binders used-binders
+                  :type declared-qual-ty)))
+          (multiple-value-bind (forall-ty preds accessors expr-node subs)
+              (check-forall-expression-type (parser:node-the-expr node)
+                                            declared-forall
+                                            subs
+                                            env)
+            (let ((effective-expected (tc:apply-substitution subs expected-type)))
+              (return-from infer-expression-type
+                (cond
+                  ((typep effective-expected 'tc:forall-ty)
+                   (handler-case
+                       (progn
+                         (setf subs (tc:unify subs forall-ty effective-expected))
+                         (values (tc:apply-substitution subs forall-ty)
+                                 preds
+                                 accessors
+                                 expr-node
+                                 subs))
+                     (tc:coalton-internal-type-error ()
+                       (standard-expression-type-mismatch-error node subs effective-expected forall-ty))))
+                  (t
+                   (let* ((inst-qual (tc:instantiate-forall-ty forall-ty :rigid-p nil))
+                          (inst-ty (tc:qualified-ty-type inst-qual))
+                          (inst-preds (loop :for p :in (tc:qualified-ty-predicates inst-qual)
+                                            :collect (tc:make-ty-predicate
+                                                      :class (tc:ty-predicate-class p)
+                                                      :types (tc:ty-predicate-types p)
+                                                      :location (source:location node)))))
+                     (handler-case
+                         (progn
+                           (setf subs (tc:unify subs inst-ty expected-type))
+                           (let ((type (tc:apply-substitution subs inst-ty))
+                                 (inst-preds (tc:apply-substitution subs inst-preds)))
+                             (values type
+                                     (append preds inst-preds)
+                                     accessors
+                                     (wrap-expression-with-instantiated-predicates
+                                      expr-node
+                                      forall-ty
+                                      type
+                                      inst-preds
+                                      (source:location node))
+                                     subs)))
+                       (tc:coalton-internal-type-error ()
+                         (standard-expression-type-mismatch-error node subs expected-type inst-ty)))))))))))
+
       (let* ((declared-ty (tc:qualified-ty-type declared-qual-ty))
              (expr-env (if explicit-p
                            (tc-env-extend-type-variable-scope
@@ -2956,7 +3309,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
         (multiple-value-bind (expr-ty preds accessors expr-node subs)
             (infer-expression-type (parser:node-the-expr node)
-                                   (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                                   (if (tc:contains-forall-ty-p declared-ty)
+                                       declared-ty
+                                       (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
                                    subs
                                    expr-env)
 
@@ -3058,7 +3413,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (let ((block-info (return-block-info (parser:node-return-from-name node))))
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-return-from-expr node)
-                                 (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                                 (if (typep (return-block-info-type block-info) 'tc:forall-ty)
+                                     (return-block-info-type block-info)
+                                     (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
                                  subs
                                  env)
         (let ((first-return (return-block-info-first-return block-info)))
@@ -3902,20 +4259,33 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty pattern-var tc:substitution-list))
 
-    (let ((ty (tc-env-add-variable env (parser:pattern-var-name pat))))
-
-      ;; SAFETY: unification against a variable will never fail
-      (setf subs (tc:unify subs ty expected-type))
-
-      (let ((type (tc:apply-substitution subs ty)))
-        (values
-         type
-         (make-pattern-var
-          :type (tc:qualify nil type)
-          :location (source:location pat)
-          :name (parser:pattern-var-name pat)
-          :orig-name (parser:pattern-var-orig-name pat))
-         subs))))
+    (let ((effective-expected (tc:apply-substitution subs expected-type)))
+      (cond
+        ((typep effective-expected 'tc:forall-ty)
+         (tc-env-add-definition env
+                                (parser:pattern-var-name pat)
+                                (tc:to-scheme effective-expected))
+         (values
+          effective-expected
+          (make-pattern-var
+           :type (tc:qualify nil effective-expected)
+           :location (source:location pat)
+           :name (parser:pattern-var-name pat)
+           :orig-name (parser:pattern-var-orig-name pat))
+          subs))
+        (t
+         (let ((ty (tc-env-add-variable env (parser:pattern-var-name pat))))
+           ;; SAFETY: unification against a variable will never fail
+           (setf subs (tc:unify subs ty effective-expected))
+           (let ((type (tc:apply-substitution subs ty)))
+             (values
+              type
+              (make-pattern-var
+               :type (tc:qualify nil type)
+               :location (source:location pat)
+               :name (parser:pattern-var-name pat)
+               :orig-name (parser:pattern-var-orig-name pat))
+              subs)))))))
 
   (:method ((pat parser:pattern-literal) expected-type subs env)
     (declare (type tc:ty expected-type)

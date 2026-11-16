@@ -134,21 +134,29 @@
                              (accessor-field accessor))))
 
         ;; the order of unification matters here
-        (handler-case
-            (setf subs (tc:unify subs (accessor-to accessor)
-                                 (tc:apply-substitution fresh-subs
-                                                        (tc:struct-field-type field))))
-          (tc:coalton-internal-type-error ()
-            (tc-error "Accessor type mismatch"
-                      (tc-note accessor
-                               "field '~A' has type '~A', but expected '~A'"
-                               (accessor-field accessor)
-                               (type-object-string
-                                (tc:apply-substitution
-                                 subs (tc:apply-substitution fresh-subs
-                                                            (tc:struct-field-type field)))
-                                env)
-                               (type-object-string (accessor-to accessor) env)))))
+        (let ((field-type (tc:apply-substitution fresh-subs
+                                                 (tc:struct-field-type field))))
+          (when (typep field-type 'tc:forall-ty)
+            (when (tc:forall-ty-predicates field-type)
+              (tc-error "Invalid accessor"
+                        (tc-note accessor
+                                 "struct accessor '~A' cannot be used on a field with class constraints '~A'; use pattern matching instead"
+                                 (accessor-field accessor)
+                                 (type-object-string field-type env))))
+            (setf field-type
+                  (tc:qualified-ty-type
+                   (tc:instantiate-forall-ty field-type :rigid-p nil))))
+          (handler-case
+              (setf subs (tc:unify subs (accessor-to accessor) field-type))
+            (tc:coalton-internal-type-error ()
+              (tc-error "Accessor type mismatch"
+                        (tc-note accessor
+                                 "field '~A' has type '~A', but expected '~A'"
+                                 (accessor-field accessor)
+                                 (type-object-string
+                                  (tc:apply-substitution subs field-type)
+                                  env)
+                                 (type-object-string (accessor-to accessor) env))))))
 
         (values t subs)))))
 
