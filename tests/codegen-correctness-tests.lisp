@@ -767,25 +767,31 @@
                      (+ (.px acc) (.py acc)))))
 
                 (abi :unboxed)
-                (declare run-allocation-free-loop (U64 -> F64))
+                (declare run-allocation-free-loop (U64 -> Boolean))
                 (define (run-allocation-free-loop n)
-                  (loop-points 0 n (Point2D 0.0d0 0.0d0))))")))
+                  ;; Consume the float before crossing the boxed Lisp boundary.
+                  (== (loop-points 0 n (Point2D 0.0d0 0.0d0)) 0.0d0)))")))
         (unwind-protect
              (progn
                (let ((unpacked-fn (symbol-function (intern "RUN-UNPACKED-ALLOCATION-FREE-LOOP" *package*))))
                  (is (= 0 (funcall unpacked-fn 300)))
+                 ;; Account for allocations still in the thread's open region.
+                 (sb-vm::close-thread-alloc-region)
                  (let ((before (sb-ext:get-bytes-consed)))
                    (dotimes (_ 100)
                      (funcall unpacked-fn 3000))
+                   (sb-vm::close-thread-alloc-region)
                    (let ((consed (- (sb-ext:get-bytes-consed) before)))
                      (is (zerop consed)))))
                (when (coalton-impl/codegen/calling-convention::sbcl-specialized-xep-available-p)
                  (let ((fn (symbol-function (intern "RUN-ALLOCATION-FREE-LOOP" *package*))))
                    ;; Warm up
-                   (is (= 0.0d0 (funcall fn 300)))
+                   (is (eq t (funcall fn 300)))
+                   (sb-vm::close-thread-alloc-region)
                    (let ((before (sb-ext:get-bytes-consed)))
                      (dotimes (_ 100)
                        (funcall fn 3000))
+                     (sb-vm::close-thread-alloc-region)
                      (let ((consed (- (sb-ext:get-bytes-consed) before)))
                        (is (zerop consed)))))))
           (delete-file source-file)
