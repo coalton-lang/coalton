@@ -1,0 +1,471 @@
+;;;; power-series.ct
+;;;;
+;;;; Lazy memoized formal power series R[[x]]
+
+(coalton/utils:defstdlib-package #:coalton/xmath/power-series
+  (:documentation "The ring $R[[x]]$ of formal power series $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$, represented lazily with memoized coefficients.
+
+Over any semiring or ring $R$, formal power series form a ring under termwise addition and the Cauchy product $(fg)_n = \\sum_{k=0}^n a_k b_{n-k}$, with formal derivative $f'(x) = \\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$.
+
+**Inversion and division.** A series $g(x) = \\sum_{n=0}^{\\infty} b_n x^n$ is a unit in $R[[x]]$ if and only if its constant term $b_0$ is invertible, in which case the coefficients of $c = g^{-1}$ are determined recursively by
+$$c_0 = b_0^{-1}, \\qquad c_n = -b_0^{-1} \\sum_{k=1}^n b_k c_{n-k} \\quad (n \\ge 1).$$
+More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\cdots = b_{v-1} = 0 \\neq b_v$ and $a_0 = \\cdots = a_{v-1} = 0$.
+
+**Elementary functions and calculus over a field of characteristic $0$.** Over any `Reciprocable` coefficient type, formal integration $\\int_0^x f(t)\\,dt = \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$ and differential recurrences define the elementary transcendental series for any series $a(x)$ with $a(0) = 0$:
+- Exponential $\\exp(a)$ via $(\\exp a)' = a' \\exp a$, and logarithm $\\ln(1 + a) = \\int \\frac{a'}{1 + a}\\,dx$;
+- Principal roots $\\sqrt{1 + a}$ and $(1 + a)^{1/m}$ (`Radical`);
+- Trigonometric and inverse trigonometric series $\\sin(a), \\cos(a)$ (via coupled recurrences $(\\sin a)' = a'\\cos a$, $(\\cos a)' = -a'\\sin a$), $\\tan(a)$, $\\arcsin(a) = \\int \\frac{a'}{\\sqrt{1 - a^2}}\\,dx$, and $\\arctan(a) = \\int \\frac{a'}{1 + a^2}\\,dx$.
+
+**Composition and Lagrange reversion.** When $g(0) = 0$, the formal composition $(f \\circ g)(x) = \\sum_{k=0}^{\\infty} a_k g(x)^k$ (`series-compose`) is well-defined because $g(x)^k$ has valuation at least $k$. When furthermore $g'(0) \\neq 0$, Lagrange reversion (`series-revert`) computes the unique compositional inverse $g^{[-1]}(x)$ satisfying $g(g^{[-1]}(x)) = g^{[-1]}(g(x)) = x$.")
+  (:nicknames
+   #:coalton/math/power-series
+   #:coalton-library/math/power-series)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral
+   #:coalton/math/elementary)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:vec #:coalton/vector))
+  (:export
+   #:PowerSeries
+   #:with-series-comparison-order
+   #:series-approx-equal?
+   #:make-series
+   #:from-coefficients
+   #:series-var
+   #:series-coeff
+   #:series-prefix
+   #:series->polynomial
+   #:series-shift
+   #:series-differentiate
+   #:series-integrate
+   #:series-compose
+   #:series-revert))
+
+(in-package #:coalton/xmath/power-series)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(cl:defvar *series-comparison-order* 16
+  "Number of leading coefficients compared by `Eq (PowerSeries :a)`.")
+
+(coalton-toplevel
+  (declare with-series-comparison-order
+    (forall ((:r Values)) (UFix * (Void -> :r) -> :r)))
+  (define (with-series-comparison-order order thunk)
+    "Call `thunk` with `*series-comparison-order*` dynamically bound to `order`."
+    (lisp (-> :r) (order thunk)
+      (cl:let ((*series-comparison-order* order))
+        (call-coalton-function thunk))))
+
+  (define-type (PowerSeries :a)
+    "An infinite formal power series $\\sum_{n=0}^{\\infty} a_n x^n$ with memoized coefficients."
+    (%PowerSeries (vec:Vector :a) (UFix -> :a)))
+
+  (declare make-series ((UFix -> :a) -> PowerSeries :a))
+  (define (make-series gen)
+    "Construct a formal power series $\\sum_{n=0}^{\\infty} a_n x^n$ from a coefficient generator $n \\mapsto a_n$."
+    (%PowerSeries (vec:new) gen))
+
+  (declare series-coeff (PowerSeries :a * UFix -> :a))
+  (define (series-coeff (%PowerSeries cache gen) n)
+    "Return the coefficient $a_n$ of $x^n$, computing and caching coefficients $a_0, \\ldots, a_n$ in order."
+    (rec fill ((k (vec:length cache)))
+      (cond
+        ((> k n) (vec:index-unsafe n cache))
+        (True
+         (vec:push! (gen k) cache)
+         (fill (+ k 1))))))
+
+  (declare series-prefix (UFix * PowerSeries :a -> List :a))
+  (define (series-prefix count ps)
+    "Return the first `count` coefficients $(a_0, \\ldots, a_{\\mathtt{count}-1})$ of `ps`."
+    (when (> count 0)
+      (series-coeff ps (- count 1))
+      (values))
+    (rec collect ((i count) (acc Nil))
+      (if (== i 0)
+          acc
+          (let ((idx (- i 1)))
+            (collect idx (Cons (series-coeff ps idx) acc))))))
+
+  (declare series->polynomial (UFix * PowerSeries :a -> poly:Polynomial :a))
+  (define (series->polynomial count ps)
+    "Truncate `ps` to its first `count` terms $\\sum_{k=0}^{\\mathtt{count}-1} a_k x^k$ as a `Polynomial`."
+    (poly:polynomial (series-prefix count ps)))
+
+  (declare from-coefficients (Additive :a => List :a -> PowerSeries :a))
+  (define (from-coefficients xs)
+    "Construct a `PowerSeries` from a finite list of leading coefficients, padded with `zero`."
+    (let p = (poly:polynomial xs))
+    (make-series (fn (n) (poly:coeff p n))))
+
+  (declare constant-series (Additive :a => :a -> PowerSeries :a))
+  (define (constant-series c)
+    "Construct the constant power series $c + 0x + 0x^2 + \\cdots$."
+    (make-series (fn (n) (if (== n 0) c zero))))
+
+  (declare series-var (Semiring :a => PowerSeries :a))
+  (define series-var
+    "The indeterminate series $x = 0 + 1x + 0x^2 + \\cdots$."
+    (make-series (fn (n) (if (== n 1) one zero))))
+
+  (declare series-shift (Additive :a => UFix * PowerSeries :a -> PowerSeries :a))
+  (define (series-shift k ps)
+    "Multiply `ps` by $x^k$."
+    (make-series
+     (fn (n)
+       (if (< n k)
+           zero
+           (series-coeff ps (- n k))))))
+
+  (define-instance (Additive :a => Into (poly:Polynomial :a) (PowerSeries :a))
+    (define (into p)
+      (make-series (fn (n) (poly:coeff p n)))))
+
+  (declare series-approx-equal? (Eq :a => UFix * PowerSeries :a * PowerSeries :a -> Boolean))
+  (define (series-approx-equal? order a b)
+    "Return `True` if the first `order` coefficients ($a_0$ through $a_{\\mathtt{order}-1}$) of `a` and `b` are equal."
+    (rec check ((i 0))
+      (if (>= i order)
+          True
+          (and (== (series-coeff a i) (series-coeff b i))
+               (check (+ i 1))))))
+
+  (define-instance (Eq :a => Eq (PowerSeries :a))
+    "Compares coefficients `0` through `*series-comparison-order* - 1`."
+    (define (== a b)
+      (series-approx-equal? (lisp (-> UFix) () *series-comparison-order*) a b)))
+
+  ;;
+  ;; Algebraic Hierarchy: Additive -> AdditiveGroup -> Multiplicative -> Semiring -> Ring -> Num
+  ;;
+
+  (define-instance (Additive :a => Additive (PowerSeries :a))
+    (define (+ a b)
+      (make-series (fn (n) (+ (series-coeff a n) (series-coeff b n)))))
+    (define zero
+      (make-series (fn (_) zero))))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (PowerSeries :a))
+    (define (neg a)
+      (make-series (fn (n) (neg (series-coeff a n)))))
+    (define (- a b)
+      (make-series (fn (n) (- (series-coeff a n) (series-coeff b n))))))
+
+  (define-instance (Semiring :a => Multiplicative (PowerSeries :a))
+    (define (* a b)
+      (make-series
+       (fn (n)
+         (rec cauchy ((k 0) (acc zero))
+           (let term = (* (series-coeff a k) (series-coeff b (- n k))))
+           (let next = (+ acc term))
+           (if (== k n)
+               next
+               (cauchy (+ k 1) next))))))
+    (define one
+      (constant-series one)))
+
+  (define-instance (Semiring :a => Semiring (PowerSeries :a)))
+
+  (define-instance (Ring :a => Ring (PowerSeries :a))
+    (inline)
+    (define (from-int n)
+      (constant-series (from-int n))))
+
+  (define-instance (Num :a => Num (PowerSeries :a)))
+
+  (define-instance (Multiplicative :a => Scale :a (PowerSeries :a))
+    (define (scale c ps)
+      (make-series (fn (n) (* c (series-coeff ps n))))))
+
+  (define-instance (Ring :a => Module :a (PowerSeries :a)))
+  (define-instance (Reciprocable :a => VectorSpace :a (PowerSeries :a)))
+
+  (define-instance (ConjugateRing :a => ConjugateRing (PowerSeries :a))
+    (define (conjugate ps)
+      (make-series (fn (n) (conjugate (series-coeff ps n))))))
+
+  (declare %series-drop (UFix * PowerSeries :a -> PowerSeries :a))
+  (define (%series-drop k ps)
+    "Divide `ps` by $x^k$, dropping the first `k` coefficients."
+    (if (== k 0)
+        ps
+        (make-series (fn (n) (series-coeff ps (+ n k))))))
+
+  (define-instance ((Eq :a) (Reciprocable :a) => Reciprocable (PowerSeries :a))
+    (define (recip b)
+      (let cache = (vec:new))
+      (let gen =
+        (fn (n)
+          (let b0 = (series-coeff b 0))
+          (when (zero? b0)
+            (error "PowerSeries recip requires a nonzero constant term."))
+          (if (== n 0)
+              (recip b0)
+              (let ((inv-b0 (recip b0)))
+                (rec sum-loop ((k 1) (acc zero))
+                  (let next = (+ acc (* (series-coeff b k)
+                                        (vec:index-unsafe (- n k) cache))))
+                  (if (== k n)
+                      (neg (* inv-b0 next))
+                      (sum-loop (+ k 1) next)))))))
+      (%PowerSeries cache gen))
+    (define (/ a b)
+      (if (nonzero? (series-coeff b 0))
+          (* a (recip b))
+          (let ((limit (max 1 (lisp (-> UFix) () *series-comparison-order*))))
+            (rec find-val ((k 0))
+              (cond
+                ((>= k limit)
+                 (error "PowerSeries division by zero series."))
+                ((nonzero? (series-coeff b k))
+                 (* (%series-drop k a) (recip (%series-drop k b))))
+                ((nonzero? (series-coeff a k))
+                 (error "PowerSeries division: numerator has smaller valuation than denominator."))
+                (True
+                 (find-val (+ k 1)))))))))
+
+  ;;
+  ;; Calculus & Composition on Power Series
+  ;;
+
+  (declare series-differentiate (Semiring :a => PowerSeries :a -> PowerSeries :a))
+  (define (series-differentiate ps)
+    "Formal derivative $\\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$."
+    (make-series
+     (fn (n)
+       (* (from-nat (+ n 1)) (series-coeff ps (+ n 1))))))
+
+  (declare series-integrate (Reciprocable :a => :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-integrate c0 ps)
+    "Formal integral $c_0 + \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$."
+    (make-series
+     (fn (n)
+       (if (== n 0)
+           c0
+           (/ (series-coeff ps (- n 1)) (from-nat n))))))
+
+  (declare series-compose ((Eq :a) (Semiring :a) => PowerSeries :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-compose f g)
+    "Formal composition $f(g(x))$, requiring `(series-coeff g 0) == zero`."
+    ;; Wait until evaluation so constructing `series-compose` is lazy.
+    ;; We cache `g^k` in a vector of PowerSeries so each power is built once.
+    (let powers = (vec:new))
+    (let power-of-g =
+      (fn (k)
+        (rec ensure ((m (vec:length powers)))
+          (if (> m k)
+              (vec:index-unsafe k powers)
+              (let ((next-pow
+                      (cond
+                        ((== m 0) one)
+                        ((== m 1) g)
+                        (True (* (vec:index-unsafe (- m 1) powers) g)))))
+                (vec:push! next-pow powers)
+                (ensure (+ m 1)))))))
+    (make-series
+     (fn (n)
+       (when (nonzero? (series-coeff g 0))
+         (error "series-compose requires g(0) == 0."))
+       (if (== n 0)
+           (series-coeff f 0)
+           (rec loop ((k 1) (acc zero))
+             (let term = (* (series-coeff f k)
+                            (series-coeff (power-of-g k) n)))
+             (let next = (+ acc term))
+             (if (== k n)
+                 next
+                 (loop (+ k 1) next)))))))
+
+  (declare series-revert ((Eq :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-revert f)
+    "Compositional inverse $g(x)$ satisfying $f(g(x)) = x$, requiring $f(0) = 0$ and $f'(0) \\neq 0$."
+    (let cache = (vec:new))
+    ;; h(x) = g(x) / x = g_1 + g_2 x + g_3 x^2 + ...
+    ;; For k >= 2, [x^n] g(x)^k = [x^{n-k}] h(x)^k, which depends only on
+    ;; h_0 .. h_{n-k} = g_1 .. g_{n-k+1} <= g_{n-1}, all already in `cache`.
+    (let h = (make-series (fn (m) (vec:index-unsafe (+ m 1) cache))))
+    (let h-powers = (vec:new))
+    (let power-of-h =
+      (fn (k)
+        (rec ensure ((m (vec:length h-powers)))
+          (if (> m k)
+              (vec:index-unsafe k h-powers)
+              (let ((next-pow
+                      (cond
+                        ((== m 0) one)
+                        ((== m 1) h)
+                        (True (* (vec:index-unsafe (- m 1) h-powers) h)))))
+                (vec:push! next-pow h-powers)
+                (ensure (+ m 1)))))))
+    (let gen =
+      (fn (n)
+        (when (nonzero? (series-coeff f 0))
+          (error "series-revert requires f(0) == 0."))
+        (let f1 = (series-coeff f 1))
+        (when (zero? f1)
+          (error "series-revert requires f'(0) /= 0."))
+        (cond
+          ((== n 0) zero)
+          ((== n 1) (recip f1))
+          (True
+           (rec sum-k ((k 2) (acc zero))
+             (let term = (* (series-coeff f k)
+                            (series-coeff (power-of-h k) (- n k))))
+             (let next-acc = (+ acc term))
+             (if (== k n)
+                 (neg (* (recip f1) next-acc))
+                 (sum-k (+ k 1) next-acc)))))))
+    (%PowerSeries cache gen))
+
+  ;;
+  ;; Elementary Functions on Formal Power Series (over any Reciprocable field!)
+  ;;
+
+  (define-instance ((Eq :a) (Reciprocable :a) => Exponentiable (PowerSeries :a))
+    (define (exp a)
+      (let cache = (vec:new))
+      (let gen =
+        (fn (n)
+          (when (nonzero? (series-coeff a 0))
+            (error "PowerSeries exp requires constant term 0."))
+          (if (== n 0)
+              one
+              (rec loop ((k 1) (acc zero))
+                (let term = (* (from-nat k)
+                               (* (series-coeff a k)
+                                  (vec:index-unsafe (- n k) cache))))
+                (let next = (+ acc term))
+                (if (== k n)
+                    (/ next (from-nat n))
+                    (loop (+ k 1) next))))))
+      (%PowerSeries cache gen))
+    (define (ln a)
+      (let deriv-quot = (/ (series-differentiate a) a))
+      (make-series
+       (fn (n)
+         (when (/= (series-coeff a 0) one)
+           (error "PowerSeries ln requires constant term 1."))
+         (if (== n 0)
+             zero
+             (/ (series-coeff deriv-quot (- n 1))
+                (from-nat n))))))
+    (define (pow a b)
+      (exp (* b (ln a))))
+    (define (log b a)
+      (/ (ln a) (ln b))))
+
+  (define-instance ((Eq :a) (Reciprocable :a) => Radical (PowerSeries :a))
+    (define (sqrt a)
+      (let cache = (vec:new))
+      (let gen =
+        (fn (n)
+          (when (/= (series-coeff a 0) one)
+            (error "PowerSeries sqrt requires constant term 1."))
+          (cond
+            ((== n 0) one)
+            ((== n 1) (/ (series-coeff a 1) (from-nat 2)))
+            (True
+             (let conv =
+               (rec loop ((k 1) (acc zero))
+                 (let next = (+ acc (* (vec:index-unsafe k cache)
+                                       (vec:index-unsafe (- n k) cache))))
+                 (if (== k (- n 1))
+                     next
+                     (loop (+ k 1) next))))
+             (/ (- (series-coeff a n) conv) (from-nat 2))))))
+      (%PowerSeries cache gen))
+    (define (nth-root m a)
+      (exp (* (constant-series (recip (from-int m))) (ln a)))))
+
+  (declare %sincos-series ((Eq :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a * PowerSeries :a))
+  (define (%sincos-series a)
+    (let sin-cache = (vec:new))
+    (let cos-cache = (vec:new))
+    (let compute-sin-at =
+      (fn (m)
+        (if (== m 0)
+            zero
+            (let ((inv-m (recip (from-nat m))))
+              (rec loop ((k 1) (s-acc zero))
+                (let ka = (* (from-nat k) (series-coeff a k)))
+                (let next-s = (+ s-acc (* ka (vec:index-unsafe (- m k) cos-cache))))
+                (if (== k m)
+                    (* inv-m next-s)
+                    (loop (+ k 1) next-s)))))))
+    (let compute-cos-at =
+      (fn (m)
+        (if (== m 0)
+            one
+            (let ((inv-m (recip (from-nat m))))
+              (rec loop ((k 1) (c-acc zero))
+                (let ka = (* (from-nat k) (series-coeff a k)))
+                (let next-c = (+ c-acc (* ka (vec:index-unsafe (- m k) sin-cache))))
+                (if (== k m)
+                    (neg (* inv-m next-c))
+                    (loop (+ k 1) next-c)))))))
+    (let fill-below =
+      (fn (n)
+        (when (nonzero? (series-coeff a 0))
+          (error "PowerSeries sin/cos requires constant term 0."))
+        (rec fill ((m (min (vec:length sin-cache) (vec:length cos-cache))))
+          (when (< m n)
+            (when (== (vec:length sin-cache) m)
+              (vec:push! (compute-sin-at m) sin-cache))
+            (when (== (vec:length cos-cache) m)
+              (vec:push! (compute-cos-at m) cos-cache))
+            (fill (+ m 1))))))
+    (values (%PowerSeries sin-cache
+                          (fn (n)
+                            (fill-below n)
+                            (compute-sin-at n)))
+            (%PowerSeries cos-cache
+                          (fn (n)
+                            (fill-below n)
+                            (compute-cos-at n)))))
+
+  (define-instance ((Eq :a) (Reciprocable :a) => Trigonometric (PowerSeries :a))
+    (define (sin a)
+      (let (values s _) = (%sincos-series a))
+      s)
+    (define (cos a)
+      (let (values _ c) = (%sincos-series a))
+      c)
+    (define (tan a)
+      (/ (sin a) (cos a)))
+    (define (asin a)
+      (let deriv =
+        (series-integrate zero
+                          (/ (series-differentiate a)
+                             (sqrt (- one (* a a))))))
+      (make-series
+       (fn (n)
+         (when (nonzero? (series-coeff a 0))
+           (error "PowerSeries asin requires constant term 0."))
+         (series-coeff deriv n))))
+    (define (acos _)
+      (make-series (fn (_) (error "PowerSeries acos has non-rational constant term pi/2."))))
+    (define (atan a)
+      (let deriv =
+        (series-integrate zero
+                          (/ (series-differentiate a)
+                             (+ one (* a a)))))
+      (make-series
+       (fn (n)
+         (when (nonzero? (series-coeff a 0))
+           (error "PowerSeries atan requires constant term 0."))
+         (series-coeff deriv n)))))
+
+  (define-instance ((Eq :a) (Elementary :a) => Elementary (PowerSeries :a))
+    (define pi (constant-series pi))
+    (define ee (constant-series ee))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/POWER-SERIES")

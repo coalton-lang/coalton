@@ -1,0 +1,173 @@
+;;;; modular.ct
+;;;;
+;;;; Modular arithmetic and interpolation over Euclidean domains
+
+(coalton/utils:defstdlib-package #:coalton/xmath/modular
+  (:documentation "Modular arithmetic, the generalized Chinese Remainder Theorem, and Lagrange interpolation over arbitrary Euclidean domains.
+
+In any `EuclideanDomain` $D$ with valuation $\\delta$ and division with remainder $a = qb + r$ ($\\delta(r) < \\delta(b)$ or $r = 0$), residue classes modulo a nonzero $m \\in D$ are represented by remainders of degree smaller than $\\delta(m)$ (`mod-reduce`, using `rem`; for integers $D = \\mathbb{Z}$, `canonical-mod` uses floored `mod` to return representatives in $[0, m)$ for $m > 0$).
+
+**Modular inverses.** From the extended Euclidean identity $g = \\gcd(a, m) = sa + tm$, an element $a \\in D$ is invertible modulo $m$ if and only if the unit-normalized GCD is $g = 1$, in which case $a^{-1} \\equiv s \\pmod{m}$ (`mod-inv`).
+
+**Generalized Chinese Remainder Theorem (`crt`).** A system of congruences $x \\equiv r_i \\pmod{m_i}$ ($m_i \\neq 0$) over $D$ has a solution if and only if $r_i \\equiv r_j \\pmod{\\gcd(m_i, m_j)}$ for all $i, j$. Pairwise reduction writes $g = \\gcd(m_1, m_2) = s m_1 + t m_2$; when $g \\mid (r_2 - r_1)$, the unique solution modulo $M = \\operatorname{lcm}(m_1, m_2) = \\operatorname{normal}(m_1 m_2 / g)$ is
+$$x \\equiv r_1 + m_1 \\left(\\frac{r_2 - r_1}{g}\\, s \\bmod \\frac{m_2}{g}\\right) \\pmod{M}.$$
+
+**Lagrange interpolation (`lagrange-interpolate`).** Because evaluating $P(x_i) = y_i$ over a field $K$ is equivalent to the linear polynomial congruence $P(x) \\equiv y_i \\pmod{x - x_i}$ in the Euclidean domain $K[x]$, applying `crt` directly in $K[x]$ recovers the unique interpolating polynomial of degree $< n$ (or returns `None` when two points assign conflicting values to the same abscissa).")
+  (:nicknames
+   #:coalton/math/modular
+   #:coalton-library/math/modular)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:poly #:coalton/xmath/polynomial))
+  (:export
+   #:mod-reduce
+   #:canonical-mod
+   #:mod-add
+   #:mod-sub
+   #:mod-neg
+   #:mod-mul
+   #:mod-expt
+   #:mod-inv
+   #:mod-div
+   #:crt
+   #:lagrange-interpolate))
+
+(in-package #:coalton/xmath/modular)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (inline)
+  (declare euclidean-reduce (EuclideanDomain :a => :a * :a -> :a))
+  (define (euclidean-reduce a m)
+    "Reduce `a` modulo nonzero `m` using `rem`. In particular, `(euclidean-reduce -1 5)` is `-1`, not `4`."
+    (rem a m))
+
+  (inline)
+  (declare mod-reduce (EuclideanDomain :a => :a * :a -> :a))
+  (define (mod-reduce a m)
+    "An alias for `euclidean-reduce`; polynomial remainders have degree $< \\deg m$."
+    (euclidean-reduce a m))
+
+  (inline)
+  (declare canonical-mod (Remainder :a => :a * :a -> :a))
+  (define (canonical-mod a m)
+    "Reduce using floored `mod`. For positive integer `m`, the result lies in $[0,m)$; negative integer moduli give nonpositive representatives."
+    (mod a m))
+
+  (inline)
+  (declare mod-add (EuclideanDomain :a => :a * :a * :a -> :a))
+  (define (mod-add a b m)
+    "Return $(a+b) \\bmod m$ using `rem`."
+    (rem (+ a b) m))
+
+  (inline)
+  (declare mod-sub (EuclideanDomain :a => :a * :a * :a -> :a))
+  (define (mod-sub a b m)
+    "Return $(a-b) \\bmod m$ using `rem`."
+    (rem (- a b) m))
+
+  (inline)
+  (declare mod-neg (EuclideanDomain :a => :a * :a -> :a))
+  (define (mod-neg a m)
+    "Return $-a \\bmod m$ using `rem`."
+    (rem (neg a) m))
+
+  (inline)
+  (declare mod-mul (EuclideanDomain :a => :a * :a * :a -> :a))
+  (define (mod-mul a b m)
+    "Return $ab \\bmod m$ using `rem`."
+    (rem (* a b) m))
+
+  (declare mod-expt
+    ((EuclideanDomain :a) (Integral :int) => :a * :int * :a -> :a))
+  (define (mod-expt a exponent m)
+    "Compute $a^e \\bmod m$ by binary exponentiation, reducing with `rem` after each product. Signal an error for a negative exponent."
+    (when (< exponent 0)
+      (error "mod-expt requires a nonnegative exponent."))
+    (rec power ((base (rem a m)) (e exponent) (acc (rem one m)))
+      (if (== e 0)
+          acc
+          (power (mod-mul base base m)
+                 (quot e 2)
+                 (if (odd? e) (mod-mul acc base m) acc)))))
+
+  (declare %normal-reduce (EuclideanDomain :a => :a * :a -> :a))
+  (define (%normal-reduce a m)
+    (let nm = (normal-part m))
+    (rem (+ (rem a nm) nm) nm))
+
+  (declare mod-inv
+    ((Eq :a) (EuclideanDomain :a) => :a * :a -> Optional :a))
+  (define (mod-inv a m)
+    "Return the inverse of `a` modulo `m`, or `None` if the modulus is zero or the normalized GCD is not `one`. Integer results lie in $[0,|m|)$."
+    (cond
+      ((zero? m) None)
+      (True
+       (let (values g s _) = (extended-gcd a m))
+       (if (== g one)
+           (Some (%normal-reduce s m))
+           None))))
+
+  (declare mod-div
+    ((Eq :a) (EuclideanDomain :a) => :a * :a * :a -> Optional :a))
+  (define (mod-div a b m)
+    "Return $a b^{-1} \\bmod m$, or `None` if `b` has no inverse or the modulus is zero."
+    (match (mod-inv b m)
+      ((None) None)
+      ((Some inverse) (Some (%normal-reduce (* a inverse) m)))))
+
+  (declare crt2
+    ((Eq :a) (EuclideanDomain :a) =>
+     :a * :a * :a * :a -> Optional (Tuple :a :a)))
+  (define (crt2 r1 m1 r2 m2)
+    "Combine $x \\equiv r_1 \\pmod{m_1}$ and $x \\equiv r_2 \\pmod{m_2}$. Return `(Some (Tuple remainder modulus))` with unit-normalized LCM modulus, or `None` for zero moduli or incompatible residues."
+    (cond
+      ((or (zero? m1) (zero? m2)) None)
+      (True
+       (let (values g s _) = (extended-gcd m1 m2))
+       (match (exact-quot (- r2 r1) g)
+         ((None) None)
+         ((Some delta)
+          (let m2/g = (exact-div m2 g))
+          (let combined-mod = (normal-part (* m1 m2/g)))
+          (let correction = (rem (* delta s) m2/g))
+          (Some (Tuple (%normal-reduce (+ r1 (* m1 correction)) combined-mod)
+                       combined-mod)))))))
+
+  (declare crt
+    ((Eq :a) (EuclideanDomain :a) =>
+     List (Tuple :a :a) -> Optional (Tuple :a :a)))
+  (define (crt congruences)
+    "Combine `(Tuple remainder modulus)` pairs with `crt2`. The empty system returns `(Some (Tuple zero one))`."
+    (rec combine ((rest congruences) (r zero) (m one))
+      (match rest
+        ((Nil) (Some (Tuple r m)))
+        ((Cons (Tuple next-r next-m) more)
+         (match (crt2 r m next-r next-m)
+           ((None) None)
+           ((Some (Tuple combined-r combined-m))
+            (combine more combined-r combined-m)))))))
+
+  (declare lagrange-interpolate
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     List (Tuple :a :a) -> Optional (poly:Polynomial :a)))
+  (define (lagrange-interpolate points)
+    "Interpolate field-valued points $(x_i,y_i)$ using polynomial CRT. Return `None` for conflicting values at the same abscissa; repeated identical points are allowed. The empty interpolant is zero."
+    (let congruences =
+      (map (fn ((Tuple x y))
+             (Tuple (into y)
+                    (- poly:poly-var (into x))))
+           points))
+    (match (crt congruences)
+      ((None) None)
+      ((Some (Tuple interpolant _)) (Some interpolant)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/MODULAR")

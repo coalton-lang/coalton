@@ -56,7 +56,17 @@
    (#:m-res #:coalton/monad/resultt)
    (#:m-env #:coalton/monad/environment)
    (#:m-stt #:coalton/monad/statet)
-   (#:fft #:coalton/xmath/fft)))
+   (#:fft #:coalton/xmath/fft)
+   (#:ratio #:coalton/xmath/ratio)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:series #:coalton/xmath/power-series)
+   (#:mat #:coalton/xmath/matrix)
+   (#:diff #:coalton/xmath/differential)
+   (#:gb #:coalton/xmath/groebner)
+   (#:modmath #:coalton/xmath/modular)
+   (#:recur #:coalton/xmath/recurrence)
+   (#:quat #:coalton/xmath/quaternion)
+   (#:cliff #:coalton/xmath/clifford-algebra)))
 
 (in-package #:coalton-native-tests)
 

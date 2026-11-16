@@ -1,0 +1,427 @@
+;;;; recurrence.ct
+;;;;
+;;;; Rational approximation, linear recurrences, and difference calculus
+
+(coalton/utils:defstdlib-package #:coalton/xmath/recurrence
+  (:documentation "Padé rational approximation of formal power series, Berlekamp–Massey recurrence synthesis, $O(d^2 \\log n)$ linear recurrence evaluation, finite difference calculus, and Gosper's algorithm for indefinite hypergeometric summation.
+
+**Padé approximants (`pade-approximant`).** Given a formal power series $S(x) = \\sum_{k \\ge 0} s_k x^k \\in K[[x]]$ over a field $K$ and degree bounds $(m, n)$, the $[m/n]$ Padé approximant is the reduced rational function $P(x)/Q(x)$ satisfying $\\deg P \\le m$, $\\deg Q \\le n$, $Q(0) \\neq 0$, and
+$$P(x) - Q(x) S(x) \\equiv 0 \\pmod{x^{m+n+1}},$$
+computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^{m+n+1}$, stopping at the first remainder of degree $\\le m$.
+
+**Berlekamp–Massey and rational generating functions.** Given a finite prefix $(a_0, \\ldots, a_{N-1})$ over a field, Berlekamp–Massey (`berlekamp-massey`) finds the shortest linear recurrence $a_n = \\sum_{j=1}^L c_j a_{n-j}$ ($n \\ge L$) by iteratively updating the connection polynomial $C(x) = 1 - \\sum_{j=1}^L c_j x^j$, from which `guess-generating-function` recovers the rational generating function $P(x)/C(x)$.
+
+**Fast recurrence evaluation (`linear-recurrence-nth`).** For an order-$d$ linear recurrence over any commutative ring $R$, the shift operator acts as multiplication by $x$ in the quotient ring $R[x] / (\\chi(x))$ modulo the monic characteristic polynomial $\\chi(x) = x^d - c_1 x^{d-1} - \\cdots - c_d$. Binary exponentiation computes $x^n \\bmod \\chi(x) = \\sum_{i=0}^{d-1} w_i x^i$ in $O(d^2 \\log n)$ ring operations without division, yielding $a_n = \\sum_{i=0}^{d-1} w_i a_i$.
+
+**Difference calculus and Gosper's algorithm.** The forward difference operator $\\Delta f(x) = f(x + 1) - f(x)$ (`forward-diff`) has a unique polynomial inverse $F = \\Delta^{-1} p$ (`antidifference-poly`, with $F(0) = 0$) over any field of characteristic $0$, giving closed forms for $\\sum_{k=0}^{n-1} p(k) = F(n)$. More generally, for a hypergeometric term $t_n$ with rational term ratio $R(n) = t_{n+1}/t_n = A(n)/B(n) \\in \\mathbb{Q}(n)$, Gosper's algorithm (`gosper-solve`) decides whether $t_n$ has a hypergeometric antidifference $z_{n+1} - z_n = t_n$:
+1. Factor the term ratio into **Gosper canonical form** $\\frac{A(n)}{B(n)} = \\frac{p(n+1)}{p(n)} \\frac{q(n)}{r(n+1)}$ with $\\gcd(q(n), r(n+k+1)) = 1$ for all $k \\in \\mathbb{N}$;
+2. Solve **Gosper's key equation** $q(n) f(n+1) - r(n) f(n) = p(n)$ for a polynomial $f(n) \\in \\mathbb{Q}[n]$;
+3. Return the rational certificate $y(n) = \\frac{r(n) f(n)}{p(n)}$ satisfying $y(n+1) R(n) - y(n) = 1$, so that $z_n = y(n) t_n$ telescopes $\\sum_{n=a}^{b-1} t_n = y(b) t_b - y(a) t_a$.")
+  (:nicknames
+   #:coalton/math/recurrence
+   #:coalton-library/math/recurrence)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:import-from
+   #:coalton/tuple
+   #:Tuple3)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:frac #:coalton/math/fraction)
+   (#:mat #:coalton/xmath/matrix)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:ratio #:coalton/xmath/ratio)
+   (#:series #:coalton/xmath/power-series)
+   (#:vec #:coalton/vector))
+  (:export
+   #:pade-approximant
+   #:berlekamp-massey
+   #:guess-generating-function
+   #:linear-recurrence-nth
+   #:poly-shift
+   #:forward-diff
+   #:antidifference-poly
+   #:rational-shift
+   #:gosper-solve))
+
+(in-package #:coalton/xmath/recurrence)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (declare poly-shift
+    (Semiring :a => poly:Polynomial :a * :a -> poly:Polynomial :a))
+  (define (poly-shift p c)
+    "Compute $p(x+c)$ over any semiring."
+    (poly:compose p (poly:polynomial [c one])))
+
+  (declare forward-diff (Ring :a => poly:Polynomial :a -> poly:Polynomial :a))
+  (define (forward-diff p)
+    "Compute the forward difference $\\Delta p(x)=p(x+1)-p(x)$."
+    (- (poly-shift p one) p))
+
+  (declare antidifference-poly
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     poly:Polynomial :a -> poly:Polynomial :a))
+  (define (antidifference-poly p)
+    "Over a field of characteristic zero, return the unique $F$ with $F(0)=0$ and $\\Delta F=p$. In particular, $F(n)=\\sum_{k=0}^{n-1}p(k)$."
+    (rec eliminate ((remaining p) (answer zero))
+      (if (zero? remaining)
+          answer
+          (let ((exponent (+ (poly:degree remaining) 1))
+                (term (quot (poly:monomial (poly:leading-coefficient remaining) exponent)
+                            (from-nat exponent))))
+            (eliminate (- remaining (forward-diff term)) (+ answer term))))))
+
+  (declare rational-shift
+    (Semiring :a =>
+     ratio:Ratio (poly:Polynomial :a) * :a -> ratio:Ratio (poly:Polynomial :a)))
+  (define (rational-shift rational c)
+    "Compute a rational function at $x+c$ without requiring coefficient equality or division."
+    ;; Translation preserves coprimality and the denominator's leading unit.
+    (ratio::%Ratio (poly-shift (ratio:numerator rational) c)
+                   (poly-shift (ratio:denominator rational) c)))
+
+  (declare %recurrence-tabulate (UFix * (UFix -> :a) -> List :a))
+  (define (%recurrence-tabulate count f)
+    (rec build ((i count) (acc Nil))
+      (if (zero? i)
+          acc
+          (build (- i 1) (Cons (f (- i 1)) acc)))))
+
+  (declare %gosper-resultant
+    (poly:Polynomial Fraction * poly:Polynomial Fraction -> poly:Polynomial Fraction))
+  (define (%gosper-resultant a b)
+    "Compute $\\operatorname{Res}_n(a(n),b(n+k))$ as a polynomial in $k$."
+    (let da = (poly:degree a))
+    (let db = (poly:degree b))
+    (let lifted-a = (poly:polynomial (map into (poly:coefficients a))))
+    (let shifted-b =
+      (poly-shift (poly:polynomial (map into (poly:coefficients b)))
+                  poly:poly-var))
+    (let size = (+ da db))
+    (mat:det
+     (mat:from-rows
+      (%recurrence-tabulate size
+        (fn (i)
+          (let offset = (if (< i db) i (- i db)))
+          (let polynomial = (if (< i db) lifted-a shifted-b))
+          (%recurrence-tabulate size
+            (fn (j)
+              (if (< j offset)
+                  zero
+                  (poly:coeff polynomial (- j offset))))))))))
+
+  (declare %gosper-shifts
+    (poly:Polynomial Fraction * poly:Polynomial Fraction -> List Integer))
+  (define (%gosper-shifts a b)
+    "Find every nonnegative integer zero of the shift resultant, without a search cutoff."
+    (if (or (zero? (poly:degree a)) (zero? (poly:degree b)))
+        Nil
+        (let ((resultant (%gosper-resultant a b))
+              (coefficients (poly:coefficients resultant))
+              (common-denominator
+                (rec denominators ((rest coefficients) (acc 1))
+                  (match rest
+                    ((Nil) acc)
+                    ((Cons c more) (denominators more (lcm acc (frac:denominator c)))))))
+              (integer-resultant
+                (poly:primitive-part
+                 (poly:polynomial
+                  (map (fn (c) (frac:numerator (* (from-int common-denominator) c)))
+                       coefficients))))
+              (bound
+                (rec lowest ((rest (poly:coefficients integer-resultant)))
+                  (match rest
+                    ((Nil) (error "The Gosper shift resultant is identically zero."))
+                    ((Cons c more) (if (nonzero? c) (abs c) (lowest more))))))
+              (roots
+                (rec divisors ((candidate 1) (small Nil) (large Nil))
+                  (if (> (* candidate candidate) bound)
+                      (list:append (list:reverse small) large)
+                      (if (zero? (rem bound candidate))
+                          (let ((other (quot bound candidate)))
+                            (divisors (+ candidate 1)
+                                      (if (zero? (poly:evaluate integer-resultant candidate))
+                                          (Cons candidate small)
+                                          small)
+                                      (if (and (/= other candidate)
+                                               (zero? (poly:evaluate integer-resultant other)))
+                                          (Cons other large)
+                                          large)))
+                          (divisors (+ candidate 1) small large))))))
+          (if (zero? (poly:coeff integer-resultant 0))
+              (Cons 0 roots)
+              roots))))
+
+  (declare gosper-canonical-form
+    (ratio:Ratio (poly:Polynomial Fraction) ->
+     Tuple3 (poly:Polynomial Fraction) (poly:Polynomial Fraction) (poly:Polynomial Fraction)))
+  (define (gosper-canonical-form term-ratio)
+    "Return `(Tuple3 p q r)` with $A(n)p(n)r(n+1)=B(n)p(n+1)q(n)$ and $\\gcd(q(n),r(n+k+1))=1$ for every nonnegative integer $k$."
+    (let a = (ratio:numerator term-ratio))
+    (let b = (ratio:denominator term-ratio))
+    (rec shifts ((rest (%gosper-shifts a b)) (p one) (q a) (r (poly-shift b -1)))
+      (match rest
+        ((Nil) (Tuple3 p q r))
+        ((Cons k more)
+         (let g = (gcd q (poly-shift r (from-int (+ k 1)))))
+         (if (zero? (poly:degree g))
+             (shifts more p q r)
+             (let ((product
+                     (rec multiply ((j 1) (acc one))
+                       (if (> j k)
+                           acc
+                           (multiply (+ j 1) (* acc (poly-shift g (from-int (neg j)))))))))
+               (shifts rest
+                       (* p product)
+                       (exact-div q g)
+                       (exact-div r (poly-shift g (from-int (neg (+ k 1))))))))))))
+
+  (declare %gosper-degree-bound
+    (poly:Polynomial Fraction * poly:Polynomial Fraction * poly:Polynomial Fraction -> Integer))
+  (define (%gosper-degree-bound p q r)
+    (let degree = (max (poly:degree q) (poly:degree r)))
+    (let dp = (to-integer (poly:degree p)))
+    (if (nonzero? (- (poly:coeff q degree) (poly:coeff r degree)))
+        (- dp (to-integer degree))
+        (let ((ordinary (+ (- dp (to-integer degree)) 1))
+              (cancel (if (zero? degree)
+                          zero
+                          (/ (- (poly:coeff r (- degree 1)) (poly:coeff q (- degree 1)))
+                             (poly:leading-coefficient q)))))
+          ;; The top coefficient is lc(q)*D + q[m-1] - r[m-1].
+          ;; A nonnegative integral cancellation degree has no fixed safe cap.
+          (if (and (>= cancel zero) (== (frac:denominator cancel) 1))
+              (max ordinary (frac:numerator cancel))
+              ordinary))))
+
+  (declare gosper-solve-key-equation
+    (poly:Polynomial Fraction * poly:Polynomial Fraction * poly:Polynomial Fraction ->
+     Optional (poly:Polynomial Fraction)))
+  (define (gosper-solve-key-equation p q r)
+    "Find a polynomial $f$ satisfying $q(n)f(n+1)-r(n)f(n)=p(n)$, or return `None`. Free coefficients of an underdetermined system are set to zero."
+    (cond
+      ((zero? p) (Some zero))
+      ((and (zero? q) (zero? r)) None)
+      (True
+       (let bound = (%gosper-degree-bound p q r))
+       (if (< bound 0)
+           None
+           (let ((columns
+                   (%list-vector
+                    (%recurrence-tabulate (+ (the UFix (from-int bound)) 1)
+                      (fn (j)
+                        (let monomial = (poly:monomial one j))
+                        (- (* q (poly-shift monomial one)) (* r monomial))))))
+                 (width (vec:length columns))
+                 (height (+ (max (poly:degree p)
+                                 (+ (max (poly:degree q) (poly:degree r))
+                                    (the UFix (from-int bound))))
+                            1))
+                 (augmented
+                   (mat:from-rows
+                    (%recurrence-tabulate height
+                      (fn (i)
+                        (%recurrence-tabulate (+ width 1)
+                          (fn (j)
+                            (if (== j width)
+                                (poly:coeff p i)
+                                (poly:coeff (vec:index-unsafe j columns) i)))))))))
+             ;; solve-vector requires a nonsingular square matrix; rref also
+             ;; handles rectangular systems and polynomial homogeneous solutions.
+             (let (values reduced pivots) = (mat:rref augmented))
+             (if (list:any (fn (j) (== j width)) pivots)
+                 None
+                 (let ((solution (vec:with-initial-element width zero)))
+                   (rec fill ((rest pivots) (i 0))
+                     (match rest
+                       ((Nil) (values))
+                       ((Cons j more)
+                        (vec:set! j (mat:entry reduced i width) solution)
+                        (fill more (+ i 1)))))
+                   (let f =
+                     (poly:polynomial
+                      (%recurrence-tabulate width (fn (j) (vec:index-unsafe j solution)))))
+                   (if (== (- (* q (poly-shift f one)) (* r f)) p)
+                       (Some f)
+                       None))))))))
+
+  (declare gosper-solve
+    (ratio:Ratio (poly:Polynomial Fraction) ->
+     Optional (ratio:Ratio (poly:Polynomial Fraction))))
+  (define (gosper-solve term-ratio)
+    "Return a rational certificate $y$ with $y(n+1)R(n)-y(n)=1$ for the supplied term ratio $R=t_{n+1}/t_n$, or `None` if the term is not Gosper-summable."
+    (let (Tuple3 p q r) = (gosper-canonical-form term-ratio))
+    (match (gosper-solve-key-equation p q r)
+      ((None) None)
+      ((Some f)
+       (let certificate = (ratio:make-ratio (* r f) p))
+       (if (== (- (* (rational-shift certificate one) term-ratio) certificate) one)
+           (Some certificate)
+           None))))
+
+  (declare pade-approximant
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     UFix * UFix * series:PowerSeries :a -> ratio:Ratio (poly:Polynomial :a)))
+  (define (pade-approximant m n ps)
+    "Return the reduced Padé approximant $P/Q$ with $\\deg P\\le m$, $\\deg Q\\le n$, and $P/Q\\equiv S\\pmod{x^{m+n+1}}$. Signal an error when no approximant regular at zero exists with these bounds."
+    (let order = (+ (+ m n) 1))
+    (let truncated = (series:series->polynomial order ps))
+    (let modulus = (poly:monomial one order))
+    (let approximant =
+      (rec euclid ((old-r modulus) (r truncated) (old-q zero) (q one))
+        (cond
+          ((or (zero? r) (<= (poly:degree r) m))
+           (when (zero? q)
+             (error "No Pade approximant exists with these degree bounds."))
+           (ratio:make-ratio r q))
+          (True
+           (let (values quotient next-r) = (quotrem old-r r))
+           (euclid r next-r q (- old-q (* quotient q)))))))
+    (let numerator = (ratio:numerator approximant))
+    (let denominator = (ratio:denominator approximant))
+    ;; Cancelling a common power of x can lose approximation order.
+    (when (or (> (poly:degree numerator) m)
+              (> (poly:degree denominator) n)
+              (zero? (poly:coeff denominator 0))
+              (nonzero? (rem (- (* truncated denominator) numerator) modulus)))
+      (error "No Pade approximant exists with these degree bounds."))
+    approximant)
+
+  (declare %list-vector (List :a -> vec:Vector :a))
+  (define (%list-vector xs)
+    (let out = (vec:with-capacity (list:length xs)))
+    (rec fill ((rest xs))
+      (match rest
+        ((Nil) out)
+        ((Cons x more)
+         (vec:push! x out)
+         (fill more)))))
+
+  (declare berlekamp-massey
+    ((Eq :a) (Reciprocable :a) => List :a -> List :a))
+  (define (berlekamp-massey terms)
+    "Find the shortest recurrence $(c_1,\\ldots,c_L)$ fitting all supplied terms $s_k=\\sum_{j=1}^L c_j s_{k-j}$ for $L\\le k<N$, over a field. Empty and all-zero sequences return `Nil`."
+    (let samples = (%list-vector terms))
+    (let count = (vec:length samples))
+    (let size = (+ count 1))
+    (let connection = (vec:with-initial-element size zero))
+    (let previous = (vec:with-initial-element size zero))
+    (vec:set! 0 one connection)
+    (vec:set! 0 one previous)
+    (rec step ((k 0) (length 0) (shift 1) (last-discrepancy one) (backup previous))
+      (if (== k count)
+          (rec collect ((i length) (acc Nil))
+            (if (== i 0)
+                acc
+                (collect (- i 1) (Cons (neg (vec:index-unsafe i connection)) acc))))
+          (let ((discrepancy
+                  (rec sum ((j 1) (acc (vec:index-unsafe k samples)))
+                    (if (> j length)
+                        acc
+                        (sum (+ j 1)
+                             (+ acc (* (vec:index-unsafe j connection)
+                                       (vec:index-unsafe (- k j) samples))))))))
+            (if (zero? discrepancy)
+                (step (+ k 1) length (+ shift 1) last-discrepancy backup)
+                (let ((old-connection (vec:copy connection))
+                      (factor (/ discrepancy last-discrepancy)))
+                  (rec update ((j 0))
+                    (when (< (+ j shift) size)
+                      (vec:set! (+ j shift)
+                                (- (vec:index-unsafe (+ j shift) connection)
+                                   (* factor (vec:index-unsafe j backup)))
+                                connection)
+                      (update (+ j 1))))
+                  (if (<= (* 2 length) k)
+                      (step (+ k 1) (- (+ k 1) length) 1 discrepancy old-connection)
+                      (step (+ k 1) length (+ shift 1) last-discrepancy backup))))))))
+
+  (declare guess-generating-function
+    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+     List :a -> ratio:Ratio (poly:Polynomial :a)))
+  (define (guess-generating-function terms)
+    "Guess a reduced rational generating function from a finite field-valued prefix. With recurrence length $L$, use $Q=1-c_1x-\\cdots-c_Lx^L$ and $P=(SQ)\\bmod x^{N-L}$ when $N\\ge 2L$. Shorter prefixes retain the first $L$ numerator coefficients instead, so every supplied coefficient is reproduced. Extrapolation is not guaranteed."
+    (let recurrence = (berlekamp-massey terms))
+    (let count = (list:length terms))
+    (let length = (list:length recurrence))
+    (let denominator = (poly:polynomial (Cons one (map neg recurrence))))
+    ;; A short, underdetermined prefix may have N-L < L.
+    (let order = (max length (- count length)))
+    (let numerator =
+      (rem (* (poly:polynomial terms) denominator)
+           (poly:monomial one order)))
+    (ratio:make-ratio numerator denominator))
+
+  (declare %monic-poly-rem
+    ((Eq :a) (Ring :a) =>
+     poly:Polynomial :a * poly:Polynomial :a -> poly:Polynomial :a))
+  (define (%monic-poly-rem dividend divisor)
+    "Reduce a polynomial by a monic divisor using only ring operations."
+    (when (/= (poly:leading-coefficient divisor) one)
+      (error "%monic-poly-rem requires a monic divisor."))
+    (let degree = (poly:degree divisor))
+    (let remainder = (%list-vector (poly:coefficients dividend)))
+    (rec reduce ((length (vec:length remainder)))
+      (if (<= length degree)
+          (poly:polynomial
+           (rec collect ((i length) (acc Nil))
+             (if (== i 0)
+                 acc
+                 (collect (- i 1)
+                          (Cons (vec:index-unsafe (- i 1) remainder) acc)))))
+          (let ((top (- length 1))
+                (factor (vec:index-unsafe top remainder))
+                (shift (- top degree)))
+            (rec cancel ((j 0))
+              (when (< j degree)
+                (vec:set! (+ shift j)
+                          (- (vec:index-unsafe (+ shift j) remainder)
+                             (* factor (poly:coeff divisor j)))
+                          remainder)
+                (cancel (+ j 1))))
+            (vec:set! top zero remainder)
+            (reduce top)))))
+
+  (declare linear-recurrence-nth
+    ((Eq :a) (Ring :a) => List :a * List :a * Integer -> :a))
+  (define (linear-recurrence-nth coefficients initial n)
+    "Compute $a_n$ for $a_k=c_1a_{k-1}+\\cdots+c_da_{k-d}$ in $O(d^2\\log n)$ ring operations. Supply exactly $d$ initial values and a nonnegative index; otherwise signal an error. An empty recurrence with empty initial values defines the zero sequence."
+    (when (< n 0)
+      (error "linear-recurrence-nth requires a nonnegative index."))
+    (let degree = (list:length coefficients))
+    (when (/= (list:length initial) degree)
+      (error "linear-recurrence-nth requires one initial value per coefficient."))
+    (cond
+      ((== degree 0) zero)
+      ((< n (to-integer degree))
+       (list:nth (the UFix (from-int n)) initial))
+      (True
+       (let characteristic =
+         (poly:polynomial
+          (list:append (map neg (list:reverse coefficients)) (Cons one Nil))))
+       (let weights =
+         (rec power ((base (%monic-poly-rem poly:poly-var characteristic))
+                     (exponent n)
+                     (acc one))
+           (if (== exponent 0)
+               acc
+               (power (%monic-poly-rem (* base base) characteristic)
+                      (quot exponent 2)
+                      (if (odd? exponent)
+                          (%monic-poly-rem (* acc base) characteristic)
+                          acc)))))
+       (rec dot ((rest initial) (i 0) (acc zero))
+         (match rest
+           ((Nil) acc)
+           ((Cons a more)
+            (dot more (+ i 1) (+ acc (* (poly:coeff weights i) a))))))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/RECURRENCE")
