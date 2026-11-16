@@ -54,7 +54,11 @@
            :accessor unread-characters)
    (position :initform 0
              :accessor character-position))
-  (:documentation "A stream that exposes the character offset into an underlying character stream through #'stream-file-position."))
+  (:documentation "A stream that exposes the character offset into an underlying character stream through #'stream-file-position. Closing this stream also closes the underlying stream."))
+
+(defmethod close ((stream char-position-stream) &key abort)
+  (close (inner-stream stream) :abort abort)
+  (call-next-method))
 
 (defmethod trivial-gray-streams:stream-read-char ((stream char-position-stream))
   (let ((char (cond ((not (null (unread-characters stream)))
@@ -317,11 +321,16 @@ OFFSET indicates starting character offset within the file."
                           :direction ':input
                           :element-type 'character
                           :external-format (source-external-format)))
-         (stream (make-instance 'char-position-stream
-                   :stream fd-stream)))
-    (when (plusp (file-offset self))
-      (file-position stream (file-offset self)))
-    stream))
+         (returned-p nil))
+    (unwind-protect
+         (let ((stream (make-instance 'char-position-stream
+                         :stream fd-stream)))
+           (when (plusp (file-offset self))
+             (file-position stream (file-offset self)))
+           (setf returned-p t)
+           stream)
+      (unless returned-p
+        (close fd-stream :abort t)))))
 
 (defclass source-string (source)
   ((string :initarg :string

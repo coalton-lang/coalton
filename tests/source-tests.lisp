@@ -24,6 +24,46 @@
                    (cdr (nth 71 chars)))
             "Second kanji is at char offset, not byte offset")))))
 
+(deftest test-char-position-stream-close-closes-inner-stream ()
+  (dolist (abort '(nil t))
+    (with-open-file (inner (test-file "tests/test-files/unicode.coal")
+                           :direction :input
+                           :external-format :utf-8)
+      (let ((stream (make-instance 'source:char-position-stream :stream inner)))
+        (is (open-stream-p stream))
+        (is (open-stream-p inner))
+        (close stream :abort abort)
+        (is (not (open-stream-p inner))
+            "Closing the wrapper must close its underlying stream")
+        (is (not (open-stream-p stream))
+            "Closing the wrapper must mark it closed")
+        (close stream :abort abort)
+        (is (not (open-stream-p inner)))
+        (is (not (open-stream-p stream)))))))
+
+(deftest test-source-file-with-open-stream-closes-inner-stream ()
+  (dolist (unwind-p '(nil t))
+    (let ((source (source:make-source-file
+                   (test-file "tests/test-files/unicode.coal")
+                   :offset 1))
+          (wrapper nil)
+          (inner nil))
+      (unwind-protect
+           (progn
+             (catch 'leave-stream
+               (with-open-stream (stream (source:source-stream source))
+                 (setf wrapper stream
+                       inner (source::inner-stream stream))
+                 (is (open-stream-p inner))
+                 (is (= 1 (file-position stream)))
+                 (when unwind-p
+                   (throw 'leave-stream nil))))
+             (is (not (open-stream-p inner))
+                 "WITH-OPEN-STREAM must close the underlying file on normal and nonlocal exits")
+             (is (not (open-stream-p wrapper))))
+        (when inner
+          (close inner))))))
+
 (deftest test-reader-error-reports-character-offsets ()
   "A reader error in a file with multibyte characters must report character offsets.
 
