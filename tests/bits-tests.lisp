@@ -174,8 +174,8 @@
   (declare %method-laws ((bits:Bits :a) (Integral :a) => (Integer -> :a) * :a * :a * Integer -> Boolean))
   (define (%method-laws wrap a b k)
     "Each method is the unbounded operation followed by `wrap`."
-    (let ((ia (math:toInteger a))
-          (ib (math:toInteger b)))
+    (let ((ia (math:to-integer a))
+          (ib (math:to-integer b)))
       (and (== (bits:and a b) (wrap (%logand ia ib)))
            (== (bits:or a b) (wrap (%logior ia ib)))
            (== (bits:xor a b) (wrap (%logxor ia ib)))
@@ -187,8 +187,8 @@
     "`ldb` and `dpb` are the unbounded operations followed by `wrap`."
     (match size-and-position
       ((Tuple s p)
-       (and (== (bits:ldb s p a) (wrap (%ldb s p (math:toInteger a))))
-            (== (bits:dpb n s p a) (wrap (%dpb (math:toInteger n) s p (math:toInteger a))))))))
+       (and (== (bits:ldb s p a) (wrap (%ldb s p (math:to-integer a))))
+            (== (bits:dpb n s p a) (wrap (%dpb (math:to-integer n) s p (math:to-integer a))))))))
 
   (declare %boolean-algebra-laws ((bits:Bits :a) (Num :a) => :a * :a * :a -> Boolean))
   (define (%boolean-algebra-laws a b c)
@@ -214,13 +214,13 @@
     "For non-negative `j` and `k`."
     (and (== (bits:shift 0 a) a)
          (== (bits:shift j (bits:shift k a)) (bits:shift (+ j k) a))
-         (== (bits:shift (negate j) (bits:shift (negate k) a))
-             (bits:shift (negate (+ j k)) a))))
+         (== (bits:shift (neg j) (bits:shift (neg k) a))
+             (bits:shift (neg (+ j k)) a))))
 
   (declare %signed-shift-laws (bits:Bits :a => Integer * :a -> Boolean))
   (define (%signed-shift-laws k a)
     "For non-negative `k`, in signed types and `Integer`."
-    (== (bits:shift (negate k) (bits:not a)) (bits:not (bits:shift (negate k) a))))
+    (== (bits:shift (neg k) (bits:not a)) (bits:not (bits:shift (neg k) a))))
 
   (declare %shift-distribution-laws (bits:Bits :a => Integer * :a * :a -> Boolean))
   (define (%shift-distribution-laws i a b)
@@ -243,10 +243,10 @@
     "Bit `i` of `(reverse-bits x)` is bit `w - 1 - i` of `x`, and
 `(reverse-n-bits n x)` is `(reverse-bits x)` shifted by `n - w`."
     (let ((reversed (bits:reverse-bits x)))
-      (and (== (math:toInteger reversed) (%reverse w (math:toInteger x)))
+      (and (== (math:to-integer reversed) (%reverse w (math:to-integer x)))
            (== (bits:reverse-bits reversed) x)
            (== (bits:reverse-n-bits n x)
-               (wrap (%ash (math:toInteger reversed) (- (math:toInteger n) (math:toInteger w)))))))))
+               (wrap (%ash (math:to-integer reversed) (- (math:to-integer n) (math:to-integer w)))))))))
 
 ;;; For each instance, `define-bits-law-test` defines the laws compiled
 ;;; with the methods inlined, and a test that checks every law both ways.
@@ -350,7 +350,7 @@
   (is (== 0 (bits:dpb (the U8 1) 1 8 (the U8 0))))
   (is (== 0 (bits:dpb (the Bit 1) 1 1 (the Bit 0))))
   (is (== 0 (bits:dpb (the UFix 1) 1 %ufix-width (the UFix 0))))
-  (is (== -2 (bits:shift 1 (the IFix math:maxBound))))
+  (is (== -2 (bits:shift 1 (the IFix math:max-bound))))
   (is (== 0 (bits:reverse-n-bits 0 (the U64 5))))
   (is (== 9223372036854775808 (bits:reverse-n-bits 65 (the U64 3))))
   (is (== 0 (bits:reverse-n-bits 1000000000000 (the U64 3)))))

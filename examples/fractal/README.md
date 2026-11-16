@@ -1,6 +1,6 @@
 # Fractal
 
-This is a crude implementation of an infinite-zoom viewer of the Mandelbrot set. This uses the `Num` type class, Coalton's `Big-Float` type, and Coalton-Lisp interop.
+This is a crude implementation of an infinite-zoom viewer of the Mandelbrot set. This uses the `Num` type class, Coalton's `BigFloat` type, and Coalton-Lisp interop.
 
 Try it with:
 

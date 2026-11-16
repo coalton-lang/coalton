@@ -17,11 +17,10 @@
    #:ceiling
    #:truncate
    #:round
-   #:Real
-   #:real-approx
-   #:Rational
-   #:to-fraction
-   #:best-approx
+   #:Approximable
+   #:approx
+   #:rational-approx
+   #:simplest-fraction
    #:Quantization
    #:quantize
    #:round-half-up
@@ -40,54 +39,46 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Quantizable :a)
-    "The representation of a type that allows for rounding operations
+  (define-class ((Ord :a) (Ring :a) => Quantizable :a)
+    "An Archimedean ordered ring whose elements lie between consecutive integers and support rounding to `Integer`.
 
+By the **Archimedean property**, for every element $x$ there exist integers $m, n \\in \\mathbb{Z}$ with $m \\le x \\le n$, so a greatest integer $\\lfloor x \\rfloor$ (`floor`) at most $x$ and a least integer $\\lceil x \\rceil$ (`ceiling`) at least $x$ are well-defined.
 
-    max x such that (floor x) <= x
-    min x such that (ceiling x) <= x
-
-And
-
-
-    (proper x) = (values (truncate x) (- x (truncate x)))
-
-
-where
-
-
-    (truncate x) = (* (sign x) (floor (abs x))
-"
+Invariants:
+- Floor bound: `(<= (from-int (floor x)) x)` and `(< x (from-int (+ (floor x) 1)))`
+- Ceiling bound: `(< (from-int (- (ceiling x) 1)) x)` and `(<= x (from-int (ceiling x)))`
+- Exact integer agreement: `(<=> (floor x) (ceiling x)) == EQ` iff `x == (from-int (floor x))`
+- Proper decomposition: `(proper x) == (values (truncate x) (- x (from-int (truncate x))))` where `(truncate x) == (* (sign x) (floor (abs x)))` and the fractional remainder $r$ satisfies $0 \\le r < 1$ when $x \\ge 0$ and $-1 < r \\le 0$ when $x \\le 0$."
     (proper (:a -> Integer * :a))
     (floor (:a -> Integer))
     (ceiling (:a -> Integer)))
 
-  (define-class ((Quantizable :a) (Num :a) => Real :a)
-    "A real number that can be approximated with abs(real-approx x - x) < 2^-n."
-    (real-approx (UFix * :a -> Fraction)))
+  (define-class (Approximable :a :b)
+    "Approximate a value `x` of type `:a` to within $2^{-\\mathtt{bits}}$ in type `:b`.
 
-  (define-class ((Real :a) (Ord :a) => Rational :a)
-    "Any number that can be exactly represented by a fraction, or is not finite.
+For scalar numeric types, `(approx bits x)` returns an approximation $y$ satisfying
 
-If a rational can be converted from a fraction it must satisfy:
+$$\\vert y - x \\vert \\le 2^{-\\mathtt{bits}}.$$
 
+For composite structures (such as `Complex`, `Dual`, `Polynomial`, `Matrix`, `Quaternion`, or `Multivector`), `approx` approximates each component to within $2^{-\\mathtt{bits}}$."
+    (approx (UFix * :a -> :b)))
 
-    (into (to-fraction x)) = x
-    (into (best-approx x)) = x
+  (inline)
+  (declare rational-approx (Approximable :a Fraction => UFix * :a -> Fraction))
+  (define (rational-approx bits x)
+    "Approximate `x` as a `Fraction` within $2^{-\\mathtt{bits}}$:
 
+$$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{bits}}.$$"
+    (approx bits x))
 
-Furthermore, `best-approx` returns the simplest fraction, and both functions may be partial.
-"
-    (to-fraction (:a -> Fraction))
-    (best-approx (:a -> Fraction)))
-
+  (inline)
   (declare truncate ((Quantizable :a) => :a -> Integer))
   (define (truncate x)
     "Returns the integer closest/equal to `x` that is within `0` and `x`."
     (let (values t _) = (proper x))
     t)
 
-  (declare round ((Quantizable :a) (Num :a) => :a -> Integer))
+  (declare round ((Quantizable :a) => :a -> Integer))
   (define (round x)
     "Return the nearest integer to X, with ties breaking towards even numbers."
     (let (values n r) = (proper x))
@@ -95,7 +86,7 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
       ;; Negative r
       ((GT)
        ;; r <=> -0.5
-       (let s = (+ (* 2 r) 1))
+       (let s = (+ (* (from-int 2) r) one))
        (match (<=> (abs (floor s)) (abs (ceiling s)))
          ((LT) n)
          ((GT) (- n 1))
@@ -106,7 +97,7 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
       ;; Positive r
       ((LT)
        ;; r <=> 0.5
-       (let s = (- (* 2 r) 1))
+       (let s = (- (* (from-int 2) r) one))
        (match (<=> (abs (floor s)) (abs (ceiling s)))
          ((LT) (+ n 1))
          ((GT) n)
@@ -115,52 +106,39 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
                    n
                    (+ n 1)))))
       ;; Zero r
-      ((EQ) n)))
-
-  (define (rational-approx precision x)
-    "Implemention of `real-approx' for rationals."
-    ;; See figure 3 in https://doi.org/10.1145/142675.142726
-    (let epsilon = (^ (reciprocal 2) precision))
-    (when (== epsilon 0)
-      (return (to-fraction x)))
-    (let ((approximate-rec
-            (fn (e0 p0 q0 e1 p1 q1)
-              (cond
-                ((and (/= q1 0)
-                      (< (abs (- (/ (fromInt p1) (fromInt q1)) x)) epsilon))
-                 (mkFraction p1 q1))
-                ((/= 0 e1)
-                 (let r = (floor (/ e0 e1)))
-                 (approximate-rec e1 p1 q1
-                                  (- e0 (* (fromInt r) e1))
-                                  (- p0 (* r p1))
-                                  (- q0 (* r q1))))
-                ;; SBCL cannot prove this branch unreachable for the initial
-                ;; p1=1, q1=0 seed; inlining exposes a spurious division by zero.
-                (True (noinline (mkFraction p1 q1)))))))
-      (approximate-rec x 0 1 -1 1 0))))
+      ((EQ) n))))
 
 (cl:defmacro %define-integer-roundings (coalton-type)
   `(coalton-toplevel
      (define-instance (Quantizable ,coalton-type)
-       (define (floor x) (fromInt (toInteger x)))
-       (define (ceiling x) (fromInt (toInteger x)))
+       (inline)
+       (define (floor x) (from-int (to-integer x)))
+       (inline)
+       (define (ceiling x) (from-int (to-integer x)))
+       (inline)
        (define (proper x)
-         (values (fromInt (toInteger x)) 0)))
+         (values (from-int (to-integer x)) 0)))
 
-     (define-instance (Real ,coalton-type)
-       (define (real-approx _ x) (fromInt (toInteger x))))
+     (define-instance (Approximable ,coalton-type Fraction)
+       (inline)
+       (define (approx _ x) (from-int (to-integer x))))
 
-     (define-instance (Rational ,coalton-type)
-       (define (to-fraction x) (fromint (tointeger x)))
-       (define (best-approx x) (fromint (tointeger x))))))
+     (define-instance (Approximable ,coalton-type F32)
+       (inline)
+       (define (approx _ x) (from-int (to-integer x))))
+
+     (define-instance (Approximable ,coalton-type F64)
+       (inline)
+       (define (approx _ x) (from-int (to-integer x))))))
 
 (%define-integer-roundings Bit)
 (%define-integer-roundings U8)
+(%define-integer-roundings U16)
 (%define-integer-roundings U32)
 (%define-integer-roundings U64)
 (%define-integer-roundings UFix)
 (%define-integer-roundings I8)
+(%define-integer-roundings I16)
 (%define-integer-roundings I32)
 (%define-integer-roundings I64)
 (%define-integer-roundings IFix)
@@ -196,22 +174,24 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
            (lisp (-> Integer) (x)
              (cl:nth-value 0 (cl:truncate x)))))
 
-       (define-instance (Real ,type)
+       (define-instance (Approximable ,type Fraction)
          (inline)
-         (define (real-approx prec x)
-           (rational-approx prec x)))
+         (define (approx _ x)
+           (coalton++:unsafe
+             (lisp (-> Fraction) (x)
+               (cl:rational x)))))
 
-       (define-instance (Rational ,type)
+       (define-instance (Approximable ,type F32)
          (inline)
-         (define (to-fraction x)
-           (coalton++:unsafe
-             (lisp (-> Fraction) (x)
-               (cl:rational x))))
+         (define (approx _ x)
+           (lisp (-> F32) (x)
+             (cl:coerce x 'cl:single-float))))
+
+       (define-instance (Approximable ,type F64)
          (inline)
-         (define (best-approx x)
-           (coalton++:unsafe
-             (lisp (-> Fraction) (x)
-               (cl:rationalize x)))))
+         (define (approx _ x)
+           (lisp (-> F64) (x)
+             (cl:coerce x 'cl:double-float))))
 
        (specialize round ,round (,type -> Integer))
        (inline)
@@ -226,6 +206,33 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
 (%define-native-rationals F64)
 
 (coalton-toplevel
+  (declare simplest-fraction (Approximable :a Fraction => UFix * :a -> Fraction))
+  (define (simplest-fraction bits x)
+    "Return the simplest `Fraction` $p/q$ (minimal positive denominator $q$, then minimal $\\vert p \\vert$) within $2^{-\\mathtt{bits}}$ of `x`:
+
+$$\\left\\vert \\frac{p}{q} - x \\right\\vert \\le 2^{-\\mathtt{bits}}.$$"
+    ;; See figure 3 in https://doi.org/10.1145/142675.142726
+    ;; Approximate x to 2^-(bits + 1), then find the simplest convergent within 2^-(bits + 1) of q.
+    ;; By the triangle inequality, |p/q - x| <= |p/q - q| + |q - x| <= 2^-bits.
+    (let q = (the Fraction (approx (+ bits 1) x)))
+    (let epsilon = (the Fraction (^^ 2 (neg (+ (to-integer bits) 1)))))
+    (let ((approximate-rec
+            (fn (e0 p0 q0 e1 p1 q1)
+              (cond
+                ((and (/= q1 0)
+                      (<= (abs (- (make-fraction p1 q1) q)) epsilon))
+                 (make-fraction p1 q1))
+                ((/= 0 e1)
+                 (let r = (floor (/ e0 e1)))
+                 (approximate-rec e1 p1 q1
+                                  (- e0 (* (from-int r) e1))
+                                  (- p0 (* r p1))
+                                  (- q0 (* r q1))))
+                ;; SBCL cannot prove this branch unreachable for the initial
+                ;; p1=1, q1=0 seed; inlining exposes a spurious division by zero.
+                (True (noinline (make-fraction p1 q1)))))))
+      (approximate-rec q 0 1 -1 1 0)))
+
   (define-struct (Quantization :a)
     "Represents an integer quantization of `:a`."
     (value       "A value of type `:a`."
@@ -239,31 +246,33 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
     (ceiling-rem "The remainder of the ceiling operation as type `:a`."
                  :a))
 
-  (declare quantize (Real :a => (:a -> (Quantization :a))))
+  (declare quantize (Quantizable :a => (:a -> (Quantization :a))))
   (define (quantize x)
     "Given X, (QUANTIZE X) will return the least integer greater or equal to X,
 and the greatest integer less than or equal to X, along with their respective
 remainders expressed as values of type of X."
     (let x-floor = (floor x))
     (let x-ceiling = (ceiling x))
-    (let x-rem-floor = (- x (fromInt x-floor)))
-    (let x-rem-ceiling = (- x (fromInt x-ceiling)))
+    (let x-rem-floor = (- x (from-int x-floor)))
+    (let x-rem-ceiling = (- x (from-int x-ceiling)))
     (Quantization x x-floor x-rem-floor x-ceiling x-rem-ceiling))
 
-  (declare round-half-up ((Quantizable :a) (Num :a) => :a -> INteger))
+  (inline)
+  (declare round-half-up (Quantizable :a => :a -> Integer))
   (define (round-half-up x)
     "Return the nearest integer to X, with ties breaking toward positive infinity."
-    (ceiling/ (floor (* 2 x)) 2))
+    (ceiling/ (floor (* (from-int 2) x)) 2))
 
-  (declare round-half-down ((Quantizable :a) (Num :a) => :a -> INteger))
+  (inline)
+  (declare round-half-down (Quantizable :a => :a -> Integer))
   (define (round-half-down x)
-    "Return the nearest integer to X, with ties breaking toward positive infinity."
-    (floor/ (ceiling (* 2 x)) 2))
+    "Return the nearest integer to X, with ties breaking toward negative infinity."
+    (floor/ (ceiling (* (from-int 2) x)) 2))
 
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
+  (declare safe/ ((Eq :a) (Additive :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
-    (if (== y 0)
+    (if (zero? y)
         None
         (Some (general/ x y))))
 
@@ -274,7 +283,7 @@ remainders expressed as values of type of X."
     (general/ a b))
 
   (inline)
-  (declare inexact/ (Integer * Integer -> Double-Float))
+  (declare inexact/ (Integer * Integer -> F64))
   (define (inexact/ a b)
     "Compute the quotient of integers as a double-precision float.
 
@@ -295,11 +304,13 @@ Note: This does *not* divide double-float arguments."
     (lisp (-> Integer) (a b)
       (cl:values (cl:ceiling a b))))
 
+  (inline)
   (declare round/ (Integer * Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
     (round (exact/ a b)))
 
+  (inline)
   (declare fromfrac (Dividable Integer :a => Fraction -> :a))
   (define (fromfrac q)
     "Converts a fraction to a target type.

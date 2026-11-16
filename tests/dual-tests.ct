@@ -32,7 +32,7 @@
   (define (dual-test4 x) (math:exp (math:sin (math:cos (+ x 1)))))
 
   (define (dtest4 x)
-    (math:negate
+    (math:neg
      (* (math:sin (+ x 1))
         (* (math:cos (math:cos (+ x 1)))
            (math:exp (math:sin (math:cos (+ x 1))))))))
@@ -66,4 +66,4 @@
   (test-dual dual-test4 dual-test4 dtest4 1.0d0)
   (test-dual dual-test4 dual-test4 dtest4 -1.0d0)
   (test-dual dual-test4 dual-test4 dtest4 2.0d0)
-  (test-dual dual-test4 dual-test4 dtest4 (the Double-Float math:pi)))
+  (test-dual dual-test4 dual-test4 dtest4 (the F64 math:pi)))

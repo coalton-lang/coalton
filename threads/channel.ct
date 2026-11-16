@@ -69,10 +69,10 @@ lock-free."))
       ((Cons value _) (Some value))
       ((Nil) None)))
 
-  (declare recv-timeout! ((math:Rational :b) => Channel :a * :b -> Optional :a))
+  (declare recv-timeout! ((math:Approximable :b Fraction) => Channel :a * :b -> Optional :a))
   (define (recv-timeout! channel seconds)
     "Like `recv!`, but stop waiting after `seconds`, returning `None` if no value arrived in time."
-    (let ((timeout (math:best-approx seconds)))
+    (let ((timeout (math:rational-approx 32 seconds)))
       (match (lisp (-> (List :a)) (channel timeout)
                (cl:multiple-value-bind (value foundp)
                    (backend:receive-message channel :timeout (cl:max 0 timeout))

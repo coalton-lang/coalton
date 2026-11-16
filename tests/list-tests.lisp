@@ -148,7 +148,7 @@
 
   (is (== (list:sort (list:append x x)) (make-list 1 1 2 2 3 3)))
 
-  (is (== (list:sortBy (fn (a b) (<=> (negate a) (negate b))) x)
+  (is (== (list:sortBy (fn (a b) (<=> (neg a) (neg b))) x)
           (make-list 3 2 1))))
 
 (define-test test-array-functions ()

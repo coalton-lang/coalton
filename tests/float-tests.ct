@@ -17,12 +17,12 @@
           True
           (or (== a b) (< (abs (- a b)) 1d-6)))))
 
-  (define-instance (LooseCompare big-float:Big-Float)
+  (define-instance (LooseCompare big-float:BigFloat)
     (define (~ a b)
       (if (and (math:nan? a) (math:nan? b))
           True
           (or (< (abs (- a b))
-                 (^ (math:reciprocal 2) (math:div (big-float:get-precision) 2)))
+                 (^ (math:recip 2) (math:div (big-float:get-precision) 2)))
               (== a b) ))))
 
   (define-instance ((LooseCompare :a) (math:ComplexComponent :a) => LooseCompare (Complex :a))
@@ -36,12 +36,12 @@
 
   (declare test-list-single (List F32))
   (define test-list-single
-    (make-list math:infinity 0f0 1 math:pi math:ee (negate math:pi)
+    (make-list math:infinity 0f0 1 math:pi math:ee (neg math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10))
 
   (declare test-list-double (List F64))
   (define test-list-double
-    (make-list math:infinity 0d0 1 math:pi math:ee (negate math:pi)
+    (make-list math:infinity 0d0 1 math:pi math:ee (neg math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10 100))
 
   (declare test-list-complex-single (List (Complex F32)))
@@ -81,8 +81,8 @@
     ;; Nans and Infinities
     (is (test-identity
          l
-         (fn (x) (negate (/ x 0)))
-         (fn (x) (/ (negate x) 0))))))
+         (fn (x) (neg (/ x 0)))
+         (fn (x) (/ (neg x) 0))))))
 
 (define-test float-identities ()
   (test-identities test-list-single)
@@ -90,7 +90,7 @@
   (test-identities test-list-complex-single)
   (test-identities test-list-complex-double)
   (test-identities
-   (the (List big-float:Big-Float)
+   (the (List big-float:BigFloat)
         (map into test-list-single))))
 
 (coalton-toplevel
@@ -100,11 +100,17 @@
      math:general/ (coalton:the (coalton:List coalton:Integer) (coalton-prelude:range -100 99)) (coalton-prelude:range 200 1))))
 
 (coalton-toplevel
+  (declare exact-fraction (TryInto :a Fraction => :a -> Fraction))
+  (define (exact-fraction x)
+    (match (try-into x)
+      ((Some q) q)
+      ((None) (error "Expected finite value convertible to Fraction."))))
+
   (define (check-against-double x y)
     "Checks to see if a double-float within a tolerable error of a big-float thunk."
-    (is (<= (abs (- (math:to-fraction (the F64 x))
+    (is (<= (abs (- (exact-fraction (the F64 x))
                     (big-float:with-precision-rounding
-                      (fn () (math:to-fraction (the big-float:Big-Float (y))))
+                      (fn () (exact-fraction (the big-float:BigFloat (y))))
                       :precision 53
                       :rounding big-float:rndn)))
             ;; 2^-48 is the worst a double-float will compare to a coerced fraction.
@@ -125,66 +131,66 @@
 
   (double-check (fn (x) (math:sqrt (abs x))))
   (double-check (fn (x) (math:ln (abs (+ 1 x)))))
-  (double-check (fn (x) (math:exp (negate x))))
+  (double-check (fn (x) (math:exp (neg x))))
 
   (double-check (fn (x) (math:sin x)))
   (double-check (fn (x) (math:cos x)))
   (double-check (fn (x) (math:atan x)))
   (double-check
    (fn (x) (math:asin (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x))))))
+                         (min (math:recip (abs x)) (abs x))))))
   (double-check
    (fn (x) (math:acos (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x)))))))
+                         (min (math:recip (abs x)) (abs x)))))))
 
 (define-test big-float-native-float-conversions ()
-  (let exact32 = (the big-float:Big-Float (into 1.25f0)))
-  (let exact64 = (the big-float:Big-Float (into 1.25d0)))
-  (is (== (the (Optional F32) (tryInto exact32)) (Some 1.25f0)))
-  (is (== (the (Optional F64) (tryInto exact64)) (Some 1.25d0)))
+  (let exact32 = (the big-float:BigFloat (into 1.25f0)))
+  (let exact64 = (the big-float:BigFloat (into 1.25d0)))
+  (is (== (the (Optional F32) (try-into exact32)) (Some 1.25f0)))
+  (is (== (the (Optional F64) (try-into exact64)) (Some 1.25d0)))
   (is (== (big-float:with-precision-rounding
-            (fn () (the big-float:Big-Float (into 1.25f0)))
+            (fn () (the big-float:BigFloat (into 1.25f0)))
             :precision 1
             :rounding big-float:rndn)
           exact32))
   (is (== (big-float:with-precision-rounding
-            (fn () (the big-float:Big-Float (into 1.25d0)))
+            (fn () (the big-float:BigFloat (into 1.25d0)))
             :precision 1
             :rounding big-float:rndn)
           exact64))
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (the big-float:Big-Float (into (the U64 3)))))
+            (fn () (exact-fraction (the big-float:BigFloat (into (the U64 3)))))
             :precision 1
             :rounding big-float:rndn)
           3))
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (the big-float:Big-Float (into (the IFix -3)))))
+            (fn () (exact-fraction (the big-float:BigFloat (into (the IFix -3)))))
             :precision 1
             :rounding big-float:rndn)
           -3))
 
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the Bit 1)))) 1.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U8 2)))) 2.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I8 -3)))) -3.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U16 4)))) 4.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I16 -5)))) -5.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U32 6)))) 6.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I32 -7)))) -7.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U64 8)))) 8.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I64 -9)))) -9.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the UFix 10)))) 10.0d0))
-  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the IFix -11)))) -11.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the Bit 1)))) 1.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the U8 2)))) 2.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the I8 -3)))) -3.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the U16 4)))) 4.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the I16 -5)))) -5.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the U32 6)))) 6.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the I32 -7)))) -7.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the U64 8)))) 8.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the I64 -9)))) -9.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the UFix 10)))) 10.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:BigFloat (into (the IFix -11)))) -11.0d0))
 
   (let not32 = (big-float:with-precision-rounding
-                 (fn () (+ 1 (the big-float:Big-Float (math:^^ 2 -30))))
+                 (fn () (+ 1 (the big-float:BigFloat (math:^^ 2 -30))))
                  :precision 64
                  :rounding big-float:rndn))
   (let not64 = (big-float:with-precision-rounding
-                 (fn () (+ 1 (the big-float:Big-Float (math:^^ 2 -60))))
+                 (fn () (+ 1 (the big-float:BigFloat (math:^^ 2 -60))))
                  :precision 128
                  :rounding big-float:rndn))
-  (is (== (the (Optional F32) (tryInto not32)) None))
-  (is (== (the (Optional F64) (tryInto not64)) None))
+  (is (== (the (Optional F32) (try-into not32)) None))
+  (is (== (the (Optional F64) (try-into not64)) None))
   (is (== (big-float:round-to-f32 exact32) 1.25f0))
   (is (== (big-float:round-to-f64 exact64) 1.25d0))
   (is (== (big-float:with-rounding
@@ -196,20 +202,20 @@
             :rounding big-float:rndu)
           1.0d0))
 
-  (is (== (the (Optional F32) (tryInto (the big-float:Big-Float math:infinity)))
+  (is (== (the (Optional F32) (try-into (the big-float:BigFloat math:infinity)))
           (Some (the F32 math:infinity))))
-  (is (== (big-float:round-to-f32 (the big-float:Big-Float math:infinity))
+  (is (== (big-float:round-to-f32 (the big-float:BigFloat math:infinity))
           (the F32 math:infinity)))
-  (is (match (the (Optional F64) (tryInto (the big-float:Big-Float math:nan)))
+  (is (match (the (Optional F64) (try-into (the big-float:BigFloat math:nan)))
         ((Some x) (math:nan? x))
         ((None) False)))
-  (is (math:nan? (big-float:round-to-f64 (the big-float:Big-Float math:nan)))))
+  (is (math:nan? (big-float:round-to-f64 (the big-float:BigFloat math:nan)))))
 
 (coalton-toplevel
   (define (test-constant a b)
     "Checks a big-float against an integer representing the actual first 64 digits."
-    (is (<= (abs (- (math:to-fraction
-                     (the big-float:Big-Float
+    (is (<= (abs (- (exact-fraction
+                     (the big-float:BigFloat
                           (big-float:with-precision-rounding
                             a
                             :precision 208
@@ -226,26 +232,26 @@
    (fn () (math:ln 2)) 693147180559945309417232121458176568075500134360255254120680009)
   ;; Verify math:pi and math:ee (BFConst) dynamically resolve to the active precision
   (test-constant
-   (fn () (+ (the big-float:Big-Float math:pi) 0))
+   (fn () (+ (the big-float:BigFloat math:pi) 0))
    3141592653589793238462643383279502884197169399375105820974944592)
   (test-constant
-   (fn () (+ (the big-float:Big-Float math:ee) 0))
+   (fn () (+ (the big-float:BigFloat math:ee) 0))
    2718281828459045235360287471352662497757247093699959574966967627))
 
 (define-test big-float-edge-cases-and-rounding ()
   ;; Extreme binary exponents for division and sqrt
-  (let tiny = (the big-float:Big-Float (math:^^ 2 -200)))
-  (let huge = (the big-float:Big-Float (math:^^ 2 200)))
-  (is (== (math:reciprocal huge) tiny))
-  (is (== (math:reciprocal tiny) huge))
-  (is (== (math:sqrt tiny) (the big-float:Big-Float (math:^^ 2 -100))))
-  (is (== (math:sqrt huge) (the big-float:Big-Float (math:^^ 2 100))))
+  (let tiny = (the big-float:BigFloat (math:^^ 2 -200)))
+  (let huge = (the big-float:BigFloat (math:^^ 2 200)))
+  (is (== (math:recip huge) tiny))
+  (is (== (math:recip tiny) huge))
+  (is (== (math:sqrt tiny) (the big-float:BigFloat (math:^^ 2 -100))))
+  (is (== (math:sqrt huge) (the big-float:BigFloat (math:^^ 2 100))))
 
   ;; Negative zero, infinities, and NaN ordering and arithmetic
-  (let neg-zero = (negate (the big-float:Big-Float 0)))
-  (let pos-inf = (the big-float:Big-Float math:infinity))
-  (let neg-inf = (the big-float:Big-Float math:negative-infinity))
-  (let qnan = (the big-float:Big-Float math:nan))
+  (let neg-zero = (neg (the big-float:BigFloat 0)))
+  (let pos-inf = (the big-float:BigFloat math:infinity))
+  (let neg-inf = (the big-float:BigFloat math:negative-infinity))
+  (let qnan = (the big-float:BigFloat math:nan))
   (is (== neg-zero 0))
   (is (< neg-zero 1))
   (is (> neg-zero -1))
@@ -264,7 +270,7 @@
   (let round-at-4 =
     (fn (mode num)
       (big-float:with-precision-rounding
-        (fn () (math:to-fraction (the big-float:Big-Float (math:general/ num 16))))
+        (fn () (exact-fraction (the big-float:BigFloat (math:general/ num 16))))
         :precision 4
         :rounding mode)))
   (is (== (round-at-4 big-float:rndn 17) (math:exact/ 8 8)))
@@ -284,90 +290,90 @@
   (is (== (round-at-4 big-float:rndna -17) (math:exact/ -9 8)))
 
   ;; ln across (0, 1) and (2, inf), and pow with negative exponents
-  (is (~ (math:ln (the big-float:Big-Float (math:general/ 1 8)))
-         (negate (* 3 (math:ln (the big-float:Big-Float 2))))))
-  (is (~ (math:ln (the big-float:Big-Float 16))
-         (* 4 (math:ln (the big-float:Big-Float 2)))))
-  (is (~ (math:pow (the big-float:Big-Float 4) (math:general/ -1 2))
-         (the big-float:Big-Float (math:general/ 1 2))))
-  (is (== (math:pow (the big-float:Big-Float 0) -1) pos-inf))
+  (is (~ (math:ln (the big-float:BigFloat (math:general/ 1 8)))
+         (neg (* 3 (math:ln (the big-float:BigFloat 2))))))
+  (is (~ (math:ln (the big-float:BigFloat 16))
+         (* 4 (math:ln (the big-float:BigFloat 2)))))
+  (is (~ (math:pow (the big-float:BigFloat 4) (math:general/ -1 2))
+         (the big-float:BigFloat (math:general/ 1 2))))
+  (is (== (math:pow (the big-float:BigFloat 0) -1) pos-inf))
 
   ;; Exact cancellation of unnormalized multi-hundred-bit integers
   (let p200 = (^ 2 200))
   (let p200-plus-1 = (+ p200 1))
-  (is (== (- (the big-float:Big-Float (into p200-plus-1))
-             (the big-float:Big-Float (into p200)))
+  (is (== (- (the big-float:BigFloat (into p200-plus-1))
+             (the big-float:BigFloat (into p200)))
           1))
 
   ;; Unnormalized operand + small delta across rounding boundaries at precision 4
   (is (== (big-float:with-precision-rounding
             (fn ()
-              (math:to-fraction
-               (+ (the big-float:Big-Float (into 545))
-                  (the big-float:Big-Float (math:general/ -3 2)))))
+              (exact-fraction
+               (+ (the big-float:BigFloat (into 545))
+                  (the big-float:BigFloat (math:general/ -3 2)))))
             :precision 4
             :rounding big-float:rndn)
           512))
   (is (== (big-float:with-precision-rounding
             (fn ()
-              (math:to-fraction
-               (+ (the big-float:Big-Float (into 513))
-                  (the big-float:Big-Float (math:general/ -3 2)))))
+              (exact-fraction
+               (+ (the big-float:BigFloat (into 513))
+                  (the big-float:BigFloat (math:general/ -3 2)))))
             :precision 4
             :rounding big-float:rndd)
           480))
 
   ;; Trig near multiples of pi/2, tiny arguments at high precision, and acos near 1
   (let sin-pi = (math:sin (big-float:bf-pi)))
-  (let pi-err = (- (math:to-fraction (big-float:bf-pi))
-                   (math:to-fraction
+  (let pi-err = (- (exact-fraction (big-float:bf-pi))
+                   (exact-fraction
                     (big-float:with-precision
                       (fn () (big-float:bf-pi))
                       :precision 128))))
-  (is (<= (abs (- (math:to-fraction sin-pi) (negate pi-err)))
+  (is (<= (abs (- (exact-fraction sin-pi) (neg pi-err)))
           (math:^^ 2 -100)))
   (is (== (big-float:with-precision-rounding
             (fn ()
-              (math:sin (the big-float:Big-Float (math:^^ 2 -100))))
+              (math:sin (the big-float:BigFloat (math:^^ 2 -100))))
             :precision 200
             :rounding big-float:rndn)
-          (the big-float:Big-Float (math:^^ 2 -100))))
+          (the big-float:BigFloat (math:^^ 2 -100))))
   (is (== (big-float:with-precision-rounding
             (fn ()
-              (math:atan (the big-float:Big-Float (math:^^ 2 -100))))
+              (math:atan (the big-float:BigFloat (math:^^ 2 -100))))
             :precision 200
             :rounding big-float:rndn)
-          (the big-float:Big-Float (math:^^ 2 -100))))
+          (the big-float:BigFloat (math:^^ 2 -100))))
   (let near-one = (big-float:with-precision
-                    (fn () (- 1 (the big-float:Big-Float (math:^^ 2 -200))))
+                    (fn () (- 1 (the big-float:BigFloat (math:^^ 2 -200))))
                     :precision 256))
   (let acos-near-one = (math:acos near-one))
   ;; sqrt(2 * 2^-200) = 2^-99.5 = sqrt(2) * 2^-100
-  (is (~ (* acos-near-one (the big-float:Big-Float (math:^^ 2 100)))
-         (math:sqrt (the big-float:Big-Float 2))))
+  (is (~ (* acos-near-one (the big-float:BigFloat (math:^^ 2 100)))
+         (math:sqrt (the big-float:BigFloat 2))))
 
   ;; Pow with huge exponent and nth-root rounding back to caller's precision
-  (is (== (math:pow (the big-float:Big-Float 2)
-                    (the big-float:Big-Float (math:^^ 2 120)))
-          (the big-float:Big-Float (math:^^ 2 (^ 2 120)))))
+  (is (== (math:pow (the big-float:BigFloat 2)
+                    (the big-float:BigFloat (math:^^ 2 120)))
+          (the big-float:BigFloat (math:^^ 2 (^ 2 120)))))
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (math:nth-root 3 (the big-float:Big-Float 2))))
+            (fn () (exact-fraction (math:nth-root 3 (the big-float:BigFloat 2))))
             :precision 4
             :rounding big-float:rndn)
           (math:exact/ 5 4)))
-  (is (== (math:nth-root 3 (the big-float:Big-Float (math:^^ 2 3000)))
-          (the big-float:Big-Float (math:^^ 2 1000))))
+  (is (== (math:nth-root 3 (the big-float:BigFloat (math:^^ 2 3000)))
+          (the big-float:BigFloat (math:^^ 2 1000))))
 
   ;; Payne-Hanek / Ziv retry for large argument near multiple of pi/2 and high-precision pi/2
   (let large-near-pi2 =
-    (* (the big-float:Big-Float (into 6381956970095103))
-       (the big-float:Big-Float (math:^^ 2 797))))
+    (* (the big-float:BigFloat (into 6381956970095103))
+       (the big-float:BigFloat (math:^^ 2 797))))
   (let cos-53 = (math:cos large-near-pi2))
   (let cos-300 =
     (big-float:with-precision
       (fn () (math:cos large-near-pi2))
       :precision 300))
-  (is (<= (abs (- (math:to-fraction cos-53) (math:to-fraction cos-300)))
+  (is (<= (abs (- (exact-fraction cos-53) (exact-fraction cos-300)))
           (math:^^ 2 -110)))
   (let pi2-400 =
     (big-float:with-precision
@@ -377,22 +383,22 @@
 
   ;; Exact roots under directed rounding, negative-index nth-root, and tiny asin/acos
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (math:nth-root 3 (the big-float:Big-Float (into 27)))))
+            (fn () (exact-fraction (math:nth-root 3 (the big-float:BigFloat (into 27)))))
             :precision 4
             :rounding big-float:rndd)
           3))
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (math:pow (the big-float:Big-Float 9)
-                                               (the big-float:Big-Float (math:general/ 1 2)))))
+            (fn () (exact-fraction (math:pow (the big-float:BigFloat 9)
+                                             (the big-float:BigFloat (math:general/ 1 2)))))
             :precision 53
             :rounding big-float:rndd)
           3))
   (is (== (big-float:with-precision-rounding
-            (fn () (math:to-fraction (math:nth-root -2 (the big-float:Big-Float 2))))
+            (fn () (exact-fraction (math:nth-root -2 (the big-float:BigFloat 2))))
             :precision 4
             :rounding big-float:rndn)
           (math:exact/ 11 16)))
-  (let ultra-tiny = (the big-float:Big-Float (math:^^ 2 (negate (^ 2 120)))))
+  (let ultra-tiny = (the big-float:BigFloat (math:^^ 2 (neg (^ 2 120)))))
   (is (== (math:asin ultra-tiny) ultra-tiny))
   (is (== (math:acos ultra-tiny) (/ (big-float:bf-pi) 2))))
 

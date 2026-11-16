@@ -1,13 +1,13 @@
 ;;;; Load coalton/xmath first, then this file, and call
-;;;; (realalgebraic-benchmark:run :iterations 1000).
-;;;; See docs/internals/realalgebraic.md for methodology and reference results.
+;;;; (real-algebraic-benchmark:run :iterations 1000).
+;;;; See docs/internals/real-algebraic.md for methodology and reference results.
 
-(defpackage #:realalgebraic-benchmark
+(defpackage #:real-algebraic-benchmark
   (:use #:cl)
-  (:local-nicknames (#:ra #:coalton/xmath/realalgebraic))
+  (:local-nicknames (#:ra #:coalton/xmath/real-algebraic))
   (:export #:run))
 
-(in-package #:realalgebraic-benchmark)
+(in-package #:real-algebraic-benchmark)
 
 (defun checked-root (coefficients lo hi)
   (let ((result (ra:root coefficients lo hi)))

@@ -199,10 +199,10 @@
           (iter:min! (iter:chain! (iter:down-from 10)
                                   (iter:up-to 10)))))
   (is (== (Some (the Integer 0))
-          (iter:maximize-by! negate (iter:chain! (iter:up-to 10)
+          (iter:maximize-by! neg (iter:chain! (iter:up-to 10)
                                                  (iter:down-from 10)))))
   (is (== (Some (the Integer 10))
-          (iter:minimize-by! negate (iter:chain! (iter:down-from 10)
+          (iter:minimize-by! neg (iter:chain! (iter:down-from 10)
                                                  (iter:up-through 10))))))
 
 (define-test iter-optimize-string-length ()

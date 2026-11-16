@@ -10,7 +10,7 @@
    #:coalton/functions
    #:coalton/math/arith)
   (:export
-   #:mkFraction
+   #:make-fraction
    #:numerator
    #:denominator))
 
@@ -24,11 +24,13 @@
   ;; generic concept than a humble fraction of integers. This
   ;; fraction is always assumed to be in reduced terms.
 
-  (declare mkFraction (Integer * Integer -> Fraction))
-  (define (mkFraction a b)
+  (inline)
+  (declare make-fraction (Integer * Integer -> Fraction))
+  (define (make-fraction a b)
     (lisp (-> Fraction) (a b)
       (cl:/ a b)))
 
+  (inline)
   (declare numerator (Fraction -> Integer))
   (define (numerator q)
     "The numerator of a fraction."
@@ -36,6 +38,7 @@
       (lisp (-> Integer) (q)
         (cl:numerator q))))
 
+  (inline)
   (declare denominator (Fraction -> Integer))
   (define (denominator q)
     "The denominator of a fraction."
@@ -44,12 +47,14 @@
         (cl:denominator q))))
 
   (define-instance (Eq Fraction)
+    (inline)
     (define (== a b)
       (coalton++:unsafe
         (lisp (-> Boolean) (a b)
           (cl:= a b)))))
 
   (define-instance (Ord Fraction)
+    (inline)
     (define (<=> a b)
       (coalton++:unsafe
         (lisp (-> Ordering) (a b)
@@ -61,40 +66,85 @@
             (cl:t
              EQ))))))
 
-  (define-instance (Num Fraction)
+  (define-instance (Additive Fraction)
+    (inline)
     (define (+ p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:+ p q))))
+    (define zero
+      (coalton++:unsafe
+        (lisp (-> Fraction) () 0))))
+
+  (define-instance (AdditiveGroup Fraction)
+    (inline)
     (define (- p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:- p q))))
+    (inline)
+    (define (neg q)
+      (coalton++:unsafe
+        (lisp (-> Fraction) (q)
+          (cl:- q)))))
+
+  (define-instance (Multiplicative Fraction)
+    (inline)
     (define (* p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
           (cl:* p q))))
-    (define (fromInt z)
+    (define one
+      (coalton++:unsafe
+        (lisp (-> Fraction) () 1))))
+
+  (define-instance (Semiring Fraction))
+
+  (define-instance (Ring Fraction)
+    (inline)
+    (define (from-int z)
       (coalton++:unsafe
         (lisp (-> Fraction) (z) z))))
 
+  (define-instance (Num Fraction))
+
   (define-instance (Reciprocable Fraction)
+    (inline)
     (define (/ a b)
       (lisp (-> Fraction) (a b)
         (cl:/ a b)))
-    (define (reciprocal q)
+    (inline)
+    (define (recip q)
       (lisp (-> Fraction) (q)
         (cl:/ q))))
 
+  (define-instance (Scale Fraction Fraction)
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance (Module Fraction Fraction))
+
+  (define-instance (ConjugateRing Fraction)
+    (inline)
+    (define (conjugate x) x))
+
+  (define-instance (VectorSpace Fraction Fraction))
+
+  (define-instance (InnerSpace Fraction Fraction)
+    (inline)
+    (define (inner-product a b) (* a b)))
+
   (define-instance (Dividable Integer Fraction)
+    (inline)
     (define (general/ x y)
-      (mkFraction x y))))
+      (make-fraction x y))))
 
 ;;; All integer types representationally are already fractions.
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-into-integer-fraction (integer-type)
     `(coalton-toplevel
        (define-instance (Into ,integer-type Fraction)
+         (inline)
          (define (into i)
            (coalton++:unsafe
              (lisp (-> Fraction) (i)

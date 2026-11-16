@@ -25,7 +25,7 @@
   (:local-nicknames
    (#:types #:coalton/types)
    (#:math #:coalton/math)
-   (#:ra #:coalton/xmath/realalgebraic)
+   (#:ra #:coalton/xmath/real-algebraic)
    (#:dual #:coalton/math/dual)
    (#:hyperdual #:coalton/math/hyperdual)
    (#:big-float #:coalton/big-float)

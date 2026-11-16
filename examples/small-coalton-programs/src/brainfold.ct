@@ -152,7 +152,7 @@
                         (str:concat
                          (cell:read (.print-buffer bfs))
                          (find-ascii
-                          (fromint (abs (value-at-pointer bfs)))))))
+                          (from-int (abs (value-at-pointer bfs)))))))
       (state:put bfs)))
 
   ;;

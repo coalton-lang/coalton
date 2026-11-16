@@ -76,8 +76,6 @@
    #:UFix
    #:F32
    #:F64
-   #:Single-Float                       ; deprecated
-   #:Double-Float                       ; deprecated
    #:String
    #:Fraction
    #:Arrow

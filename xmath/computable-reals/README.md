@@ -16,12 +16,14 @@ As stated in the computable-reals README:
 
 Other instances defined:
 
-- `Num`
+- `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`
 - `Reciprocable`
+- `Quantizable`
+- `Approximable` (to `Fraction`, `Dyadic`, `BigFloat`, `F32`, `F64`)
 - `Exponentiable`
 - `Radical`
 - `Trigonometric`
-- `Complex`
+- `ComplexComponent`
 - `Polar`
 - `Elementary`
 - Typical `Into` instances

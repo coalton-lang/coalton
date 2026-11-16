@@ -2,12 +2,6 @@
 
 (coalton-toplevel
 
-  (define-instance (LooseCompare :t => LooseCompare (hyperdual:Hyperdual :t))
-    (define (~ (hyperdual:Hyperdual a1 b1 c1 d1) (hyperdual:Hyperdual a2 b2 c2 d2))
-      (and (~ a1 a2) (~ b1 b2) (~ c1 c2) (~ d1 d2)))))
-
-(coalton-toplevel
-
   ;; Type Class Instance Test Functions
 
   ;; Num
@@ -36,7 +30,7 @@
 
   ;; Trigonometric
 
-  (define (sec x) (reciprocal (cos x)))
+  (define (sec x) (recip (cos x)))
   (define (sec2 x) (^ (sec x) 2))
 
   (define (f3 x)
@@ -48,15 +42,15 @@
   (define (d0f3 x)
     (f3 x))
   (define (d1f3 x)
-    (+ (* (cos (cos (tan x))) (* (negate (sin (tan x))) (sec2 x)))
-       (reciprocal (1+ (* x x)))))
+    (+ (* (cos (cos (tan x))) (* (neg (sin (tan x))) (sec2 x)))
+       (recip (1+ (* x x)))))
  (define (d2f3 x)
-   (+ (+ (* (* (negate (sin (cos (tan x)))) (* (negate (sin (tan x))) (sec2 x)))
-            (* (negate (sin (tan x))) (sec2 x)))
-         (+ (* (* (negate (cos (tan x))) (sec2 x))
+   (+ (+ (* (* (neg (sin (cos (tan x)))) (* (neg (sin (tan x))) (sec2 x)))
+            (* (neg (sin (tan x))) (sec2 x)))
+         (+ (* (* (neg (cos (tan x))) (sec2 x))
                (* (cos (cos (tan x))) (sec2 x)))
             (* (* 2 (* (sec2 x) (tan x)))
-               (* (cos (cos (tan x))) (negate (sin (tan x)))))))
+               (* (cos (cos (tan x))) (neg (sin (tan x)))))))
       (* -2 (/ x (^ (1+ (* x x)) 2)))))
 
   ;; Exponentiable
@@ -77,9 +71,9 @@
   (define (d0f6 x)
     (f6 x))
   (define (d1f6 x)
-    (reciprocal (* x (ln 2))))
+    (recip (* x (ln 2))))
   (define (d2f6 x)
-    (negate (reciprocal (* (* x x) (ln 2)))))
+    (neg (recip (* (* x x) (ln 2)))))
 
   ;; Radical
 
@@ -128,7 +122,7 @@
 
 (define-test univariate-hyperdual-test-5 ()
   (all (fn (x)
-         (test-univariate f4 d0f4 d1f4 d2f4 x))
+         (test-univariate f5 d0f5 d1f5 d2f5 x))
        (make-list 0.1 0.2 0.3 0.4 0.8)))
 
 (define-test univariate-hyperdual-test-6 ()

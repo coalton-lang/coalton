@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/classes
+  (:documentation "Core type classes, algebraic hierarchy (`Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`), and fundamental data types (`Tuple`, `Optional`, `Result`).")
   (:use
    #:coalton)
   (:local-nicknames
@@ -17,7 +18,14 @@
    #:<=> #:> #:< #:>= #:<=
    #:max
    #:min
-   #:Num #:+ #:- #:* #:fromInt
+   #:Additive #:+ #:zero
+   #:AdditiveGroup #:- #:neg #:negate
+   #:Multiplicative #:* #:one
+   #:Semiring
+   #:Ring #:from-int
+   #:Num
+   #:define-ring
+   #:define-num
    #:Semigroup #:<>
    #:Monoid #:mempty
    #:Functor #:map
@@ -42,7 +50,7 @@
    #:FromAssociationComprehension #:begin-association-comprehension
    #:adjoin-to-association-comprehension #:finalize-association-comprehension
    #:Into
-   #:TryInto
+   #:TryInto #:try-into
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
    #:Fallible #:split-failure
@@ -135,12 +143,58 @@ Every type defined with `define-resumption` is an instance, and instances cannot
       (lisp (-> Boolean) (a b)
         (cl:equalp a b))))
 
-  (define-class (Eq :a => Num :a)
-    "Types which have numeric operations defined."
+  (define-class (Additive :a)
+    "Types with an associative, commutative addition and an additive identity `zero`.
+
+Laws:
+- Associativity: `(+ (+ a b) c) == (+ a (+ b c))`
+- Identity: `(+ zero a) == (+ a zero) == a`
+- Commutativity: `(+ a b) == (+ b a)`"
     (+ (:a * :a -> :a))
+    (zero :a))
+
+  (define-class (Additive :a => AdditiveGroup :a)
+    "An `Additive` type with subtraction and additive inverses.
+
+Laws:
+- Inverse: `(+ a (neg a)) == (+ (neg a) a) == zero`
+- Subtraction: `(- a b) == (+ a (neg b))`"
     (- (:a * :a -> :a))
+    (neg (:a -> :a)))
+
+  (inline)
+  (declare negate (AdditiveGroup :a => :a -> :a))
+  (define (negate x)
+    "An alias for `neg`."
+    (neg x))
+
+  (define-class (Multiplicative :a)
+    "Types with an associative multiplication and a multiplicative identity `one`.
+
+Laws:
+- Associativity: `(* (* a b) c) == (* a (* b c))`
+- Identity: `(* one a) == (* a one) == a`"
     (* (:a * :a -> :a))
-    (fromInt (Integer -> :a)))
+    (one :a))
+
+  (define-class ((Additive :a) (Multiplicative :a) => Semiring :a)
+    "Types with both addition and multiplication, where multiplication distributes over addition and `zero` annihilates multiplication.
+
+Laws:
+- Left distributivity: `(* a (+ b c)) == (+ (* a b) (* a c))`
+- Right distributivity: `(* (+ a b) c) == (+ (* a c) (* b c))`
+- Annihilation: `(* zero a) == (* a zero) == zero`")
+
+  (define-class ((AdditiveGroup :a) (Semiring :a) => Ring :a)
+    "A `Semiring` with additive inverses (`AdditiveGroup`) and a canonical embedding of integers `from-int`.
+
+Laws:
+- Identities: `(from-int 0) == zero`, `(from-int 1) == one`
+- Homomorphism: `from-int` preserves `+`, `-`, and `*`."
+    (from-int (Integer -> :a)))
+
+  (define-class ((Eq :a) (Ring :a) => Num :a)
+    "Everyday numeric types: a `Ring` with decidable equality (`Eq`).")
 
   (define-instance (Eq Unit)
     (define (== _ _) True))
@@ -557,7 +611,7 @@ optimization restrictions, and separate-compilation details."
 
   (define-class (TryInto :a :b)
     "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."
-    (tryInto (:a -> (Optional :b))))
+    (try-into (:a -> (Optional :b))))
 
   ;;
   ;; Unwrappable for fallible unboxing
@@ -618,8 +672,8 @@ Typical `fail` continuations are:
 
   (declare unwrap-into (TryInto :a :b => :a -> :b))
   (define (unwrap-into x)
-    "Same as `tryInto` followed by `unwrap`."
-    (unwrap (tryinto x)))
+    "Same as `try-into` followed by `unwrap`."
+    (unwrap (try-into x)))
 
   (declare with-default ((Unwrappable :container) =>
                          :element
@@ -669,6 +723,120 @@ Typical `fail` continuations are:
   (define (default? x)
       "Is `x` the default item of its type?"
       (== x (default))))
+
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defun %ring-instance-head (spec class-sym)
+    (cl:if (cl:and (cl:consp spec)
+                   (cl:member "=>" spec
+                              :key (cl:lambda (x) (cl:and (cl:symbolp x) (cl:symbol-name x)))
+                              :test #'cl:string=))
+           (cl:let* ((arrow-pos (cl:position "=>" spec
+                                             :key (cl:lambda (x) (cl:and (cl:symbolp x) (cl:symbol-name x)))
+                                             :test #'cl:string=))
+                     (preds (cl:subseq spec 0 arrow-pos))
+                     (target (cl:subseq spec (cl:1+ arrow-pos)))
+                     (target-type (cl:if (cl:= 1 (cl:length target))
+                                         (cl:first target)
+                                         target)))
+             `(,@preds coalton:=> (,class-sym ,target-type)))
+           `(,class-sym ,spec)))
+
+  (cl:defun %extract-ring-method-name (def-form)
+    (cl:let ((head (cl:second def-form)))
+      (cl:if (cl:consp head)
+             (cl:first head)
+             head)))
+
+  (cl:defun %synthesize-constant-from-from-int (from-int-def const-sym int-val)
+    (cl:let* ((head (cl:second from-int-def))
+              (raw-body (cl:cddr from-int-def))
+              (expr-body (cl:if (cl:and (cl:stringp (cl:first raw-body))
+                                        (cl:rest raw-body))
+                                (cl:rest raw-body)
+                                raw-body)))
+      (cl:if (cl:consp head)
+             (cl:let ((param (cl:second head)))
+               `(coalton:define ,const-sym
+                  (coalton:let ((,param (coalton:the coalton:Integer ,int-val)))
+                    ,@expr-body)))
+             `(coalton:define ,const-sym
+                (,(cl:first expr-body) (coalton:the coalton:Integer ,int-val))))))
+
+  (cl:defun %normalize-neg-form (def-form)
+    (cl:let ((head (cl:second def-form)))
+      (cl:if (cl:consp head)
+             `(,(cl:first def-form) (neg ,@(cl:rest head)) ,@(cl:cddr def-form))
+             `(,(cl:first def-form) neg ,@(cl:cddr def-form)))))
+
+  (define-toplevel-macro define-ring (spec cl:&body body)
+    "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring` instances from `+`, `-`, `*`, and `from-int` (with optional `zero`, `neg`, and `one`)."
+    (cl:let ((plus-forms cl:nil)
+             (zero-forms cl:nil)
+             (minus-forms cl:nil)
+             (neg-forms cl:nil)
+             (times-forms cl:nil)
+             (one-forms cl:nil)
+             (from-int-forms cl:nil)
+             (from-int-def cl:nil)
+             (pending-inline cl:nil))
+      (cl:dolist (form body)
+        (cl:cond
+          ((cl:stringp form)
+           cl:nil)
+          ((cl:and (cl:consp form)
+                   (cl:symbolp (cl:first form))
+                   (cl:string-equal (cl:symbol-name (cl:first form)) "INLINE"))
+           (cl:setf pending-inline (cl:list form)))
+          ((cl:and (cl:consp form)
+                   (cl:symbolp (cl:first form))
+                   (cl:string-equal (cl:symbol-name (cl:first form)) "DEFINE"))
+           (cl:let* ((mname (%extract-ring-method-name form))
+                     (sname (cl:symbol-name mname))
+                     (entry (cl:append pending-inline (cl:list form))))
+             (cl:setf pending-inline cl:nil)
+             (cl:cond
+               ((cl:string-equal sname "+") (cl:setf plus-forms entry))
+               ((cl:string-equal sname "ZERO") (cl:setf zero-forms entry))
+               ((cl:string-equal sname "-") (cl:setf minus-forms entry))
+               ((cl:or (cl:string-equal sname "NEG")
+                       (cl:string-equal sname "NEGATE"))
+                (cl:setf neg-forms (cl:append (cl:butlast entry)
+                                              (cl:list (%normalize-neg-form form)))))
+               ((cl:string-equal sname "*") (cl:setf times-forms entry))
+               ((cl:string-equal sname "ONE") (cl:setf one-forms entry))
+               ((cl:string-equal sname "FROM-INT")
+                (cl:setf from-int-forms entry
+                         from-int-def form))
+               (cl:t
+                (cl:error "Unknown method ~S in DEFINE-RING for ~S" mname spec)))))
+          (cl:t
+           (cl:error "Unexpected form ~S in DEFINE-RING for ~S" form spec))))
+      (cl:unless (cl:and plus-forms minus-forms times-forms from-int-forms)
+        (cl:error "DEFINE-RING for ~S requires definitions for +, -, *, and from-int" spec))
+      (cl:let ((x-sym (cl:gensym "X")))
+        `(coalton:progn
+           (coalton:define-instance ,(%ring-instance-head spec 'Additive)
+             ,@plus-forms
+             ,@(cl:or zero-forms
+                      (cl:list (%synthesize-constant-from-from-int from-int-def 'zero 0))))
+           (coalton:define-instance ,(%ring-instance-head spec 'AdditiveGroup)
+             ,@minus-forms
+             ,@(cl:or neg-forms
+                      `((coalton:inline)
+                        (coalton:define (neg ,x-sym) (- zero ,x-sym)))))
+           (coalton:define-instance ,(%ring-instance-head spec 'Multiplicative)
+             ,@times-forms
+             ,@(cl:or one-forms
+                      (cl:list (%synthesize-constant-from-from-int from-int-def 'one 1))))
+           (coalton:define-instance ,(%ring-instance-head spec 'Semiring))
+           (coalton:define-instance ,(%ring-instance-head spec 'Ring)
+             ,@from-int-forms)))))
+
+  (define-toplevel-macro define-num (spec cl:&body body)
+    "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, and `Num` instances from `+`, `-`, `*`, and `from-int` (with optional `zero`, `neg`, and `one`)."
+    `(coalton:progn
+       (define-ring ,spec ,@body)
+       (coalton:define-instance ,(%ring-instance-head spec 'Num)))))
 
 
 #+sb-package-locks

@@ -1,6 +1,6 @@
-# Coalton `Big-Float`
+# Coalton `BigFloat`
 
-`Big-Float` is a portable arbitrary-precision floating-point number written in
+`BigFloat` is a portable arbitrary-precision floating-point number written in
 Coalton.
 
 Dynamic precision and rounding are configured with scoped helpers. For example:

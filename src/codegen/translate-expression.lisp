@@ -713,10 +713,10 @@ Returns a `node'.")
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (let* ((classes-package (util:find-package "COALTON/CLASSES"))
-             (num-class (util:find-symbol "NUM" classes-package))
-             (num-pred (tc:make-ty-predicate :class num-class
-                                             :types (list (tc:qualified-ty-type qual-ty))))
-             (from-int-method (util:find-symbol "FROMINT" classes-package))
+             (ring-class (util:find-symbol "RING" classes-package))
+             (ring-pred (tc:make-ty-predicate :class ring-class
+                                              :types (list (tc:qualified-ty-type qual-ty))))
+             (from-int-method (util:find-symbol "FROM-INT" classes-package))
              (val (tc:node-integer-literal-value expr))
              (ty (tc:qualified-ty-type qual-ty)))
         (flet ((make-full-call ()
@@ -726,17 +726,17 @@ Returns a `node'.")
                   :rator (make-node-global-variable
                           :type (tc:make-function-type*
                                  (list
-                                  (pred-type num-pred env)
+                                  (pred-type ring-pred env)
                                   tc:*integer-type*)
                                  (tc:qualified-ty-type qual-ty))
                           :value from-int-method)
                   :rands (list
-                          (resolve-dict num-pred ctx env)
+                          (resolve-dict ring-pred ctx env)
                           (make-node-literal
                            :type tc:*integer-type*
                            :value val)))))
 
-          ;; Avoid casting INTEGER literals with FROMINT at runtime
+          ;; Avoid casting INTEGER literals with FROM-INT at runtime
           ;; when the type is known, We can do that at comptime.  This
           ;; is a temporary hack to get an easy performance boost but
           ;; should be solved later with proper constant folding.
