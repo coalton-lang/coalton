@@ -1,4 +1,4 @@
-;;;; big-float.lisp
+;;;; impl-default.ct
 ;;;;
 ;;;; Arbitrary precision floats using pure Coalton.
 
@@ -9,6 +9,7 @@
 
 (coalton-toplevel
   ;; Rounding modes
+  (derive Eq)
   (repr :enum)
   (define-type RoundingMode
     RoundNearAway
@@ -21,7 +22,7 @@
     RoundDisable))
 
 (cl:defvar *bf-precision* 53)
-(cl:defvar *bf-rounding-mode* RoundDown)
+(cl:defvar *bf-rounding-mode* RoundEven)
 
 (coalton-toplevel
 
@@ -53,18 +54,6 @@
   (define rndf
     "Faithful rounding (experimental)."
     RoundFaithful)
-
-  (define (round-from-zero x)
-    "Rounds to an integer away from zero."
-    (* (sign x) (ceiling (abs x))))
-
-  (define (dyadic-round-half-away-zero x)
-    "Rounds a dyadic to the nearest integer with ties going away from zero."
-    (* (sign x) (floor (+ (abs x) (Dyadic 1 -1)))))
-
-  (define (fraction-round-half-away-zero x)
-    "Rounds a fraction to the nearest integer with ties going away from zero."
-    (* (sign x) (floor (+ (abs x) -1/2))))
 
   (declare set-precision! (UFix -> Void))
   (define (set-precision! prec-bits)
@@ -100,6 +89,8 @@
       ((Void -> :a) &key (:precision UFix) (:rounding RoundingMode) -> :a)))
   (define (with-precision-rounding f &key (precision (get-precision)) (rounding (get-rounding-mode)))
     "Call F with a temporary Big-Float PRECISION and ROUNDING mode."
+    (unless (> precision 0)
+      (error "Precision must be positive."))
     (lisp (-> :a) (f precision rounding)
       (cl:let ((*bf-precision* precision)
                (*bf-rounding-mode* rounding))
@@ -117,21 +108,41 @@
     "Call F with a temporary Big-Float ROUNDING mode."
     (with-precision-rounding f :rounding rounding))
 
-  (declare polylog-prec (UFix -> UFix))
-  (define (polylog-prec n)
-    "Raises (ilog 2 (get-precision)) to a power N or return 1 if prec is 1."
-    (let x = (get-precision))
-    (max 1
-         (- (lisp (-> UFix) (x n) (cl:expt (cl:integer-length x) n)) 1)))
-
+  (inline)
   (declare bit-length (Integer -> Integer))
   (define (bit-length n)
     (lisp (-> Integer) (n)
-      (cl:integer-length n)))
+      (cl:integer-length (cl:abs n))))
 
+  (inline)
   (declare ilog2-abs (Integer -> Integer))
   (define (ilog2-abs x)
-    (- (bit-length (abs x)) 1)))
+    (- (bit-length x) 1))
+
+  (inline)
+  (declare low-bits-nonzero? (Integer * Integer -> Boolean))
+  (define (low-bits-nonzero? abs-m count)
+    "Return True when any of the lowest COUNT bits of ABS-M (> 0) are non-zero."
+    (cond
+      ((<= count 0) False)
+      ((< (bit-length abs-m) (+ count 1)) True)
+      (True
+       (lisp (-> Boolean) (abs-m count)
+         (cl:ldb-test (cl:byte count 0) abs-m)))))
+
+  (inline)
+  (declare test-bit? (Integer * Integer -> Boolean))
+  (define (test-bit? abs-m bit-index)
+    (if (< (bit-length abs-m) (+ bit-index 1))
+        False
+        (lisp (-> Boolean) (abs-m bit-index)
+          (cl:logbitp bit-index abs-m))))
+
+  (inline)
+  (declare round-quotient (Integer * Integer -> Integer))
+  (define (round-quotient a b)
+    (lisp (-> Integer) (a b)
+      (cl:values (cl:round a b)))))
 
 (coalton-toplevel
 
@@ -144,14 +155,20 @@
   (define (round-scaled-integer n shift)
     (if (< shift 0)
         (progn
-          (let scale = (lsh 1 (negate shift)))
-          (let (values quo r) = (quotRem n scale))
-          (let twice-rem = (lsh r 1))
-          (cond
-            ((< twice-rem scale) quo)
-            ((> twice-rem scale) (+ quo 1))
-            ((even? quo) quo)
-            (True (+ quo 1))))
+          (let s = (negate shift))
+          (let len = (bit-length n))
+          (if (< len s)
+              0
+              (progn
+                (let quo = (rsh n s))
+                (let half? = (test-bit? n (- s 1)))
+                (if (not half?)
+                    quo
+                    (if (odd? quo)
+                        (+ quo 1)
+                        (if (low-bits-nonzero? n (- s 1))
+                            (+ quo 1)
+                            quo))))))
         (lsh n shift)))
 
   (declare dyadic->native-float-exact
@@ -201,6 +218,14 @@
     BFNegInf
     BFNaN)
 
+  (inline)
+  (declare resolve (Big-Float -> Big-Float))
+  (define (resolve x)
+    "Evaluates a lazy Big-Float constant at the current precision and rounding mode."
+    (match x
+      ((BFConst f) (resolve (f)))
+      (_ x)))
+
   (declare integer->big-float-exact (Integer -> Big-Float))
   (define (integer->big-float-exact n)
     (BFValue (Dyadic n 0)))
@@ -208,30 +233,24 @@
   ;; Can compare non-normalized big-floats or big-floats of different precisions.
   (define-instance (Eq Big-Float)
     (define (== a b)
-      (match (Tuple a b)
+      (match (Tuple (resolve a) (resolve b))
         ((Tuple (BFValue x) (BFValue y))
          (== x y))
-        ((Tuple (BFConst f) b)
-         (== (f) b))
-        ((Tuple a (BFConst f))
-         (== a (f)))
-        ((Tuple (BFNegZero) a) (== 0 a))
-        ((Tuple a (BFNegZero)) (== a 0))
+        ((Tuple (BFNegZero) (BFNegZero)) True)
+        ((Tuple (BFNegZero) (BFValue (Dyadic m _))) (== m 0))
+        ((Tuple (BFValue (Dyadic m _)) (BFNegZero)) (== m 0))
         ((Tuple (BFInf) (BFInf)) True)
         ((Tuple (BFNegInf) (BFNegInf)) True)
         (_ False))))
 
   (define-instance (Ord Big-Float)
     (define (<=> a b)
-      (match (Tuple a b)
+      (match (Tuple (resolve a) (resolve b))
         ((Tuple (BFValue x) (BFValue y))
          (<=> x y))
-        ((Tuple (BFConst f) _)
-         (<=> (f) b))
-        ((Tuple _ (BFConst f))
-         (<=> a (f)))
-        ((Tuple (BFNegZero) _) (<=> 0 a))
-        ((Tuple _ (BFNegZero)) (<=> a 0))
+        ((Tuple (BFNegZero) (BFNegZero)) EQ)
+        ((Tuple (BFNegZero) (BFValue (Dyadic m _))) (<=> 0 m))
+        ((Tuple (BFValue (Dyadic m _)) (BFNegZero)) (<=> m 0))
         ((Tuple (BFInf) (BFInf)) EQ)
         ((Tuple (BFNegInf) (BFNegInf)) EQ)
         ((Tuple (BFInf) (BFNegInf)) GT)
@@ -243,133 +262,296 @@
         ((Tuple (BFInf) _) GT)
         ((Tuple (BFNegInf) _) LT)
         ((Tuple _ (BFInf)) LT)
-        ((Tuple _ (BFNegInf)) GT))))
+        ((Tuple _ (BFNegInf)) GT)
+        (_ EQ))))
 
+  (declare round-shifted-integer (Integer * Integer * RoundingMode -> Integer))
+  (define (round-shifted-integer m shift rnd-mode)
+    "Round M * 2^(-SHIFT) (where M /= 0 and SHIFT > 0) to an Integer under RND-MODE."
+    (let neg? = (< m 0))
+    (let abs-m = (abs m))
+    (let len = (bit-length abs-m))
+    (let q = (if (< len (+ shift 1)) 0 (rsh abs-m shift)))
+    (let half? = (test-bit? abs-m (- shift 1)))
+    (let mag =
+      (match rnd-mode
+        ((RoundToZero) q)
+        ((RoundNearAway)
+         (if half? (+ q 1) q))
+        ((RoundEven)
+         (if (not half?)
+             q
+             (if (odd? q)
+                 (+ q 1)
+                 (if (low-bits-nonzero? abs-m (- shift 1))
+                     (+ q 1)
+                     q))))
+        ((RoundFaithful)
+         (if (not half?)
+             q
+             (if (odd? q)
+                 (+ q 1)
+                 (if (low-bits-nonzero? abs-m (- shift 1))
+                     (+ q 1)
+                     q))))
+        ((RoundFromZero)
+         (if (or half? (low-bits-nonzero? abs-m (- shift 1)))
+             (+ q 1)
+             q))
+        ((RoundUp)
+         (if neg?
+             q
+             (if (or half? (low-bits-nonzero? abs-m (- shift 1)))
+                 (+ q 1)
+                 q)))
+        ((RoundDown)
+         (if neg?
+             (if (or half? (low-bits-nonzero? abs-m (- shift 1)))
+                 (+ q 1)
+                 q)
+             q))
+        ((RoundDisable)
+         (error "RoundDisable cannot be passed to round-shifted-integer."))))
+    (if neg? (negate mag) mag))
+
+  (declare normalize-dyadic (Integer * Integer -> Big-Float))
+  (define (normalize-dyadic m e)
+    "Normalize M * 2^E into a Big-Float using current precision and rounding mode."
+    (if (== m 0)
+        (BFValue (Dyadic 0 0))
+        (match (get-rounding-mode)
+          ((RoundDisable) (BFValue (Dyadic m e)))
+          (rnd-mode
+           (let k = (toInteger (get-precision)))
+           (let len = (bit-length m))
+           (let delta = (- k len))
+           (if (>= delta 0)
+               (BFValue (Dyadic (lsh m delta) (- e delta)))
+               (progn
+                 (let shift = (negate delta))
+                 (let q = (round-shifted-integer m shift rnd-mode))
+                 (let e-new = (+ e shift))
+                 (if (> (bit-length q) k)
+                     (BFValue (Dyadic (rsh q 1) (+ e-new 1)))
+                     (BFValue (Dyadic q e-new)))))))))
+
+  (declare normalize (Big-Float -> Big-Float))
   (define (normalize a)
     "Normalizes a Big-Float using current rounding and precision."
-    (let k = (get-precision))
-    (match (Tuple a (get-rounding-mode))
-      ;; normalize cannot use fromInt
-      ((Tuple (BFValue (Dyadic 0 _)) _) (BFValue (Dyadic 0 0)))
-      ((Tuple x (RoundDisable)) x)
-      ((Tuple (BFValue (Dyadic m e)) rnd-mode)
-       (let j =  (ilog2-abs m))
-       (let delta = (- (toInteger k) j))
-       (let rounder =
-         (match rnd-mode
-           ((RoundDown) floor)
-           ((RoundToZero) truncate)
-           ((RoundUp) ceiling)
-           ((RoundEven) round)
-           ((RoundNearAway) dyadic-round-half-away-zero)
-           ((RoundFromZero) round-from-zero)
-           ;; TODO: Implement round faithful.
-           ((RoundFaithful) round)
-           (_ (error "Current rounding mode not implemented"))))
-       (if (>= delta 0)
-           (BFValue (Dyadic (lsh m delta) (- e delta)))
-           (BFValue
-            (match (Dyadic (rounder (Dyadic m delta)) (- e delta))
-              ((Dyadic 0 n)
-               (Dyadic (sign m) (- n 1)))
-              (d d)))))
-      (_ a)))
+    (match (resolve a)
+      ((BFValue (Dyadic m e))
+       (normalize-dyadic m e))
+      (x x)))
+
+  (declare cap-dyadic-bits (Integer * Integer * Integer -> Dyadic))
+  (define (cap-dyadic-bits m e max-bits)
+    "Truncate M to at most MAX-BITS bits, preserving a sticky bit at bit 0."
+    (let len = (bit-length m))
+    (if (<= len max-bits)
+        (Dyadic m e)
+        (progn
+          (let drop = (- len (- max-bits 1)))
+          (let abs-m = (abs m))
+          (let q = (rsh abs-m drop))
+          (let sticky = (if (low-bits-nonzero? abs-m drop) 1 0))
+          (let q2 = (+ (lsh q 1) sticky))
+          (Dyadic (if (< m 0) (negate q2) q2)
+                  (- (+ e drop) 1)))))
+
+  (declare add-dyadic (Integer * Integer * Integer * Integer -> Big-Float))
+  (define (add-dyadic m1 e1 m2 e2)
+    "Add M1 * 2^E1 + M2 * 2^E2 and normalize at current precision and rounding."
+    (cond
+      ((and (== m1 0) (== m2 0))
+       (BFValue (Dyadic 0 0)))
+      ((== m1 0)
+       (normalize-dyadic m2 e2))
+      ((== m2 0)
+       (normalize-dyadic m1 e1))
+      ((== (get-rounding-mode) RoundDisable)
+       (BFValue (+ (Dyadic m1 e1) (Dyadic m2 e2))))
+      (True
+       (let prec = (toInteger (get-precision)))
+       (let len1 = (bit-length m1))
+       (let len2 = (bit-length m2))
+       (let top1 = (+ e1 len1))
+       (let top2 = (+ e2 len2))
+       (if (< top1 top2)
+           (add-dyadic m2 e2 m1 e1)
+           (progn
+             (let cut = (- top1 (+ prec 3)))
+             (if (<= top2 (min cut (- e1 1)))
+                 (progn
+                   (let s = (max 1 (+ (- e1 cut) 1)))
+                   (normalize-dyadic (+ (lsh m1 s) (sign m2)) (- e1 s)))
+                 (match (+ (Dyadic m1 e1) (Dyadic m2 e2))
+                   ((Dyadic sm se)
+                    (normalize-dyadic sm se)))))))))
+
+  (declare div-dyadic (Integer * Integer * Integer * Integer -> Big-Float))
+  (define (div-dyadic m1 e1 m2 e2)
+    "Divide (M1 * 2^E1) / (M2 * 2^E2) for non-zero M1, M2 and normalize."
+    (let prec = (toInteger (get-precision)))
+    (let neg? = (/= (< m1 0) (< m2 0)))
+    (let n1 = (abs m1))
+    (let n2 = (abs m2))
+    (let len1 = (bit-length n1))
+    (let len2 = (bit-length n2))
+    (let s = (+ (+ prec 3) (- len2 len1)))
+    (if (>= s 0)
+        (progn
+          (let (values q r) = (quotRem (lsh n1 s) n2))
+          (let q2 = (+ (lsh q 1) (if (== r 0) 0 1)))
+          (normalize-dyadic (if neg? (negate q2) q2)
+                            (- (- e1 e2) (+ s 1))))
+        (progn
+          (let drop = (negate s))
+          (let n1-dropped = (rsh n1 drop))
+          (let dropped-sticky? = (low-bits-nonzero? n1 drop))
+          (let (values q r) = (quotRem n1-dropped n2))
+          (let q2 = (+ (lsh q 1)
+                       (if (and (== r 0) (not dropped-sticky?)) 0 1)))
+          (normalize-dyadic (if neg? (negate q2) q2)
+                            (- (- e1 e2) (+ s 1))))))
+
+  (declare sqrt-dyadic (Integer * Integer -> Big-Float))
+  (define (sqrt-dyadic m e)
+    "Compute sqrt(M * 2^E) for M > 0 and normalize."
+    (let prec = (toInteger (get-precision)))
+    (let len = (bit-length m))
+    (let s0 = (- (+ (* 2 prec) 6) len))
+    (let s = (if (odd? (- e s0)) (+ s0 1) s0))
+    (let e-out = (div (- e s) 2))
+    (if (>= s 0)
+        (progn
+          (let n = (lsh m s))
+          (let q = (isqrt n))
+          (let q2 = (+ (lsh q 1) (if (== (* q q) n) 0 1)))
+          (normalize-dyadic q2 (- e-out 1)))
+        (progn
+          (let drop = (negate s))
+          (let n = (rsh m drop))
+          (let dropped-sticky? = (low-bits-nonzero? m drop))
+          (let q = (isqrt n))
+          (let q2 = (+ (lsh q 1)
+                       (if (and (not dropped-sticky?) (== (* q q) n)) 0 1)))
+          (normalize-dyadic q2 (- e-out 1)))))
 
   (specialize negate bf-negate (Big-Float -> Big-Float))
   (define (bf-negate x)
     "Negates a Big-Float"
-    (match x
+    (match (resolve x)
       ((BFValue (Dyadic n k))
        (if (== n 0)
            BFNegZero
            (BFValue (Dyadic (negate n) k))))
-      ((BFConst f) (negate (f)))
-      ((BFNegZero) 0)
+      ((BFConst f) (bf-negate (f)))
+      ((BFNegZero) (BFValue (Dyadic 0 0)))
       ((BFInf) BFNegInf)
       ((BFNegInf) BFInf)
       ((BFNaN) BFNaN)))
 
+  (declare bf-negative-sign? (Big-Float -> Boolean))
+  (define (bf-negative-sign? x)
+    (match (resolve x)
+      ((BFNegZero) True)
+      ((BFNegInf) True)
+      ((BFValue (Dyadic m _)) (< m 0))
+      (_ False)))
+
+  (declare bf-zero? (Big-Float -> Boolean))
+  (define (bf-zero? x)
+    (match (resolve x)
+      ((BFNegZero) True)
+      ((BFValue (Dyadic m _)) (== m 0))
+      (_ False)))
+
   (define-instance (Num Big-Float)
     (define (+ a b)
-      (match (Tuple a b)
-        ((Tuple (BFValue x) (BFValue y))
-         (normalize (BFValue (+ x y))))
-        ((Tuple (BFConst f) b)
-         (+ (f) b))
-        ((Tuple a (BFConst f))
-         (+ a (f)))
+      (match (Tuple (resolve a) (resolve b))
+        ((Tuple (BFNaN) _) BFNaN)
+        ((Tuple _ (BFNaN)) BFNaN)
+        ((Tuple (BFInf) (BFNegInf)) BFNaN)
+        ((Tuple (BFNegInf) (BFInf)) BFNaN)
+        ((Tuple (BFInf) _) BFInf)
+        ((Tuple _ (BFInf)) BFInf)
+        ((Tuple (BFNegInf) _) BFNegInf)
+        ((Tuple _ (BFNegInf)) BFNegInf)
         ((Tuple (BFNegZero) (BFNegZero)) BFNegZero)
-        ((Tuple (BFNegZero) a) a)
-        ((Tuple a (BFNegZero)) a)
-        ((Tuple (BFInf) (BFInf)) BFInf)
-        ((Tuple (BFNegInf) (BFNegInf)) BFNegInf)
+        ((Tuple (BFNegZero) x) (normalize x))
+        ((Tuple x (BFNegZero)) (normalize x))
+        ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
+         (add-dyadic m1 e1 m2 e2))
         (_ BFNaN)))
     (define (- a b)
       (+ a (bf-negate b)))
     (define (* a b)
-      (match (Tuple a b)
-        ((Tuple (BFValue (Dyadic 0 _)) (BFValue b))
-         (if (< b 0)
-             BFNegZero
-             0))
-        ((Tuple (BFValue a) (BFValue (Dyadic 0 _)))
-         (if (< a 0)
-             BFNegZero
-             0))
-        ((Tuple (BFValue a) (BFValue b))
-         (normalize (BFValue (* a b))))
-        ((Tuple (BFConst f) b)
-         (* (f) b))
-        ((Tuple a (BFConst f))
-         (* a (f)))
-        ((Tuple (BFNegZero) (BFNegZero)) 0)
-        ((Tuple (BFNegZero) a)
-         (if (>= a 0) BFNegZero 0))
-        ((Tuple a (BFNegZero))
-         (if (>= a 0) BFNegZero 0))
-        ((Tuple (BFInf) (BFInf)) BFInf)
-        ((Tuple (BFNegInf) (BFNegInf)) BFInf)
-        ((Tuple (BFInf) a)
-         (cond
-           ((nan? a) BFNaN)
-           ((< a 0) BFNegInf)
-           ((> a 0) BFInf)
-           ((== a 0) BFNaN)))
-        ((Tuple a (BFInf)) (* BFInf a))
-        (_ BFNaN)))
-    (define (fromInt x) (normalize (BFValue (fromInt x)))))
+      (let ra = (resolve a))
+      (let rb = (resolve b))
+      (cond
+        ((or (nan? ra) (nan? rb)) BFNaN)
+        ((or (and (bf-zero? ra) (infinite? rb))
+             (and (infinite? ra) (bf-zero? rb)))
+         BFNaN)
+        ((or (infinite? ra) (infinite? rb))
+         (if (== (bf-negative-sign? ra) (bf-negative-sign? rb))
+             BFInf
+             BFNegInf))
+        ((or (bf-zero? ra) (bf-zero? rb))
+         (if (== (bf-negative-sign? ra) (bf-negative-sign? rb))
+             (BFValue (Dyadic 0 0))
+             BFNegZero))
+        (True
+         (match (Tuple ra rb)
+           ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
+            (normalize-dyadic (* m1 m2) (+ e1 e2)))
+           (_ BFNaN)))))
+    (define (fromInt x)
+      (normalize-dyadic x 0)))
 
   (define-instance (Reciprocable Big-Float)
     (define (reciprocal x)
-      (match x
+      (match (resolve x)
         ((BFValue (Dyadic 0 _)) BFInf)
         ((BFNegZero) BFNegInf)
         ((BFValue (Dyadic m k))
-         (let p = (+ 1 (toInteger (get-precision))))
-         (normalize
-          (BFValue (Dyadic (div (lsh 1 (- p k)) m) (negate p)))))
-        ((BFInf) 0)
+         (div-dyadic 1 0 m k))
+        ((BFInf) (BFValue (Dyadic 0 0)))
         ((BFNegInf) BFNegZero)
-        ((BFConst f) (reciprocal (f)))
-        ((BFNaN) BFNaN)))
+        ((BFNaN) BFNaN)
+        (_ BFNaN)))
     (define (/ a b)
-      (when (== b 0)
-        (return (* a (reciprocal b))))
-      (match (Tuple a b)
-        ((Tuple (BFValue (Dyadic m1 k1)) (BFValue (Dyadic m2 k2)))
-         (let p = (+ 1 (toInteger (get-precision))))
-         (normalize
-          (BFValue
-           (Dyadic
-            (div (lsh m1 (+ p (- k1 k2))) m2) (negate p)))))
-        (_ (* a (reciprocal b))))))
+      (let ra = (resolve a))
+      (let rb = (resolve b))
+      (cond
+        ((or (nan? ra) (nan? rb)) BFNaN)
+        ((and (infinite? ra) (infinite? rb)) BFNaN)
+        ((and (bf-zero? ra) (bf-zero? rb)) BFNaN)
+        ((bf-zero? rb)
+         (if (== (bf-negative-sign? ra) (bf-negative-sign? rb))
+             BFInf
+             BFNegInf))
+        ((infinite? ra)
+         (if (== (bf-negative-sign? ra) (bf-negative-sign? rb))
+             BFInf
+             BFNegInf))
+        ((or (infinite? rb) (bf-zero? ra))
+         (if (== (bf-negative-sign? ra) (bf-negative-sign? rb))
+             (BFValue (Dyadic 0 0))
+             BFNegZero))
+        (True
+         (match (Tuple ra rb)
+           ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
+            (div-dyadic m1 e1 m2 e2))
+           (_ BFNaN))))))
 
   (define-instance (Dividable Integer Big-Float)
     (define (general/ a b)
-      (let p = (+ 1 (toInteger (get-precision))))
-      (if (== b 0)
-          (* (fromInt a) (reciprocal (fromInt b)))
-          (normalize (BFValue (Dyadic (div (lsh a p) b) (negate p)))))))
+      (cond
+        ((and (== a 0) (== b 0)) BFNaN)
+        ((== b 0) (if (> a 0) BFInf BFNegInf))
+        ((== a 0) (if (> b 0) (BFValue (Dyadic 0 0)) BFNegZero))
+        (True (div-dyadic a 0 b 0)))))
 
   (define-instance (Into F32 Big-Float)
     (define (into a)
@@ -428,56 +610,54 @@
 
   (define-instance (Rational Big-Float)
     (define (to-fraction x)
-      (match x
+      (match (resolve x)
         ((BFValue d)
          (to-fraction d))
-        ((BFConst f)
-         (best-approx (f)))
         ((BFNegZero) 0)
         ((BFInf) (error "Cannot rationalize Inf"))
         ((BFNegInf) (error "Cannot rationalize -Inf"))
-        ((BFNaN) (error "Cannot rationalize NaN"))))
+        ((BFNaN) (error "Cannot rationalize NaN"))
+        (_ (error "Cannot rationalize non-finite Big-Float"))))
     (define (best-approx x)
       (real-approx (get-precision) x)))
 
   (define-instance (Quantizable Big-Float)
     (define (proper x)
-      (match x
+      (match (resolve x)
         ((BFValue d)
          (let (values n d) = (proper d))
          (values n (BFValue d)))
-        ((BFConst f)
-         (proper (f)))
         ((BFNegZero) (values 0 BFNegZero))
         ((BFInf) (values 0 BFInf))
         ((BFNegInf) (values 0 BFNegInf))
-        ((BFNaN) (values 0 BFNaN))))
+        ((BFNaN) (values 0 BFNaN))
+        (_ (values 0 BFNaN))))
     (define (floor x)
-      (match x
+      (match (resolve x)
         ((BFValue d) (floor d))
-        ((BFConst f) (floor (f)))
         ((BFNegZero) 0)
         ((BFInf) (error "Cannot floor Inf"))
         ((BFNegInf) (error "Cannot floor -Inf"))
-        ((BFNaN) (error "Cannot floor NaN"))))
+        ((BFNaN) (error "Cannot floor NaN"))
+        (_ (error "Cannot floor non-finite Big-Float"))))
     (define (ceiling x)
-      (match x
+      (match (resolve x)
         ((BFValue d) (ceiling d))
-        ((BFConst f) (ceiling (f)))
         ((BFNegZero) 0)
         ((BFInf) (error "Cannot ceiling Inf"))
         ((BFNegInf) (error "Cannot ceiling -Inf"))
-        ((BFNaN) (error "Cannot ceiling NaN")))))
+        ((BFNaN) (error "Cannot ceiling NaN"))
+        (_ (error "Cannot ceiling non-finite Big-Float")))))
 
   (define-instance (Transfinite Big-Float)
     (define nan BFNaN)
     (define (nan? x)
-      (match x
-        ((BFNan) True)
+      (match (resolve x)
+        ((BFNaN) True)
         (_ False)))
     (define infinity BFInf)
     (define (infinite? x)
-      (match x
+      (match (resolve x)
         ((BFInf) True)
         ((BFNegInf) True)
         (_ False))))
@@ -487,36 +667,24 @@
 
   (define (scale x n)
     "Scales a Big-Float X=a*2^k to a*2^(+ k n)."
-    (match x
+    (match (resolve x)
       ((BFValue d) (BFValue (dyadic:scale d n)))
-      ((BFConst f) (scale (f) n))
       ((BFNegZero) BFNegZero)
       ((BFInf) BFInf)
       ((BFNegInf) BFNegInf)
-      ((BFNaN) BFNaN)))
+      ((BFNaN) BFNaN)
+      (_ BFNaN)))
 
   (define (reciprocal-sqrt a)
-    "Non-normalized reciprocal of the sqrt of a"
-    (let prec = (get-precision))
-    (match a
+    "Reciprocal of the square root of A."
+    (match (resolve a)
       ((BFValue (Dyadic m j))
        (cond
          ((< m 0) BFNaN)
          ((== m 0) BFInf)
-         ((== a 1) 1)
-         (True
-          (let l = (bit-length m))
-          (let ((newton-rec
-                  (fn (x)
-                    (let y = (dyadic:scale (* x (- 3 (* (Dyadic m j) (* x x)))) -1))
-                    (let z = (dyadic:shift prec y))
-                    (if (== z x)
-                        z
-                        (newton-rec z)))))
-            (BFValue (newton-rec (Dyadic 1 (negate (div (+ j l) 2)))))))))
-      ((BFConst f) (reciprocal-sqrt (f)))
+         (True (reciprocal (sqrt-dyadic m j)))))
       ((BFNegZero) BFNegInf)
-      ((BFInf) 0)
+      ((BFInf) (BFValue (Dyadic 0 0)))
       (_ BFNaN))))
 
 (complex::%define-standard-complex-instances Big-Float)
@@ -629,249 +797,736 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (recip-result
      (eval-series start ƒm.(f (toInteger m)) n))))
 
+;;; High-water caches for fundamental constants (stored atomically as (Tuple prec Dyadic) with 32 extra guard bits)
+(cl:defvar *cached-pi* (Tuple 0 (Dyadic 0 0)))
+(cl:defvar *cached-ln2* (Tuple 0 (Dyadic 0 0)))
+(cl:defvar *cached-ee* (Tuple 0 (Dyadic 0 0)))
+
 (coalton-toplevel
 
-  ;; XXX: We can pre-compute some values here
+  (declare dyadic->fixed (Dyadic * Integer -> Integer))
+  (define (dyadic->fixed d scale-bits)
+    "Convert Dyadic D to floor(D * 2^SCALE-BITS)."
+    (match d
+      ((Dyadic m k)
+       (if (== m 0)
+           0
+           (let ((s (+ k scale-bits)))
+             (cond
+               ((>= s 0) (lsh m s))
+               ((< (+ (bit-length m) s) 0)
+                (if (< m 0) -1 0))
+               (True (lsh m s))))))))
+
+  (declare compute-pi-dyadic (Integer -> Dyadic))
+  (define (compute-pi-dyadic work-prec)
+    "Compute pi as a Dyadic at scale 2^(-WORK-PREC) using Chudnovsky binary splitting."
+    (let a = (* 12 13591409))
+    (let b = (* 12 545140134))
+    (let c = 640320)
+    (let j = (div (^ c 3) 24))
+    (let n-terms = (fromInt (+ (div work-prec 47) 2)))
+    (let (SeriesResult _ q b-prod t) =
+      (eval-series
+       (SeriesSplit a 1 1 1)
+       (fn (m)
+         (let n = (toInteger m))
+         (let 2n = (* 2 n))
+         (let 6n = (* 3 2n))
+         (let n2 = (* n n))
+         (SeriesSplit
+          (+ a (* b n))
+          (negate (* (* (- 6n 5) (- 2n 1)) (- 6n 1)))
+          (* j (* n2 n)) 1))
+       n-terms))
+    (let sqrt-c = (isqrt (lsh c (* 2 work-prec))))
+    (let pi-fixed = (div (* (* b-prod q) (* c sqrt-c)) t))
+    (Dyadic pi-fixed (negate work-prec)))
+
+  (declare trim-cached-dyadic (Dyadic * Integer -> Dyadic))
+  (define (trim-cached-dyadic d prec)
+    (match d
+      ((Dyadic m e)
+       (cap-dyadic-bits m e (+ prec 64)))))
+
+  (declare raw-pi (Integer -> Dyadic))
+  (define (raw-pi prec)
+    "Return a cached Dyadic approximation of pi accurate to at least PREC + 32 bits."
+    (let (Tuple cached-prec cached-d) = (lisp (-> (Tuple Integer Dyadic)) () *cached-pi*))
+    (if (<= prec cached-prec)
+        (trim-cached-dyadic cached-d prec)
+        (progn
+          (let target = (max (+ prec 64) (* 2 cached-prec)))
+          (let d = (compute-pi-dyadic (+ target 32)))
+          (lisp (-> Void) (target d)
+            (cl:progn
+              (cl:setf *cached-pi* (Tuple target d))
+              (cl:values)))
+          (trim-cached-dyadic d prec))))
+
+  (declare fixed-atanh-recip (Integer * Integer -> Integer))
+  (define (fixed-atanh-recip k scale-bits)
+    "Compute atanh(1/K) * 2^SCALE-BITS for integer K >= 2."
+    (let k2 = (* k k))
+    (let t0 = (div (lsh 1 scale-bits) k))
+    (rec % ((j 3)
+            (term (div t0 k2))
+            (acc t0))
+      (let step = (div term j))
+      (if (== step 0)
+          acc
+          (% (+ j 2) (div term k2) (+ acc step)))))
+
+  (declare compute-ln2-dyadic (Integer -> Dyadic))
+  (define (compute-ln2-dyadic work-prec)
+    "Compute ln(2) = 18*atanh(1/26) - 2*atanh(1/4801) + 8*atanh(1/8749)."
+    (let w = (+ work-prec 16))
+    (let a1 = (fixed-atanh-recip 26 w))
+    (let a2 = (fixed-atanh-recip 4801 w))
+    (let a3 = (fixed-atanh-recip 8749 w))
+    (let sum = (+ (- (* 18 a1) (* 2 a2)) (* 8 a3)))
+    (Dyadic (rsh sum 16) (negate work-prec)))
+
+  (declare raw-ln2 (Integer -> Dyadic))
+  (define (raw-ln2 prec)
+    "Return a cached Dyadic approximation of ln(2) accurate to at least PREC + 32 bits."
+    (let (Tuple cached-prec cached-d) = (lisp (-> (Tuple Integer Dyadic)) () *cached-ln2*))
+    (if (<= prec cached-prec)
+        (trim-cached-dyadic cached-d prec)
+        (progn
+          (let target = (max (+ prec 64) (* 2 cached-prec)))
+          (let d = (compute-ln2-dyadic (+ target 32)))
+          (lisp (-> Void) (target d)
+            (cl:progn
+              (cl:setf *cached-ln2* (Tuple target d))
+              (cl:values)))
+          (trim-cached-dyadic d prec))))
+
   (declare bf-pi (Void -> Big-Float))
   (define (bf-pi)
     "Return the value of pi to the currently set precision."
-    ;; Chudnovsky algorithm
-    (progn
-      (let a = (* 12 13591409))
-      (let b = (* 12 545140134))
-      (let c = 640320)
-      (let c3 = (^ c 3))
-      ;; d = c^3/24
-      (let j = (div c3 24))
-      ;; C^3/2 / 12pi
-      ;;  = Σ_n (6n)!(545140134n + 13591409)/((3q)!(n!)^3(-262537412640768000)^n
-      ;; a(n)=A+nB, b(n)=1, p(0)=1, q(0)=1,
-      ;; p(n)=−(6n−5)(2n−1)(6n−1), q(n)=1
-      (reciprocal
-       (*
-        (make-results
-         (polylog-prec 2) (SeriesSplit a 1 1 1)
-         (fn (n)
-           (let 2n = (* 2 n))
-           (let 6n = (* 3 2n))
-           (let n2 = (* n n))
-           (SeriesSplit
-            (+ a (* b n))
-            (negate (* (* (- 6n 5) (- 2n 1)) (- 6n 1)))
-            (* j (* n2 n)) 1)))
-        (reciprocal-sqrt (BFValue (dyadic:simplify-integer c3)))))))
+    (match (raw-pi (toInteger (get-precision)))
+      ((Dyadic m e) (normalize-dyadic m e))))
 
   (declare bf-ln2 (Void -> Big-Float))
   (define (bf-ln2)
     "Return the value of (ln 2) to the currently set precision."
-    ;; 2/3 Σ_n 1/(9^n(2n+1))
-    ;; a(n)=2, b(n)=(6n + 3), p(n)=1, q(0)=1, q(n)=9
-    (make-results
-     (polylog-prec 4) (SeriesSplit 2 1 1 3)
-     (fn (n)
-       (SeriesSplit 2 1 9 (+ (* 6 n) 3)))))
+    (match (raw-ln2 (toInteger (get-precision)))
+      ((Dyadic m e) (normalize-dyadic m e))))
+
+  (declare reduce-mod-pi-half (Integer * Integer * Integer -> (Tuple Integer (Tuple Integer Integer))))
+  (define (reduce-mod-pi-half m k base-prec)
+    "Reduce M * 2^K modulo pi/2 with Ziv retry when near a multiple of pi/2.
+Returns (Tuple q (Tuple r-fixed work-prec))."
+    (let x-mag = (+ (bit-length m) k))
+    (let init-prec = (+ (+ base-prec 36) (abs x-mag)))
+    (rec % ((work-prec init-prec))
+      (let pi-half-fixed = (dyadic->fixed (dyadic:scale (raw-pi work-prec) -1) work-prec))
+      (let x-fixed = (dyadic->fixed (Dyadic m k) work-prec))
+      (let q = (round-quotient x-fixed pi-half-fixed))
+      (let r-fixed = (- x-fixed (* q pi-half-fixed)))
+      (let r-bits = (bit-length r-fixed))
+      (let qb = (bit-length q))
+      (if (and (/= q 0)
+               (< r-bits (+ (+ base-prec 28) qb)))
+          (% (+ work-prec (+ (- (+ (+ base-prec 36) qb) r-bits) 16)))
+          (Tuple q (Tuple r-fixed work-prec)))))
+
+  (declare sincos-reduced (Integer * Integer * Integer -> (Tuple Dyadic Dyadic)))
+  (define (sincos-reduced m k prec)
+    "Reduce X = M * 2^K modulo pi/2 and return (Tuple sin(X) cos(X)) as Dyadics."
+    (let (Tuple q (Tuple r-fixed work-prec)) = (reduce-mod-pi-half m k prec))
+    (let r-mag = (- (bit-length r-fixed) work-prec))
+    (let s = (max 4 (isqrt (+ prec 32))))
+    (let w2 = (+ (+ (+ prec 36) (max 0 (negate r-mag))) s))
+    (let r0 = (lsh r-fixed (- (- w2 s) work-prec)))
+    (let neg-r0? = (< r0 0))
+    (let abs-r0 = (abs r0))
+    (let r0-sq = (rsh (* abs-r0 abs-r0) w2))
+    (let one = (lsh 1 w2))
+    (let abs-sin-r0 =
+      (rec % ((j 2)
+              (term abs-r0)
+              (sub? True)
+              (acc abs-r0))
+        (let next-term = (quot (rsh (* term r0-sq) w2) (* j (+ j 1))))
+        (if (== next-term 0)
+            acc
+            (% (+ j 2)
+               next-term
+               (not sub?)
+               (if sub? (- acc next-term) (+ acc next-term))))))
+    (let sin-r0 = (if neg-r0? (negate abs-sin-r0) abs-sin-r0))
+    (let cos-r0 =
+      (rec % ((j 1)
+              (term one)
+              (sub? True)
+              (acc one))
+        (let next-term = (quot (rsh (* term r0-sq) w2) (* j (+ j 1))))
+        (if (== next-term 0)
+            acc
+            (% (+ j 2)
+               next-term
+               (not sub?)
+               (if sub? (- acc next-term) (+ acc next-term))))))
+    (let (Tuple sin-r cos-r) =
+      (rec % ((i 0)
+              (sv sin-r0)
+              (cv cos-r0))
+        (if (>= i s)
+            (Tuple sv cv)
+            (% (+ i 1)
+               (rsh (* sv cv) (- w2 1))
+               (rsh (- (* cv cv) (* sv sv)) w2)))))
+    (let neg-w2 = (negate w2))
+    (let q-mod = (mod q 4))
+    (cond
+      ((== q-mod 0) (Tuple (Dyadic sin-r neg-w2) (Dyadic cos-r neg-w2)))
+      ((== q-mod 1) (Tuple (Dyadic cos-r neg-w2) (Dyadic (negate sin-r) neg-w2)))
+      ((== q-mod 2) (Tuple (Dyadic (negate sin-r) neg-w2) (Dyadic (negate cos-r) neg-w2)))
+      (True         (Tuple (Dyadic (negate cos-r) neg-w2) (Dyadic sin-r neg-w2)))))
+
+  (declare atan-dyadic (Integer * Integer * Integer -> Dyadic))
+  (define (atan-dyadic m k work-prec)
+    "Compute atan(M * 2^K) as a Dyadic with at least WORK-PREC bits of relative precision."
+    (if (== m 0)
+        (Dyadic 0 0)
+        (progn
+          (let neg? = (< m 0))
+          (let abs-m = (abs m))
+          (let len-m = (bit-length abs-m))
+          (let x-mag = (+ len-m k))
+          (let eff-prec = (max work-prec (+ len-m 4)))
+          (cond
+            ((< x-mag (negate (+ eff-prec 4)))
+             (let s = (+ (- eff-prec len-m) 4))
+             (let mp = (- (lsh abs-m s) 1))
+             (Dyadic (if neg? (negate mp) mp) (- k s)))
+            ((> x-mag (+ eff-prec 4))
+             (let pi-half = (dyadic->fixed (dyadic:scale (raw-pi (+ eff-prec 16)) -1) eff-prec))
+             (let ans = (- pi-half 1))
+             (Dyadic (if neg? (negate ans) ans) (negate eff-prec)))
+            ((and (<= k 0) (== abs-m (lsh 1 (negate k))))
+             (let pi-q = (dyadic->fixed (dyadic:scale (raw-pi (+ eff-prec 16)) -2) eff-prec))
+             (Dyadic (if neg? (negate pi-q) pi-q) (negate eff-prec)))
+            (True
+             (let recip? = (> (Dyadic abs-m k) (Dyadic 1 0)))
+             (let small-guard = (if recip? 0 (max 0 (negate x-mag))))
+             (let s = (max 4 (isqrt work-prec)))
+             (let w2 = (+ (+ work-prec small-guard) (+ s 8)))
+             (let t0 =
+               (if recip?
+                   (div (lsh 1 (- w2 k)) abs-m)
+                   (dyadic->fixed (Dyadic abs-m k) w2)))
+             (let one = (lsh 1 w2))
+             (let one-sq = (lsh 1 (* 2 w2)))
+             (let t-red =
+               (rec % ((i 0)
+                       (t t0))
+                 (if (>= i s)
+                     t
+                     (% (+ i 1)
+                        (div (lsh t w2)
+                             (+ one (isqrt (+ one-sq (* t t)))))))))
+             (let t2 = (rsh (* t-red t-red) w2))
+             (let atan-red =
+               (rec % ((j 3)
+                       (term (rsh (* t-red t2) w2))
+                       (sub? True)
+                       (acc t-red))
+                 (let step = (quot term j))
+                 (if (== step 0)
+                     acc
+                     (% (+ j 2)
+                        (rsh (* term t2) w2)
+                        (not sub?)
+                        (if sub? (- acc step) (+ acc step))))))
+             (let atan-abs = (lsh atan-red s))
+             (let atan-final =
+               (if recip?
+                   (- (dyadic->fixed (dyadic:scale (raw-pi w2) -1) w2) atan-abs)
+                   atan-abs))
+             (Dyadic (if neg? (negate atan-final) atan-final)
+                     (negate w2)))))))
 
   (define-instance (Trigonometric Big-Float)
     (define (sin x)
-      (let prec = (polylog-prec 4))
-      ;; sin(x) = Σ_n ((-1)^n x^(1 + 2 n))/((1 + 2 n)!)
-      ;; a(n)=1, b(n)=1, p(0)=u ,q(0)=v
-      ;; p(n)= −u^2, q(n)=(2n)(2n+1)v^2
-      (match x
+      (match (resolve x)
         ((BFValue (Dyadic m k))
-         (if (< k 0)
-             (make-results
-              prec (SeriesSplit 1 m (rsh 1 k) 1)
-              (fn (n)
-                (let 2n = (* 2 n))
-                (SeriesSplit 1 (negate (* m m)) (rsh (* 2n (+ 2n 1)) (* 2 k)) 1)))
+         (if (== m 0)
+             (BFValue (Dyadic 0 0))
              (progn
-               (let u = (lsh m k))
-               (make-results
-                prec (SeriesSplit 1 u 1 1)
-                (fn (n)
-                  (let 2n = (* 2 n))
-                  (SeriesSplit 1 (negate (* u u)) (* 2n (+ 2n 1)) 1))))))
-        ((BFConst f) (sin (f)))
+               (let prec = (toInteger (get-precision)))
+               (let len-m = (bit-length m))
+               (let x-mag = (+ len-m k))
+               (if (< x-mag (negate (+ (div (max prec len-m) 2) 4)))
+                   (progn
+                     (let s = (+ (- (max prec len-m) len-m) 4))
+                     (let mp = (- (lsh (abs m) s) 1))
+                     (normalize-dyadic (if (< m 0) (negate mp) mp) (- k s)))
+                   (match (sincos-reduced m k prec)
+                     ((Tuple (Dyadic sv se) _)
+                      (normalize-dyadic sv se)))))))
         ((BFNegZero) BFNegZero)
         (_ BFNaN)))
     (define (cos x)
-      (let prec = (polylog-prec 4))
-      (match x
+      (match (resolve x)
         ((BFValue (Dyadic m k))
-         ;; cos(x) = Σ_n ((-1)^n x^(2 n))/((2 n)!)
-         ;; a(n)=1, b(n)=1, p(0)=1 ,q(0)=v
-         ;; p(n)= −u^2, q(n)=(2n)(2n+1)v^2
-         (if (< k 0)
-             (make-results
-              prec (SeriesSplit 1 1 1 1)
-              (fn (n)
-                (let 2n = (* 2 n))
-                (SeriesSplit 1 (negate (* m m)) (rsh (* 2n (- 2n 1)) (* 2 k)) 1)))
+         (if (== m 0)
+             (normalize-dyadic 1 0)
              (progn
-               (let u = (lsh m k))
-               (make-results
-                prec (SeriesSplit 1 1 1 1)
-                (fn (n)
-                  (let 2n = (* 2 n))
-                  (SeriesSplit 1 (negate (* u u)) (* 2n (- 2n 1)) 1))))))
-        ((BFConst f) (cos (f)))
-        ((BFNegZero) 1)
+               (let prec = (toInteger (get-precision)))
+               (let x-mag = (+ (bit-length m) k))
+               (if (< x-mag (negate (+ (div prec 2) 4)))
+                   (normalize-dyadic (- (lsh 1 (+ prec 4)) 1)
+                                     (negate (+ prec 4)))
+                   (match (sincos-reduced m k prec)
+                     ((Tuple _ (Dyadic cv ce))
+                      (normalize-dyadic cv ce)))))))
+        ((BFNegZero) (normalize-dyadic 1 0))
         (_ BFNaN)))
     (define (tan x)
-      (match x
-        ((BFValue d)
-         (/ (sin (BFValue d)) (cos (BFValue d))))
-        ((BFConst f) (tan (f)))
+      (match (resolve x)
+        ((BFValue (Dyadic m k))
+         (if (== m 0)
+             (BFValue (Dyadic 0 0))
+             (progn
+               (let prec = (toInteger (get-precision)))
+               (let len-m = (bit-length m))
+               (let x-mag = (+ len-m k))
+               (if (< x-mag (negate (+ (div (max prec len-m) 2) 4)))
+                   (progn
+                     (let s = (+ (- (max prec len-m) len-m) 4))
+                     (let mp = (+ (lsh (abs m) s) 1))
+                     (normalize-dyadic (if (< m 0) (negate mp) mp) (- k s)))
+                   (match (sincos-reduced m k prec)
+                     ((Tuple (Dyadic sv se) (Dyadic cv ce))
+                      (div-dyadic sv se cv ce)))))))
         ((BFNegZero) BFNegZero)
         (_ BFNaN)))
     (define (atan x)
-      (let prec = (get-precision))
-      ;; atan(x) =  Σ_n ((-1)^n x^(1 + 2 n))/(1 + 2 n) for abs(x)<1
-      ;; a(n)=1, b(n)=2n+1, q(n)=v^2, p(0)=u,p(n)=−u^2
-      (let compute-atan =
-        (fn (u v)
-          (make-results
-           (polylog-prec 4)
-           (SeriesSplit 1 u v 1)
-           (fn (n)
-             (SeriesSplit
-              1 (negate (* u u)) (* v v) (+ (* 2 n) 1))))))
-      (normalize
-       (with-rounding
-         (fn ()
-           (match x
-             ((BFValue (Dyadic m k))
-              (cond
-                ((< (abs x) 1)
-                 (let f = (to-fraction (Dyadic m k)))
-                 (compute-atan (numerator f) (denominator f)))
-                ((< x -1)
-                 (- (scale (negate (bf-pi)) -1)
-                    (atan (reciprocal x))))
-                ((> x 1)
-                 (let f = (to-fraction (Dyadic m k)))
-                 (- (scale (bf-pi) -1)
-                    (atan (reciprocal x))))
-                ((== x 1)
-                 (scale (bf-pi) -2))
-                ((== x -1)
-                 (scale (negate (bf-pi)) -2))))
-             ((BFConst f) (atan (f)))
-             ((BFNegZero) BFNegZero)
-             ((BFInf) (scale (bf-pi) -1))
-             ((BFNegInf) (scale (negate (bf-pi)) -1))
-             (_ BFNaN)))
-         :rounding RoundDisable)))
+      (let prec = (toInteger (get-precision)))
+      (match (resolve x)
+        ((BFValue (Dyadic m k))
+         (if (== m 0)
+             (BFValue (Dyadic 0 0))
+             (match (atan-dyadic m k (+ prec 36))
+               ((Dyadic am ae) (normalize-dyadic am ae)))))
+        ((BFNegZero) BFNegZero)
+        ((BFInf)
+         (match (raw-pi (+ prec 32))
+           ((Dyadic pm pe) (normalize-dyadic pm (- pe 1)))))
+        ((BFNegInf)
+         (match (raw-pi (+ prec 32))
+           ((Dyadic pm pe) (normalize-dyadic (negate pm) (- pe 1)))))
+        (_ BFNaN)))
     (define (asin x)
-      (atan (* x (reciprocal-sqrt (- 1 (* x x))))))
+      (let prec = (toInteger (get-precision)))
+      (match (resolve x)
+        ((BFNegZero) BFNegZero)
+        ((BFValue (Dyadic m k))
+         (if (== m 0)
+             (BFValue (Dyadic 0 0))
+             (progn
+               (let len-m = (bit-length m))
+               (let x-mag = (+ len-m k))
+               (if (< x-mag (negate (+ (div (max prec len-m) 2) 4)))
+                   (progn
+                     (let s = (+ (- (max prec len-m) len-m) 4))
+                     (let mp = (+ (lsh (abs m) s) 1))
+                     (normalize-dyadic (if (< m 0) (negate mp) mp) (- k s)))
+                   (progn
+                     (let abs-d = (Dyadic (abs m) k))
+                     (match (<=> abs-d (Dyadic 1 0))
+                       ((GT) BFNaN)
+                       ((EQ)
+                        (match (raw-pi (+ prec 32))
+                          ((Dyadic pm pe)
+                           (normalize-dyadic (if (< m 0) (negate pm) pm) (- pe 1)))))
+                       ((LT)
+                        (let w = (+ prec 36))
+                        (let (Dyadic dm de) = (* (- (Dyadic 1 0) abs-d)
+                                                 (+ (Dyadic 1 0) abs-d)))
+                        (let s0 = (- (+ (* 2 w) 4) (bit-length dm)))
+                        (let s = (if (odd? (- de s0)) (+ s0 1) s0))
+                        (let sqrt-m = (isqrt (lsh dm s)))
+                        (let sqrt-e = (div (- de s) 2))
+                        (let shift = (+ (+ w 4) (- (bit-length sqrt-m) len-m)))
+                        (let q = (if (>= shift 0)
+                                     (div (lsh m shift) sqrt-m)
+                                     (div (rsh m (negate shift)) sqrt-m)))
+                        (let qe = (- (- k sqrt-e) shift))
+                        (match (atan-dyadic q qe w)
+                          ((Dyadic am ae) (normalize-dyadic am ae))))))))))
+        (_ BFNaN)))
     (define (acos x)
-      (- (scale (bf-pi) -1) (asin x)))
-    (define pi (BFconst bf-pi))))
+      (let prec = (toInteger (get-precision)))
+      (match (resolve x)
+        ((BFNegZero)
+         (match (raw-pi (+ prec 32))
+           ((Dyadic pm pe) (normalize-dyadic pm (- pe 1)))))
+        ((BFValue (Dyadic m k))
+         (if (== m 0)
+             (match (raw-pi (+ prec 32))
+               ((Dyadic pm pe) (normalize-dyadic pm (- pe 1))))
+             (progn
+               (let x-mag = (+ (bit-length m) k))
+               (if (< x-mag (negate (+ prec 4)))
+                   (match (raw-pi (+ prec 32))
+                     ((Dyadic pm pe)
+                      (normalize-dyadic (- (lsh pm 1) (sign m)) (- pe 2))))
+                   (progn
+                     (let abs-d = (Dyadic (abs m) k))
+                     (match (<=> abs-d (Dyadic 1 0))
+                       ((GT) BFNaN)
+                       ((EQ)
+                        (if (> m 0)
+                            (BFValue (Dyadic 0 0))
+                            (bf-pi)))
+                       ((LT)
+                        ;; Use cancellation-free identity:
+                        ;; For x > 0: acos(x) = 2 * atan(sqrt((1 - x) / (1 + x)))
+                        ;; For x < 0: acos(x) = pi - 2 * atan(sqrt((1 + x) / (1 - x)))
+                        (let w = (+ prec 36))
+                        (let (Dyadic num-m num-e) = (- (Dyadic 1 0) abs-d))
+                        (let (Dyadic den-m den-e) = (+ (Dyadic 1 0) abs-d))
+                        (let div-shift = (+ (+ (* 2 w) 6) (- (bit-length den-m) (bit-length num-m))))
+                        (let ratio-e0 = (- (- num-e den-e) div-shift))
+                        (let adj-shift = (if (odd? ratio-e0) (+ div-shift 1) div-shift))
+                        (let ratio-q =
+                          (if (>= adj-shift 0)
+                              (div (lsh num-m adj-shift) den-m)
+                              (div (rsh num-m (negate adj-shift)) den-m)))
+                        (let sqrt-m = (isqrt ratio-q))
+                        (let sqrt-e = (div (- (- num-e den-e) adj-shift) 2))
+                        (let half-angle = (atan-dyadic sqrt-m sqrt-e w))
+                        (let two-atan = (dyadic:scale half-angle 1))
+                        (if (> m 0)
+                            (match two-atan
+                              ((Dyadic rm re) (normalize-dyadic rm re)))
+                            (match (- (raw-pi (+ w 16)) two-atan)
+                              ((Dyadic rm re) (normalize-dyadic rm re)))))))))))
+        (_ BFNaN)))
+    (define pi (BFConst bf-pi))))
 
 (coalton-toplevel
-  
+
+  (declare exp-dyadic (Integer * Integer * Integer -> Dyadic))
+  (define (exp-dyadic m k prec)
+    "Compute exp(M * 2^K) as a Dyadic with at least PREC + 32 bits of precision."
+    (if (== m 0)
+        (Dyadic 1 0)
+        (progn
+          (let x-mag = (+ (bit-length m) k))
+          (if (< x-mag (negate (+ prec 4)))
+              (Dyadic (+ (lsh 1 (+ prec 5)) (sign m))
+                      (negate (+ prec 5)))
+              (progn
+                (let work-prec = (+ (+ prec 36) (max 0 x-mag)))
+                (let ln2-d = (raw-ln2 work-prec))
+                (let x-fixed = (dyadic->fixed (Dyadic m k) work-prec))
+                (let ln2-fixed = (dyadic->fixed ln2-d work-prec))
+                (let q = (round-quotient x-fixed ln2-fixed))
+                (let r-fixed = (- x-fixed (* q ln2-fixed)))
+                (let s = (max 4 (isqrt (+ prec 32))))
+                (let w2 = (+ (+ prec 36) s))
+                (let r0 = (lsh r-fixed (- (- w2 s) work-prec)))
+                (let neg-r0? = (< r0 0))
+                (let abs-r0 = (abs r0))
+                (let one = (lsh 1 w2))
+                (let exp-r0 =
+                  (rec % ((j 1)
+                          (term abs-r0)
+                          (sub? neg-r0?)
+                          (acc (if neg-r0? (- one abs-r0) (+ one abs-r0))))
+                    (if (== term 0)
+                        acc
+                        (progn
+                          (let next-term = (quot (rsh (* term abs-r0) w2) (+ j 1)))
+                          (let next-sub? = (if neg-r0? (not sub?) False))
+                          (% (+ j 1)
+                             next-term
+                             next-sub?
+                             (if next-sub? (- acc next-term) (+ acc next-term)))))))
+                (let exp-r =
+                  (rec % ((i 0)
+                          (y exp-r0))
+                    (if (>= i s)
+                        y
+                        (% (+ i 1) (rsh (* y y) w2)))))
+                (Dyadic exp-r (- q w2)))))))
+
+  (declare raw-ee (Integer -> Dyadic))
+  (define (raw-ee prec)
+    "Return a cached Dyadic approximation of e = exp(1) accurate to at least PREC + 32 bits."
+    (let (Tuple cached-prec cached-d) = (lisp (-> (Tuple Integer Dyadic)) () *cached-ee*))
+    (if (<= prec cached-prec)
+        (trim-cached-dyadic cached-d prec)
+        (progn
+          (let target = (max (+ prec 64) (* 2 cached-prec)))
+          (let d = (exp-dyadic 1 0 target))
+          (lisp (-> Void) (target d)
+            (cl:progn
+              (cl:setf *cached-ee* (Tuple target d))
+              (cl:values)))
+          (trim-cached-dyadic d prec))))
+
+  (declare ln-dyadic (Integer * Integer * Integer -> Dyadic))
+  (define (ln-dyadic m k prec)
+    "Compute ln(M * 2^K) for M > 0 as a Dyadic with at least PREC + 32 bits of precision."
+    (let len = (bit-length m))
+    (let p2-exp = (+ k (- len 1)))
+    (if (== m (lsh 1 (- len 1)))
+        (if (== p2-exp 0)
+            (Dyadic 0 0)
+            (progn
+              (let w = (+ (+ prec 36) (bit-length p2-exp)))
+              (match (raw-ln2 w)
+                ((Dyadic lm le) (Dyadic (* p2-exp lm) le)))))
+        (progn
+          (let e0 = (+ k len))
+          ;; Check if m / 2^len < 11/16 (~ sqrt(1/2)) to center f near 1
+          (let top4 = (if (>= len 4) (rsh m (- len 4)) (lsh m (- 4 len))))
+          (let e = (if (< top4 11) (- e0 1) e0))
+          (let extra-guard =
+            (if (== e 0)
+                (match (- (Dyadic m k) (Dyadic 1 0))
+                  ((Dyadic dm dk)
+                   (max 0 (negate (+ (bit-length dm) dk)))))
+                0))
+          (if (> extra-guard (+ prec 4))
+              (match (- (Dyadic m k) (Dyadic 1 0))
+                ((Dyadic dm dk)
+                 (let len-dm = (bit-length dm))
+                 (let s = (+ (- (max prec len-dm) len-dm) 4))
+                 (Dyadic (- (lsh dm s) 1) (- dk s))))
+              (progn
+                (let work-prec = (+ (+ prec 36) (+ (bit-length e) extra-guard)))
+                (let s = (max 4 (isqrt (+ prec 32))))
+                (let w2 = (+ work-prec s))
+                (let f-init = (dyadic->fixed (Dyadic m (- k e)) w2))
+                (let f0 =
+                  (rec % ((i 0)
+                          (f f-init))
+                    (if (>= i s)
+                        f
+                        (% (+ i 1) (isqrt (lsh f w2))))))
+                (let one = (lsh 1 w2))
+                (let u = (quot (lsh (- f0 one) w2) (+ f0 one)))
+                (let neg-u? = (< u 0))
+                (let abs-u = (abs u))
+                (let u2 = (rsh (* abs-u abs-u) w2))
+                (let abs-atanh-u =
+                  (rec % ((j 3)
+                          (term (rsh (* abs-u u2) w2))
+                          (acc abs-u))
+                    (let step = (quot term j))
+                    (if (== step 0)
+                        acc
+                        (% (+ j 2) (rsh (* term u2) w2) (+ acc step)))))
+                (let atanh-u = (if neg-u? (negate abs-atanh-u) abs-atanh-u))
+                (let ln-f = (lsh atanh-u (+ s 1)))
+                (let ln2-fixed =
+                  (if (== e 0)
+                      0
+                      (dyadic->fixed (raw-ln2 w2) w2)))
+                (let total = (+ ln-f (* e ln2-fixed)))
+                (Dyadic total (negate w2)))))))
+
+  (declare pow-dyadic-int (Dyadic * Integer * Integer -> Dyadic))
+  (define (pow-dyadic-int base exp-int max-bits)
+    "Raise Dyadic BASE to non-negative integer EXP-INT, capping intermediates to MAX-BITS."
+    (rec % ((b base)
+            (n exp-int)
+            (acc (Dyadic 1 0)))
+      (if (<= n 0)
+          acc
+          (progn
+            (let next-acc =
+              (if (odd? n)
+                  (match (* acc b)
+                    ((Dyadic pm pe) (cap-dyadic-bits pm pe max-bits)))
+                  acc))
+            (if (== n 1)
+                next-acc
+                (match (* b b)
+                  ((Dyadic sm se)
+                   (% (cap-dyadic-bits sm se max-bits)
+                      (quot n 2)
+                      next-acc))))))))
+
   (define-instance (Exponentiable Big-Float)
     (define (exp x)
-      (let prec = (get-precision))
-      (match x
+      (let prec = (toInteger (get-precision)))
+      (match (resolve x)
         ((BFValue (Dyadic m k))
-         ;; e^x = Σ_n x^n/(n!)
-         ;; a(n)=1, b(n)=1, p(0)=q(0)=1, p(n)=u, q(n)=nv
-         (if (< k 0)
-             (make-results
-              (polylog-prec 4) (SeriesSplit 1 1 1 1)
-              (fn (n)
-                (SeriesSplit 1 m (rsh n k) 1)))
-             (make-results
-              (polylog-prec 4) (SeriesSplit 1 1 1 1)
-              (fn (n)
-                (SeriesSplit 1 (lsh m k) n 1)))))
-        ((BFConst f) (exp (f)))
-        ((BFNegZero) 1)
+         (match (exp-dyadic m k prec)
+           ((Dyadic em ee-exp) (normalize-dyadic em ee-exp))))
+        ((BFNegZero) (normalize-dyadic 1 0))
         ((BFInf) BFInf)
-        ((BFNegInf) 0)
+        ((BFNegInf) (BFValue (Dyadic 0 0)))
         (_ BFNaN)))
     (define (ln x)
-      (let prec = (polylog-prec 4))
-      (match x
+      (let prec = (toInteger (get-precision)))
+      (match (resolve x)
         ((BFValue (Dyadic m k))
-         ;; ln(x) = - Σ_n ((-1)^n (-1 + x)^n)/n for abs(-1 + x)<1
-         ;; a(n)=1, b(n)=n+1, q(n)=v, p(0)=u, p(n)=−u
          (cond
-           ((< x 0) BFNaN)
-           ((== x 0) BFNegInf)
-           ((== x 1) 0)
-           ((< x 2)
-            (let f = (- (to-fraction x) 1))
-            (let u = (numerator f))
-            (let v = (denominator f))
-            (make-results
-             prec (SeriesSplit 1 u v 1)
-             (fn (n)
-               (SeriesSplit 1 (negate u) v (+ n 1)))))
-           ((== x 2) (bf-ln2))
+           ((< m 0) BFNaN)
+           ((== m 0) BFNegInf)
            (True
-            (let (Dyadic m k) = (Dyadic m k))
-            (let j = (if (< m 1)
-                         1
-                         (bit-length m)))
-            (let y = (BFValue (Dyadic m (negate j))))
-            (when (> y 2)
-              (error "Preventing infinite loop in ln."))
-            (let l =  (+ j (toInteger k)))
-            ;; ln (u/v + 1) + l * ln 2
-            (normalize
-             (with-rounding
-               (fn ()
-                 (+ (ln y)
-                    (* (if (< l 0)
-                           (general/ 1 (negate l))
-                           (fromInt l))
-                       (bf-ln2))))
-               :rounding RoundDisable)))))
-        ((BFConst f) (ln (f)))
+            (match (ln-dyadic m k prec)
+              ((Dyadic lm le) (normalize-dyadic lm le))))))
         ((BFNegZero) BFNegInf)
         ((BFInf) BFInf)
         (_ BFNaN)))
     (define (pow x y)
-      (match (Tuple x y)
-        ((Tuple (BFValue x) (BFValue y))
-         (cond
-           ((and (== x 0) (== y 0)) BFNaN)
-           ((== x 0) 0)
-           ((or (== x 1) (== y 0)) 1)
-           ((< y 0)
-            (let fl-x = (floor y))
-            (if (== (fromInt fl-x) y)
-                (reciprocal (BFValue (^ x (negate fl-x))))
-                BFNaN))
-           (True
-            (let fl-x = (floor y))
-            (if (== (fromInt fl-x) y)
-                (normalize (BFValue (^ x fl-x)))
-                (exp (* (BFValue y) (ln (BFValue x))))))))
-        ((Tuple (BFConst f) y) (pow (f) y))
-        ((Tuple x (BFConst f)) (pow x (f)))
-        (_ (exp (* y (ln x))))))
+      (let rx = (resolve x))
+      (let ry = (resolve y))
+      (let prec = (toInteger (get-precision)))
+      (cond
+        ((or (nan? rx) (nan? ry)) BFNaN)
+        ((and (bf-zero? rx) (bf-zero? ry)) BFNaN)
+        ((< rx 0) BFNaN)
+        ((bf-zero? rx)
+         (if (< ry 0)
+             BFInf
+             (BFValue (Dyadic 0 0))))
+        ((bf-zero? ry)
+         (if (infinite? rx)
+             BFNaN
+             (normalize-dyadic 1 0)))
+        ((== rx 1)
+         (if (infinite? ry)
+             BFNaN
+             (normalize-dyadic 1 0)))
+        ((or (infinite? rx) (infinite? ry))
+         (exp (* ry (ln rx))))
+        (True
+         (match (Tuple rx ry)
+           ((Tuple (BFValue (Dyadic mx kx)) (BFValue (Dyadic my ky)))
+            (let len-x = (bit-length mx))
+            (let x-pow2? = (== mx (lsh 1 (- len-x 1))))
+            (let p2-exp = (+ kx (- len-x 1)))
+            (let tz-y = (lisp (-> Integer) (my)
+                          (cl:1- (cl:integer-length (cl:logand my (cl:- my))))))
+            (let y-int? = (>= (+ ky tz-y) 0))
+            (let y-mag = (+ (bit-length my) ky))
+            (cond
+              (x-pow2?
+               (let prod-d = (Dyadic (* p2-exp my) ky))
+               (let q = (round prod-d))
+               (let (Dyadic rm re) = (- prod-d (Dyadic q 0)))
+               (if (== rm 0)
+                   (normalize-dyadic 1 q)
+                   (progn
+                     (let w = (+ prec 36))
+                     (let (Dyadic lm le) = (raw-ln2 w))
+                     (let (Dyadic exp-m exp-e) = (exp-dyadic (* rm lm) (+ re le) prec))
+                     (normalize-dyadic exp-m (+ exp-e q)))))
+              ((and y-int? (<= y-mag 20))
+               (let n-int = (lsh my ky))
+               (let (Dyadic pm pe) = (pow-dyadic-int (Dyadic mx kx) (abs n-int) (+ prec 48)))
+               (if (>= n-int 0)
+                   (normalize-dyadic pm pe)
+                   (div-dyadic 1 0 pm pe)))
+              ((and (== (+ ky tz-y) -1) (<= y-mag 20))
+               ;; Half-integer exponent y = odd-y / 2: compute via exact/high-precision sqrt
+               (let odd-y = (rsh my tz-y))
+               (match (with-precision-rounding
+                        (fn () (sqrt-dyadic mx kx))
+                        :precision (fromInt (+ prec 48))
+                        :rounding RoundEven)
+                 ((BFValue sqrt-d)
+                  (let (Dyadic pm pe) = (pow-dyadic-int sqrt-d (abs odd-y) (+ prec 48)))
+                  (if (>= odd-y 0)
+                      (normalize-dyadic pm pe)
+                      (div-dyadic 1 0 pm pe)))
+                 (_ BFNaN)))
+              (True
+               (let w = (+ (+ prec 36) (max 0 y-mag)))
+               (let (Dyadic lnm lne) = (ln-dyadic mx kx w))
+               (let prod-m = (* my lnm))
+               (let prod-e = (+ ky lne))
+               (let prod-mag = (+ (bit-length prod-m) prod-e))
+               (let (Dyadic cm ce) = (cap-dyadic-bits prod-m prod-e (+ (+ prec 44) (max 0 prod-mag))))
+               (match (exp-dyadic cm ce prec)
+                 ((Dyadic em ee-exp) (normalize-dyadic em ee-exp))))))
+           (_ BFNaN)))))
     (define (log b x)
-      (/ (ln x) (ln b)))
+      (normalize
+       (with-precision-rounding
+         (fn () (/ (ln x) (ln b)))
+         :precision (+ (get-precision) 16)
+         :rounding RoundEven)))
     (define ee (BFConst bf-ee)))
 
   (declare bf-ee (Void -> Big-Float))
   (define (bf-ee)
     "Return the value of ee = exp(1) to the currently set precision."
-    (exp 1))
+    (match (raw-ee (toInteger (get-precision)))
+      ((Dyadic m e) (normalize-dyadic m e))))
 
   (define-instance (Radical Big-Float)
     (define (sqrt x)
-      (reciprocal (reciprocal-sqrt x)))
+      (match (resolve x)
+        ((BFValue (Dyadic m e))
+         (cond
+           ((< m 0) BFNaN)
+           ((== m 0) (BFValue (Dyadic 0 0)))
+           (True (sqrt-dyadic m e))))
+        ((BFNegZero) BFNegZero)
+        ((BFInf) BFInf)
+        (_ BFNaN)))
     (define (nth-root n x)
-      (pow x (general/ 1 n))))
+      (cond
+        ((== n 0) BFNaN)
+        ((< n 0)
+         (normalize
+          (with-precision-rounding
+            (fn () (reciprocal (nth-root (negate n) x)))
+            :precision (+ (get-precision) 16)
+            :rounding RoundEven)))
+        ((== n 1) (normalize x))
+        ((== n 2) (sqrt x))
+        (True
+         (match (resolve x)
+           ((BFNegZero) BFNegZero)
+           ((BFInf) BFInf)
+           ((BFValue (Dyadic m k))
+            (cond
+              ((< m 0) BFNaN)
+              ((== m 0) (BFValue (Dyadic 0 0)))
+              (True
+               (let prec = (toInteger (get-precision)))
+               (let len = (bit-length m))
+               (let p2-exp = (+ k (- len 1)))
+               (let (values q-exp r-exp) = (divMod p2-exp n))
+               (if (and (== m (lsh 1 (- len 1))) (== r-exp 0))
+                   (normalize-dyadic 1 q-exp)
+                   (progn
+                     (let k-red = (- r-exp (- len 1)))
+                     (let w = (+ prec 36))
+                     (let (Dyadic lnm lne) = (ln-dyadic m k-red w))
+                     (let shift = (+ (+ w 8) (- (bit-length n) (bit-length lnm))))
+                     (let div-m =
+                       (if (>= shift 0)
+                           (quot (lsh lnm shift) n)
+                           (quot (rsh lnm (negate shift)) n)))
+                     (let div-e = (- lne shift))
+                     (let (Dyadic em ee-exp) = (exp-dyadic div-m div-e prec))
+                     (let (Dyadic m-odd k-odd) = (dyadic:simplify (Dyadic m k)))
+                     (let (values q-odd r-odd) = (divMod k-odd n))
+                     (if (== r-odd 0)
+                         (progn
+                           (let cand = (round (Dyadic em (- (+ ee-exp q-exp) q-odd))))
+                           (if (and (> cand 0) (== (^ cand n) m-odd))
+                               (normalize-dyadic cand q-odd)
+                               (normalize-dyadic em (+ ee-exp q-exp))))
+                         (normalize-dyadic em (+ ee-exp q-exp))))))))
+           (_ BFNaN))))))
 
   (define-instance (Polar Big-Float)
     (define (phase z)
-      (let prec = (get-precision))
       (let x = (real-part z))
       (let y = (imag-part z))
       (match (Tuple (<=> x 0) (<=> y 0))
@@ -886,41 +1541,65 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 
   (define-instance (Elementary Big-Float))
 
+  (declare scale-fraction-10 (Fraction * Integer -> Integer))
+  (define (scale-fraction-10 frac scale-10)
+    (if (>= scale-10 0)
+        (round (* frac (^ 10 scale-10)))
+        (round (/ frac (^ 10 (negate scale-10))))))
+
   (define (big-float->string x)
     "Returns a Big-Float in scientific notation."
-    (match x
+    (match (resolve x)
       ((BFValue (Dyadic 0 _)) "0.0e+0")
-      ((BFValue d)
-       (let y = (to-fraction d))
-       (let prec = (ilog 10 (lsh 2 (get-precision))))
-       (let z = (round (* y (^ 10 prec))))
-       (let powr = (ilog 10 (max 1 (abs z))))
-       (lisp (-> String) (z powr prec)
-         (cl:multiple-value-bind (t r) (cl:truncate z (cl:expt 10 powr))
-           (cl:format
-            nil (cl:concatenate
-                 'cl:string "~d.~"         ; Integer part and sign
-                 (cl:princ-to-string powr) ; Left pad of zeros
-                 ",'0de~@d")               ; Decimal part and exponent.
-            t (cl:abs r) (cl:- powr prec)))))
-      ((BFConst f) (big-float->string (f)))
+      ((BFValue (Dyadic m k))
+       (let neg? = (< m 0))
+       (let abs-frac = (to-fraction (Dyadic (abs m) k)))
+       (let digits = (max 1 (toInteger (ilog 10 (lsh 2 (get-precision))))))
+       (let bit-exp = (+ (- (bit-length m) 1) k))
+       (let e10-est = (floor/ (* bit-exp 30103) 100000))
+       (let scale-10 = (- digits e10-est))
+       (let ten-pow = (^ 10 digits))
+       (let ten-pow-next = (* 10 ten-pow))
+       (let (Tuple z e10) =
+         (rec % ((e e10-est)
+                 (zv (scale-fraction-10 abs-frac scale-10)))
+           (cond
+             ((>= zv ten-pow-next)
+              (let next-e = (+ e 1))
+              (let next-z = (scale-fraction-10 abs-frac (- digits next-e)))
+              (if (< next-z ten-pow)
+                  (Tuple ten-pow next-e)
+                  (% next-e next-z)))
+             ((< zv ten-pow)
+              (let next-e = (- e 1))
+              (let next-z = (scale-fraction-10 abs-frac (- digits next-e)))
+              (if (>= next-z ten-pow-next)
+                  (Tuple ten-pow e)
+                  (% next-e next-z)))
+             (True
+              (Tuple zv e)))))
+       (lisp (-> String) (neg? z digits ten-pow e10)
+         (cl:multiple-value-bind (lead rem) (cl:truncate z ten-pow)
+           (cl:format nil "~:[~;-~]~d.~v,'0de~@d"
+                      neg? lead digits (cl:abs rem) e10))))
       ((BFNegZero) "-0.0e+0")
       ((BFInf) "Inf")
       ((BFNegInf) "-Inf")
-      ((BFNaN) "NaN"))))
+      ((BFNaN) "NaN")
+      (_ "NaN"))))
 
 (cl:defmethod cl:print-object ((obj big-float/bfvalue) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 (cl:defmethod cl:print-object ((obj big-float/bfnegzero) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 (cl:defmethod cl:print-object ((obj big-float/bfconst) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 (cl:defmethod cl:print-object ((obj big-float/bfinf) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 (cl:defmethod cl:print-object ((obj big-float/bfneginf) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 (cl:defmethod cl:print-object ((obj big-float/bfnan) out)
-  (cl:format out (big-float->string obj)))
+  (cl:write-string (big-float->string obj) out))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/BIG-FLOAT")

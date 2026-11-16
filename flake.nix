@@ -30,7 +30,7 @@
             trivial-gray-streams
           ];
           ## Non-Lisp dependencies
-          nativeLibs = with pkgs; [ mpfr ];
+          nativeLibs = [];
           ## Supported Lisp implementations
           lispImpls = [
             "sbcl"
@@ -106,7 +106,6 @@
                 --eval '(require :sb-posix)' \
                 --eval "(asdf:initialize-source-registry '(:source-registry (:tree \"$PWD/..\") :inherit-configuration))" \
                 --eval "(asdf:initialize-output-translations '(:output-translations (t (\"$TMPDIR/fasl-cache\" :implementation)) :inherit-configuration))" \
-                --eval '(pushnew :coalton-portable-bigfloat *features*)' \
                 --load coalton-config.lisp \
                 --eval '(asdf:load-system "mine" :verbose t)' \
                 --eval '(mine/app/executable:build)'

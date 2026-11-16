@@ -27,7 +27,6 @@ if [ -n "${MINE_AS_CORE:-}" ]; then
   export MINE_SAVE_CORE=1
 fi
 
-COALTON_PORTABLE_BIGFLOAT=1 \
 CL_SOURCE_REGISTRY="$CL_SOURCE_REGISTRY_VALUE" \
 "$SBCL_BIN" \
   --dynamic-space-size 4096 \

@@ -6,6 +6,7 @@
   (:nicknames #:coalton/big-float
               #:coalton-library/big-float)
   (:use #:coalton
+        #:coalton/builtin
         #:coalton/classes
         #:coalton/functions
         #:coalton/math)

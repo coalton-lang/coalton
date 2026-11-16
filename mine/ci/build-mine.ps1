@@ -6,7 +6,6 @@ $WorkspaceRoot = (Resolve-Path (Join-Path $ProjectRoot "..")).Path
 
 $sbclBin = if ($env:SBCL_BIN) { $env:SBCL_BIN } else { "sbcl" }
 
-$env:COALTON_PORTABLE_BIGFLOAT = "1"
 if (-not $env:CL_SOURCE_REGISTRY) {
   $env:CL_SOURCE_REGISTRY = "$WorkspaceRoot//"
 }
