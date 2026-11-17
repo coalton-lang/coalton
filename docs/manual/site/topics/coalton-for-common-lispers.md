@@ -1,6 +1,6 @@
 ---
 title: "Coalton for Common Lispers"
-description: "Why Coalton matters to Common Lisp programmers, key mental-model shifts, optimizations, and how to architect Coalton programs."
+description: "Why Coalton matters to Common Lisp programmers and how to think about programming in Coalton."
 hideMeta: true
 math: true
 weight: 15
