@@ -1,6 +1,7 @@
 # Coalton Docs
 
 ## Tutorials
+* [Coalton for Common Lispers](./manual/site/topics/coalton-for-common-lispers.md)
 * [Coalton Language Guide](./manual/site/topics/language-guide.md) ([Japanese](./intro-to-coalton.ja.md), [Ukrainian](./intro-to-coalton.ua.md), [Russian](./intro-to-coalton.ru.md))
 * [Advanced Coalton Programming](./manual/site/topics/advanced-coalton-programming.md)
 * [Language Manual source](./manual/site/_index.md) - synced to the website in CI
