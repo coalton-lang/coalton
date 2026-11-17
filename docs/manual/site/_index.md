@@ -18,6 +18,7 @@ an error or or something is unclear, please fix it and submit a PR.
 - [Coalton for Common Lispers](/manual/topics/coalton-for-common-lispers/)
 - [Coalton Language Guide](/manual/topics/language-guide/)
 - [Advanced Coalton Programming](/manual/topics/advanced-coalton-programming/)
+- [Numbers and Math](/manual/topics/numbers-and-math/)
 - [Configuring Coalton](/manual/topics/configuring-coalton/)
 - [Macros](/manual/topics/macros/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
