@@ -365,7 +365,7 @@ At the surface syntax level, keep these everyday differences in mind:
 
 For a fuller side-by-side table of Common Lisp and Coalton names, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
 
-## Structuring Coalton and Hybrid Lisp Systems
+## Structuring Hybrid Coalton/Lisp Systems
 
 Because Coalton and Common Lisp share the same image, you do not have to commit an entire project to one or the other:
 
