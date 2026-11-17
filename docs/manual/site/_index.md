@@ -15,6 +15,7 @@ an error or or something is unclear, please fix it and submit a PR.
 ## Articles
 
 - [Introduction and Getting Started](/manual/topics/introduction/)
+- [Coalton for Common Lispers](/manual/topics/coalton-for-common-lispers/)
 - [Coalton Language Guide](/manual/topics/language-guide/)
 - [Advanced Coalton Programming](/manual/topics/advanced-coalton-programming/)
 - [Configuring Coalton](/manual/topics/configuring-coalton/)

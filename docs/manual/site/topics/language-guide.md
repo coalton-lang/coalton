@@ -7,7 +7,7 @@ weight: 20
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages. If you are setting up Coalton or creating your first project, start with [Introduction and Getting Started](/manual/topics/introduction/). If you are already familiar with Common Lisp, the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md) may also be useful. When you've finished reading the language guide, check out [Advanced Coalton Programming](/manual/topics/advanced-coalton-programming/) for deeper coverage of the type system, custom abstractions, resumptions, and specialization.
+This document is aimed toward people who are already familiar with functional programming languages. If you are setting up Coalton or creating your first project, start with [Introduction and Getting Started](/manual/topics/introduction/). If you are coming from Common Lisp, start with [Coalton for Common Lispers](/manual/topics/coalton-for-common-lispers/) and the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md). When you've finished reading the language guide, check out [Advanced Coalton Programming](/manual/topics/advanced-coalton-programming/) for deeper coverage of the type system, custom abstractions, resumptions, and specialization.
 
 {{<toc>}}
 
@@ -19,7 +19,8 @@ If you are experimenting with Coalton in a Common Lisp REPL, switch to the `#:co
 (in-package #:coalton-user)
 ```
 
-(`#:coalton-user` is for interactive use only, just like `#:cl-user`; see [Packages and ASDF Systems](#packages-and-asdf-systems) for how to set up packages and `.ct` files in a project.)
+> [!NOTE]
+> `#:coalton-user` is for interactive use only, just like `#:cl-user`. See [Packages and ASDF Systems](#packages-and-asdf-systems) for how to set up packages and `.ct` files in a project.
 
 There are two primary entry points into Coalton from Lisp:
 
@@ -1587,7 +1588,7 @@ The `coalton/exception` package predefines exception types for standard Common L
 
 ## Packages and ASDF Systems
 
-Coalton uses ordinary Common Lisp packages and ASDF systems to organize libraries and applications. (For a step-by-step walkthrough of creating a new project from scratch, see [Introduction and Getting Started](/manual/topics/introduction/).)
+Coalton uses ordinary Common Lisp packages and ASDF systems to organize libraries and applications. For a step-by-step walkthrough of creating a new project from scratch, see [Introduction and Getting Started](/manual/topics/introduction/).
 
 ### Packages
 
@@ -1691,17 +1692,3 @@ The following Common Lisp functions all take an optional package designator and 
 
 See [Debugging Operators](/manual/topics/debugging/) for code-generation inspection tools such as `pprint-coalton-codegen`.
 
-## Quirks and Differences from Common Lisp
-
-* Coalton uses `True` and `False` (not `t` and `nil`). As such, `t` may be used as an ordinary variable name.
-* For testing equality, Coalton uses double-equals, `==`.
-* Lists in Coalton must be homogeneous.
-* To denote anonymous functions, Coalton uses `fn` (*not* `lambda`), with
-  `ƒ` available as short `fn` syntax in Coalton source.
-* Numerical operators like `+`, `-`, `*`, and `/` are binary (fixed 2-argument functions).
-* Negation is done with `negate`; `-` is always binary subtraction.
-
-For more details, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
-
-
-   
