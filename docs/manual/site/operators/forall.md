@@ -132,7 +132,7 @@ annotated `Type`, cannot stand for zero or multiple values. For example:
 (call-one (fn () (values 42 "answer"))) ; type error
 ```
 
-## Rank-$N$ Polymorphism
+## Higher-Rank Polymorphism
 
 A `forall` type can appear inside function inputs, function outputs, and data
 constructor or struct fields. Higher-rank functions must have an explicit type
