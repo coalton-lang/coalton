@@ -260,7 +260,7 @@ In Coalton, you write `horner` as an ordinary generic function once:
       ((Cons c rest) (+ c (* x (horner x rest)))))))
 ```
 
-The operations `+` and `*` are methods of `Num`, and integer literals such as `0` are interpreted through its `fromInt` method. The same `horner` definition therefore works on any type with a `Num` instance, including `Integer`, `Fraction`, `F32`, `F64`, and suitable user-defined matrix or polynomial types.
+`Num` supplies `+` and `*` through its superclasses, and integer literals such as `0` are interpreted through `from-int`. The same `horner` definition therefore works on any type with a `Num` instance, including `Integer`, `Fraction`, `F32`, and `F64`.
 
 When you want a fast `F64` version, you do not rewrite `horner` as a macro. Instead, you ask the compiler to [`monomorphize`](/manual/operators/monomorphize/) a concrete entry point:
 
@@ -411,7 +411,7 @@ At the surface syntax level, keep these everyday differences in mind:
 * To denote anonymous functions, Coalton uses `fn` (*not* `lambda`), with
   `ƒ` available as short `fn` syntax in Coalton source.
 * Numerical operators like `+`, `-`, `*`, and `/` are binary (fixed 2-argument functions).
-* Negation is done with `negate`; `-` is always binary subtraction.
+* Negation is done with `neg`; `-` is always binary subtraction.
 
 For a fuller side-by-side table of Common Lisp and Coalton names, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
 

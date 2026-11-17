@@ -19,8 +19,8 @@ weight: 120
 
 ## Semantics
 
-- `(try-as ⟨type⟩ ⟨expr⟩)` expands to `(the (Optional ⟨type⟩) (coalton/classes:tryInto ⟨expr⟩))`.
-- `(try-as ⟨type⟩)` with one argument expands to `(fn (x) (the (Optional ⟨type⟩) (coalton/classes:tryInto x)))`.
+- `(try-as ⟨type⟩ ⟨expr⟩)` expands to `(the (Optional ⟨type⟩) (coalton/classes:try-into ⟨expr⟩))`.
+- `(try-as ⟨type⟩)` with one argument expands to `(fn (x) (the (Optional ⟨type⟩) (coalton/classes:try-into x)))`.
 - Requires an instance of `TryInto :src ⟨type⟩`, where `:src` is the inferred type of `⟨expr⟩` (or the input type of the returned unary function).
 - Evaluates to `(Some value)` when `⟨expr⟩` can be converted to `⟨type⟩`, or `None` when the conversion fails (such as an out-of-range integer conversion).
 - `⟨type⟩` may reference scoped type variables bound by an enclosing [`forall`](/manual/operators/forall/).

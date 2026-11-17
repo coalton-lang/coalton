@@ -962,7 +962,7 @@ Here is a Fibonacci function that is polymorphic in both its input and output nu
         (True (% (- i 1) b (+ a b)))))))
 ```
 
-Its inferred type is `∀ A B. (NUM B) (NUM A) ⇒ A → B`:
+Its inferred type is `∀ :A :B. (EQ :A) (RING :A) (RING :B) ⇒ (:A → :B)`, where `Ring` is the type class for numeric types that support `+`, `-`, `*`, and integer literals like `0` and `1` (see [Numbers](#numbers)):
 
 ```
 > (coalton (the F32 (fib-polymorphic (the Integer 10))))
@@ -1212,7 +1212,7 @@ The most common standard library type classes fall into three groups:
 * `Eq` (`==`) — types that can be compared for equality.
 * `Ord` (`<=>`, `<`, `<=`, `>`, `>=`) — types with a total ordering.
 * `Hash` (`hash`) — types that can be hashed (for example, as `HashMap` keys).
-* `Num` (`+`, `-`, `*`, `fromInt`) — numeric types.
+* `Num` (and its algebraic superclasses `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring`: `+`, `-`, `neg`, `*`, `zero`, `one`, `from-int`) — numeric and algebraic types.
 * `Semigroup` (`<>`) — types with an associative binary combining operation (such as string or list concatenation).
 * `Monoid` (`mempty`) — semigroups with an identity element.
 * `Default` (`default`) — types with a standard default value.
@@ -1227,7 +1227,7 @@ The most common standard library type classes fall into three groups:
 
 **Type conversions** (inspired by Rust):
 * `Into` (`into`) — total conversions from one type to another.
-* `TryInto` (`tryInto`) — fallible conversions returning `Optional`.
+* `TryInto` (`try-into`) — fallible conversions returning `Optional`.
 
 ### Automatically deriving type class instances (`derive`)
 
@@ -1287,7 +1287,7 @@ Because `(the Target (into expr))` is so common, Coalton provides the `as` short
 ;; ==> (#\m #\s #\p #\i)
 ```
 
-`Into` is only for *total* conversions that always succeed. When a conversion can fail at runtime (such as parsing or narrowing a number), types implement `TryInto` and its method `tryInto`, which returns `Optional` (`Some` on success and `None` on failure). You can also use [`try-as`](/manual/operators/try-as/) or [`unwrap-as`](/manual/operators/unwrap-as/) when specifying the target type explicitly.
+`Into` is only for *total* conversions that always succeed. When a conversion can fail at runtime (such as parsing or narrowing a number), types implement `TryInto` and its method `try-into`, which returns `Optional` (`Some` on success and `None` on failure). You can also use [`try-as`](/manual/operators/try-as/) or [`unwrap-as`](/manual/operators/unwrap-as/) when specifying the target type explicitly.
 
 The standard library provides the identity conversion `Into :a :a` alongside more specific generic conversions using [overlapping instances](/manual/topics/advanced-coalton-programming/#overlapping-instances).
 
@@ -1327,7 +1327,7 @@ An unadorned floating-point literal such as `5.0` is read according to `cl:*read
 
 Coalton also provides fixed-width signed integers (`I8`, `I16`, `I32`, `I64`, `IFix`), fixed-width unsigned integers (`U8`, `U16`, `U32`, `U64`, `UFix`), and exact rational numbers (`Fraction`, the ratio of two `Integer`s).
 
-All numeric types implement the `Num` type class (`+`, `-`, `*`, and `fromInt`). Integer literals in source code are polymorphic: `5` is shorthand for `(fromInt 5)` and can stand for any `Num` type.
+All numeric types implement the `Num` type class (and its algebraic superclasses `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring`), which provides `+`, `-`, `neg`, `*`, `zero`, `one`, and `from-int`. Integer literals in source code are polymorphic: `5` is shorthand for `(from-int 5)` and can stand for any `Ring` or `Num` type. For a complete guide to numeric types, rounding, approximation, elementary functions, and algebraic structures, see [Numbers and Math](/manual/topics/numbers-and-math/).
 
 ### Division, in short
 
@@ -1357,7 +1357,7 @@ Coalton separates same-type division from cross-type division:
 
 - `math:general/` is the method of `(math:Dividable :s :t)`, which divides two values of type `:s` to produce a result of type `:t`.
 
-When you evaluate `(/ 1 2)` at the REPL with no surrounding type context, the literals `1` and `2` require both `Num :a` and `Reciprocable :a`. Because `Integer` does not implement `Reciprocable`, Coalton's [instance defaulting](/manual/topics/advanced-coalton-programming/#instance-defaulting) resolves `:a` to `F64`:
+When you evaluate `(/ 1 2)` at the REPL with no surrounding type context, the expression requires `Reciprocable :a` (which implies `Ring :a`). Because `Integer` does not implement `Reciprocable`, Coalton's [instance defaulting](/manual/topics/advanced-coalton-programming/#instance-defaulting) resolves `:a` to `F64`:
 
 ```
 COALTON-USER> (coalton (/ 1 2))

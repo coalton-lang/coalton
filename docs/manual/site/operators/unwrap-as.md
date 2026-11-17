@@ -19,10 +19,10 @@ weight: 130
 
 ## Semantics
 
-- `(unwrap-as ⟨type⟩ ⟨expr⟩)` expands to `(the ⟨type⟩ (coalton/classes:unwrap (coalton/classes:tryInto ⟨expr⟩)))`.
-- `(unwrap-as ⟨type⟩)` with one argument expands to `(fn (x) (the ⟨type⟩ (coalton/classes:unwrap (coalton/classes:tryInto x))))`.
+- `(unwrap-as ⟨type⟩ ⟨expr⟩)` expands to `(the ⟨type⟩ (coalton/classes:unwrap (coalton/classes:try-into ⟨expr⟩)))`.
+- `(unwrap-as ⟨type⟩)` with one argument expands to `(fn (x) (the ⟨type⟩ (coalton/classes:unwrap (coalton/classes:try-into x))))`.
 - Requires an instance of `TryInto :src ⟨type⟩`, where `:src` is the inferred type of `⟨expr⟩` (or the input type of the returned unary function).
-- Returns the converted value of type `⟨type⟩` when `(tryInto ⟨expr⟩)` produces `(Some v)`, or signals a `Panic` error if it produces `None`.
+- Returns the converted value of type `⟨type⟩` when `(try-into ⟨expr⟩)` produces `(Some v)`, or signals a `Panic` error if it produces `None`.
 - `⟨type⟩` may reference scoped type variables bound by an enclosing [`forall`](/manual/operators/forall/).
 
 ## Examples
