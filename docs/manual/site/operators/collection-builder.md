@@ -32,7 +32,7 @@ weight: 145
   - Comprehensions `[head ⟨clause⟩+]` desugar to the `FromCollectionComprehension :c :e :s` typeclass protocol (`begin-collection-comprehension`, `adjoin-to-collection-comprehension`, `finalize-collection-comprehension`). When the first clause is `:for ⟨var⟩ :in ⟨iter⟩`, the iterator's `size-hint` (`Optional UFix`) is passed to `begin-collection-comprehension`.
 - All element expressions in an itemized builder must unify to the same element type `:e` and are evaluated left-to-right in index order.
 - **Comprehension clauses** are nested left-to-right from outermost to innermost:
-  - `:for ⟨var-or-_⟩ :below ⟨bound-expr⟩` evaluates `⟨bound-expr⟩` once as an upper bound and iterates `⟨var-or-_⟩` from `0` by `1+` while `(< i bound)` (for any type implementing `Num` and `Ord`).
+  - `:for ⟨var-or-_⟩ :below ⟨bound-expr⟩` evaluates `⟨bound-expr⟩` once as an upper bound and iterates `⟨var-or-_⟩` from `0` by `1+` while `(< i bound)` (for any type implementing `Ring` and `Ord`).
   - `:for ⟨var-or-_⟩ :in ⟨iterable-expr⟩` converts `⟨iterable-expr⟩` via `coalton/iterator:into-iter` (`IntoIterator`) and folds over its elements.
   - `:with ⟨var-or-_⟩ = ⟨expr⟩` binds `⟨var-or-_⟩` to `⟨expr⟩` for the remaining clauses and `⟨head-expr⟩`.
   - `:when ⟨boolean-expr⟩` filters iterations: subsequent clauses and `⟨head-expr⟩` run only when `⟨boolean-expr⟩` evaluates to `True`.
