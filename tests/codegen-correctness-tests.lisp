@@ -910,7 +910,7 @@
 
       (declare call-eval-pair (F32 -> F32))
       (define (call-eval-pair x)
-        (eval-num-fn-pair (NumFnPair square x))))")
+        (eval-num-fn-pair (NumFnPair square x)))")
     (is (= 6.0f0 (codegen-test-eval "((differentiate square) 3.0f0)")))
     (is (= 12.0f0 (codegen-test-eval "((differentiate (fn (x) (+ (* x x) (* 2 x)))) 5.0f0)")))
     (is (eq t (codegen-test-eval "(== (Tuple 16.0f0 8.0f0) ((val-and-deriv square) 4.0f0))")))

@@ -52,7 +52,7 @@ error: Invalid recursive bindings
 (declare make-loop (Void -> (MyNullableLoop :any)))
 (define (make-loop)
   (let ((lp (MyLoop lp)))
-    lp)))
+    lp))
 
 --------------------------------------------------------------------------------
 
@@ -115,7 +115,7 @@ error: Invalid recursive bindings
   (define (make-loop-fn)
     (let ((lp (LoopFn func))
                 (func (fn () lp)))
-      lp)))
+      lp))
 
 --------------------------------------------------------------------------------
 
