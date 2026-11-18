@@ -463,10 +463,10 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/polynomial`**: Univariate and recursive multivariate
   polynomials ($R[x]$ and $R[x][y]\cdots$), including polynomial GCDs,
   resultants, and square-free factorization.
-- **`coalton/xmath/polynomial-factor`**: Complete univariate factorization
+- **`coalton/xmath/polynomial-factor`**: [Complete univariate factorization](#factoring-a-polynomial-completely)
   over finite fields, the integers, and the rationals.
-- **`coalton/xmath/number-field`**: Arithmetic, trace, norm, and minimal
-  polynomials in a field defined by an irreducible rational polynomial.
+- **`coalton/xmath/number-field`**: [Arithmetic in a number field](#working-in-a-number-field),
+  including trace, norm, and minimal polynomials.
 - **`coalton/xmath/ratio`**: Reduced fractions over any GCD domain (such as
   rational functions $p(x)/q(x)$ and Gaussian rationals), along with partial
   fraction decomposition and Hermite reduction for symbolic rational integration.
@@ -476,25 +476,12 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/matrix`**: Dense matrices over semirings, rings, GCD domains,
   and fields, supporting fraction-free determinants and characteristic
   polynomials, linear system solving, and Gram–Schmidt orthogonalization.
-- **`coalton/xmath/semiring-graph`**: Exact-length walks, all-pairs closure,
-  and weighted finite automata over semirings. For example, with `sg` and
-  `mat` as local nicknames for this package and `coalton/xmath/matrix`:
-
-  ```lisp
-  (coalton
-    (let ((routes (sg:graph 3 [(sg:Edge 0 1 (sg:MinFinite 4))
-                               (sg:Edge 1 2 (sg:MinFinite -1))
-                               (sg:Edge 0 2 (sg:MinFinite 9))])))
-      (Tuple (mat:entry (sg:walks-of-length 1 routes) 0 2)
-             (mat:entry (sg:all-pairs-closure routes) 0 2))))
-  ; => (Tuple (MinFinite 9) (MinFinite 3))
-  ```
-
-  A missing route is `MinNoPath`; a route that can pass through a negative
-  cycle is `MinUnbounded`. Use integer edge weights of 1 to count walks of
-  a fixed length, not for unbounded closure. To evaluate an automaton, pass
-  its initial weights, labeled transitions, and final weights to `automaton`,
-  then evaluate its input with `word-weight`.
+- **`coalton/xmath/semiring-graph`**: [Weighted graphs and automata](#weighted-graphs-and-automata),
+  including exact-length walks and all-pairs closure.
+- **`coalton/xmath/normal-form`**, **`coalton/xmath/lattice`**, and
+  **`coalton/xmath/pslq`**: [Hermite and Smith normal forms](#hermite-and-smith-normal-forms),
+  [LLL lattice reduction](#lll-lattice-reduction), and
+  [integer relations with PSLQ](#integer-relations-with-pslq).
 - **`coalton/xmath/differential`**: Differential rings, Wronskians, linear
   differential operators $A[\partial; \, '\,]$, and power-series solutions of
   linear ordinary differential equations.
@@ -525,11 +512,68 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/fft`**: Fast Fourier transforms over rings with roots of
   unity.
 
+## Advanced Topics and Examples
+
+After loading `"coalton/xmath"`, evaluate this setup once at the Lisp REPL.
+The short names below are local to the example package; `nf` refers to matrix
+normal forms and `nfield` to algebraic number fields.
+
+```lisp
+(cl:defpackage #:advanced-math-examples
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:mat #:coalton/xmath/matrix)
+                    (#:sg #:coalton/xmath/semiring-graph)
+                    (#:qr #:coalton/xmath/quotient)
+                    (#:ff #:coalton/xmath/finite-field)
+                    (#:vec #:coalton/vector)
+                    (#:ifact #:coalton/xmath/integer-factorization)
+                    (#:poly #:coalton/xmath/polynomial)
+                    (#:factor #:coalton/xmath/polynomial-factor)
+                    (#:nfield #:coalton/xmath/number-field)
+                    (#:nf #:coalton/xmath/normal-form)
+                    (#:lattice #:coalton/xmath/lattice)
+                    (#:pslq #:coalton/xmath/pslq)
+                    (#:ra #:coalton/xmath/real-algebraic)
+                    (#:cr #:coalton/xmath/computable-reals)))
+(cl:in-package #:advanced-math-examples)
+(named-readtables:in-readtable coalton:coalton)
+```
+
+### Weighted graphs and automata
+
+From vertex 0 to vertex 2, the direct edge costs 9. The two-edge route
+through vertex 1 costs $4+(-1)=3$. Min-plus weights let us ask both questions
+of the same graph:
+
+```lisp
+(coalton
+  (let ((routes (sg:graph 3 [(sg:Edge 0 1 (sg:MinFinite 4))
+                             (sg:Edge 1 2 (sg:MinFinite -1))
+                             (sg:Edge 0 2 (sg:MinFinite 9))])))
+    (Tuple (mat:entry (sg:walks-of-length 1 routes) 0 2)
+           (mat:entry (sg:all-pairs-closure routes) 0 2))))
+;; => (Tuple (MinFinite 9) (MinFinite 3))
+```
+
+A missing route is `MinNoPath`; a route that can pass through a negative
+cycle is `MinUnbounded`. With integer weights, multiplication instead
+multiplies along a walk and addition sums over alternatives. For a finite
+word, an automaton counts only walks whose labels match:
+
+```lisp
+(coalton
+  (let ((machine (sg:automaton [(the Integer 1) 0]
+                   [(sg:Transition 0 #\a 1 2) (sg:Transition 0 #\a 1 3)
+                    (sg:Transition 1 #\b 1 4)]
+                   [0 1])))
+    (values (sg:word-weight machine [#\a #\b])
+            (sg:word-weight machine [#\b #\a]))))
+;; => 20, 0: (2 + 3) * 4 for "ab"; no accepting run for "ba".
+```
+
 ### Residue rings and finite fields
 
-Use `qr`, `ff`, and `poly` as local nicknames for `coalton/xmath/quotient`,
-`coalton/xmath/finite-field`, and `coalton/xmath/polynomial`. For a modulus
-chosen at runtime, elements carry their quotient with them:
+For a modulus chosen at runtime, elements carry their quotient with them:
 
 ```lisp
 (coalton
@@ -558,9 +602,16 @@ work on vectors of these coefficients and additionally require a power-of-two
 length: four samples can be transformed over $\mathbb{F}_{17}$, but not over
 $\mathbb{F}_4$.
 
-### Integer factorization and primality
+```lisp
+(coalton
+  (let ((samples (the (vec:Vector (ff:Fp ff:P17)) [1 2 3 4]))
+        (spectrum (unwrap (ff:ntt samples))))
+    (Tuple (== spectrum [10 7 15 6])
+           (== (ff:inverse-ntt spectrum) (Some samples)))))
+;; => (Tuple True True)
+```
 
-With `ifact` as a local nickname for `coalton/xmath/integer-factorization`:
+### Integer factorization and primality
 
 ```lisp
 (coalton (ifact:factor-integer-exact -360))
@@ -594,10 +645,6 @@ fixed bases yields only `ProbablePrime`; it carries no randomized error bound.
 When constructing a field, accept only `ProvenPrime`.
 
 ### Factoring a polynomial completely
-
-The examples below use `poly`, `factor`, `ff`, and `nfield` as local package
-nicknames for `coalton/xmath/polynomial`, `coalton/xmath/polynomial-factor`,
-`coalton/xmath/finite-field`, and `coalton/xmath/number-field`.
 
 `factor:factor-integer`, `factor:factor-rational` (coefficients of type
 `Fraction`), and `factor:factor-finite` return two values: a scalar $c$ and a
@@ -679,3 +726,92 @@ polynomial is $m_b(t)^{[K:\mathbb Q(b)]}$.
 such as $(x^2+1)(x^2+4)$. Each element carries its normalized defining
 polynomial; binary arithmetic on different presentations returns `None`,
 even if the fields are isomorphic. Inversion of zero also returns `None`.
+
+### Hermite and Smith normal forms
+
+The rows $(6,12)$ and $(10,20)$ lie on the same line. Dropping the second
+would lose lattice points: twice the first minus the second gives $(2,4)$.
+Include a third generator $(0,9)$ and compute the **row** Hermite form:
+
+```lisp
+(coalton-toplevel
+  (define generators
+    (the (mat:Matrix Integer) (mat:from-rows [[6 12] [10 20] [0 9]]))))
+
+(coalton
+  (progn
+    (let (values h u pivots) = (nf:hermite-normal-form generators))
+    (values (mat:to-rows h) pivots (== h (* u generators)))))
+;; => ((2 4) (0 9) (0 0)), (0 1), True
+```
+
+$H=UA$ has the same row lattice as $A$: the square matrix $U$ is unimodular,
+so its inverse also has integer entries. The pivot columns are zero-indexed.
+Integer pivots are positive with residues above a pivot $p$ in $[0,p)$.
+For univariate polynomials over an exact field, pivots are monic and residues
+have smaller degree.
+
+Smith form describes the **map on columns**. Its convention is $D=UAV$,
+not $A=UDV$:
+
+```lisp
+(coalton
+  (progn
+    (let a = (the (mat:Matrix Integer) (mat:from-rows [[6 0 6] [0 10 10]])))
+    (let (values d u v factors) = (nf:smith-normal-form a))
+    (values factors (== d (* (* u a) v)) (mat:mat-vec-mul a (mat:col v 2)))))
+;; => (2 30), True, (0 0)
+```
+
+The invariant factors are $2$ and $30$; the first divides the second. In
+general, for $n$ columns and rank $r$, the last $n-r$ columns of $V$ form a
+right-kernel basis. Here that kernel consists of the multiples of $(-1,-1,1)$.
+The first $r$ columns of $AV$ form an image basis **over the integers**: the
+image contains $(6,0)$ and $(0,10)$, but not $(1,0)$.
+
+### LLL lattice reduction
+
+Hermite form is canonical; LLL instead seeks short, nearly orthogonal row
+generators. Using `generators` from the Hermite example:
+
+```lisp
+(coalton
+  (progn
+    (let (values b u rank) = (lattice:lll generators :delta 3/4))
+    (values (mat:to-rows b) rank (== b (* u generators)))))
+;; => ((2 4) (-4 1) (0 0)), 2, True
+```
+
+The first `rank` rows form the reduced basis; the remaining rows are zero.
+The transformation is unimodular, including for dependent inputs. Rounding
+and Lovász comparisons use exact arithmetic with $1/4<\delta<1$. The result
+need not be a shortest possible basis.
+
+### Integer relations with PSLQ
+
+Given real numbers $x_i$, PSLQ searches for small integers $c_i$, not all
+zero, such that $\sum c_i x_i=0$. To find a polynomial for
+$x=1+\sqrt2$, use $1,x,x^2$ as the inputs:
+
+```lisp
+(coalton
+  (let ((x (+ 1 (sqrt (the ra:RealAlgebraic 2)))))
+    (pslq:pslq [1 x (* x x)] :bits 80 :max-coefficient 4 :max-iterations 100)))
+;; => ExactRelation (1 2 -1): 1 + 2x - x^2 = 0, checked in the exact field.
+
+(coalton
+  (let ((a (sqrt (the cr:CReal 2)))
+        (b (sqrt (the cr:CReal 3))))
+    (pslq:pslq [a b (+ (* 5 a) (* 7 b))]
+               :bits 96 :max-coefficient 7 :max-iterations 100)))
+;; => RelationCandidate (5 7 -1) bound
+```
+
+The second search checks the candidate against fresh, higher-precision
+approximations. `bound` is an absolute upper bound on the residual in the
+original units; a small bound does **not** prove that the residual is zero.
+For `Integer`, `Fraction`, or `RealAlgebraic` inputs PSLQ checks the dot
+product exactly instead. `:bits` specifies binary working precision relative
+to the input scale; it cannot recover digits lost in an earlier conversion to
+`F64`. `PrecisionExhausted`, `CoefficientLimit`, and `IterationLimit` mean
+the search stopped, not that no relation exists.
