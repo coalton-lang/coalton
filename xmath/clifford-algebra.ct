@@ -536,9 +536,8 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
 
   (define-instance (Ring :a => Module :a (Multivector :a)))
 
-  (define-instance (Reciprocable :a => VectorSpace :a (Multivector :a)))
-
-  (define-instance ((ConjugateRing :a) (Reciprocable :a) => InnerSpace :a (Multivector :a))
+  (define-instance ((ConjugateRing :a) (DivisionRing :a) => InnerSpace :a (Multivector :a)))
+  (define-instance (ConjugateRing :a => HermitianForm :a (Multivector :a))
     (define (inner-product (%Multivector xs) (%Multivector ys))
       (rec loop ((a xs) (b ys) (acc zero))
         (match (Tuple a b)
@@ -548,7 +547,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
            (cond
              ((< ba bb) (loop more-a b acc))
              ((> ba bb) (loop a more-b acc))
-             (True (loop more-a more-b (+ acc (* (conjugate ca) cb))))))))))
+             (True (loop more-a more-b (+ acc (* cb (conjugate ca)))))))))))
 
   (define-instance ((Approximable :a :b) (Eq :b) (Additive :b) => Approximable (Multivector :a) (Multivector :b))
     (define (approx bits (%Multivector xs))

@@ -16,7 +16,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
 - Principal roots $\\sqrt{1 + a}$ and $(1 + a)^{1/m}$ (`Radical`);
 - Trigonometric and inverse trigonometric series $\\sin(a), \\cos(a)$ (via coupled recurrences $(\\sin a)' = a'\\cos a$, $(\\cos a)' = -a'\\sin a$), $\\tan(a)$, $\\arcsin(a) = \\int \\frac{a'}{\\sqrt{1 - a^2}}\\,dx$, and $\\arctan(a) = \\int \\frac{a'}{1 + a^2}\\,dx$.
 
-**Composition and Lagrange reversion.** When $g(0) = 0$, the formal composition $(f \\circ g)(x) = \\sum_{k=0}^{\\infty} a_k g(x)^k$ (`series-compose`) is well-defined because $g(x)^k$ has valuation at least $k$. When furthermore $g'(0) \\neq 0$, Lagrange reversion (`series-revert`) computes the unique compositional inverse $g^{[-1]}(x)$ satisfying $g(g^{[-1]}(x)) = g^{[-1]}(g(x)) = x$.")
+**Composition and Lagrange reversion.** When $g(0) = 0$, the formal substitution $(f \\circ g)(x) = \\sum_{k=0}^{\\infty} a_k g(x)^k$ (`series-compose`) is well-defined because $g(x)^k$ has valuation at least $k$. For commuting coefficients and a unit $g'(0)$, Lagrange reversion (`series-revert`) computes the unique compositional inverse $g^{[-1]}(x)$ satisfying $g(g^{[-1]}(x)) = g^{[-1]}(g(x)) = x$.")
   (:nicknames
    #:coalton/math/power-series
    #:coalton-library/math/power-series)
@@ -193,7 +193,6 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
       (make-series (fn (n) (* c (series-coeff ps n))))))
 
   (define-instance (Ring :a => Module :a (PowerSeries :a)))
-  (define-instance (Reciprocable :a => VectorSpace :a (PowerSeries :a)))
 
   (define-instance (ConjugateRing :a => ConjugateRing (PowerSeries :a))
     (define (conjugate ps)

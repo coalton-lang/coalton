@@ -370,7 +370,6 @@ Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, 
       (%DiffOp (%generate (vec:length v) (fn (i) (* c (vec:index-unsafe i v)))))))
 
   (define-instance (DifferentialRing :a => Module :a (DiffOp :a)))
-  (define-instance ((Reciprocable :a) (DifferentialRing :a) => VectorSpace :a (DiffOp :a)))
 
   (define-instance (Functor DiffOp)
     (define (map f (%DiffOp v))

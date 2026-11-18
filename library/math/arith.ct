@@ -29,6 +29,7 @@
    #:scale
    #:Module
    #:VectorSpace
+   #:HermitianForm
    #:InnerSpace
    #:inner-product
    #:Transfinite
@@ -147,17 +148,27 @@ Laws:
 - Compatibility: `(scale (* r s) x) == (scale r (scale s x))`
 - Identity: `(scale one x) == x`")
 
-  (define-class ((Reciprocable :k) (Module :k :v) => VectorSpace :k :v (:v -> :k))
-    "A `Module` `:v` over a scalar division ring / field (`Reciprocable`) `:k`.")
+  (define-class ((DivisionRing :k) (Module :k :v) => VectorSpace :k :v)
+    "A left module over an exact division ring. A vector type may be a
+vector space over several scalar types, as with complex and real scalars.")
 
-  (define-class ((ConjugateRing :k) (VectorSpace :k :v) => InnerSpace :k :v (:v -> :k))
-    "A `VectorSpace` over a `ConjugateRing` scalar `:k` equipped with a (possibly Hermitian) inner product.
+  (define-instance ((DivisionRing :k) (Module :k :v) => VectorSpace :k :v))
+
+  (define-class ((ConjugateRing :k) (Module :k :v) => HermitianForm :k :v)
+    "A Hermitian form on a left module, linear in the second argument. In
+coordinates the standard form is $\\langle x,y\\rangle=\\sum_i y_i\\bar{x}_i$;
+the order of multiplication matters over a noncommutative scalar ring.
 
 Laws:
 - Conjugate symmetry: `(inner-product x y) == (conjugate (inner-product y x))`
 - Linearity in second argument: `(inner-product x (+ (scale c y) z)) == (+ (* c (inner-product x y)) (inner-product x z))`
-- Non-degeneracy: `(inner-product x x) == zero` iff `x == zero`"
+- Conjugate linearity in first argument: `(inner-product (scale c x) y) == (* (inner-product x y) (conjugate c))`"
     (inner-product (:v * :v -> :k)))
+
+  (define-class ((VectorSpace :k :v) (HermitianForm :k :v) => InnerSpace :k :v)
+    "A vector space with a nondegenerate Hermitian form: if
+$\\langle x,y\\rangle=0$ for every $y$, then $x=0$. This is weaker than
+anisotropy: a nonzero vector can be orthogonal to itself.")
 
   (define-class (Transfinite :a)
     "Types with a representation of positive infinity and finiteness predicates.

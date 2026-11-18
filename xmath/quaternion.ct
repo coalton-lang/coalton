@@ -11,7 +11,7 @@ or equivalently $(w_1, \\mathbf{v}_1)(w_2, \\mathbf{v}_2) = (w_1 w_2 - \\mathbf{
 
 Over any ring $R$, $\\mathbb{H}(R)$ is a non-commutative associative ring. When $R$ is a $\\ast$-ring (`ConjugateRing`), quaternion conjugation
 $$\\bar{q} = \\bar{w} - \\bar{x}\\mathbf{i} - \\bar{y}\\mathbf{j} - \\bar{z}\\mathbf{k}$$
-is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The squared norm $N(q) = q\\bar{q} = w^2 + x^2 + y^2 + z^2$ (`norm-squared`) is multiplicative ($N(pq) = N(p)N(q)$). Over any field (`Reciprocable`), every nonzero quaternion has multiplicative inverse $q^{-1} = \\bar{q} / N(q)$, making `Quaternion` a non-commutative division ring (`Reciprocable`) and a 4-dimensional `InnerSpace`.
+is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). For **commuting coefficients**, Hamilton conjugation $q^\\sharp=w-x\\mathbf{i}-y\\mathbf{j}-z\\mathbf{k}$ (which does not conjugate the coefficients) gives the multiplicative squared norm $N(q)=q q^\\sharp=w^2+x^2+y^2+z^2$ (`norm-squared`). Where $N(q)$ is a unit, $q^{-1}=q^\\sharp/N(q)$. A nonzero quaternion need not have nonzero norm: over $\\mathbb C$, for example, $1+\\sqrt{-1}\\,\\mathbf{i}$ has norm zero. Over $\\mathbb Q$ the sum of four squares is anisotropic, so `Quaternion Fraction` is a `DivisionRing`.
 
 **Spatial rotations ($\\mathrm{SO}(3)$).** Identifying $R^3$ with pure quaternions ($w = 0$), a unit quaternion $q = \\cos(\\theta / 2) + \\sin(\\theta / 2)\\,\\hat{u}$ (`from-axis-angle`) acts isometrically on $\\mathbf{v} \\in R^3$ via the sandwich product $\\mathbf{v} \\mapsto q \\mathbf{v} q^{-1}$ (`rotate-vector`), rotating $\\mathbf{v}$ by angle $\\theta$ around the unit axis $\\hat{u}$ without gimbal lock.")
   (:nicknames
@@ -26,6 +26,7 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The
    #:coalton/math/elementary
    #:coalton/math/real)
   (:local-nicknames
+   (#:ra #:coalton/xmath/real-algebraic)
    (#:show #:coalton/show))
   (:export
    #:Quaternion
@@ -162,6 +163,11 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The
       (Quaternion (from-int n) zero zero zero)))
 
   (define-instance (Num :a => Num (Quaternion :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (Quaternion :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (Quaternion :a)))
+  (define-instance (RationalScalars :a => RationalScalars (Quaternion :a))
+    (inline)
+    (define (embed-fraction q) (Quaternion (embed-fraction q) zero zero zero)))
 
   (define-instance (Additive :a => Into :a (Quaternion :a))
     (inline)
@@ -183,18 +189,26 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The
 
   (define-instance (Ring :a => Module :a (Quaternion :a)))
 
-  (define-instance (Reciprocable :a => VectorSpace :a (Quaternion :a)))
-
-  (define-instance ((ConjugateRing :a) (Reciprocable :a) => InnerSpace :a (Quaternion :a))
+  (define-instance ((ConjugateRing :a) (DivisionRing :a) => InnerSpace :a (Quaternion :a)))
+  (define-instance (ConjugateRing :a => HermitianForm :a (Quaternion :a))
     (define (inner-product (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
-      (+ (+ (* (conjugate w1) w2)
-            (* (conjugate x1) x2))
-         (+ (* (conjugate y1) y2)
-            (* (conjugate z1) z2)))))
+      (+ (+ (* w2 (conjugate w1))
+            (* x2 (conjugate x1)))
+         (+ (* y2 (conjugate y1))
+            (* z2 (conjugate z1))))))
+
+  (define-instance (Ring :a => Scale (Quaternion :a) (Quaternion :a))
+    (inline)
+    (define (scale c q) (* c q)))
+  (define-instance (Ring :a => Module (Quaternion :a) (Quaternion :a)))
+  (define-instance (ConjugateRing :a => HermitianForm (Quaternion :a) (Quaternion :a))
+    (inline)
+    (define (inner-product x y) (* y (conjugate x))))
 
   (declare norm-squared (Semiring :a => Quaternion :a -> :a))
   (define (norm-squared (Quaternion w x y z))
-    "Return the squared norm $w^2 + x^2 + y^2 + z^2$ of a quaternion."
+    "Return the coordinate sum $w^2 + x^2 + y^2 + z^2$. With commuting
+coefficients this is the reduced norm; it need not be nonzero for nonzero `q`."
     (+ (+ (* w w) (* x x))
        (+ (* y y) (* z z))))
 
@@ -203,7 +217,7 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The
     "Return the Euclidean norm $\\sqrt{w^2 + x^2 + y^2 + z^2}$ of a quaternion."
     (sqrt (norm-squared q)))
 
-  (define-instance (Reciprocable :a => Reciprocable (Quaternion :a))
+  (define-instance ((CommutativeRing :a) (Reciprocable :a) => Reciprocable (Quaternion :a))
     (define (recip q)
       (let (Quaternion w x y z) = q)
       (scale (recip (norm-squared q))
@@ -212,19 +226,24 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). The
     (define (/ p q)
       (* p (recip q))))
 
-  (declare normalize ((Reciprocable :a) (Radical :a) => Quaternion :a -> Quaternion :a))
+  (define-instance (DivisionRing (Quaternion Fraction)))
+  (define-instance (InnerSpace (Quaternion Fraction) (Quaternion Fraction)))
+  (define-instance (DivisionRing (Quaternion ra:RealAlgebraic)))
+  (define-instance (InnerSpace (Quaternion ra:RealAlgebraic) (Quaternion ra:RealAlgebraic)))
+
+  (declare normalize ((CommutativeRing :a) (Reciprocable :a) (Radical :a) => Quaternion :a -> Quaternion :a))
   (define (normalize q)
-    "Normalize a non-zero quaternion `q` to unit norm."
+    "Normalize `q` to unit norm, requiring that its norm be invertible."
     (scale (recip (norm q)) q))
 
-  (declare rotate-vector (Reciprocable :a => Quaternion :a * Tuple3 :a :a :a -> Tuple3 :a :a :a))
+  (declare rotate-vector ((CommutativeRing :a) (Reciprocable :a) => Quaternion :a * Tuple3 :a :a :a -> Tuple3 :a :a :a))
   (define (rotate-vector q (Tuple3 vx vy vz))
-    "Rotate the 3D vector `(Tuple3 vx vy vz)` by the non-zero quaternion `q` via the sandwich product $q v q^{-1}$."
+    "Rotate the 3D vector `(Tuple3 vx vy vz)` by the invertible quaternion `q` via the sandwich product $q v q^{-1}$."
     (let vq = (pure-quaternion vx vy vz))
     (vector-part (* (* q vq) (recip q))))
 
   (declare from-axis-angle
-    ((Reciprocable :a) (Radical :a) (Trigonometric :a) => Tuple3 :a :a :a * :a -> Quaternion :a))
+    ((CommutativeRing :a) (Reciprocable :a) (Radical :a) (Trigonometric :a) => Tuple3 :a :a :a * :a -> Quaternion :a))
   (define (from-axis-angle (Tuple3 ax ay az) angle)
     "Construct the unit quaternion $\\cos(\\theta/2) + \\sin(\\theta/2)\\,\\hat{u}$ representing a rotation by `angle` $\\theta$ around the 3D axis $u = (a_x, a_y, a_z)$."
     (let half = (/ angle (from-int 2)))

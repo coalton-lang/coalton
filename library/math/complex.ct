@@ -78,8 +78,8 @@ component types."
 ;; as a Lisp type in codegen. SBCL and CCL tolerate it fine.
 
 (coalton-toplevel
-  (define-class ((Num :a) (CommutativeRing :a) => ComplexComponent :a)
-    "A type class for describing commutative complex component types. This type class
+  (define-class (Num :a => ComplexComponent :a)
+    "A type class for describing complex component types. This type class
 also encodes the construction and projection of `Complex` data types."
     (complex (:a * :a -> Complex :a))
     (real-part (Complex :a -> :a))
@@ -133,14 +133,14 @@ blackboard-bold 𝕚.)"
 
   (define-instance (ComplexComponent :a => Num (Complex :a)))
 
-  (define-instance (ComplexComponent :a => CommutativeRing (Complex :a)))
+  (define-instance ((ComplexComponent :a) (CommutativeRing :a) => CommutativeRing (Complex :a)))
   (define-instance ((ComplexComponent :a) (CharacteristicZero :a) => CharacteristicZero (Complex :a)))
   (define-instance ((ComplexComponent :a) (RationalAlgebra :a) => RationalAlgebra (Complex :a)))
   (define-instance ((ComplexComponent :a) (RationalScalars :a) => RationalScalars (Complex :a))
     (inline)
     (define (embed-fraction q) (complex (embed-fraction q) zero)))
 
-  (define-instance (ComplexComponent :a => ConjugateRing (Complex :a))
+  (define-instance ((ComplexComponent :a) (CommutativeRing :a) => ConjugateRing (Complex :a))
     (inline)
     (define (conjugate z) (complex-conjugate z)))
 
@@ -162,7 +162,7 @@ blackboard-bold 𝕚.)"
   ;;                   => (Dividable (Complex :num) (Complex :frac)))
   ;;   (define (general/ a b) (complex-divide a b)))
 
-  (define-instance ((ComplexComponent :a) (Reciprocable :a) => Reciprocable (Complex :a))
+  (define-instance ((ComplexComponent :a) (CommutativeRing :a) (Reciprocable :a) => Reciprocable (Complex :a))
     (inline)
     (define (recip x)
       (complex-reciprocal x))
@@ -170,12 +170,18 @@ blackboard-bold 𝕚.)"
     (define (/ a b)
       (complex-divide a b)))
 
-  (define-instance ((ComplexComponent :a) (Reciprocable :a) => VectorSpace (Complex :a) (Complex :a)))
-
-  (define-instance ((ComplexComponent :a) (Reciprocable :a) => InnerSpace (Complex :a) (Complex :a))
+  (define-instance ((ComplexComponent :a) (CommutativeRing :a) => HermitianForm (Complex :a) (Complex :a))
     (inline)
     (define (inner-product x y)
-      (* (conjugate x) y)))
+      (* y (conjugate x))))
+
+  (define-instance ((ComplexComponent :a) (ConjugateRing :a) => HermitianForm :a (Complex :a))
+    (inline)
+    (define (inner-product x y)
+      (+ (* (real-part y) (conjugate (real-part x)))
+         (* (imag-part y) (conjugate (imag-part x))))))
+
+  (define-instance ((ComplexComponent :a) (ConjugateRing :a) (DivisionRing :a) => InnerSpace :a (Complex :a)))
 
   ;; (define-instance (ComplexComponent :a => ComplexComponent (Complex :a))
   ;;   (define (complex a b)
@@ -222,7 +228,7 @@ blackboard-bold 𝕚.)"
   (define (complex-from-int n)
     (complex (from-int n) 0))
 
-  (declare complex-reciprocal ((ComplexComponent :a) (Reciprocable :a) => Complex :a -> Complex :a))
+  (declare complex-reciprocal ((ComplexComponent :a) (CommutativeRing :a) (Reciprocable :a) => Complex :a -> Complex :a))
   (define (complex-reciprocal x)
     (let a = (real-part x))
     (let b = (imag-part x))
@@ -231,6 +237,7 @@ blackboard-bold 𝕚.)"
     (complex (* a divisor) (neg (* b divisor))))
 
   (declare complex-divide ((ComplexComponent :a)
+                           (CommutativeRing :a)
                            (ComplexComponent :b)
                            (Dividable :a :b)
                            => Complex :a * Complex :a -> Complex :b))
@@ -407,6 +414,7 @@ blackboard-bold 𝕚.)"
 
   (define-instance (DivisionRing (Complex Fraction)))
   (define-instance (Field (Complex Fraction)))
+  (define-instance (InnerSpace (Complex Fraction) (Complex Fraction)))
 
   (define-instance ((ComplexComponent :a) (ComplexComponent :b) (Approximable :a :b)
                     => Approximable (Complex :a) (Complex :b))

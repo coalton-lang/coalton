@@ -1761,7 +1761,6 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (define (scale k p) (poly-frac-scale k p)))
 
   (define-instance (Module Fraction (Poly Fraction)))
-  (define-instance (VectorSpace Fraction (Poly Fraction)))
 
   (define-instance (GcdDomain (Poly Fraction))
     (define (unit-part p)
@@ -2272,9 +2271,8 @@ No rationality decision or coefficient-dependent precision is needed."
     (inline)
     (define (conjugate x) x))
 
-  (define-instance (VectorSpace RealAlgebraic RealAlgebraic))
-
-  (define-instance (InnerSpace RealAlgebraic RealAlgebraic)
+  (define-instance (InnerSpace RealAlgebraic RealAlgebraic))
+  (define-instance (HermitianForm RealAlgebraic RealAlgebraic)
     (inline)
     (define (inner-product a b) (* a b)))
 
@@ -2354,6 +2352,15 @@ No rationality decision or coefficient-dependent precision is needed."
       (fromfrac (approx-fraction (max bits 53) x)))))
 
 (coalton/math/complex::%define-standard-complex-instances RealAlgebraic)
+(coalton/math/integral::%define-field-gcd-domain (coalton/math/complex:Complex RealAlgebraic))
+
+(coalton-toplevel
+  ;; A sum of two squares in the ordered real algebraic field is zero only
+  ;; if both are zero, so every nonzero complex algebraic number is a unit.
+  (define-instance (DivisionRing (coalton/math/complex:Complex RealAlgebraic)))
+  (define-instance (Field (coalton/math/complex:Complex RealAlgebraic)))
+  (define-instance (InnerSpace (coalton/math/complex:Complex RealAlgebraic)
+                              (coalton/math/complex:Complex RealAlgebraic))))
 
 ;; Specializations cover every built-in Integral exponent type. The generic
 ;; Num algorithm would repeatedly rebuild certificates; these wrappers reduce

@@ -205,7 +205,6 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
     (define (scale a b) (* a b)))
 
   (define-instance ((Eq :d) (GcdDomain :d) => Module (Ratio :d) (Ratio :d)))
-  (define-instance ((Eq :d) (GcdDomain :d) => VectorSpace (Ratio :d) (Ratio :d)))
 
   (define-instance ((Eq :d) (GcdDomain :d) (ConjugateRing :d) => ConjugateRing (Ratio :d))
     (inline)

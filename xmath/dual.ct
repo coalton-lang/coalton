@@ -168,7 +168,6 @@ component."
       (Dual (* k p) (* k d))))
 
   (define-instance (Ring :t => Module :t (Dual :t)))
-  (define-instance (Reciprocable :t => VectorSpace :t (Dual :t)))
 
   (define-instance (CommutativeRing :t => CommutativeRing (Dual :t)))
   (define-instance (CharacteristicZero :t => CharacteristicZero (Dual :t)))

@@ -142,6 +142,10 @@ whether it's even or odd)."
   (define-instance (arith:ConjugateRing Bit)
     (inline)
     (define (arith:conjugate x) x))
+  (define-instance (arith:HermitianForm Bit Bit)
+    (inline)
+    (define (arith:inner-product x y) (cls:* x y)))
+  (define-instance (arith:InnerSpace Bit Bit))
 
   ;; UFixes are unsafe and depend on implementation.
   (define-instance (cls:Additive UFix)

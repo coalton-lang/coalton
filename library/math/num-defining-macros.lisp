@@ -425,9 +425,7 @@
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:/ x)))))))
 
-     (define-instance (VectorSpace ,type ,type))
-
-     (define-instance (InnerSpace ,type ,type)
+     (define-instance (HermitianForm ,type ,type)
        (inline)
        (define (inner-product a b) (* a b)))))
 

@@ -11,7 +11,7 @@ Over any semiring or ring, matrices support entrywise addition, transposition $(
 $$a_{ij}^{(k)} = \\frac{a_{kk}^{(k-1)} a_{ij}^{(k-1)} - a_{ik}^{(k-1)} a_{kj}^{(k-1)}}{a_{k-1,k-1}^{(k-2)}},$$
 where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$. This computes determinants $\\det(A)$ in $O(n^3)$ ring operations without fractions, along with classical adjugates $\\operatorname{adj}(A)$ satisfying $A \\operatorname{adj}(A) = \\det(A) I$ and characteristic polynomials $\\chi_A(x) = \\det(xI - A) \\in D[x]$ (by running Bareiss over $D[x]$).
 
-**Linear systems and subspaces over fields.** Over any field or division ring (`Reciprocable`), Gauss–Jordan elimination computes the reduced row echelon form (`rref`) and pivot columns of $A$, yielding $\\operatorname{rank}(A)$, a basis of the right kernel $\\ker(A) = \\{x : Ax = 0\\}$ (`nullspace`), solutions of linear systems $AX = B$ (`solve`, `solve-vector`), and matrix inverses $A^{-1}$ (`inv`). Over a field with conjugation (`ConjugateRing` and `Reciprocable`), modified Gram–Schmidt (`gram-schmidt`) orthogonalizes vectors with respect to the Hermitian inner product $\\langle u, v \\rangle = \\sum_i \\overline{u_i} v_i$.")
+**Linear systems and subspaces.** Over an exact `DivisionRing`, Gauss–Jordan elimination computes the reduced row echelon form (`rref`) and pivot columns of $A$, yielding $\\operatorname{rank}(A)$, a basis of the right kernel $\\ker(A) = \\{x : Ax = 0\\}$ (`nullspace`), solutions of linear systems $AX = B$ (`solve`, `solve-vector`), and matrix inverses $A^{-1}$ (`inv`). With scalar conjugation, modified Gram–Schmidt orthogonalizes left-scaled vectors for the Hermitian form $\\langle u,v\\rangle = \\sum_i v_i\\overline{u_i}$, unless it encounters a nonzero isotropic pivot.")
   (:nicknames
    #:coalton/math/matrix
    #:coalton-library/math/matrix)
@@ -58,7 +58,8 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:solve
    #:solve-vector
    #:inv
-   #:gram-schmidt))
+   #:gram-schmidt
+   #:try-gram-schmidt))
 
 (in-package #:coalton/xmath/matrix)
 
@@ -474,7 +475,6 @@ The ring constants `zero`, `one`, `(from-int c)`, and integer literals of `Matri
       (%map (fn (x) (* c x)) m)))
 
   (define-instance (Ring :a => Module :a (Matrix :a)))
-  (define-instance (Reciprocable :a => VectorSpace :a (Matrix :a)))
 
   (define-instance (ConjugateRing :a => ConjugateRing (Matrix :a))
     (inline)
@@ -687,23 +687,24 @@ certificate. The first admissible row is used, not a stability-maximizing pivot.
     (rec loop ((xs u) (ys v) (acc zero))
       (match (Tuple xs ys)
         ((Tuple (Cons x xr) (Cons y yr))
-         (loop xr yr (+ acc (* (conjugate x) y))))
+         (loop xr yr (+ acc (* y (conjugate x)))))
         (_ acc))))
 
-  (declare gram-schmidt ((Eq :a) (ConjugateRing :a) (Reciprocable :a) => List (List :a) -> List (List :a)))
-  (define (gram-schmidt vs)
-    "Orthogonalize a list of equal-length vectors by the (modified) Gram–Schmidt process with respect to the Hermitian inner product $\\langle u, v \\rangle = \\sum_i \\overline{u_i} v_i$.
-
-Each vector $v$ is replaced by $u = v - \\sum_e \\frac{\\langle e, v \\rangle}{\\langle e, e \\rangle} e$ over the previously produced vectors $e$. Vectors whose projection $u$ is zero (i.e., that are linearly dependent on earlier vectors) are skipped. The results are orthogonal but not normalized."
+  (declare try-gram-schmidt ((Eq :a) (ConjugateRing :a) (DivisionRing :a) => List (List :a) -> Optional (List (List :a))))
+  (define (try-gram-schmidt vs)
+    "Orthogonalize left-scaled vectors. Each projection subtracts $c e$ with
+$c=\\langle e,u\\rangle\\langle e,e\\rangle^{-1}$. Skip zero residuals
+(dependent inputs); return `None` for a nonzero isotropic pivot, which
+cannot be used for projection. Require equal input lengths."
     (match vs
-      ((Nil) Nil)
+      ((Nil) (Some Nil))
       ((Cons v0 _)
        (let len = (list:length v0))
        (when (list:any (fn (v) (/= (list:length v) len)) vs)
          (error "gram-schmidt: vectors have differing lengths."))
        (rec outer ((rest vs) (basis Nil))
          (match rest
-           ((Nil) (list:reverse basis))
+           ((Nil) (Some (list:reverse basis)))
            ((Cons v more)
             (let ((u (rec project ((es basis) (u v))
                        (match es
@@ -711,9 +712,18 @@ Each vector $v$ is replaced by $u = v - \\sum_e \\frac{\\langle e, v \\rangle}{\
                          ((Cons e er)
                           (let ((c (/ (%inner e u) (%inner e e))))
                             (project er (list:zipWith (fn (ui ei) (- ui (* c ei))) u e))))))))
-              (if (list:all (fn (x) (zero? x)) u)
-                  (outer more basis)
-                  (outer more (Cons u basis))))))))))
+              (cond
+                ((list:all zero? u) (outer more basis))
+                ((zero? (%inner u u)) None)
+                (True (outer more (Cons u basis)))))))))))
+
+  (declare gram-schmidt ((Eq :a) (ConjugateRing :a) (DivisionRing :a) => List (List :a) -> List (List :a)))
+  (define (gram-schmidt vs)
+    "Return an orthogonal, unnormalized basis in input order. Signals an error
+on a nonzero isotropic pivot; use `try-gram-schmidt` to handle that case."
+    (match (try-gram-schmidt vs)
+      ((Some basis) basis)
+      ((None) (error "gram-schmidt: nonzero isotropic pivot (zero self-product)."))))
 
   (define-instance (Approximable :a :b => Approximable (Matrix :a) (Matrix :b))
     (define (approx bits m)
