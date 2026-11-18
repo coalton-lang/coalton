@@ -261,14 +261,14 @@ In Coalton, you write `horner` as an ordinary generic function once:
 
 ```lisp
 (coalton-toplevel
-  (declare horner (Num :a => :a * List :a -> :a))
+  (declare horner (Ring :a => :a * List :a -> :a))
   (define (horner x coeffs)
     (match coeffs
       ((Nil) 0)
       ((Cons c rest) (+ c (* x (horner x rest)))))))
 ```
 
-Because `+`, `*`, and the literal `0` are provided by the `Num` type class, `horner` works on `Integer`, `Fraction`, `F32`, `F64`, `Complex`, or your own matrix or polynomial type.
+`Ring` supplies the arithmetic and the conversion of the literal `0`. No equality test is needed, so `horner` also works on rings without an `Eq` instance.
 
 When you want a fast `F64` version, you do not rewrite `horner` as a macro. Instead, you ask the compiler to [`monomorphize`](/manual/operators/monomorphize/) a concrete entry point:
 

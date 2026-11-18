@@ -3,17 +3,40 @@
 (coalton-toplevel
   (derive Eq)
   (define-type PatternNumber (PatternNumber Integer))
-  (define-num PatternNumber
+  (define-ring PatternNumber
     (define (+ (PatternNumber a) (PatternNumber b)) (PatternNumber (+ a b)))
     (define (- (PatternNumber a) (PatternNumber b)) (PatternNumber (- a b)))
     (define (* (PatternNumber a) (PatternNumber b)) (PatternNumber (* a b)))
     (define (from-int x) (PatternNumber x)))
-  (declare numeric-one? (Num :a => :a -> Boolean))
+  (declare numeric-one? ((Eq :a) (Ring :a) => :a -> Boolean))
   (define (numeric-one? x) (match x (1 True) (_ False)))
-  (declare nested-numeric-one? (Num :a => Optional :a -> Boolean))
+  (declare nested-numeric-one? ((Eq :a) (Ring :a) => Optional :a -> Boolean))
   (define (nested-numeric-one? x) (match x ((Some 1) True) (_ False)))
-  (declare delayed-numeric-one? (Num :a => :a -> (Void -> Boolean)))
+  (declare delayed-numeric-one? ((Eq :a) (Ring :a) => :a -> (Void -> Boolean)))
   (define (delayed-numeric-one? x) (fn () (match x (1 True) (_ False)))))
+
+;; Functions form a ring pointwise, but function equality is not decidable.
+(coalton-toplevel
+  (define-type IntegerFunction (IntegerFunction (Integer -> Integer)))
+  (define-ring IntegerFunction
+    (define (+ (IntegerFunction f) (IntegerFunction g))
+      (IntegerFunction (fn (x) (+ (f x) (g x)))))
+    (define (- (IntegerFunction f) (IntegerFunction g))
+      (IntegerFunction (fn (x) (- (f x) (g x)))))
+    (define (* (IntegerFunction f) (IntegerFunction g))
+      (IntegerFunction (fn (x) (* (f x) (g x)))))
+    (define (from-int n) (IntegerFunction (fn (_) n))))
+  (declare literal-polynomial (Ring :a => :a -> :a))
+  (define (literal-polynomial x) (+ (* 3 x) -2))
+  (monomorphize)
+  (declare function-polynomial (IntegerFunction -> IntegerFunction))
+  (define (function-polynomial x) (literal-polynomial x)))
+
+(define-test test-integer-literals-need-no-equality ()
+  (let (IntegerFunction f) = (literal-polynomial (IntegerFunction id)))
+  (let (IntegerFunction g) = (function-polynomial (IntegerFunction id)))
+  (is (== (f 5) 13))
+  (is (== (g 5) 13)))
 
 (define-test test-overloaded-integer-patterns ()
   (is (numeric-one? (the Integer 1)))

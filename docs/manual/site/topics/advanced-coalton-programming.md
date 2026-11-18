@@ -180,6 +180,12 @@ In Coalton, integer literals like `1` and `2` are polymorphic: they desugar via 
 - `(+ 1 2)` has the inferred type `Ring :a => :a`.
 - `(/ 1 2)` has the inferred type `Reciprocable :a => :a` (since `Ring :a` is a superclass of `Reciprocable :a`).
 
+For example, integer-valued functions form a ring under pointwise arithmetic.
+The literal `3` in that ring is the constant function returning `3`. No `Eq`
+instance is needed to construct it; deciding equality of arbitrary functions is
+not possible. An integer *pattern* additionally needs `Eq`, because it compares
+its input with the value constructed by `from-int`.
+
 At the top level of a `(coalton ...)` form—or in an implicitly typed `define` or `let` binding—leaving `:a` unresolved would make it impossible to choose a concrete runtime dictionary. Rather than rejecting every unannotated numeric literal as ambiguous, Coalton applies *type defaulting*, similar to [Haskell's type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4).
 
 ### How Defaulting Resolves Ambiguity

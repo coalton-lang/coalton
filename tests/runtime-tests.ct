@@ -139,7 +139,7 @@
 
 (define-test test-type-of-shows-constrained-polymorphic-types ()
   (is (== type-of-literal-string
-          "∀ :A. Num :A ⇒ :A")))
+          "∀ :A. Ring :A ⇒ :A")))
 
 (define-test test-type-of-does-not-evaluate-its-expression ()
   (is (== type-of-erroring-expression-string
@@ -147,7 +147,7 @@
 
 (define-test test-type-of-shows-keyword-function-types ()
   (is (== type-of-keyword-function-string
-          "∀ :A. Num :A ⇒ :A * :A &key (:z :A) → :A")))
+          "∀ :A. Ring :A ⇒ :A * :A &key (:z :A) → :A")))
 
 (define-test test-type-of-shows-local-type-variables ()
   (is (== (type-of-local-variable-string True)

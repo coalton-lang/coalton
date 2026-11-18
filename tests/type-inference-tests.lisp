@@ -199,8 +199,12 @@
   (check-coalton-types
    "(define (one? x) (match x (1 True) (_ False)))
     (define (nested-one? x) (match x ((Some 1) True) (_ False)))"
-   '("one?" . "(Num :a => :a -> Boolean)")
-   '("nested-one?" . "(Num :a => Optional :a -> Boolean)"))
+   '("one?" . "((Ring :a) (Eq :a) => :a -> Boolean)")
+   '("nested-one?" . "((Ring :a) (Eq :a) => Optional :a -> Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare one? (Ring :a => :a -> Boolean))
+      (define (one? x) (match x (1 True) (_ False)))"))
   (signals tc:tc-error
     (check-coalton-types
      "(declare one? (String -> Boolean))
@@ -591,7 +595,7 @@
         (unless (== i 0)
           (loop (- i 1)))))"
 
-   '("count-down" . "(Num :a => :a -> Void)"))
+   '("count-down" . "((Ring :a) (Eq :a) => :a -> Void)"))
 
   (check-coalton-types
    "(define (count-to n)
@@ -653,8 +657,8 @@
 
    '("declared-keyword-only" . "(&key (:x Integer) -> Integer)")
    '("declared-empty-keyword" . "(Void -> Integer)")
-   '("keyword-add" . "(Num :a => :a &key (:y :a) -> :a)")
-   '("keyword-only" . "(Num :a => &key (:x :a) -> :a)")
+   '("keyword-add" . "(Ring :a => :a &key (:y :a) -> :a)")
+   '("keyword-only" . "(Ring :a => &key (:x :a) -> :a)")
    '("empty-keyword" . "(:a -> :a)")
    '("optional-default" . "(&key (:tag (Optional :a)) -> Optional :a)")))
 
@@ -709,7 +713,7 @@
     (define d (run0 keywordy0))"
 
    '("plain" . "(:a -> :a)")
-   '("keywordy" . "(Num :a => :a &key (:extra :a) (:timeout :a) -> :a)")
+   '("keywordy" . "(Ring :a => :a &key (:extra :a) (:timeout :a) -> :a)")
    '("a" . "Integer")
    '("b" . "Integer")
    '("c" . "Integer")
@@ -813,7 +817,7 @@
    "(define f
        (fn (_a) (f 5)))"
 
-   '("f" . "(forall (:a (:b Values)) (Num :a => :a -> :b))")))
+   '("f" . "(forall (:a (:b Values)) (Ring :a => :a -> :b))")))
 
 (deftest test-explicit-type-declarations ()
   ;; Check that explicit declarations can reduce the type of a definition
@@ -1303,7 +1307,7 @@
       (let ((g (fn (x) (Tuple x a))))
         (g 5)))"
 
-   '("f" . "(Num :b => :a -> Tuple :b :a)")))
+   '("f" . "(Ring :b => :a -> Tuple :b :a)")))
 
 (deftest test-weak-type-variables ()
   ;; See gh #84
@@ -1516,7 +1520,7 @@
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
    "(define f (fn () 5))"
-   '("f" . "(Num :a => (Void -> :a))")))
+   '("f" . "(Ring :a => (Void -> :a))")))
 
 (deftest test-short-lambda-shorthand ()
   (check-coalton-types
@@ -1581,7 +1585,7 @@
     (define (float-sum)
       (let ((sum (fold + 0 [1 2]))) (+ sum 0.5)))"
    '("count-items" . "(:a -> Integer)")
-   '("sum-items" . "(Num :a => Void -> :a)")
+   '("sum-items" . "(Ring :a => Void -> :a)")
    '("numeric-count" . "Integer")
    '("float-sum" . "(Void -> F32)")))
 
@@ -1737,10 +1741,10 @@
    '("mk-assoc-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
    '("mk-seq-comprehension-default" . "(Void -> coalton/seq:Seq Boolean)")
    '("mk-seq-comprehension-underscore" . "(Void -> coalton/seq:Seq Boolean)")
-   '("mk-seq-below-default" . "((Num :num) (Ord :num) => (Void -> coalton/seq:Seq :num))")
+   '("mk-seq-below-default" . "((Ring :num) (Ord :num) => (Void -> coalton/seq:Seq :num))")
    '("mk-assoc-comprehension-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
    '("mk-assoc-comprehension-underscore" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
-   '("mk-assoc-below-default" . "((Num :num) (Ord :num) => (Void -> coalton/seq:Seq (Tuple :num :num)))")))
+   '("mk-assoc-below-default" . "((Ring :num) (Ord :num) => (Void -> coalton/seq:Seq (Tuple :num :num)))")))
 
 (deftest test-function-implicit-progn ()
   (check-coalton-types
@@ -1748,7 +1752,7 @@
       (let _a = (+ a 1))
       a)"
 
-   '("f" . "(Num :a => :a -> :a)")))
+   '("f" . "(Ring :a => :a -> :a)")))
 
 (deftest test-returns ()
   (check-coalton-types
@@ -2120,8 +2124,8 @@
   (check-coalton-types
    "(define (early &key (x (return 1))) x)
     (define (early-or-body &key (x (return 1))) (return 2) x)"
-   '("early" . "(Num :a => &key (:x :a) -> :a)")
-   '("early-or-body" . "(Num :a => &key (:x :a) -> :a)"))
+   '("early" . "(Ring :a => &key (:x :a) -> :a)")
+   '("early-or-body" . "(Ring :a => &key (:x :a) -> :a)"))
   (dolist (program '("(define (bad &key (x (return \"bad\"))) 1)"
                      "(define (bad &key (x (return \"bad\"))) True)"))
     (signals tc:tc-error (check-coalton-types program))))
@@ -2134,7 +2138,7 @@
            (y <- (fn (r) (* r 2)))
            (pure (+ x y)))
        r0))"
-   '("reader-sum" . "(Num :a => :a -> :a)"))
+   '("reader-sum" . "(Ring :a => :a -> :a)"))
   (let ((*package* (find-package "COALTON-USER"))
         (entry:*global-environment* entry:*global-environment*)
         (source (source:make-source-string
