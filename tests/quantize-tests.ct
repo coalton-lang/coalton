@@ -49,7 +49,7 @@
          (is (== (math:floor/ a b) (math:div a b))))))))
 
 (coalton-toplevel
-  ;; 1. Vector space without Multiplicative or Num
+  ;; 1. A floating-point module with a Hermitian form, without Num on vectors
   (derive Eq)
   (define-struct TestVec2
     (vx F64)
@@ -71,9 +71,7 @@
       (TestVec2 (* c x) (* c y))))
 
   (define-instance (math:Module F64 TestVec2))
-  (define-instance (math:VectorSpace F64 TestVec2))
-
-  (define-instance (math:InnerSpace F64 TestVec2)
+  (define-instance (math:HermitianForm F64 TestVec2)
     (define (math:inner-product (TestVec2 x1 y1) (TestVec2 x2 y2))
       (+ (* x1 x2) (* y1 y2))))
 
@@ -127,7 +125,7 @@
   (define (unwrap-noeq (NoEqRing n)) n))
 
 (define-test test-algebraic-hierarchy ()
-  ;; Additive, AdditiveGroup, VectorSpace, InnerSpace on TestVec2
+  ;; Additive, AdditiveGroup and a Hermitian form on TestVec2
   (let ((u (TestVec2 1.0d0 2.0d0))
         (v (TestVec2 3.0d0 -1.0d0)))
     (is (== (+ u v) (TestVec2 4.0d0 1.0d0)))
@@ -147,8 +145,8 @@
     (is (== (math:conjugate (the Integer 42)) 42))
     (is (== (math:conjugate c1) (math:complex 1 -2)))
     (is (== (math:inner-product c1 c2) (* (math:conjugate c1) c2)))
-    (is (== (math:inner-product c1 c2) (math:conjugate (math:inner-product c2 c1))))
-    (is (== (math:inner-product c1 c1) (math:complex 5 0))))
+    (is (== (the (Complex Fraction) (math:inner-product c1 c2)) (math:conjugate (math:inner-product c2 c1))))
+    (is (== (math:inner-product c1 c1) (math:complex (the Fraction 5) 0))))
 
   ;; Multiplicative binary exponentiation (^) and product on 2x2 matrices
   (let ((fib-mat (Mat2x2 1 1 1 0)))

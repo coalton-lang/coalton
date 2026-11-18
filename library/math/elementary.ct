@@ -76,7 +76,7 @@
     (nth-root (Integer * :a -> :a))
     (sqrt (:a -> :a)))
 
-  (define-class ((ComplexComponent :a) (Num :a) => Polar :a)
+  (define-class ((ComplexComponent :a) (CommutativeRing :a) => Polar :a)
     "This type class includes `ComplexComponent` types that admit a magnitude and phase.
 
 For a complex number `z = (complex x y)`, the following identities hold:

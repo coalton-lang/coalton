@@ -328,7 +328,6 @@ using Buchberger's first criterion to skip pairs with coprime leading monomials,
       (%multiply-term c (make-monomial Nil) p)))
 
   (define-instance ((Eq :a) (Ring :a) => Module :a (MPoly :a)))
-  (define-instance ((Eq :a) (Reciprocable :a) => VectorSpace :a (MPoly :a)))
 
   (define-instance ((Eq :a) (Additive :a) => Into :a (MPoly :a))
     (inline)

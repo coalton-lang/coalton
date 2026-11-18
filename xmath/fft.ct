@@ -538,7 +538,7 @@ Normalization: none"
   (define-type-alias C64 (Complex F32))
   (define-type-alias C128 (Complex F64))
 
-  (define-instance ((math:Elementary :a) (math:ComplexComponent :a) => RootsOfUnity (Complex :a))
+  (define-instance ((math:Elementary :a) (math:ComplexComponent :a) (math:CommutativeRing :a) => RootsOfUnity (Complex :a))
     (inline)
     (define (root-of-unity n)
       (inline (math:cis (/ (* (from-int 2) math:pi) (math:integral->num n))))))

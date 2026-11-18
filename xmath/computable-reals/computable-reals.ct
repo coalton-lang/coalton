@@ -160,9 +160,7 @@ is no guarantee that the `CReal` will be accurate to any precision*."
     (inline)
     (define (math:conjugate x) x))
 
-  (define-instance (math:VectorSpace CReal CReal))
-
-  (define-instance (math:InnerSpace CReal CReal)
+  (define-instance (math:HermitianForm CReal CReal)
     (inline)
     (define (math:inner-product a b) (* a b))))
 

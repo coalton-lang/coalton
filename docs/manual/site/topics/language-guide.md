@@ -1337,7 +1337,10 @@ The `coalton-prelude` package exports `/` (from `Reciprocable`), `floor`, `ceili
 - If you have integers and want a double-float (`F64`), use `math:inexact/`. (For `F32`, convert with `into` or constrain `/` with `the F32`.)
 - If you have integers and want an integer quotient, use `math:floor/`, `math:ceiling/`, or `math:round/`.
 - If you want an exact rational (`Fraction`) from two integers, use `math:exact/`.
-- If you are writing generic code over a single field-like type, use `/` (from `Reciprocable`).
+- For same-type division, use `/` (from `Reciprocable`). This alone does not
+  guarantee that every nonzero value is invertible; exact algorithms that
+  rely on that law use `math:DivisionRing`, or `math:Field` if multiplication
+  must commute.
 
 ### Details about division
 

@@ -258,7 +258,6 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
            (loop (+ i 1)))))))
 
   (define-instance (Ring :a => Module :a (Polynomial :a)))
-  (define-instance (Reciprocable :a => VectorSpace :a (Polynomial :a)))
 
   (define-instance (ConjugateRing :a => ConjugateRing (Polynomial :a))
     (define (conjugate (%Polynomial v))

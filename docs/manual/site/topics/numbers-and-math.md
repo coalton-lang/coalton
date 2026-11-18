@@ -308,9 +308,11 @@ graph TD
     Ring --> ConjugateRing["ConjugateRing :k"]
     AdditiveGroup["AdditiveGroup :m"] --> Module
     Module --> VectorSpace["VectorSpace :k :v"]
-    Reciprocable["Reciprocable :k"] --> VectorSpace
+    DivisionRing["DivisionRing :k"] --> VectorSpace
     VectorSpace --> InnerSpace["InnerSpace :k :v"]
-    ConjugateRing --> InnerSpace
+    Module --> HermitianForm["HermitianForm :k :v"]
+    ConjugateRing --> HermitianForm
+    HermitianForm --> InnerSpace
 ```
 
 - **`ConjugateRing :a`**:
@@ -321,16 +323,23 @@ graph TD
   Left scaling `(scale c v)` of `:v` by `:s`.
 - **`Module :r :m`**:
   A module `:m` over a ring `:r`.
-- **`VectorSpace :k :v (:v -> :k)`**:
-  A module over a division ring or field `:k`, with a functional dependency
-  `:v -> :k` so the scalar field is uniquely determined by the vector type.
-- **`InnerSpace :k :v (:v -> :k)`**:
-  Provides `(inner-product x y)`, obeying conjugate symmetry
-  $\langle x, y \rangle = \overline{\langle y, x \rangle}$ so both real
-  dot products and complex Hermitian inner products share a single interface.
+- **`VectorSpace :k :v`**:
+  Every left module over a `DivisionRing` is automatically a vector space.
+  The vector type need not determine a unique scalar field: `Complex Fraction`
+  is a vector space over both `Fraction` and `Complex Fraction`.
+- **`HermitianForm :k :v`**:
+  Provides `(inner-product x y)`, conjugate symmetric and left-linear in `y`.
+  The standard coordinate form is $\langle x,y\rangle=\sum_i y_i\overline{x_i}$;
+  reversing these factors is not equivalent for quaternion scalars. Where
+  several forms exist, annotate the result type to select the scalar field.
+- **`InnerSpace :k :v`**:
+  A vector space with a nondegenerate Hermitian form: only the zero vector
+  is orthogonal to *every* vector. This does not forbid a nonzero vector
+  from being orthogonal to *itself*. `try-gram-schmidt` reports such a pivot
+  as `None`, rather than treating it as linear dependence.
 
-Continuing our `Vec2` example above, we can make `Vec2` an `InnerSpace` over
-`F64`:
+Continuing our `Vec2` example above, its numerical dot product needs no claim
+that `F64` is an exact division ring:
 
 ```lisp
 (coalton-toplevel
@@ -339,11 +348,21 @@ Continuing our `Vec2` example above, we can make `Vec2` an `InnerSpace` over
       (Vec2 (* k x) (* k y))))
 
   (define-instance (math:Module F64 Vec2))
-  (define-instance (math:VectorSpace F64 Vec2))
 
-  (define-instance (math:InnerSpace F64 Vec2)
+  (define-instance (math:HermitianForm F64 Vec2)
     (define (math:inner-product (Vec2 x1 y1) (Vec2 x2 y2))
       (+ (* x1 x2) (* y1 y2)))))
+```
+
+For restriction of scalars, no wrapper or new vector representation is needed:
+
+```lisp
+(coalton
+ (let ((z (math:complex (the Fraction 1) 2)))
+  (values (math:scale (the Fraction 2) z)              ; 2 + 4i
+          (math:scale (the (Complex Fraction) math:ii) z) ; -2 + i
+          (the Fraction (math:inner-product z z))       ; 5
+          (the (Complex Fraction) (math:inner-product z z))))) ; 5 + 0i
 ```
 
 ### GCD Domains, Euclidean Domains, and Integers (`coalton/math/integral`)

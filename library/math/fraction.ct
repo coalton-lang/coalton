@@ -142,9 +142,8 @@
     (inline)
     (define (conjugate x) x))
 
-  (define-instance (VectorSpace Fraction Fraction))
-
-  (define-instance (InnerSpace Fraction Fraction)
+  (define-instance (InnerSpace Fraction Fraction))
+  (define-instance (HermitianForm Fraction Fraction)
     (inline)
     (define (inner-product a b) (* a b)))
 

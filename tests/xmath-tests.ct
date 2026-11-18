@@ -12,7 +12,58 @@
     (signals tc:tc-error
       (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
 
+(deftest noncommuting-and-isotropic-quaternions-are-not-fields ()
+  (dolist (form '("(recip (the (coalton/xmath/quaternion:Quaternion (coalton/xmath/quaternion:Quaternion Fraction)) one))"
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix (coalton/xmath/quaternion:Quaternion (Complex Fraction))) one))"
+                  "(coalton/xmath/groebner:groebner-basis coalton/xmath/groebner:Lex
+                     (the (List (coalton/xmath/groebner:MPoly (coalton/xmath/quaternion:Quaternion Fraction))) Nil))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
+
 (in-package #:coalton-native-tests)
+
+(coalton-toplevel
+  (declare vector-scale (math:VectorSpace :k :v => :k * :v -> :v))
+  (define (vector-scale k v) (math:scale k v)))
+
+(define-test left-scalar-hermitian-laws ()
+  ;; The same vectors admit both unrestricted and restricted scalars.
+  (let z = (math:complex (the Fraction 1) 2))
+  (is (== (vector-scale (the Fraction 2) z) (math:complex 2 4)))
+  (is (== (vector-scale (the (Complex Fraction) math:ii) z) (math:complex -2 1)))
+  (is (== (the Fraction (math:inner-product z z)) 5))
+  (is (== (the (Complex Fraction) (math:inner-product z z)) (math:complex 5 0)))
+
+  (let i = (the (quat:Quaternion Fraction) quat:q-i))
+  (let j = (the (quat:Quaternion Fraction) quat:q-j))
+  (let k = (* i j))
+  (let x = (quat:quaternion i zero zero zero))
+  (let y = (quat:quaternion j zero zero zero))
+  (is (== (math:inner-product x y) k))
+  (is (== (math:inner-product x (math:scale i y)) (* i k)))
+  (is (== (math:inner-product (math:scale i x) y) (* k (math:conjugate i))))
+  (is (== (math:inner-product y x) (math:conjugate k)))
+  (let blade = (the (cliff:Multivector (quat:Quaternion Fraction)) (cliff:basis-vector 0)))
+  (is (== (math:inner-product (math:scale i blade) (math:scale j blade)) k))
+  (let imag = (the (Complex Fraction) math:ii))
+  (let split = (quat:quaternion one imag zero zero))
+  (is (nonzero? split))
+  (is (zero? (* split (quat:quaternion one (neg imag) zero zero))))
+
+  ;; Multiplying the projection coefficient on the wrong side, or taking
+  ;; the conjugates on the wrong side, changes the sign of the j component.
+  (is (== (mat:gram-schmidt [[i one] [j zero]])
+          [[i one] [(math:scale (the Fraction 1/2) j) (math:scale (the Fraction -1/2) k)]]))
+  (is (== (mat:solve-vector (mat:from-rows [[i j] [zero i]]) [(+ k i) (neg j)])
+          (Some [j k])))
+  (let direct =
+    (rec advance ((n (the Integer 0)) (a i) (b j))
+      (if (== n 19) a (advance (+ n 1) b (+ (* i b) (* j a))))))
+  (is (== (recur:linear-recurrence-nth [i j] [i j] 19) direct))
+
+  ;; The standard dot product on F_2^2 is nondegenerate but isotropic.
+  (is (== (mat:try-gram-schmidt [[(the Bit 1) 1]]) None))
+  (is (== (mat:try-gram-schmidt [[(the Bit 1) 0] [1 0]]) (Some [[1 0]]))))
 
 (define-test test-exact-algebra-contracts ()
   ;; Machine quotient/remainder survives without claiming a domain.

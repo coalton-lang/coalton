@@ -578,9 +578,7 @@
             (div-dyadic m1 e1 m2 e2))
            (_ BFNaN))))))
 
-  (define-instance (VectorSpace BigFloat BigFloat))
-
-  (define-instance (InnerSpace BigFloat BigFloat)
+  (define-instance (HermitianForm BigFloat BigFloat)
     (inline)
     (define (inner-product a b) (* a b)))
 
