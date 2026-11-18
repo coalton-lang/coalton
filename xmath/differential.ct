@@ -13,7 +13,7 @@ A **differential ring** $(A, {}')$ is a ring $A$ equipped with a derivation $a \
 $$\\partial a = a \\partial + a', \\qquad \\partial^n a = \\sum_{k=0}^n \\binom{n}{k} a^{(n-k)} \\partial^k.$$
 In particular, for $A = R[x]$, $\\partial x - x \\partial = 1$ (the first Weyl algebra $A_1(R)$). Applying an operator via `apply-diff-op`, $L(y) = \\sum_k c_k y^{(k)}$, is a ring homomorphism into endomorphisms of $A$: $(L_1 L_2)(y) = L_1(L_2(y))$.
 
-**Right Euclidean structure and ODE factoring.** Over a differential field $K$ (`Eq`, `Reciprocable`, and `DifferentialRing`, such as $\\mathbb{Q}(x)$), $K[\\partial; {}']$ is a right Euclidean domain:
+**Right Euclidean structure and ODE factoring.** Over an exact differential division ring $K$ (`Eq`, `DivisionRing`, and `DifferentialRing`, such as $\\mathbb{Q}(x)$), $K[\\partial; {}']$ admits right Euclidean division:
 - Right division (`diff-op-right-divrem`) decomposes $A = QB + R$ with $\\operatorname{ord} R < \\operatorname{ord} B$;
 - The monic greatest common right divisor $G = \\operatorname{gcrd}(L_1, L_2) = S L_1 + T L_2$ (`diff-op-gcrd`, `diff-op-right-ext-gcd`) has solution space $\\ker G = \\ker L_1 \\cap \\ker L_2$;
 - The monic least common left multiple $M = \\operatorname{lclm}(L_1, L_2)$ (`diff-op-lclm`) has order $\\operatorname{ord} L_1 + \\operatorname{ord} L_2 - \\operatorname{ord} \\operatorname{gcrd}(L_1, L_2)$ and solution space $\\ker M = \\ker L_1 + \\ker L_2$.
@@ -403,7 +403,7 @@ This is a ring homomorphism into the endomorphisms of the differential ring: `(a
   ;; Right Euclidean structure over a differential field
   ;;
 
-  (declare diff-op-monic ((Eq :a) (Reciprocable :a) => DiffOp :a -> DiffOp :a))
+  (declare diff-op-monic ((Eq :a) (DivisionRing :a) => DiffOp :a -> DiffOp :a))
   (define (diff-op-monic op)
     "Scale `op` on the left by the inverse of its leading coefficient, so its leading coefficient is `one`. The zero operator is returned unchanged."
     (let lc = (diff-op-leading op))
@@ -412,7 +412,7 @@ This is a ring homomorphism into the endomorphisms of the differential ring: `(a
         (%trim (scale (recip lc) op))))
 
   (declare diff-op-right-divrem
-    ((Eq :a) (Reciprocable :a) (DifferentialRing :a) =>
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
      DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a))
   (define (diff-op-right-divrem a b)
     "Right Euclidean division over a differential field: returns `(values q r)` with $A = Q B + R$ and $\\operatorname{ord} R < \\operatorname{ord} B$ (or $R = 0$).
@@ -433,7 +433,7 @@ Signals an error if `b` is the zero operator."
             (loop (+ q term) (%truncate (- r (* term b)) dr))))))
 
   (declare %right-euclid
-    ((Eq :a) (Reciprocable :a) (DifferentialRing :a) =>
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
      DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a * DiffOp :a * DiffOp :a))
   (define (%right-euclid a b)
     "Run the extended right Euclidean algorithm, returning `(values g s t u)` where $g = s A + t B$ is a (non-normalized) GCRD and $u A$ is a least common left multiple."
@@ -448,7 +448,7 @@ Signals an error if `b` is the zero operator."
                r2 (- s0 (* q s1)) (- t0 (* q t1)))))))
 
   (declare diff-op-right-ext-gcd
-    ((Eq :a) (Reciprocable :a) (DifferentialRing :a) =>
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
      DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a * DiffOp :a))
   (define (diff-op-right-ext-gcd a b)
     "The extended right Euclidean algorithm: returns `(values g s t)` with $g = \\operatorname{gcrd}(A, B) = S A + T B$ and $g$ monic (or zero when both operators are zero)."
@@ -462,7 +462,7 @@ Signals an error if `b` is the zero operator."
                   (%trim (scale inv t0))))))
 
   (declare diff-op-gcrd
-    ((Eq :a) (Reciprocable :a) (DifferentialRing :a) =>
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
      DiffOp :a * DiffOp :a -> DiffOp :a))
   (define (diff-op-gcrd a b)
     "The monic greatest common right divisor of `a` and `b` over a differential field. Its solution space is $\\ker A \\cap \\ker B$."
@@ -474,7 +474,7 @@ Signals an error if `b` is the zero operator."
          (euclid r1 r2)))))
 
   (declare diff-op-lclm
-    ((Eq :a) (Reciprocable :a) (DifferentialRing :a) =>
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
      DiffOp :a * DiffOp :a -> DiffOp :a))
   (define (diff-op-lclm a b)
     "The monic least common left multiple of `a` and `b` over a differential field (`zero` if either is zero). Its solution space is $\\ker A + \\ker B$, and $\\operatorname{ord}(\\operatorname{lclm}) = \\operatorname{ord} A + \\operatorname{ord} B - \\operatorname{ord}(\\operatorname{gcrd})$."
@@ -530,7 +530,7 @@ Signals an error if `b` is the zero operator."
                                         (+ acc2 (* c (* (%rising j k) (vec:index-unsafe (+ j k) ys))))))))))))))
 
   (declare solve-ode-series
-    ((Eq :a) (Reciprocable :a) =>
+    ((Eq :a) (DivisionRing :a) (CharacteristicZero :a) =>
      DiffOp (poly:Polynomial :a) * List :a -> series:PowerSeries :a))
   (define (solve-ode-series op inits)
     "The formal power series solution $y(x) = \\sum_n y_n x^n$ of the linear ODE $L(y) = \\sum_{k=0}^m p_k(x) y^{(k)} = 0$ with initial values `inits` $= (y(0), y'(0), \\ldots, y^{(m-1)}(0))$.

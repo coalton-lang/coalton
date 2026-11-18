@@ -2228,7 +2228,8 @@ No rationality decision or coefficient-dependent precision is needed."
   (define-instance (DivisionRing RealAlgebraic))
   (define-instance (Field RealAlgebraic))
   (define-instance (CharacteristicZero RealAlgebraic))
-  (define-instance (RationalAlgebra RealAlgebraic)
+  (define-instance (RationalAlgebra RealAlgebraic))
+  (define-instance (RationalScalars RealAlgebraic)
     (inline)
     (define (embed-fraction q) (from-fraction q)))
 

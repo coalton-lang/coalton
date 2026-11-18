@@ -170,6 +170,13 @@ component."
   (define-instance (Ring :t => Module :t (Dual :t)))
   (define-instance (Reciprocable :t => VectorSpace :t (Dual :t)))
 
+  (define-instance (CommutativeRing :t => CommutativeRing (Dual :t)))
+  (define-instance (CharacteristicZero :t => CharacteristicZero (Dual :t)))
+  (define-instance (RationalAlgebra :t => RationalAlgebra (Dual :t)))
+  (define-instance (RationalScalars :t => RationalScalars (Dual :t))
+    (inline)
+    (define (embed-fraction q) (Dual (embed-fraction q) zero)))
+
   (define-instance (ConjugateRing :t => ConjugateRing (Dual :t))
     (inline)
     (define (conjugate (Dual p d))
@@ -185,7 +192,7 @@ component."
         (Dual inv-p1
               (neg (* d1 (sq inv-p1)))))))
 
-  (define-instance ((Trigonometric :t) (Reciprocable :t) (Radical :t) => (Trigonometric (Dual :t)))
+  (define-instance ((CommutativeRing :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) => Trigonometric (Dual :t))
     (define (sin (Dual p1 d1))
       (Dual (sin p1)
             (* d1 (cos p1))))
@@ -210,7 +217,7 @@ component."
       (Dual (atan p1)
             (* d1 (recip (+ one (sq p1)))))))
 
-  (define-instance ((Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
+  (define-instance ((CommutativeRing :t) (Exponentiable :t) (Reciprocable :t) => Exponentiable (Dual :t))
     (define (exp (Dual p1 d1))
       (let ((ep (exp p1)))
         (Dual ep (* d1 ep))))
@@ -227,7 +234,7 @@ component."
     (define (log dual1 dual2)
       (/ (ln dual2) (ln dual1))))
 
-  (define-instance ((Radical :t) (Reciprocable :t) => (Radical (Dual :t)))
+  (define-instance ((CommutativeRing :t) (Radical :t) (Reciprocable :t) => Radical (Dual :t))
     (define (nth-root n (Dual p1 d1))
       (let ((f0 (nth-root n p1)))
         (Dual f0
@@ -237,7 +244,7 @@ component."
       (let ((s (sqrt p1)))
         (Dual s (* d1 (recip (* (from-int 2) s)))))))
 
-  (define-instance (Elementary :t => Elementary (Dual :t))
+  (define-instance ((CommutativeRing :t) (Elementary :t) => Elementary (Dual :t))
     (define pi (Dual pi zero))
     (define ee (Dual ee zero)))
 

@@ -78,8 +78,8 @@ component types."
 ;; as a Lisp type in codegen. SBCL and CCL tolerate it fine.
 
 (coalton-toplevel
-  (define-class (Num :a => ComplexComponent :a)
-    "A type class for describing complex component types. This type class
+  (define-class ((Num :a) (CommutativeRing :a) => ComplexComponent :a)
+    "A type class for describing commutative complex component types. This type class
 also encodes the construction and projection of `Complex` data types."
     (complex (:a * :a -> Complex :a))
     (real-part (Complex :a -> :a))
@@ -133,9 +133,10 @@ blackboard-bold 𝕚.)"
 
   (define-instance (ComplexComponent :a => Num (Complex :a)))
 
-  (define-instance ((ComplexComponent :a) (CommutativeRing :a) => CommutativeRing (Complex :a)))
+  (define-instance (ComplexComponent :a => CommutativeRing (Complex :a)))
   (define-instance ((ComplexComponent :a) (CharacteristicZero :a) => CharacteristicZero (Complex :a)))
-  (define-instance ((ComplexComponent :a) (RationalAlgebra :a) => RationalAlgebra (Complex :a))
+  (define-instance ((ComplexComponent :a) (RationalAlgebra :a) => RationalAlgebra (Complex :a)))
+  (define-instance ((ComplexComponent :a) (RationalScalars :a) => RationalScalars (Complex :a))
     (inline)
     (define (embed-fraction q) (complex (embed-fraction q) zero)))
 

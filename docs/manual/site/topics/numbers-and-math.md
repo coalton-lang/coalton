@@ -348,16 +348,20 @@ Continuing our `Vec2` example above, we can make `Vec2` an `InnerSpace` over
 
 ### GCD Domains, Euclidean Domains, and Integers (`coalton/math/integral`)
 
-`coalton/math/integral` organizes integral domains and integers into four levels:
+Machine division and exact domain arithmetic are separate interfaces:
 
 ```mermaid
 graph TD
-    Ring --> GcdDomain
+    CommutativeRing --> GcdDomain
     GcdDomain --> EuclideanDomain
-    EuclideanDomain --> Remainder
+    QuotRem --> EuclideanDomain
+    QuotRem --> Remainder
     Remainder --> Integral
     Num --> Integral
     Ord --> Integral
+    Reciprocable --> DivisionRing
+    DivisionRing --> Field
+    GcdDomain --> Field
 ```
 
 - **`GcdDomain :a`**:
@@ -375,12 +379,40 @@ graph TD
   Adds a degree/norm measure `(euclidean-degree x)` returning `Integer` and
   Euclidean division with remainder (`quotrem`, `quot`, `rem`). Enables
   `(extended-gcd a b)`, which returns `(values g s t)` satisfying Bézout's
-  identity $g = \gcd(a, b) = sa + tb$. Implemented by `Integer`, fixed-width
-  integers, `Complex Integer`, and `Polynomial :k` over any field `:k`.
+  identity $g = \gcd(a, b) = sa + tb$. Implemented by `Integer`,
+  `Complex Integer`, and `Polynomial :k` over an exact field `:k` with `Eq`.
+- **`QuotRem :a`**:
+  Supplies `quot`, `rem`, and `quotrem` without promising that multiplication
+  and division reconstruct exactly.
 - **`Remainder :a`**:
   Adds floored division (`div`, `mod`, `divmod`).
 - **`Integral :int`**:
   Ordered integer types that convert to `Integer` via `to-integer`.
+
+For example, `U8` multiplies modulo 256; $16 \cdot 16 = 0$ in this ring.
+To multiply two bytes modulo 251, widen the **operands**, not their product:
+
+```lisp
+(coalton
+  (let ((a (the U8 200)))
+    (coalton/xmath/modular:mod-mul (math:to-integer a) (math:to-integer a) 251)))
+;; => 91
+```
+
+`Reciprocable` alone promises neither exactness nor an inverse for every
+nonzero element. A nonzero dual number with zero primal part is not a unit.
+Use `DivisionRing` when any nonzero pivot must be invertible, `Field` when
+multiplication must also commute, and `CharacteristicZero` when nonzero
+integers must stay nonzero. `Fraction` satisfies all three; `Bit` is an
+exact field of characteristic two. Neither `F64` nor a polynomial with `F64`
+coefficients provides exact domain arithmetic. For numerical row reduction,
+`coalton/xmath/matrix:rref-with` accepts an explicit zero test instead.
+
+Integration only needs rational scalar factors: `RationalScalars` can represent
+them exactly or with rounding. Its exact refinement `RationalAlgebra` does
+not require division by arbitrary coefficients: $\mathbb{Q}[t]$, for example,
+allows integration of polynomials in another variable even though $t$ is not
+invertible. Formal elementary recurrences additionally need commuting coefficients.
 
 ---
 

@@ -7,7 +7,7 @@
 
 Over any semiring or ring $R$, polynomials form a ring under termwise addition and Cauchy convolution $(pq)_n = \\sum_{i+j=n} a_i b_j$, and support Horner evaluation $p(x_0)$, composition $p(q(x))$, and formal differentiation $p'(x) = \\sum_{k=1}^d k c_k x^{k-1}$.
 
-Over a field $K$ (`Eq`, `GcdDomain`, and `Reciprocable`), $K[x]$ is a `EuclideanDomain` with degree valuation $\\deg p$, supporting division with remainder $a = qb + r$ ($\\deg r < \\deg b$), extended GCDs, and formal integration $\\int_0^x p(t)\\,dt = \\sum_{k=0}^d \\frac{c_k}{k+1} x^{k+1}$.
+Over an exact field $K$ (`Eq` and `Field`), $K[x]$ is a `EuclideanDomain` with degree valuation $\\deg p$, supporting division with remainder $a = qb + r$ ($\\deg r < \\deg b$) and extended GCDs. Formal integration $\\int_0^x p(t)\\,dt = \\sum_{k=0}^d \\frac{c_k}{k+1} x^{k+1}$ requires only `RationalScalars` (exact in a `RationalAlgebra`).
 
 Over any `GcdDomain` $D$ (such as $\\mathbb{Z}$ or a nested polynomial ring $D[x]$), Gauss's lemma decomposes every nonzero $p \\in D[x]$ into its content $\\operatorname{cont}(p) = \\gcd(c_0, \\ldots, c_d) \\in D$ and primitive part $\\operatorname{pp}(p) = p / \\operatorname{cont}(p)$, making $D[x]$ itself a `GcdDomain` via primitive pseudo-remainder sequences.
 
@@ -25,6 +25,7 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
    #:coalton/math/integral
    #:coalton/math/real)
   (:local-nicknames
+   (#:frac #:coalton/math/fraction)
    (#:list #:coalton/list)
    (#:show #:coalton/show)
    (#:vec #:coalton/vector))
@@ -240,7 +241,8 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
   (define-instance (Num :a => Num (Polynomial :a)))
   (define-instance (CommutativeRing :a => CommutativeRing (Polynomial :a)))
   (define-instance (CharacteristicZero :a => CharacteristicZero (Polynomial :a)))
-  (define-instance (RationalAlgebra :a => RationalAlgebra (Polynomial :a))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (Polynomial :a)))
+  (define-instance (RationalScalars :a => RationalScalars (Polynomial :a))
     (inline)
     (define (embed-fraction q) (constant-polynomial (embed-fraction q))))
 
@@ -316,7 +318,7 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
                (vec:push! (* (from-nat i) (vec:index-unsafe i v)) out)
                (loop (+ i 1))))))))
 
-  (declare integrate (Reciprocable :a => Polynomial :a -> Polynomial :a))
+  (declare integrate (RationalScalars :a => Polynomial :a -> Polynomial :a))
   (define (integrate (%Polynomial v))
     "Compute the formal antiderivative $\\int_0^x p(t)\\,dt = \\sum_{k=0}^d \\frac{c_k}{k+1} x^{k+1}$ with zero constant term."
     (let len = (vec:length v))
@@ -328,7 +330,7 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
             (cond
               ((== i len) (%Polynomial out))
               (True
-               (vec:push! (/ (vec:index-unsafe i v) (from-nat (+ i 1))) out)
+               (vec:push! (frac:divide-by-integer (vec:index-unsafe i v) (+ (to-integer i) 1)) out)
                (loop (+ i 1))))))))
 
   ;;
@@ -460,12 +462,12 @@ guaranteeing that the remainder degree strictly decreases at each step."
                      (prs q p)
                      (prs q (primitive-part (pseudo-rem p q)))))))))))
 
-  (define-instance ((Eq :a) (GcdDomain :a) (Reciprocable :a) => EuclideanDomain (Polynomial :a))
+  (define-instance ((Eq :a) (Field :a) => EuclideanDomain (Polynomial :a))
     (inline)
     (define (euclidean-degree p)
       (into (degree p))))
 
-  (define-instance ((Eq :a) (GcdDomain :a) (Reciprocable :a) => QuotRem (Polynomial :a))
+  (define-instance ((Eq :a) (DivisionRing :a) => QuotRem (Polynomial :a))
     (define (quotrem dividend divisor)
       (let lb = (leading-coefficient divisor))
       (when (zero? lb)
@@ -495,7 +497,7 @@ guaranteeing that the remainder degree strictly decreases at each step."
   ;; Square-free decomposition (characteristic 0)
   ;;
 
-  (declare square-free-part ((Eq :a) (GcdDomain :a) (Reciprocable :a) => Polynomial :a -> Polynomial :a))
+  (declare square-free-part ((Eq :a) (Field :a) (CharacteristicZero :a) => Polynomial :a -> Polynomial :a))
   (define (square-free-part p)
     "The monic square-free part $\\frac{p}{\\gcd(p, p')}$ of `p` (normalized), over a field of characteristic $0$. Returns `zero` for the zero polynomial."
     (if (zero? p)
@@ -503,7 +505,7 @@ guaranteeing that the remainder degree strictly decreases at each step."
         (exact-div (normal-part p) (gcd p (differentiate p)))))
 
   (declare square-free-factorization
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) (CharacteristicZero :a) =>
      Polynomial :a -> :a * List (Tuple (Polynomial :a) UFix)))
   (define (square-free-factorization p)
     "Square-free factorization of `p` over a field of characteristic $0$ using Yun's algorithm.

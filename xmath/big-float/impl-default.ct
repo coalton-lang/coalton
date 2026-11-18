@@ -530,6 +530,7 @@
       (normalize-dyadic x 0)))
 
   (define-instance (Num BigFloat))
+  (define-instance (CommutativeRing BigFloat))
 
   (define-instance (coalton/math/arith:Scale BigFloat BigFloat)
     (inline)
@@ -644,6 +645,10 @@
     (inline)
     (define (into a)
       (general/ (numerator a) (denominator a))))
+
+  (define-instance (RationalScalars BigFloat)
+    (inline)
+    (define (embed-fraction q) (into q)))
 
   (define-instance (TryInto BigFloat Fraction)
     (define (try-into x)

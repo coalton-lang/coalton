@@ -154,6 +154,7 @@ is no guarantee that the `CReal` will be accurate to any precision*."
     (define (math:scale a b) (* a b)))
 
   (define-instance (math:Module CReal CReal))
+  (define-instance (math:CommutativeRing CReal))
 
   (define-instance (math:ConjugateRing CReal)
     (inline)
@@ -313,6 +314,10 @@ is no guarantee that the `CReal` will be accurate to any precision*."
       (Lisp (-> CReal) (x)
         x)))
   
+  (define-instance (math:RationalScalars CReal)
+    (inline)
+    (define (math:embed-fraction q) (into q)))
+
   (define-instance (Into Integer CReal)
     (inline)
     (define (Into x)

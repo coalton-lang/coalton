@@ -124,6 +124,14 @@ whether it's even or odd)."
 
   (define-instance (cls:Num Bit))
   (define-instance (arith:CommutativeRing Bit))
+  ;; XOR and AND are the field operations in characteristic two.
+  (define-instance (arith:Reciprocable Bit)
+    (define (arith:recip b)
+      (when (arith:zero? b)
+        (coalton/builtin:error "Cannot invert zero in the two-element field."))
+      b)
+    (define (arith:/ a b) (cls:* a (arith:recip b))))
+  (define-instance (arith:DivisionRing Bit))
 
   (define-instance (arith:Scale Bit Bit)
     (inline)

@@ -11,7 +11,7 @@ Over any semiring or ring $R$, formal power series form a ring under termwise ad
 $$c_0 = b_0^{-1}, \\qquad c_n = -b_0^{-1} \\sum_{k=1}^n b_k c_{n-k} \\quad (n \\ge 1).$$
 More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\cdots = b_{v-1} = 0 \\neq b_v$ and $a_0 = \\cdots = a_{v-1} = 0$.
 
-**Elementary functions and calculus over a field of characteristic $0$.** Over any `Reciprocable` coefficient type, formal integration $\\int_0^x f(t)\\,dt = \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$ and differential recurrences define the elementary transcendental series for any series $a(x)$ with $a(0) = 0$:
+**Elementary functions and calculus.** Rational scalars permit formal integration $\\int_0^x f(t)\\,dt = \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$. Over a commutative rational algebra, differential recurrences give the following formal functions; rounded scalar types compute numerical approximations:
 - Exponential $\\exp(a)$ via $(\\exp a)' = a' \\exp a$, and logarithm $\\ln(1 + a) = \\int \\frac{a'}{1 + a}\\,dx$;
 - Principal roots $\\sqrt{1 + a}$ and $(1 + a)^{1/m}$ (`Radical`);
 - Trigonometric and inverse trigonometric series $\\sin(a), \\cos(a)$ (via coupled recurrences $(\\sin a)' = a'\\cos a$, $(\\cos a)' = -a'\\sin a$), $\\tan(a)$, $\\arcsin(a) = \\int \\frac{a'}{\\sqrt{1 - a^2}}\\,dx$, and $\\arctan(a) = \\int \\frac{a'}{1 + a^2}\\,dx$.
@@ -28,6 +28,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
    #:coalton/math/integral
    #:coalton/math/elementary)
   (:local-nicknames
+   (#:frac #:coalton/math/fraction)
    (#:list #:coalton/list)
    (#:poly #:coalton/xmath/polynomial)
    (#:vec #:coalton/vector))
@@ -180,6 +181,12 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
       (constant-series (from-int n))))
 
   (define-instance (Num :a => Num (PowerSeries :a)))
+  (define-instance (CommutativeRing :a => CommutativeRing (PowerSeries :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (PowerSeries :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (PowerSeries :a)))
+  (define-instance (RationalScalars :a => RationalScalars (PowerSeries :a))
+    (inline)
+    (define (embed-fraction q) (constant-series (embed-fraction q))))
 
   (define-instance (Multiplicative :a => Scale :a (PowerSeries :a))
     (define (scale c ps)
@@ -243,14 +250,14 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
      (fn (n)
        (* (from-nat (+ n 1)) (series-coeff ps (+ n 1))))))
 
-  (declare series-integrate (Reciprocable :a => :a * PowerSeries :a -> PowerSeries :a))
+  (declare series-integrate (RationalScalars :a => :a * PowerSeries :a -> PowerSeries :a))
   (define (series-integrate c0 ps)
     "Formal integral $c_0 + \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$."
     (make-series
      (fn (n)
        (if (== n 0)
            c0
-           (/ (series-coeff ps (- n 1)) (from-nat n))))))
+           (frac:divide-by-integer (series-coeff ps (- n 1)) (to-integer n))))))
 
   (declare series-compose ((Eq :a) (Semiring :a) => PowerSeries :a * PowerSeries :a -> PowerSeries :a))
   (define (series-compose f g)
@@ -284,9 +291,9 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                  next
                  (loop (+ k 1) next)))))))
 
-  (declare series-revert ((Eq :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (declare series-revert ((Eq :a) (CommutativeRing :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
   (define (series-revert f)
-    "Compositional inverse $g(x)$ satisfying $f(g(x)) = x$, requiring $f(0) = 0$ and $f'(0) \\neq 0$."
+    "Compositional inverse $g(x)$ satisfying $f(g(x)) = x$, requiring $f(0) = 0$ and a unit $f'(0)$."
     (let cache = (vec:new))
     ;; h(x) = g(x) / x = g_1 + g_2 x + g_3 x^2 + ...
     ;; For k >= 2, [x^n] g(x)^k = [x^{n-k}] h(x)^k, which depends only on
@@ -326,10 +333,10 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
     (%PowerSeries cache gen))
 
   ;;
-  ;; Elementary Functions on Formal Power Series (over any Reciprocable field!)
+  ;; Elementary functions on formal series with commuting rational scalars
   ;;
 
-  (define-instance ((Eq :a) (Reciprocable :a) => Exponentiable (PowerSeries :a))
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Exponentiable (PowerSeries :a))
     (define (exp a)
       (let cache = (vec:new))
       (let gen =
@@ -344,7 +351,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                                   (vec:index-unsafe (- n k) cache))))
                 (let next = (+ acc term))
                 (if (== k n)
-                    (/ next (from-nat n))
+                    (frac:divide-by-integer next (to-integer n))
                     (loop (+ k 1) next))))))
       (%PowerSeries cache gen))
     (define (ln a)
@@ -355,14 +362,13 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
            (error "PowerSeries ln requires constant term 1."))
          (if (== n 0)
              zero
-             (/ (series-coeff deriv-quot (- n 1))
-                (from-nat n))))))
+             (frac:divide-by-integer (series-coeff deriv-quot (- n 1)) (to-integer n))))))
     (define (pow a b)
       (exp (* b (ln a))))
     (define (log b a)
       (/ (ln a) (ln b))))
 
-  (define-instance ((Eq :a) (Reciprocable :a) => Radical (PowerSeries :a))
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Radical (PowerSeries :a))
     (define (sqrt a)
       (let cache = (vec:new))
       (let gen =
@@ -371,7 +377,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
             (error "PowerSeries sqrt requires constant term 1."))
           (cond
             ((== n 0) one)
-            ((== n 1) (/ (series-coeff a 1) (from-nat 2)))
+            ((== n 1) (frac:divide-by-integer (series-coeff a 1) 2))
             (True
              (let conv =
                (rec loop ((k 1) (acc zero))
@@ -380,12 +386,12 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                  (if (== k (- n 1))
                      next
                      (loop (+ k 1) next))))
-             (/ (- (series-coeff a n) conv) (from-nat 2))))))
+             (frac:divide-by-integer (- (series-coeff a n) conv) 2)))))
       (%PowerSeries cache gen))
     (define (nth-root m a)
-      (exp (* (constant-series (recip (from-int m))) (ln a)))))
+      (exp (* (constant-series (embed-fraction (frac:make-fraction 1 m))) (ln a)))))
 
-  (declare %sincos-series ((Eq :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a * PowerSeries :a))
+  (declare %sincos-series ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a * PowerSeries :a))
   (define (%sincos-series a)
     (let sin-cache = (vec:new))
     (let cos-cache = (vec:new))
@@ -393,7 +399,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
       (fn (m)
         (if (== m 0)
             zero
-            (let ((inv-m (recip (from-nat m))))
+            (let ((inv-m (embed-fraction (frac:make-fraction 1 (to-integer m)))))
               (rec loop ((k 1) (s-acc zero))
                 (let ka = (* (from-nat k) (series-coeff a k)))
                 (let next-s = (+ s-acc (* ka (vec:index-unsafe (- m k) cos-cache))))
@@ -404,7 +410,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
       (fn (m)
         (if (== m 0)
             one
-            (let ((inv-m (recip (from-nat m))))
+            (let ((inv-m (embed-fraction (frac:make-fraction 1 (to-integer m)))))
               (rec loop ((k 1) (c-acc zero))
                 (let ka = (* (from-nat k) (series-coeff a k)))
                 (let next-c = (+ c-acc (* ka (vec:index-unsafe (- m k) sin-cache))))
@@ -431,7 +437,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                             (fill-below n)
                             (compute-cos-at n)))))
 
-  (define-instance ((Eq :a) (Reciprocable :a) => Trigonometric (PowerSeries :a))
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Trigonometric (PowerSeries :a))
     (define (sin a)
       (let (values s _) = (%sincos-series a))
       s)
@@ -463,7 +469,7 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
            (error "PowerSeries atan requires constant term 0."))
          (series-coeff deriv n)))))
 
-  (define-instance ((Eq :a) (Elementary :a) => Elementary (PowerSeries :a))
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Elementary :a) => Elementary (PowerSeries :a))
     (define pi (constant-series pi))
     (define ee (constant-series ee))))
 
