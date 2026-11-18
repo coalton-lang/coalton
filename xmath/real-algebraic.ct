@@ -1754,6 +1754,7 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (define (from-int n) (Poly (Cons (from-int n) Nil))))
 
   (define-instance (Num (Poly Fraction)))
+  (define-instance (CommutativeRing (Poly Fraction)))
 
   (define-instance (Scale Fraction (Poly Fraction))
     (inline)
@@ -1777,7 +1778,9 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
 
   (define-instance (EuclideanDomain (Poly Fraction))
     (define (euclidean-degree p)
-      (poly-frac-degree p))
+      (poly-frac-degree p)))
+
+  (define-instance (QuotRem (Poly Fraction))
     (define (quotrem a b)
       (match (poly-frac-divrem a b)
         ((Tuple q r) (values q r))))
@@ -2221,6 +2224,13 @@ No rationality decision or coefficient-dependent precision is needed."
       (from-integer z)))
 
   (define-instance (Num RealAlgebraic))
+  (define-instance (CommutativeRing RealAlgebraic))
+  (define-instance (DivisionRing RealAlgebraic))
+  (define-instance (Field RealAlgebraic))
+  (define-instance (CharacteristicZero RealAlgebraic))
+  (define-instance (RationalAlgebra RealAlgebraic)
+    (inline)
+    (define (embed-fraction q) (from-fraction q)))
 
   (define-instance (Reciprocable RealAlgebraic)
     (inline)

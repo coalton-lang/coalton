@@ -15,11 +15,14 @@
   (is (== d 1))
   (is (== (+ (* s a) (* t b)) d))
 
-  ;; Underflow-safe division on floating-point polynomials
-  (let (values qf rf) = (math:quotrem (the (poly:Polynomial F64) (into 1.0d-300))
-                                      (the (poly:Polynomial F64) (into 1.0d300))))
-  (is (== qf zero))
-  (is (== rf zero))
+  ;; Even a leading quotient far below the machine range must reconstruct.
+  (let tiny = (math:make-fraction 1 (^ 10 300)))
+  (let dividend = (+ (poly:monomial tiny 2) 1))
+  (let divisor = (poly:monomial (recip tiny) 1))
+  (let (values quotient remainder) = (math:quotrem dividend divisor))
+  (is (== dividend (+ (* quotient divisor) remainder)))
+  (is (== quotient (poly:monomial (* tiny tiny) 1)))
+  (is (== remainder 1))
 
   ;; Evaluation, composition, calculus
   (is (== (poly:evaluate p 3) 8))

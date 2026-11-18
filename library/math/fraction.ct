@@ -107,6 +107,12 @@
         (lisp (-> Fraction) (z) z))))
 
   (define-instance (Num Fraction))
+  (define-instance (CommutativeRing Fraction))
+  (define-instance (DivisionRing Fraction))
+  (define-instance (CharacteristicZero Fraction))
+  (define-instance (RationalAlgebra Fraction)
+    (inline)
+    (define (embed-fraction q) q))
 
   (define-instance (Reciprocable Fraction)
     (inline)

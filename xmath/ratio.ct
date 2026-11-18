@@ -32,6 +32,7 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
    #:coalton/tuple
    #:Tuple3)
   (:local-nicknames
+   (#:frac #:coalton/math/fraction)
    (#:list #:coalton/list)
    (#:poly #:coalton/xmath/polynomial)
    (#:show #:coalton/show))
@@ -149,6 +150,13 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
     (define (from-int n) (%Ratio (from-int n) one)))
 
   (define-instance ((Eq :d) (GcdDomain :d) => Num (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) => CommutativeRing (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) => DivisionRing (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) => Field (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => CharacteristicZero (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => RationalAlgebra (Ratio :d))
+    (define (embed-fraction q)
+      (make-ratio (from-int (frac:numerator q)) (from-int (frac:denominator q)))))
 
   (define-instance ((Eq :d) (GcdDomain :d) => Reciprocable (Ratio :d))
     (define (recip (%Ratio n d))

@@ -238,6 +238,11 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
       (constant-polynomial (from-int n))))
 
   (define-instance (Num :a => Num (Polynomial :a)))
+  (define-instance (CommutativeRing :a => CommutativeRing (Polynomial :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (Polynomial :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (Polynomial :a))
+    (inline)
+    (define (embed-fraction q) (constant-polynomial (embed-fraction q))))
 
   (define-instance (Multiplicative :a => Scale :a (Polynomial :a))
     (define (scale c (%Polynomial v))
@@ -458,7 +463,9 @@ guaranteeing that the remainder degree strictly decreases at each step."
   (define-instance ((Eq :a) (GcdDomain :a) (Reciprocable :a) => EuclideanDomain (Polynomial :a))
     (inline)
     (define (euclidean-degree p)
-      (into (degree p)))
+      (into (degree p))))
+
+  (define-instance ((Eq :a) (GcdDomain :a) (Reciprocable :a) => QuotRem (Polynomial :a))
     (define (quotrem dividend divisor)
       (let lb = (leading-coefficient divisor))
       (when (zero? lb)
