@@ -11,6 +11,7 @@
    #:coalton/math/arith)
   (:export
    #:make-fraction
+   #:divide-by-integer
    #:numerator
    #:denominator))
 
@@ -29,6 +30,12 @@
   (define (make-fraction a b)
     (lisp (-> Fraction) (a b)
       (cl:/ a b)))
+
+  (inline)
+  (declare divide-by-integer (RationalScalars :a => :a * Integer -> :a))
+  (define (divide-by-integer a n)
+    "Divide `a` by a nonzero integer `n` using the central rational scalars."
+    (* a (embed-fraction (make-fraction 1 n))))
 
   (inline)
   (declare numerator (Fraction -> Integer))
@@ -110,7 +117,8 @@
   (define-instance (CommutativeRing Fraction))
   (define-instance (DivisionRing Fraction))
   (define-instance (CharacteristicZero Fraction))
-  (define-instance (RationalAlgebra Fraction)
+  (define-instance (RationalAlgebra Fraction))
+  (define-instance (RationalScalars Fraction)
     (inline)
     (define (embed-fraction q) q))
 
@@ -144,6 +152,14 @@
     (inline)
     (define (general/ x y)
       (make-fraction x y))))
+
+(coalton-toplevel
+  (define-instance (RationalScalars F32)
+    (inline)
+    (define (embed-fraction q) (general/ (numerator q) (denominator q))))
+  (define-instance (RationalScalars F64)
+    (inline)
+    (define (embed-fraction q) (general/ (numerator q) (denominator q)))))
 
 ;;; All integer types representationally are already fractions.
 (cl:eval-when (:compile-toplevel :load-toplevel)

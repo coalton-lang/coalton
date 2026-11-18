@@ -15,6 +15,7 @@
    #:CommutativeRing
    #:DivisionRing
    #:CharacteristicZero
+   #:RationalScalars
    #:RationalAlgebra
    #:embed-fraction
    #:/
@@ -91,11 +92,15 @@ arithmetic and rings with nonzero non-units are not instances.")
     "An exact ring in which `from-int` embeds the integers injectively. This
 does not imply that division by positive integers is possible.")
 
-  (define-class (CharacteristicZero :a => RationalAlgebra :a)
-    "A ring with a unital embedding of the rationals into its center.
-This permits division by nonzero integers without assuming that arbitrary
-coefficients are invertible, or even that multiplication commutes."
+  (define-class (Ring :a => RationalScalars :a)
+    "Central rational scalars, represented exactly or with the rounding of
+the coefficient type. `embed-fraction` is the canonical unital rational
+embedding (or its numerical approximation), not reduction modulo a prime."
     (embed-fraction (Fraction -> :a)))
+
+  (define-class ((RationalScalars :a) (CharacteristicZero :a) => RationalAlgebra :a)
+    "A ring for which `embed-fraction` is an exact unital embedding into its
+center. Arbitrary coefficients need not commute or be invertible.")
 
   (inline)
   (declare reciprocal (Reciprocable :a => :a -> :a))

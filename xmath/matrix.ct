@@ -51,6 +51,7 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:charpoly
    #:adjugate
    #:rref
+   #:rref-with
    #:rank
    #:nullspace
    #:solve
@@ -171,14 +172,14 @@ The ring constants `zero`, `one`, `(from-int c)`, and integer literals of `Matri
          (error (<> name " requires a square matrix.")))
        r)))
 
-  (declare %find-pivot ((Eq :a) (Additive :a) => vec:Vector :a * UFix * UFix * UFix * UFix -> Optional UFix))
-  (define (%find-pivot v stride j start end)
+  (declare %find-pivot ((:a -> Boolean) * vec:Vector :a * UFix * UFix * UFix * UFix -> Optional UFix))
+  (define (%find-pivot is-zero? v stride j start end)
     "Find the first row `i` in `[start, end)` with a nonzero entry in column `j`."
     (rec loop ((i start))
       (cond
         ((>= i end) None)
-        ((nonzero? (%get v stride i j)) (Some i))
-        (True (loop (+ i 1))))))
+        ((is-zero? (%get v stride i j)) (loop (+ i 1)))
+        (True (Some i)))))
 
   (declare %swap-rows! (vec:Vector :a * UFix * UFix * UFix -> Void))
   (define (%swap-rows! v stride p q)
@@ -496,7 +497,7 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
             (if (== k (- n 1))
                 (let ((d (%get w n k k)))
                   (if negated (neg d) d))
-                (match (%find-pivot w n k k n)
+                (match (%find-pivot zero? w n k k n)
                   ((None) zero)
                   ((Some p)
                    (%swap-rows! w n p k)
@@ -558,13 +559,13 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
   ;; Linear algebra over fields
   ;;
 
-  (declare %rref! ((Eq :a) (Reciprocable :a) => vec:Vector :a * UFix * UFix -> List UFix))
-  (define (%rref! w r c)
+  (declare %rref! (Reciprocable :a => (:a -> Boolean) * vec:Vector :a * UFix * UFix -> List UFix))
+  (define (%rref! is-zero? w r c)
     "Reduce the $r \\times c$ row-major matrix `w` to reduced row echelon form in place, returning the pivot columns in ascending order."
     (rec col-loop ((j 0) (pr 0) (pivots Nil))
       (if (or (== j c) (== pr r))
           (list:reverse pivots)
-          (match (%find-pivot w c j pr r)
+          (match (%find-pivot is-zero? w c j pr r)
             ((None) (col-loop (+ j 1) pr pivots))
             ((Some p)
              (%swap-rows! w c p pr)
@@ -577,7 +578,7 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
              (rec row-loop ((i 0))
                (when (< i r)
                  (let f = (%get w c i j))
-                 (unless (or (== i pr) (zero? f))
+                 (unless (or (== i pr) (is-zero? f))
                    (rec elim-loop ((jj (+ j 1)))
                      (when (< jj c)
                        (%put! w c i jj (- (%get w c i jj) (* f (%get w c pr jj))))
@@ -586,22 +587,30 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
                  (row-loop (+ i 1))))
              (col-loop (+ j 1) (+ pr 1) (Cons j pivots)))))))
 
-  (declare rref ((Eq :a) (Reciprocable :a) => Matrix :a -> Matrix :a * List UFix))
-  (define (rref m)
-    "The reduced row echelon form of `m` by Gauss–Jordan elimination, together with the list of pivot column indices in ascending order."
+  (declare rref-with (Reciprocable :a => (:a -> Boolean) * Matrix :a -> Matrix :a * List UFix))
+  (define (rref-with is-zero? m)
+    "Run Gauss–Jordan elimination with an explicit zero test. Every selected
+pivot must be invertible. This permits numerical calculations, for example
+with a near-zero test on `F64`; the resulting pivots are not an exact rank
+certificate. The first admissible row is used, not a stability-maximizing pivot."
     (let r = (rows m))
     (let c = (cols m))
     (let w = (vec:copy (%data m)))
-    (let pivots = (%rref! w r c))
+    (let pivots = (%rref! is-zero? w r c))
     (values (%Matrix r c w) pivots))
 
-  (declare rank ((Eq :a) (Reciprocable :a) => Matrix :a -> UFix))
+  (declare rref ((Eq :a) (DivisionRing :a) => Matrix :a -> Matrix :a * List UFix))
+  (define (rref m)
+    "The exact reduced row echelon form and ascending pivot columns, using left row operations."
+    (rref-with zero? m))
+
+  (declare rank ((Eq :a) (DivisionRing :a) => Matrix :a -> UFix))
   (define (rank m)
     "The rank of `m`, the number of pivots in its reduced row echelon form."
     (let (values _ pivots) = (rref m))
     (list:length pivots))
 
-  (declare nullspace ((Eq :a) (Reciprocable :a) => Matrix :a -> List (List :a)))
+  (declare nullspace ((Eq :a) (DivisionRing :a) => Matrix :a -> List (List :a)))
   (define (nullspace m)
     "A basis of the kernel $\\ker(M) = \\{x : Mx = 0\\}$ of `m`, with one basis vector per free (non-pivot) column of the reduced row echelon form, in ascending column order."
     (let c = (cols m))
@@ -635,7 +644,7 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
                                            xs)))))))
                  (build free (Cons basis acc)))))))))
 
-  (declare solve ((Eq :a) (Reciprocable :a) => Matrix :a * Matrix :a -> Optional (Matrix :a)))
+  (declare solve ((Eq :a) (DivisionRing :a) => Matrix :a * Matrix :a -> Optional (Matrix :a)))
   (define (solve a b)
     "Solve $AX = B$ for $X$ by Gauss–Jordan elimination on the augmented matrix $[A \\mid B]$, where `a` is square. Returns `None` if `a` is singular."
     (let n = (%require-square "solve" a))
@@ -650,19 +659,19 @@ All intermediate divisions are exact (`exact-div`), so this works over any GCD d
                                  (if (< j n)
                                      (%get va n i j)
                                      (%get vb k i (- j n))))))
-    (let pivots = (%rref! w n width))
+    (let pivots = (%rref! zero? w n width))
     (if (== (list:length (list:filter (fn (p) (< p n)) pivots)) n)
         (Some (%generate n k (fn (i j) (%get w width i (+ n j)))))
         None))
 
-  (declare solve-vector ((Eq :a) (Reciprocable :a) => Matrix :a * List :a -> Optional (List :a)))
+  (declare solve-vector ((Eq :a) (DivisionRing :a) => Matrix :a * List :a -> Optional (List :a)))
   (define (solve-vector a b)
     "Solve $Ax = b$ for the vector $x$, where `a` is square. Returns `None` if `a` is singular."
     (match (solve a (matrix (list:length b) 1 b))
       ((None) None)
       ((Some x) (Some (col x 0)))))
 
-  (declare inv ((Eq :a) (Reciprocable :a) => Matrix :a -> Optional (Matrix :a)))
+  (declare inv ((Eq :a) (DivisionRing :a) => Matrix :a -> Optional (Matrix :a)))
   (define (inv m)
     "The inverse $M^{-1}$ of a square matrix `m`, or `None` if `m` is singular."
     (let n = (%require-square "inv" m))

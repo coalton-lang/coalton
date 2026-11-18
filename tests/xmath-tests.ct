@@ -1,4 +1,50 @@
+(in-package #:coalton-tests)
+
+(deftest exact-algorithms-require-their-coefficient-laws ()
+  (dolist (form '("(coalton/math:exact-quot (the F64 1.0d-300) 1.0d300)"
+                  "(coalton/math:quotrem (the (coalton/xmath/polynomial:Polynomial F64) one) one)"
+                  "(coalton/xmath/modular:mod-mul (the U8 200) 200 251)"
+                  "(coalton/xmath/modular:mod-inv (the U8 5) 11)"
+                  "(coalton/xmath/polynomial:square-free-part (the (coalton/xmath/polynomial:Polynomial Bit) one))"
+                  "(coalton/xmath/polynomial:integrate (the (coalton/xmath/polynomial:Polynomial Bit) one))"
+                  "(coalton/xmath/recurrence:berlekamp-massey (the (List (coalton/xmath/dual:Dual Fraction)) Nil))"
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix F64) one))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
+
 (in-package #:coalton-native-tests)
+
+(define-test test-exact-algebra-contracts ()
+  ;; Machine quotient/remainder survives without claiming a domain.
+  (let a = (the U8 200))
+  (let (values q r) = (math:quotrem a (the U8 11)))
+  (is (== q 18))
+  (is (== r 2))
+  (is (== (modmath:mod-mul (math:to-integer a) (math:to-integer a) 251) 91))
+  (is (== (modmath:mod-inv (math:to-integer (the U8 5)) 11) (Some 9)))
+
+  ;; In characteristic two, polynomial Euclidean division still works, even
+  ;; though the derivative of x^2 is zero and integration is unavailable.
+  (let x = (the (poly:Polynomial Bit) poly:poly-var))
+  (let dividend = (+ (* x x) one))
+  (let divisor = (+ x one))
+  (let (values q r) = (math:quotrem dividend divisor))
+  (is (== dividend (+ (* q divisor) r)))
+  (is (== q divisor))
+  (is (zero? r))
+  (is (zero? (poly:differentiate dividend)))
+
+  ;; Rational scalars suffice even when the coefficient ring has non-units.
+  (let t0 = (the (poly:Polynomial Fraction) poly:poly-var))
+  (let p = (poly:monomial t0 3))
+  (is (== (poly:differentiate (poly:integrate p)) p))
+  (is (== (recur:forward-diff (recur:antidifference-poly p)) p))
+
+  (let floats = (mat:from-rows [[1.0d-12 2.0d0] [0.0d0 4.0d0]]))
+  (let (values reduced pivots) = (mat:rref-with (fn (x) (< (abs x) 1.0d-8)) floats))
+  (is (== pivots [1]))
+  (is (== (mat:entry reduced 0 1) 1.0d0))
+  (is (== (mat:entry reduced 1 1) 0.0d0)))
 
 (define-test test-polynomial-and-ratio ()
   (let x = (the (poly:Polynomial Fraction) poly:poly-var))

@@ -154,7 +154,8 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
   (define-instance ((Eq :d) (GcdDomain :d) => DivisionRing (Ratio :d)))
   (define-instance ((Eq :d) (GcdDomain :d) => Field (Ratio :d)))
   (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => CharacteristicZero (Ratio :d)))
-  (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => RationalAlgebra (Ratio :d))
+  (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => RationalAlgebra (Ratio :d)))
+  (define-instance ((Eq :d) (GcdDomain :d) (CharacteristicZero :d) => RationalScalars (Ratio :d))
     (define (embed-fraction q)
       (make-ratio (from-int (frac:numerator q)) (from-int (frac:denominator q)))))
 
@@ -221,7 +222,7 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
   ;;
 
   (declare %solve-diophantine
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      poly:Polynomial :a * poly:Polynomial :a * poly:Polynomial :a ->
      poly:Polynomial :a * poly:Polynomial :a))
   (define (%solve-diophantine a b c)
@@ -243,7 +244,7 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
          (% rest (* acc (^ q m)))))))
 
   (declare %q-adic-terms
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (DivisionRing :a) =>
      poly:Polynomial :a * poly:Polynomial :a * UFix ->
      List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
   (define (%q-adic-terms a q m)
@@ -260,7 +261,7 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
                      (Cons (Tuple3 ck q power) acc)))))))
 
   (declare %coprime-split
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      poly:Polynomial :a * List (Tuple (poly:Polynomial :a) UFix) ->
      List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
   (define (%coprime-split a factors)
@@ -280,7 +281,7 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
                   (list:append acc (%q-adic-terms aj q m))))))))
 
   (declare partial-fractions
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) (CharacteristicZero :a) =>
      Ratio (poly:Polynomial :a) ->
      poly:Polynomial :a * List (Tuple3 (poly:Polynomial :a) (poly:Polynomial :a) UFix)))
   (define (partial-fractions r)
@@ -318,7 +319,7 @@ Use `reconstruct-partial-fractions` to recombine the result."
   ;;
 
   (declare hermite-reduce
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) (RationalAlgebra :a) =>
      Ratio (poly:Polynomial :a) ->
      Ratio (poly:Polynomial :a) * Ratio (poly:Polynomial :a)))
   (define (hermite-reduce r)
@@ -353,7 +354,7 @@ Returns `(values g h)` such that $\\int r(x)\\,dx = g(x) + \\int h(x)\\,dx$, whe
   ;;
 
   (declare rothstein-trager-resultant
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      Ratio (poly:Polynomial :a) -> poly:Polynomial :a))
   (define (rothstein-trager-resultant h)
     "The monic Rothstein–Trager resultant $R(t) = \\operatorname{res}_x\\left(B(x), A(x) - t B'(x)\\right)$ of a logarithmic integrand $h = A / B$ with $B$ square-free and $\\deg A < \\deg B$ (such as the second value of `hermite-reduce`).

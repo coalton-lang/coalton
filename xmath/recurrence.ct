@@ -66,20 +66,20 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
     (- (poly-shift p one) p))
 
   (declare antidifference-poly
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
-     poly:Polynomial :a -> poly:Polynomial :a))
+    (RationalAlgebra :a => poly:Polynomial :a -> poly:Polynomial :a))
   (define (antidifference-poly p)
-    "Over a field of characteristic zero, return the unique $F$ with $F(0)=0$ and $\\Delta F=p$. In particular, $F(n)=\\sum_{k=0}^{n-1}p(k)$."
-    (rec eliminate ((remaining p) (answer zero))
-      (if (zero? remaining)
+    "Over a rational algebra, return the unique $F$ with $F(0)=0$ and $\\Delta F=p$. In particular, $F(n)=\\sum_{k=0}^{n-1}p(k)$."
+    ;; Descend through the stored coefficients. No test of coefficient
+    ;; equality is needed to cancel a known power of x.
+    (rec eliminate ((n (vec:length (poly::%poly-vec p))) (remaining p) (answer zero))
+      (if (== n 0)
           answer
-          (let ((exponent (+ (poly:degree remaining) 1))
-                (term (quot (poly:monomial (poly:leading-coefficient remaining) exponent)
-                            (from-nat exponent))))
-            (eliminate (- remaining (forward-diff term)) (+ answer term))))))
+          (let ((c (frac:divide-by-integer (poly:coeff remaining (- n 1)) (to-integer n)))
+                (term (poly:monomial c n)))
+            (eliminate (- n 1) (- remaining (forward-diff term)) (+ answer term))))))
 
   (declare rational-shift
-    (Semiring :a =>
+    (CommutativeRing :a =>
      ratio:Ratio (poly:Polynomial :a) * :a -> ratio:Ratio (poly:Polynomial :a)))
   (define (rational-shift rational c)
     "Compute a rational function at $x+c$ without requiring coefficient equality or division."
@@ -267,7 +267,7 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
            None))))
 
   (declare pade-approximant
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      UFix * UFix * series:PowerSeries :a -> ratio:Ratio (poly:Polynomial :a)))
   (define (pade-approximant m n ps)
     "Return the reduced Padé approximant $P/Q$ with $\\deg P\\le m$, $\\deg Q\\le n$, and $P/Q\\equiv S\\pmod{x^{m+n+1}}$. Signal an error when no approximant regular at zero exists with these bounds."
@@ -305,7 +305,7 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
          (fill more)))))
 
   (declare berlekamp-massey
-    ((Eq :a) (Reciprocable :a) => List :a -> List :a))
+    ((Eq :a) (DivisionRing :a) => List :a -> List :a))
   (define (berlekamp-massey terms)
     "Find the shortest recurrence $(c_1,\\ldots,c_L)$ fitting all supplied terms $s_k=\\sum_{j=1}^L c_j s_{k-j}$ for $L\\le k<N$, over a field. Empty and all-zero sequences return `Nil`."
     (let samples = (%list-vector terms))
@@ -344,7 +344,7 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
                       (step (+ k 1) length (+ shift 1) last-discrepancy backup))))))))
 
   (declare guess-generating-function
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      List :a -> ratio:Ratio (poly:Polynomial :a)))
   (define (guess-generating-function terms)
     "Guess a reduced rational generating function from a finite field-valued prefix. With recurrence length $L$, use $Q=1-c_1x-\\cdots-c_Lx^L$ and $P=(SQ)\\bmod x^{N-L}$ when $N\\ge 2L$. Shorter prefixes retain the first $L$ numerator coefficients instead, so every supplied coefficient is reproduced. Extrapolation is not guaranteed."
@@ -406,6 +406,9 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
        (let characteristic =
          (poly:polynomial
           (list:append (map neg (list:reverse coefficients)) (Cons one Nil))))
+       ;; Only powers of the central variable are being multiplied. If
+       ;; r = x^k - q*P, then P*r = (x^k - P*q)*P: multiplication by r
+       ;; on the right preserves the left ideal, even for skew coefficients.
        (let weights =
          (rec power ((base (%monic-poly-rem poly:poly-var characteristic))
                      (exponent n)

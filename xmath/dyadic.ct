@@ -141,6 +141,8 @@ Dyadic rationals form the smallest subring of $\\mathbb{Q}$ containing $\\mathbb
     (define (from-int x) (Dyadic x 0)))
 
   (define-instance (Num Dyadic))
+  (define-instance (coalton/math/arith:CommutativeRing Dyadic))
+  (define-instance (coalton/math/arith:CharacteristicZero Dyadic))
 
   (define-instance (coalton/math/arith:Scale Dyadic Dyadic)
     (inline)

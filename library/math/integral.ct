@@ -437,9 +437,11 @@ Laws:
              one)))))
 
 (%define-field-gcd-domain Fraction)
+(%define-field-gcd-domain Bit)
 
 (coalton-toplevel
   (define-instance (Field Fraction))
+  (define-instance (Field Bit))
 
   (declare from-nat (Semiring :a => UFix -> :a))
   (define (from-nat n)

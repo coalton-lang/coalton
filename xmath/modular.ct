@@ -82,7 +82,8 @@ $$x \\equiv r_1 + m_1 \\left(\\frac{r_2 - r_1}{g}\\, s \\bmod \\frac{m_2}{g}\\ri
   (inline)
   (declare mod-mul (EuclideanDomain :a => :a * :a * :a -> :a))
   (define (mod-mul a b m)
-    "Return $ab \\bmod m$ using `rem`."
+    "Return $ab \\bmod m$ using `rem`. For fixed-width integers, first widen
+the operands to `Integer`; their machine product may already have overflowed."
     (rem (* a b) m))
 
   (declare mod-expt
@@ -156,7 +157,7 @@ $$x \\equiv r_1 + m_1 \\left(\\frac{r_2 - r_1}{g}\\, s \\bmod \\frac{m_2}{g}\\ri
             (combine more combined-r combined-m)))))))
 
   (declare lagrange-interpolate
-    ((Eq :a) (GcdDomain :a) (Reciprocable :a) =>
+    ((Eq :a) (Field :a) =>
      List (Tuple :a :a) -> Optional (poly:Polynomial :a)))
   (define (lagrange-interpolate points)
     "Interpolate field-valued points $(x_i,y_i)$ using polynomial CRT. Return `None` for conflicting values at the same abscissa; repeated identical points are allowed. The empty interpolant is zero."
