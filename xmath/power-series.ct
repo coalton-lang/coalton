@@ -9,12 +9,12 @@ Over any semiring or ring $R$, formal power series form a ring under termwise ad
 
 **Inversion and division.** A series $g(x) = \\sum_{n=0}^{\\infty} b_n x^n$ is a unit in $R[[x]]$ if and only if its constant term $b_0$ is invertible, in which case the coefficients of $c = g^{-1}$ are determined recursively by
 $$c_0 = b_0^{-1}, \\qquad c_n = -b_0^{-1} \\sum_{k=1}^n b_k c_{n-k} \\quad (n \\ge 1).$$
-More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\cdots = b_{v-1} = 0 \\neq b_v$ and $a_0 = \\cdots = a_{v-1} = 0$.
+More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdots = b_{v-1} = 0 \\neq b_v$ and $a_0 = \\cdots = a_{v-1} = 0$. The search performed by `/` checks the current comparison prefix (16 coefficients by default, always including the constant term). A zero prefix cannot prove an infinite series is zero. Use `series-divide-through` to choose a larger search order without changing equality.
 
 **Elementary functions and calculus.** Rational scalars permit formal integration $\\int_0^x f(t)\\,dt = \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$. Over a commutative rational algebra, differential recurrences give the following formal functions; rounded scalar types compute numerical approximations:
 - Exponential $\\exp(a)$ via $(\\exp a)' = a' \\exp a$, and logarithm $\\ln(1 + a) = \\int \\frac{a'}{1 + a}\\,dx$;
 - Principal roots $\\sqrt{1 + a}$ and $(1 + a)^{1/m}$ (`Radical`);
-- Trigonometric and inverse trigonometric series $\\sin(a), \\cos(a)$ (via coupled recurrences $(\\sin a)' = a'\\cos a$, $(\\cos a)' = -a'\\sin a$), $\\tan(a)$, $\\arcsin(a) = \\int \\frac{a'}{\\sqrt{1 - a^2}}\\,dx$, and $\\arctan(a) = \\int \\frac{a'}{1 + a^2}\\,dx$.
+- The formal functions `series-sin`, `series-cos`, `series-tan`, `series-asin`, and `series-atan` work without transcendental constants in the coefficient ring. `Trigonometric (PowerSeries :a)` additionally requires scalar `Trigonometric` so that $\\arccos(a)=\\arccos(0)-\\arcsin(a)$ can supply its constant coefficient. These are expansions at zero, not arbitrary analytic continuations.
 
 **Composition and Lagrange reversion.** When $g(0) = 0$, the formal substitution $(f \\circ g)(x) = \\sum_{k=0}^{\\infty} a_k g(x)^k$ (`series-compose`) is well-defined because $g(x)^k$ has valuation at least $k$. For commuting coefficients and a unit $g'(0)$, Lagrange reversion (`series-revert`) computes the unique compositional inverse $g^{[-1]}(x)$ satisfying $g(g^{[-1]}(x)) = g^{[-1]}(g(x)) = x$.")
   (:nicknames
@@ -43,10 +43,16 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
    #:series-prefix
    #:series->polynomial
    #:series-shift
+   #:series-divide-through
    #:series-differentiate
    #:series-integrate
    #:series-compose
-   #:series-revert))
+   #:series-revert
+   #:series-sin
+   #:series-cos
+   #:series-tan
+   #:series-asin
+   #:series-atan))
 
 (in-package #:coalton/xmath/power-series)
 
@@ -205,6 +211,20 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
         ps
         (make-series (fn (n) (series-coeff ps (+ n k))))))
 
+  (declare series-divide-through
+    ((Eq :a) (Reciprocable :a) => UFix * PowerSeries :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-divide-through order a b)
+    "Divide `a` by `b`, searching coefficients through `order` (inclusive) for the leading denominator coefficient. It must be invertible. Signal an error if `a` has a lower valuation or if the search is inconclusive."
+    (rec find-val ((k 0))
+      (cond
+        ((nonzero? (series-coeff b k))
+         (* (%series-drop k a) (recip (%series-drop k b))))
+        ((nonzero? (series-coeff a k))
+         (error "PowerSeries division: numerator has smaller valuation than denominator."))
+        ((== k order)
+         (error "PowerSeries division: denominator valuation undetermined at search limit; try series-divide-through with a higher order."))
+        (True (find-val (+ k 1))))))
+
   (define-instance ((Eq :a) (Reciprocable :a) => Reciprocable (PowerSeries :a))
     (define (recip b)
       (let cache = (vec:new))
@@ -224,19 +244,8 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                       (sum-loop (+ k 1) next)))))))
       (%PowerSeries cache gen))
     (define (/ a b)
-      (if (nonzero? (series-coeff b 0))
-          (* a (recip b))
-          (let ((limit (max 1 (lisp (-> UFix) () *series-comparison-order*))))
-            (rec find-val ((k 0))
-              (cond
-                ((>= k limit)
-                 (error "PowerSeries division by zero series."))
-                ((nonzero? (series-coeff b k))
-                 (* (%series-drop k a) (recip (%series-drop k b))))
-                ((nonzero? (series-coeff a k))
-                 (error "PowerSeries division: numerator has smaller valuation than denominator."))
-                (True
-                 (find-val (+ k 1)))))))))
+      (let terms = (max 1 (lisp (-> UFix) () *series-comparison-order*)))
+      (series-divide-through (- terms 1) a b)))
 
   ;;
   ;; Calculus & Composition on Power Series
@@ -436,37 +445,47 @@ More generally, division $f / g$ cancels a common valuation $x^v$ when $b_0 = \\
                             (fill-below n)
                             (compute-cos-at n)))))
 
-  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Trigonometric (PowerSeries :a))
-    (define (sin a)
-      (let (values s _) = (%sincos-series a))
-      s)
-    (define (cos a)
-      (let (values _ c) = (%sincos-series a))
-      c)
-    (define (tan a)
-      (/ (sin a) (cos a)))
-    (define (asin a)
-      (let deriv =
-        (series-integrate zero
-                          (/ (series-differentiate a)
-                             (sqrt (- one (* a a))))))
-      (make-series
-       (fn (n)
-         (when (nonzero? (series-coeff a 0))
-           (error "PowerSeries asin requires constant term 0."))
-         (series-coeff deriv n))))
-    (define (acos _)
-      (make-series (fn (_) (error "PowerSeries acos has non-rational constant term pi/2."))))
-    (define (atan a)
-      (let deriv =
-        (series-integrate zero
-                          (/ (series-differentiate a)
-                             (+ one (* a a)))))
-      (make-series
-       (fn (n)
-         (when (nonzero? (series-coeff a 0))
-           (error "PowerSeries atan requires constant term 0."))
-         (series-coeff deriv n)))))
+  (declare series-sin ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-sin a)
+    "The formal sine of a series with constant term zero."
+    (let (values s _) = (%sincos-series a))
+    s)
+
+  (declare series-cos ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-cos a)
+    "The formal cosine of a series with constant term zero."
+    (let (values _ c) = (%sincos-series a))
+    c)
+
+  (declare series-tan ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-tan a)
+    "The formal tangent of a series with constant term zero."
+    (let (values s c) = (%sincos-series a))
+    (/ s c))
+
+  (declare series-asin ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-asin a)
+    "The formal arcsine of a series with constant term zero."
+    (when (nonzero? (series-coeff a 0))
+      (error "PowerSeries asin requires constant term 0."))
+    (series-integrate zero (/ (series-differentiate a) (sqrt (- one (* a a))))))
+
+  (declare series-atan ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-atan a)
+    "The formal arctangent of a series with constant term zero."
+    (when (nonzero? (series-coeff a 0))
+      (error "PowerSeries atan requires constant term 0."))
+    (series-integrate zero (/ (series-differentiate a) (+ one (* a a)))))
+
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) (Trigonometric :a)
+                    => Trigonometric (PowerSeries :a))
+    (define sin series-sin)
+    (define cos series-cos)
+    (define tan series-tan)
+    (define asin series-asin)
+    (define (acos a)
+      (- (constant-series (acos zero)) (series-asin a)))
+    (define atan series-atan))
 
   (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Elementary :a) => Elementary (PowerSeries :a))
     (define pi (constant-series pi))

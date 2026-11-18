@@ -20,6 +20,11 @@
     (signals tc:tc-error
       (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
 
+(deftest series-acos-requires-a-scalar-constant ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (bad-acos) (acos (the (coalton/xmath/power-series:PowerSeries Fraction) zero)))")))
+
 (in-package #:coalton-native-tests)
 
 (coalton-toplevel
@@ -198,16 +203,16 @@
   (is (== (ln ex) x))
 
   ;; Trigonometric identities: sin^2(x) + cos^2(x) == 1, tan(x), atan(x), asin(x)
-  (let sx = (sin x))
-  (let cx = (cos x))
+  (let sx = (series:series-sin x))
+  (let cx = (series:series-cos x))
   (is (== (+ (* sx sx) (* cx cx)) 1))
   (is (== (series:series-differentiate sx) cx))
   (is (== (series:series-differentiate cx) (neg sx)))
-  (is (== (series:series-prefix 6 (tan x))
+  (is (== (series:series-prefix 6 (series:series-tan x))
           [0 1 0 1/3 0 2/15]))
-  (is (== (series:series-prefix 6 (atan x))
+  (is (== (series:series-prefix 6 (series:series-atan x))
           [0 1 0 -1/3 0 1/5]))
-  (is (== (series:series-prefix 6 (asin x))
+  (is (== (series:series-prefix 6 (series:series-asin x))
           [0 1 0 1/6 0 3/40]))
 
   ;; Hyperbolic functions on PowerSeries Fraction (enabled by relaxed Elementary/sinh/cosh/tanh/asinh/atanh constraints)
@@ -226,8 +231,20 @@
   ;; (exp(x) - 1)^<-1> == ln(1 + x), and sin^<-1>(x) == asin(x)
   (let expm1 = (- ex 1))
   (is (series:series-approx-equal? 8 (series:series-revert expm1) l1+x))
-  (is (series:series-approx-equal? 8 (series:series-revert sx) (asin x)))
-  (is (series:series-approx-equal? 8 (series:series-compose sx (asin x)) x)))
+  (is (series:series-approx-equal? 8 (series:series-revert sx) (series:series-asin x)))
+  (is (series:series-approx-equal? 8 (series:series-compose sx (series:series-asin x)) x)))
+
+(define-test test-power-series-valuation-search ()
+  (let s = (the (series:PowerSeries Fraction) (series:series-shift 16 one)))
+  (let message =
+    (catch (progn (/ s s) "")
+      ((the Panic p) (lisp (-> String) (p) (cl:princ-to-string p)))))
+  (is (string-contains? "undetermined" message))
+  (is (== (series:series-prefix 3 (series:series-divide-through 16 s s)) [1 0 0])))
+
+(define-test test-power-series-acos ()
+  (let x = (the (series:PowerSeries F64) series:series-var))
+  (is (== (series:series-prefix 3 (acos x)) [(acos 0.0d0) -1.0d0 0.0d0])))
 
 (define-test test-matrix-algebra ()
   ;; Bareiss fraction-free determinant, characteristic polynomial, and adjugate over Integer
