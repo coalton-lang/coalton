@@ -439,6 +439,25 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/matrix`**: Dense matrices over semirings, rings, GCD domains,
   and fields, supporting fraction-free determinants and characteristic
   polynomials, linear system solving, and Gram–Schmidt orthogonalization.
+- **`coalton/xmath/semiring-graph`**: Exact-length walks, all-pairs closure,
+  and weighted finite automata over semirings. For example, with `sg` and
+  `mat` as local nicknames for this package and `coalton/xmath/matrix`:
+
+  ```lisp
+  (coalton
+    (let ((routes (sg:graph 3 [(sg:Edge 0 1 (sg:MinFinite 4))
+                               (sg:Edge 1 2 (sg:MinFinite -1))
+                               (sg:Edge 0 2 (sg:MinFinite 9))])))
+      (Tuple (mat:entry (sg:walks-of-length 1 routes) 0 2)
+             (mat:entry (sg:all-pairs-closure routes) 0 2))))
+  ; => (Tuple (MinFinite 9) (MinFinite 3))
+  ```
+
+  A missing route is `MinNoPath`; a route that can pass through a negative
+  cycle is `MinUnbounded`. Use integer edge weights of 1 to count walks of
+  a fixed length, not for unbounded closure. To evaluate an automaton, pass
+  its initial weights, labeled transitions, and final weights to `automaton`,
+  then evaluate its input with `word-weight`.
 - **`coalton/xmath/differential`**: Differential rings, Wronskians, linear
   differential operators $A[\partial; \, '\,]$, and power-series solutions of
   linear ordinary differential equations.
