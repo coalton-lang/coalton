@@ -420,6 +420,22 @@
   ;; 3. Harmonic term t_n = 1/(n+1) with ratio (n+1)/(n+2) is NOT Gosper-summable
   (is (== (recur:gosper-solve (ratio:make-ratio (+ x 1) (+ x 2))) None)))
 
+(define-test test-large-linear-gosper-shifts ()
+  (let x = (the (poly:Polynomial Fraction) poly:poly-var))
+  (let shift = (the Integer 100000000000000000000000000000001))
+  (let shifted = (+ x (from-int shift)))
+  (is (== (recur::%gosper-shifts shifted x) [shift]))
+  (is (== (recur::%gosper-shifts x shifted) Nil))
+  (is (== (recur::%gosper-shifts (+ x (into 1/2)) x) Nil))
+  (is (== (recur::%gosper-shifts (* x (+ x 4)) x) [0 4]))
+  (is (== (recur::%gosper-shifts (* shifted (- (* x x) 2)) x) [shift]))
+  (is (catch (progn (recur::gosper-solve-key-equation one x shifted) False)
+        ((the Panic p) (string-contains? "maximum matrix size" (lisp (-> String) (p) (cl:princ-to-string p))))))
+  (let r = (ratio:make-ratio x shifted))
+  (match (recur:gosper-solve r)
+    ((None) (is False))
+    ((Some y) (is (== (- (* (recur:rational-shift y 1) r) y) 1)))))
+
 (define-test test-quaternion-and-clifford ()
   ;; Non-commutative division ring and ConjugateRing anti-automorphism on Quaternion Fraction
   (let q1 = (quat:quaternion (the Fraction 1) 2 3 4))

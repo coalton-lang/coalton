@@ -34,6 +34,7 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
    (#:frac #:coalton/math/fraction)
    (#:mat #:coalton/xmath/matrix)
    (#:poly #:coalton/xmath/polynomial)
+   (#:ra #:coalton/xmath/real-algebraic)
    (#:ratio #:coalton/xmath/ratio)
    (#:series #:coalton/xmath/power-series)
    (#:vec #:coalton/vector))
@@ -98,66 +99,44 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
     (poly:Polynomial Fraction * poly:Polynomial Fraction -> poly:Polynomial Fraction))
   (define (%gosper-resultant a b)
     "Compute $\\operatorname{Res}_n(a(n),b(n+k))$ as a polynomial in $k$."
-    (let da = (poly:degree a))
-    (let db = (poly:degree b))
     (let lifted-a = (poly:polynomial (map into (poly:coefficients a))))
     (let shifted-b =
       (poly-shift (poly:polynomial (map into (poly:coefficients b)))
                   poly:poly-var))
-    (let size = (+ da db))
-    (mat:det
-     (mat:from-rows
-      (%recurrence-tabulate size
-        (fn (i)
-          (let offset = (if (< i db) i (- i db)))
-          (let polynomial = (if (< i db) lifted-a shifted-b))
-          (%recurrence-tabulate size
-            (fn (j)
-              (if (< j offset)
-                  zero
-                  (poly:coeff polynomial (- j offset))))))))))
+    (poly:resultant lifted-a shifted-b))
 
   (declare %gosper-shifts
     (poly:Polynomial Fraction * poly:Polynomial Fraction -> List Integer))
   (define (%gosper-shifts a b)
     "Find every nonnegative integer zero of the shift resultant, without a search cutoff."
-    (if (or (zero? (poly:degree a)) (zero? (poly:degree b)))
-        Nil
-        (let ((resultant (%gosper-resultant a b))
-              (coefficients (poly:coefficients resultant))
-              (common-denominator
-                (rec denominators ((rest coefficients) (acc 1))
-                  (match rest
-                    ((Nil) acc)
-                    ((Cons c more) (denominators more (lcm acc (frac:denominator c)))))))
-              (integer-resultant
-                (poly:primitive-part
-                 (poly:polynomial
-                  (map (fn (c) (frac:numerator (* (from-int common-denominator) c)))
-                       coefficients))))
-              (bound
-                (rec lowest ((rest (poly:coefficients integer-resultant)))
-                  (match rest
-                    ((Nil) (error "The Gosper shift resultant is identically zero."))
-                    ((Cons c more) (if (nonzero? c) (abs c) (lowest more))))))
-              (roots
-                (rec divisors ((candidate 1) (small Nil) (large Nil))
-                  (if (> (* candidate candidate) bound)
-                      (list:append (list:reverse small) large)
-                      (if (zero? (rem bound candidate))
-                          (let ((other (quot bound candidate)))
-                            (divisors (+ candidate 1)
-                                      (if (zero? (poly:evaluate integer-resultant candidate))
-                                          (Cons candidate small)
-                                          small)
-                                      (if (and (/= other candidate)
-                                               (zero? (poly:evaluate integer-resultant other)))
-                                          (Cons other large)
-                                          large)))
-                          (divisors (+ candidate 1) small large))))))
-          (if (zero? (poly:coeff integer-resultant 0))
-              (Cons 0 roots)
-              roots))))
+    (cond
+      ((or (zero? (poly:degree a)) (zero? (poly:degree b))) Nil)
+      ((and (== (poly:degree a) 1) (== (poly:degree b) 1))
+       ;; The root of a(n) must equal the root of b(n+k).
+       (let k = (- (/ (poly:coeff a 0) (poly:coeff a 1))
+                   (/ (poly:coeff b 0) (poly:coeff b 1))))
+       (if (and (>= k 0) (== (frac:denominator k) 1))
+           [(frac:numerator k)]
+           Nil))
+      (True
+       ;; Isolate the actual roots, rather than trial-dividing an integer
+       ;; that can be exponentially large in the input bit length.
+       (let cs = (poly:coefficients (%gosper-resultant a b)))
+       (let den = (fold (fn (d c) (lcm d (frac:denominator c))) 1 cs))
+       (let descending = (map (fn (c) (frac:numerator (* (from-int den) c))) (list:reverse cs)))
+       (match (ra:real-roots descending)
+         ((Err why) (error why))
+         ((Ok roots)
+          (rec collect ((rest roots) (acc Nil))
+            (match rest
+              ((Nil) (list:reverse acc))
+              ((Cons root more)
+               (match (the (Optional Fraction) (try-into root))
+                 ((Some q)
+                  (if (and (>= q 0) (== (frac:denominator q) 1))
+                      (collect more (Cons (frac:numerator q) acc))
+                      (collect more acc)))
+                 ((None) (collect more acc)))))))))))
 
   (declare gosper-canonical-form
     (ratio:Ratio (poly:Polynomial Fraction) ->
@@ -211,52 +190,61 @@ computed via the extended Euclidean algorithm on $x^{m+n+1}$ and $S(x) \\bmod x^
       ((and (zero? q) (zero? r)) None)
       (True
        (let bound = (%gosper-degree-bound p q r))
-       (if (< bound 0)
-           None
-           (let ((columns
-                   (%list-vector
-                    (%recurrence-tabulate (+ (the UFix (from-int bound)) 1)
+       (when (< bound 0) (return None))
+       ;; Do not wrap an exceptional degree into a smaller coefficient
+       ;; system and misreport an unrepresentable problem as unsummable.
+       (let rows = (+ 1 (max (to-integer (poly:degree p))
+                             (+ bound (to-integer (max (poly:degree q) (poly:degree r)))))))
+       (when (> (* rows (+ 2 bound)) (to-integer (the UFix coalton/math/bounded:max-bound)))
+         (error "Gosper coefficient system exceeds the maximum matrix size."))
+       (let ((width (the UFix (from-int (+ bound 1))))
+             (height (the UFix (from-int rows)))
+             (columns
+               (%list-vector
+                (%recurrence-tabulate width
+                  (fn (j)
+                    (let monomial = (poly:monomial one j))
+                    (- (* q (poly-shift monomial one)) (* r monomial))))))
+             (augmented
+               (mat:from-rows
+                (%recurrence-tabulate height
+                  (fn (i)
+                    (%recurrence-tabulate (+ width 1)
                       (fn (j)
-                        (let monomial = (poly:monomial one j))
-                        (- (* q (poly-shift monomial one)) (* r monomial))))))
-                 (width (vec:length columns))
-                 (height (+ (max (poly:degree p)
-                                 (+ (max (poly:degree q) (poly:degree r))
-                                    (the UFix (from-int bound))))
-                            1))
-                 (augmented
-                   (mat:from-rows
-                    (%recurrence-tabulate height
-                      (fn (i)
-                        (%recurrence-tabulate (+ width 1)
-                          (fn (j)
-                            (if (== j width)
-                                (poly:coeff p i)
-                                (poly:coeff (vec:index-unsafe j columns) i)))))))))
-             ;; solve-vector requires a nonsingular square matrix; rref also
-             ;; handles rectangular systems and polynomial homogeneous solutions.
-             (let (values reduced pivots) = (mat:rref augmented))
-             (if (list:any (fn (j) (== j width)) pivots)
-                 None
-                 (let ((solution (vec:with-initial-element width zero)))
-                   (rec fill ((rest pivots) (i 0))
-                     (match rest
-                       ((Nil) (values))
-                       ((Cons j more)
-                        (vec:set! j (mat:entry reduced i width) solution)
-                        (fill more (+ i 1)))))
-                   (let f =
-                     (poly:polynomial
-                      (%recurrence-tabulate width (fn (j) (vec:index-unsafe j solution)))))
-                   (if (== (- (* q (poly-shift f one)) (* r f)) p)
-                       (Some f)
-                       None))))))))
+                        (if (== j width)
+                            (poly:coeff p i)
+                            (poly:coeff (vec:index-unsafe j columns) i)))))))))
+         ;; solve-vector requires a nonsingular square matrix; rref also
+         ;; handles rectangular systems and polynomial homogeneous solutions.
+         (let (values reduced pivots) = (mat:rref augmented))
+         (if (list:any (fn (j) (== j width)) pivots)
+             None
+             (let ((solution (vec:with-initial-element width zero)))
+               (rec fill ((rest pivots) (i 0))
+                 (match rest
+                   ((Nil) (values))
+                   ((Cons j more)
+                    (vec:set! j (mat:entry reduced i width) solution)
+                    (fill more (+ i 1)))))
+               (let f =
+                 (poly:polynomial
+                  (%recurrence-tabulate width (fn (j) (vec:index-unsafe j solution)))))
+               (if (== (- (* q (poly-shift f one)) (* r f)) p)
+                   (Some f)
+                   None)))))))
 
   (declare gosper-solve
     (ratio:Ratio (poly:Polynomial Fraction) ->
      Optional (ratio:Ratio (poly:Polynomial Fraction))))
   (define (gosper-solve term-ratio)
     "Return a rational certificate $y$ with $y(n+1)R(n)-y(n)=1$ for the supplied term ratio $R=t_{n+1}/t_n$, or `None` if the term is not Gosper-summable."
+    ;; If A(n) - B(n-1) is a nonzero constant c, B(n-1)/c is already
+    ;; a certificate. In particular no shift product or matrix of size
+    ;; |a-b| is needed for (n+a)/(n+b).
+    (let prev-b = (poly-shift (ratio:denominator term-ratio) -1))
+    (let difference = (- (ratio:numerator term-ratio) prev-b))
+    (when (and (zero? (poly:degree difference)) (nonzero? difference))
+      (return (Some (ratio:make-ratio prev-b difference))))
     (let (Tuple3 p q r) = (gosper-canonical-form term-ratio))
     (match (gosper-solve-key-equation p q r)
       ((None) None)
