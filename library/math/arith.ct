@@ -12,6 +12,11 @@
    #:coalton/utils)
   (:export
    #:Reciprocable
+   #:CommutativeRing
+   #:DivisionRing
+   #:CharacteristicZero
+   #:RationalAlgebra
+   #:embed-fraction
    #:/
    #:recip
    #:reciprocal
@@ -66,9 +71,31 @@ Laws (for invertible `x` and `y`):
 - Inverse: `(* (recip x) x) == (* x (recip x)) == one`
 - Division: `(/ x y) == (* x (recip y))`
 
-If no reciprocal exists for an element (i.e., `zero` in a field or division ring, or non-units in rings like `Dual` or `PowerSeries`), produce a run-time error."
+This is an operational interface, not evidence that the ring is a field.
+Exact instances signal an error on attempting to invert a non-unit; machine
+arithmetic can instead produce an IEEE exceptional value or round the result."
     (/ (:a * :a -> :a))
     (recip (:a -> :a)))
+
+  (define-class (Ring :a => CommutativeRing :a)
+    "A `Ring` whose multiplication commutes. As with `Ring`, machine arithmetic
+is subject to its usual rounding or overflow behavior; commutativity alone does
+not certify exact division or absence of zero divisors.")
+
+  (define-class (Reciprocable :a => DivisionRing :a)
+    "An exact nontrivial ring in which every nonzero element has a two-sided
+multiplicative inverse. Multiplication need not commute. Rounded machine
+arithmetic and rings with nonzero non-units are not instances.")
+
+  (define-class (Ring :a => CharacteristicZero :a)
+    "An exact ring in which `from-int` embeds the integers injectively. This
+does not imply that division by positive integers is possible.")
+
+  (define-class (CharacteristicZero :a => RationalAlgebra :a)
+    "A ring with a unital embedding of the rationals into its center.
+This permits division by nonzero integers without assuming that arbitrary
+coefficients are invertible, or even that multiplication commutes."
+    (embed-fraction (Fraction -> :a)))
 
   (inline)
   (declare reciprocal (Reciprocable :a => :a -> :a))

@@ -214,6 +214,7 @@
            (lisp (-> ,type) (x)
              (,overflow-handler x)))))
 
+     (define-instance (CommutativeRing ,type))
      (define-instance (Num ,type))
 
      (define-instance (Scale ,type ,type)
@@ -273,6 +274,7 @@
            (lisp (-> ,type) (x)
              (cl:values (cl:mod x ,(cl:expt 2 bits)))))))
 
+     (define-instance (CommutativeRing ,type))
      (define-instance (Num ,type))
 
      (define-instance (Scale ,type ,type)
@@ -355,6 +357,7 @@
                          ,minus-inf
                          ,plus-inf)))))
 
+     (define-instance (CommutativeRing ,type))
      (define-instance (Num ,type))
 
      (define-instance (Scale ,type ,type)

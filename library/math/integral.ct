@@ -15,6 +15,7 @@
    (#:bits #:coalton/bits))
   (:export
    #:GcdDomain
+   #:Field
    #:unit-part
    #:normal-part
    #:exact-quot
@@ -54,7 +55,7 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Ring :a => GcdDomain :a)
+  (define-class (CommutativeRing :a => GcdDomain :a)
     "A commutative domain with canonical unit normalization (`unit-part`, `normal-part`), exact division (`exact-quot`), and greatest common divisors (`gcd`).
 
 Examples include integers $\\mathbb{Z}$ (`Integer`), Gaussian integers $\\mathbb{Z}[i]$ (`Complex Integer`), univariate and multivariate polynomials over a GCD domain such as $\\mathbb{Z}[x]$ (`Polynomial Integer`) and $\\mathbb{Z}[x][y]$ (`Polynomial (Polynomial Integer)`), and fields such as $\\mathbb{Q}$ (`Fraction`).
@@ -64,11 +65,15 @@ Laws:
 - Normalization idempotence: `(normal-part (normal-part x)) == (normal-part x)`
 - Zero normalization: `(normal-part zero) == zero` and `(unit-part zero) == one`
 - Exact division: for `b /= zero`, `(exact-quot a b) == (Some q)` iff `a == (* b q)`
-- Greatest common divisor: `(gcd a b)` is normal (`(normal-part (gcd a b)) == (gcd a b)`) and divides both `a` and `b`"
+- Greatest common divisor: `(gcd a b)` is normal, divides both `a` and `b`, and is divisible by every common divisor of `a` and `b`."
     (unit-part (:a -> :a))
     (normal-part (:a -> :a))
     (exact-quot (:a * :a -> Optional :a))
     (gcd (:a * :a -> :a)))
+
+  (define-class ((DivisionRing :a) (GcdDomain :a) => Field :a)
+    "An exact commutative division ring. Its canonical normal form for a
+nonzero element is `one`; a nonzero divisor divides every element exactly.")
 
   (declare exact-div (GcdDomain :a => :a * :a -> :a))
   (define (exact-div a b)
@@ -84,7 +89,14 @@ Laws:
         zero
         (normal-part (* (normal-part a) (exact-div (normal-part b) (gcd a b))))))
 
-  (define-class (GcdDomain :a => EuclideanDomain :a)
+  (define-class (QuotRem :a)
+    "Quotient and remainder operations, e.g. truncating division on machine
+integers. This does not certify a domain or unbounded intermediate arithmetic."
+    (quot (:a * :a -> :a))
+    (rem (:a * :a -> :a))
+    (quotrem (:a * :a -> :a * :a)))
+
+  (define-class ((GcdDomain :a) (QuotRem :a) => EuclideanDomain :a)
     "A `GcdDomain` equipped with a degree/norm measure and Euclidean division with remainder (`quotrem`, `quot`, `rem`).
 
 Laws:
@@ -92,10 +104,7 @@ Laws:
 - Nonnegativity: for `b /= zero`, `(>= (euclidean-degree b) 0)`
 - Remainder bound: `(rem a b) == zero` or `(< (euclidean-degree (rem a b)) (euclidean-degree b))`
 - Consistency: `(quotrem a b) == (values (quot a b) (rem a b))`"
-    (euclidean-degree (:a -> Integer))
-    (quot (:a * :a -> :a))
-    (rem (:a * :a -> :a))
-    (quotrem (:a * :a -> :a * :a)))
+    (euclidean-degree (:a -> Integer)))
 
   (declare euclidean-exact-quot ((Eq :a) (EuclideanDomain :a) => :a * :a -> Optional :a))
   (define (euclidean-exact-quot a b)
@@ -115,8 +124,9 @@ Laws:
         (normal-part a)
         (euclidean-gcd (normal-part b) (normal-part (rem a b)))))
 
-  (define-class (EuclideanDomain :a => Remainder :a)
-    "A `EuclideanDomain` that also provides floored division (`div`, `mod`, `divmod`).
+  (define-class (QuotRem :a => Remainder :a)
+    "Quotients and remainders with floored division (`div`, `mod`, `divmod`).
+These operations are subject to the type's representable range.
 
 Laws:
 - Division: for `b /= zero`, `a == (+ (* b (div a b)) (mod a b))`
@@ -250,38 +260,9 @@ Laws:
         ((>= x 0) x)
         (True (error "Cannot take ISQRT of a negative number."))))))
 
-(cl:defmacro %define-remainder-native (type cl:&optional (signed cl:t))
+(cl:defmacro %define-remainder-native (type)
   `(coalton-toplevel
-     (define-instance (GcdDomain ,type)
-       (inline)
-       (define (unit-part x)
-         ,(cl:if signed
-                 `(if (< x zero) (neg one) one)
-                 `(progn x one)))
-       (inline)
-       (define (normal-part x)
-         ,(cl:if signed
-                 `(abs x)
-                 `x))
-       (inline)
-       (define (exact-quot a b)
-         (if (zero? b)
-             None
-             (progn
-               (let (values q r) = (lisp (-> Integer * ,type) (a b)
-                                     (cl:truncate a b)))
-               (if (zero? r)
-                   (Some (from-int q))
-                   None))))
-       (inline)
-       (define (gcd a b)
-         (coalton++:unsafe
-           (lisp (-> ,type) (a b) (cl:gcd a b)))))
-
-     (define-instance (EuclideanDomain ,type)
-       (inline)
-       (define (euclidean-degree x)
-         (lisp (-> Integer) (x) (cl:values (cl:truncate (cl:abs x)))))
+     (define-instance (QuotRem ,type)
        (inline)
        (define (quot a n)
          (from-int (lisp (-> Integer) (a n) (cl:truncate a n))))
@@ -312,10 +293,9 @@ Laws:
            (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
            (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
            (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^")))
-           (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
-       (%define-remainder-native ,type ,signed)
+       (%define-remainder-native ,type)
        
        (coalton-toplevel
          (define-instance (Integral ,type)
@@ -359,14 +339,6 @@ Laws:
            (coalton++:unsafe
              (lisp (-> ,type) (base power) (cl:expt base power))))
 
-         (specialize lcm ,lcm (,type * ,type -> ,type))
-         (inline)
-         (declare ,lcm (,type * ,type -> ,type))
-         (define (,lcm a b)
-           ;; Allow Coalton to handle fixnum overflow
-           (from-int (coalton++:unsafe
-                      (lisp (-> Integer) (a b) (cl:lcm a b)))))
-
          (specialize isqrt ,isqrt (,type -> ,type))
          (declare ,isqrt (,type -> ,type))
          ,(cl:cond
@@ -395,6 +367,30 @@ Laws:
 (%define-integral-native U32 cl:nil)
 (%define-integral-native U64 cl:nil)
 (%define-integral-native UFix cl:nil)
+
+(coalton-toplevel
+  (define-instance (GcdDomain Integer)
+    (inline)
+    (define (unit-part x) (if (< x 0) -1 1))
+    (inline)
+    (define (normal-part x) (abs x))
+    (inline)
+    (define (exact-quot a b) (euclidean-exact-quot a b))
+    (inline)
+    (define (gcd a b)
+      (coalton++:unsafe
+        (lisp (-> Integer) (a b) (cl:gcd a b)))))
+
+  (define-instance (EuclideanDomain Integer)
+    (inline)
+    (define (euclidean-degree x) (abs x)))
+
+  (specialize lcm integer-lcm (Integer * Integer -> Integer))
+  (inline)
+  (declare integer-lcm (Integer * Integer -> Integer))
+  (define (integer-lcm a b)
+    (coalton++:unsafe
+      (lisp (-> Integer) (a b) (cl:lcm a b)))))
 
 (cl:defmacro %define-native-expt (type)
   (cl:let ((^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
@@ -441,10 +437,10 @@ Laws:
              one)))))
 
 (%define-field-gcd-domain Fraction)
-(%define-field-gcd-domain F32)
-(%define-field-gcd-domain F64)
 
 (coalton-toplevel
+  (define-instance (Field Fraction))
+
   (declare from-nat (Semiring :a => UFix -> :a))
   (define (from-nat n)
     "Embed a natural number $n$ into any `Semiring` by repeated addition of `one` ($n \\mapsto \\underbrace{1 + \\cdots + 1}_{n}$)."

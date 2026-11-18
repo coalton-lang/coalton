@@ -65,6 +65,7 @@
 ;;;
 
   (define-num-checked Integer cl:identity)
+  (define-instance (arith:CharacteristicZero Integer))
 
   (define-num-checked I8 %handle-8bit-overflow)
   (define-num-checked I16 %handle-16bit-overflow)
@@ -122,6 +123,7 @@ whether it's even or odd)."
           (cl:ldb (cl:byte 1 0) x)))))
 
   (define-instance (cls:Num Bit))
+  (define-instance (arith:CommutativeRing Bit))
 
   (define-instance (arith:Scale Bit Bit)
     (inline)
@@ -183,6 +185,7 @@ whether it's even or odd)."
           (cl:mod x #.(cl:expt 2 +fixnum-bits+))))))
 
   (define-instance (cls:Num UFix))
+  (define-instance (arith:CommutativeRing UFix))
 
   (define-instance (arith:Scale UFix UFix)
     (inline)

@@ -133,6 +133,12 @@ blackboard-bold 𝕚.)"
 
   (define-instance (ComplexComponent :a => Num (Complex :a)))
 
+  (define-instance ((ComplexComponent :a) (CommutativeRing :a) => CommutativeRing (Complex :a)))
+  (define-instance ((ComplexComponent :a) (CharacteristicZero :a) => CharacteristicZero (Complex :a)))
+  (define-instance ((ComplexComponent :a) (RationalAlgebra :a) => RationalAlgebra (Complex :a))
+    (inline)
+    (define (embed-fraction q) (complex (embed-fraction q) zero)))
+
   (define-instance (ComplexComponent :a => ConjugateRing (Complex :a))
     (inline)
     (define (conjugate z) (complex-conjugate z)))
@@ -348,6 +354,8 @@ blackboard-bold 𝕚.)"
 (%define-native-complex-instances Fraction cl:rational)
 (%define-native-complex-instances Integer cl:integer :division cl:nil)
 
+(coalton/math/integral::%define-field-gcd-domain (Complex Fraction))
+
 (coalton-toplevel
   (define-instance (GcdDomain (Complex Integer))
     (define (unit-part z)
@@ -378,7 +386,9 @@ blackboard-bold 𝕚.)"
   (define-instance (EuclideanDomain (Complex Integer))
     (inline)
     (define (euclidean-degree z)
-      (square-magnitude z))
+      (square-magnitude z)))
+
+  (define-instance (QuotRem (Complex Integer))
     (define (quotrem a b)
       (let norm-b = (square-magnitude b))
       (let prod = (* a (conjugate b)))
@@ -393,6 +403,9 @@ blackboard-bold 𝕚.)"
     (define (rem a b)
       (let (values _ r) = (quotrem a b))
       r))
+
+  (define-instance (DivisionRing (Complex Fraction)))
+  (define-instance (Field (Complex Fraction)))
 
   (define-instance ((ComplexComponent :a) (ComplexComponent :b) (Approximable :a :b)
                     => Approximable (Complex :a) (Complex :b))
