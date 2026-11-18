@@ -1467,7 +1467,115 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
                    (quot n 2)
                    next-acc))))))))
 
+  (declare integer-root (Integer * Integer -> Integer))
+  (define (integer-root n a)
+    "Floor of the positive nth root of a positive integer."
+    (cond
+      ((== n 1) a)
+      ((== n 2) (isqrt a))
+      (True
+       (rec go ((r (lsh 1 (ceiling/ (bit-length a) n))))
+         (let s = (quot (+ (* (- n 1) r) (quot a (^ r (- n 1)))) n))
+         (if (>= s r) r (go s))))))
+
+  (declare round-rational-root (Integer * Integer * Integer * Integer * Boolean -> BigFloat))
+  (define (round-rational-root n num den e negative?)
+    "Round the signed nth root of (num/den)*2^e with exact guard and sticky bits."
+    (let estimate = (- (bit-length num) (bit-length den)))
+    (let mag = (+ e (if (< (Dyadic num 0) (Dyadic den estimate)) (- estimate 1) estimate)))
+    (let unit = (- (div mag n) (to-integer (get-precision))))
+    (let shift = (- e (* n unit)))
+    (let (values a r) = (quotrem (lsh num (max 0 shift)) (lsh den (max 0 (neg shift)))))
+    (let q = (integer-root n a))
+    (let exact? = (and (== r 0) (== (^ q n) a)))
+    (let sticky = (+ (lsh q 1) (if exact? 0 1)))
+    (normalize-dyadic (if negative? (neg sticky) sticky) (- unit 1)))
+
+  (declare exact-binary-root (Dyadic * Integer -> Optional Dyadic))
+  (define (exact-binary-root d depth)
+    ;; For odd m > 1, each exact square root at least halves its bit length.
+    (let (Dyadic m e) = (dyadic:simplify d))
+    (cond
+      ((and (/= e 0) (> depth (bit-length e))) None)
+      ((and (> m 1) (> depth (bit-length (bit-length m)))) None)
+      ((/= e (lsh (rsh e depth) depth)) None)
+      (True
+       (rec go ((m m) (k depth))
+         (cond
+           ((or (== k 0) (== m 1)) (Some (Dyadic m (rsh e depth))))
+           (True
+            (let s = (isqrt m))
+            (if (== (* s s) m) (go s (- k 1)) None)))))))
+
+  (declare bounded-algebraic-power (Dyadic * Dyadic -> Optional BigFloat))
+  (define (bounded-algebraic-power x y)
+    (let (Dyadic a k) = (dyadic:simplify y))
+    (let depth = (max 0 (neg k)))
+    (let mag-a = (+ (bit-length a) (max 0 k)))
+    (cond
+      ((and (<= depth 6) (<= mag-a 7) (<= (lsh (abs a) (max 0 k)) 64))
+       ;; Modest reduced numerator and denominator: round the algebraic
+       ;; value itself, including non-perfect roots next to a boundary.
+       (let p = (lsh a (max 0 k)))
+       (let (Dyadic m e) = (dyadic:simplify x))
+       (let m^p = (^ m (abs p)))
+       (Some (round-rational-root (lsh 1 depth)
+                                  (if (> p 0) m^p 1) (if (> p 0) 1 m^p)
+                                  (* e p) False)))
+      (True
+       ;; A dyadic result or halfway case requires a perfect 2^depth-th
+       ;; root and at most precision+1 significant bits in the final power.
+       (match (exact-binary-root x depth)
+         ((Some (Dyadic root e))
+          (let budget = (+ 1 (to-integer (get-precision))))
+          (cond
+            ((and (<= mag-a (bit-length budget))
+                  (<= (* (- (bit-length root) 1) (lsh (abs a) (max 0 k))) budget))
+             (let p = (lsh a (max 0 k)))
+             (let m^p = (^ root (abs p)))
+             (Some (if (> p 0)
+                       (normalize-dyadic m^p (* e p))
+                       (div-dyadic 1 (* e p) m^p 0))))
+            (True None)))
+         ((None) None)))))
+
+  (declare bf-hyperbolic (BigFloat * Boolean -> BigFloat))
+  (define (bf-hyperbolic x tanh?)
+    (let prec = (to-integer (get-precision)))
+    (match (resolve x)
+      ((BFInf) (if tanh? one BFInf))
+      ((BFNegInf) (if tanh? (neg one) BFNegInf))
+      ((BFNegZero) BFNegZero)
+      ((BFValue (Dyadic m e))
+       (let mag = (+ e (bit-length m)))
+       (let a = (BFValue (Dyadic (abs m) e)))
+       (cond
+         ((== m 0) a)
+         ((< (* 2 mag) (neg (+ 4 (max prec (bit-length m)))))
+          ;; Both functions approach x from the side nearer zero. The
+          ;; cubic correction is smaller than the input and output grids.
+          (let s = (max 3 (- (+ prec 3) (bit-length m))))
+          (normalize-dyadic (* (sign m) (- (lsh (abs m) s) 1)) (- e s)))
+         ((and tanh? (> (Dyadic (abs m) e) (Dyadic (+ prec 2) 0)))
+          (let p = (+ prec 3))
+          (normalize-dyadic (* (sign m) (- (lsh 1 p) 1)) (neg p)))
+         (True
+          (normalize
+           (with-precision-rounding
+             (fn ()
+               (let v = (cond
+                          (tanh?
+                           (let t = (exp (bf-negate (scale a 1))))
+                           (/ (- one t) (+ one t)))
+                          (True (ln (+ a (sqrt (+ one (* a a))))))))
+               (if (< m 0) (bf-negate v) v))
+             :precision (from-int (+ (+ prec 16) (max 0 (neg mag))))
+             :rounding RoundEven)))))
+      (_ BFNaN)))
+
   (define-instance (Exponentiable BigFloat)
+    (define (tanh x) (bf-hyperbolic x True))
+    (define (asinh x) (bf-hyperbolic x False))
     (define (exp x)
       (let prec = (to-integer (get-precision)))
       (match (resolve x)
@@ -1523,6 +1631,9 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
                           (cl:1- (cl:integer-length (cl:logand my (cl:- my))))))
             (let y-int? = (>= (+ ky tz-y) 0))
             (let y-mag = (+ (bit-length my) ky))
+            (match (bounded-algebraic-power (Dyadic mx kx) (Dyadic my ky))
+              ((Some v) (return v))
+              ((None) (values)))
             (cond
               (x-pow2?
                (let prod-d = (Dyadic (* p2-exp my) ky))
@@ -1579,6 +1690,8 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
       ((Dyadic m e) (normalize-dyadic m e))))
 
   (define-instance (Radical BigFloat)
+    (define (hypot x y)
+      (if (or (infinite? x) (infinite? y)) BFInf (canonical-hypot x y)))
     (define (sqrt x)
       (match (resolve x)
         ((BFValue (Dyadic m e))
@@ -1592,14 +1705,33 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
     (define (nth-root n x)
       (cond
         ((== n 0) BFNaN)
+        ((bf-zero? x)
+         (let neg? = (and (odd? n) (bf-negative-sign? x)))
+         (cond ((> n 0) (if neg? BFNegZero (BFValue (Dyadic 0 0))))
+               (True (if neg? BFNegInf BFInf))))
+        ((and (bf-negative-sign? x) (even? n)) BFNaN)
+        ((infinite? x)
+         (cond ((> n 0) (resolve x))
+               (True (if (bf-negative-sign? x) BFNegZero (BFValue (Dyadic 0 0))))))
+        ((nan? x) BFNaN)
+        ((== n 1) (normalize x))
+        ((== n 2) (sqrt x))
+        ((<= (abs n) 64)
+         (let (Dyadic m e) = (the Dyadic (approx 0 x)))
+         (round-rational-root (abs n) (if (> n 0) (abs m) 1) (if (> n 0) 1 (abs m))
+                              (if (> n 0) e (neg e)) (< m 0)))
+        ((bf-negative-sign? x)
+         (let mode = (match (get-rounding-mode)
+                       ((RoundUp) RoundDown)
+                       ((RoundDown) RoundUp)
+                       (r r)))
+         (bf-negate (with-rounding (fn () (nth-root n (bf-negate x))) :rounding mode)))
         ((< n 0)
          (normalize
           (with-precision-rounding
             (fn () (recip (nth-root (neg n) x)))
             :precision (+ (get-precision) 16)
             :rounding RoundEven)))
-        ((== n 1) (normalize x))
-        ((== n 2) (sqrt x))
         (True
          (match (resolve x)
            ((BFNegZero) BFNegZero)

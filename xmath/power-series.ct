@@ -345,6 +345,8 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
   ;;
 
   (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Exponentiable (PowerSeries :a))
+    (define (tanh a) (canonical-tanh a))
+    (define (asinh a) (canonical-asinh a))
     (define (exp a)
       (let cache = (vec:new))
       (let gen =
@@ -377,6 +379,7 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
       (/ (ln a) (ln b))))
 
   (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) => Radical (PowerSeries :a))
+    (define (hypot x y) (canonical-hypot x y))
     (define (sqrt a)
       (let cache = (vec:new))
       (let gen =
