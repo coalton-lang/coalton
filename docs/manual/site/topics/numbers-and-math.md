@@ -185,11 +185,20 @@ Elementary transcendental and algebraic functions are grouped by capability so
 that types like polynomials, power series, or real algebraic numbers can
 implement the subset they support:
 
-- **`Radical :a`**: square roots and $n$th roots (`sqrt`, `nth-root`).
+- **`Radical :a`**: square roots, $n$th roots and hypotenuses (`sqrt`, `nth-root`, `hypot`).
 - **`Exponentiable :a`**: exponentials, logarithms, and hyperbolic functions (e.g., `exp`, `ln`, `pow`, `sinh`, `cosh`).
 - **`Trigonometric :a`**: trigonometric and inverse trigonometric functions (e.g., `sin`, `cos`, `tan`, `atan`).
 - **`Polar :a`**: polar coordinate conversions (`magnitude`, `phase`, `polar`, `cis`).
 - **`Elementary :a`**: mathematical constants `pi` ($\pi$) and `ee` ($e$) on types supporting all elementary operations.
+
+`magnitude` uses the scalar `hypot` method, so it avoids unnecessary overflow
+even in polymorphic code. Existing custom `Radical` instances can implement
+`hypot` with `canonical-hypot`; existing `Exponentiable` instances can
+implement `tanh` and `asinh` with `canonical-tanh` and `canonical-asinh`.
+These algebraic formulas suit exact and formal arithmetic; a fixed-precision
+type should use its stable numerical kernels instead. Identities for
+logarithms, roots and inverse functions assume the appropriate real domain
+or complex branch; they are not bitwise identities for rounded numbers.
 
 #### Complex Numbers (`coalton/math/complex`)
 

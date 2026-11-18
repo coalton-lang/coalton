@@ -30,6 +30,36 @@ A computable real number $x \\in \\mathbb{R}$ is represented lazily as a functio
 ;; Setting a default comparison threshold for Eq and Ord
 (cl:defvar *creal-comparison-threshold* 106)
 
+;; The backend's sqrt/log first determine the sign, which need not terminate
+;; at an oracle representing zero. Separate from zero only to the precision
+;; needed for this output digit; never ask an oracle to decide equality.
+(cl:defun %positive-index-root (n x)
+  (cl:labels ((root-away-from-zero (a)
+                (cl:cond
+                  ((cl:minusp a)
+                   (cl:when (cl:evenp n) (cl:error "Even root of a negative real."))
+                   (cr:-r (root-away-from-zero-positive (cr:-r x))))
+                  (cl:t (root-away-from-zero-positive x))))
+              (root-away-from-zero-positive (v)
+                (cl:if (cl:= n 2) (cr:sqrt-r v) (cr:expt-r v (cl:/ n)))))
+    (cl:cond
+      ((cl:= n 1) x)
+      ((cl:rationalp x) (cl:if (cl:zerop x) 0 (root-away-from-zero x)))
+      (cl:t
+       (cl:let ((root cl:nil))
+         (cr:make-real
+          (cl:lambda (k)
+            (cl:unless root
+              (cl:loop :with limit = (cl:* n (cl:1+ k))
+                       :for p = 0 :then (cl:min limit (cl:max 1 (cl:* 2 p)))
+                       :for a = (cr:approx-r x p)
+                       :when (cl:> (cl:abs a) 1)
+                         :do (cl:setf root (root-away-from-zero a)) (cl:return)
+                       :until (cl:= p limit)))
+            ;; At the limit |x| <= 2 * 2^(-n*(k+1)), so zero is a
+            ;; valid k-bit approximation to its nth root.
+            (cl:if root (cr:approx-r root k) 0))))))))
+
 ;;;
 ;;; Defining the CReal type as a wrapper around computable-reals
 ;;;
@@ -174,6 +204,8 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
   
   (define-instance (math:Exponentiable CReal)
+    (define (math:tanh x) (math:canonical-tanh x))
+    (define (math:asinh x) (math:canonical-asinh x))
 
     (inline)
     (define (math:exp x)
@@ -198,16 +230,20 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
   
   (define-instance (math:Radical CReal)
+    (define (math:hypot x y) (math:canonical-hypot x y))
 
     (inline)
     (define (math:nth-root n x)
       (lisp (-> CReal) (n x)
-        (cr:expt-r x (cl:/ n))))
+        (cl:cond
+          ((cl:zerop n) (cl:error "A zeroth root is undefined."))
+          ((cl:minusp n) (cr:/r (%positive-index-root (cl:- n) x)))
+          (cl:t (%positive-index-root n x)))))
 
     (inline)
     (define (math:sqrt x)
       (lisp (-> CReal) (x)
-        (cr:sqrt-r x)))))
+        (%positive-index-root 2 x)))))
 
 (coalton-toplevel
   
@@ -229,10 +265,10 @@ is no guarantee that the `CReal` will be accurate to any precision*."
         (cr:tan-r x)))
 
     (define (math:asin x)
-      (math:atan (/ x (sqrt (- 1 (* x x))))))
+      (* 2 (math:atan (/ x (+ 1 (sqrt (* (- 1 x) (+ 1 x))))))))
 
     (define (math:acos x)
-      (math:atan (/ (sqrt (- 1 (* x x))) x)))
+      (- (lisp (-> CReal) () cr:+pi/2-r+) (math:asin x)))
 
     (inline)
     (define (math:atan x)

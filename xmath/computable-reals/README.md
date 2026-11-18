@@ -14,6 +14,20 @@ As stated in the computable-reals README:
 
 `Eq` and `Ord` have been implemented in order to fulfill the needs of the `Num` typeclass, though they are not exact. Their definitions are shaky because they can only be verified up to an arbitrary, specified precision. The precision threshold for `Creal` can be accessed using the library function `comparison-threshold`, changed globally using `set-comparison-threshold!`, or scoped dynamically with `with-comparison-threshold`. The default precision is `106`.
 
+Threshold equality need not be transitive and is not a certificate for a
+branch in an exact computation. Integer rounding of an opaque oracle may
+not terminate at an integer. In contrast, `asin` and `acos` work throughout
+the closed interval $[-1,1]$ without deciding whether an oracle equals an
+endpoint.
+
+`rationalize` chooses a simple fraction in a certified **inner** interval.
+The result is within the requested absolute tolerance, but need not have
+minimum denominator in the full interval: deciding whether a rational lies
+exactly on its boundary is not computable for arbitrary oracles. A fixed-float
+`approx` can likewise report that its bound could not be certified, including
+at a boundary. For ordinary conversion, round a `rational-approx` using
+`fromfrac`.
+
 Other instances defined:
 
 - `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`

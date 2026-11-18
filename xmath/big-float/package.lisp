@@ -5,7 +5,7 @@
 (coalton/utils:defstdlib-package #:coalton/xmath/big-float
   (:documentation "Arbitrary-precision binary floating-point numbers (`BigFloat`) with configurable mantissa precision and IEEE-style directed and nearest rounding modes (`RoundingMode`).
 
-Finite values are represented as normalized dyadic rationals $m \\cdot 2^e$ rounded to the active bit precision (`with-precision`, `set-precision!`) under the active `RoundingMode` (`with-rounding`, `set-rounding-mode!`), alongside signed zero and IEEE transfinite values ($\\pm\\infty$, $\\text{NaN}$). Elementary transcendental functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `ln`, `pow`, `sqrt`, `nth-root`) and constants (`pi`, `ee`) are computed to the active precision via binary splitting and argument reduction.")
+Finite values are dyadic rationals $m \\cdot 2^e$; exact conversions can retain more bits than the active arithmetic precision. `with-precision` and `with-rounding` select the arithmetic format. Signed zero, infinities and NaN are also represented. General transcendental functions use guard bits, not certified directed enclosures. `approx` bounds absolute error with respect to the stored value (a lazy constant is resolved in the caller's context).")
   (:nicknames #:coalton/big-float
               #:coalton-library/big-float)
   (:shadow #:scale)

@@ -24,6 +24,7 @@
    #:sincos
    #:Radical
    #:sqrt
+   #:hypot
    #:nth-root
    #:Polar
    #:phase
@@ -32,6 +33,9 @@
    #:Exponentiable
    #:log #:pow #:exp #:ln
    #:Elementary
+   #:canonical-hypot
+   #:canonical-tanh
+   #:canonical-asinh
    #:pi #:ee
    #:atan2))
 
@@ -57,29 +61,26 @@
     (values (sin x) (cos x)))
 
   (define-class (Exponentiable :a)
-    "Exponential maps obeying:
-
-    (* (exp x) (exp y)) = (exp (+ x y))
-    (exp (ln x)) = x = (ln (exp x))
-    (log b x) = (/ (ln x) (ln b))
-    (pow x y) = (exp (* y (ln x)))
-"
+    "Exponentials, logarithms and powers on an instance's domain. In exact real arithmetic $\\exp(x+y)=\\exp(x)\\exp(y)$ and $\\ln(\\exp x)=x$; $\\exp(\\ln x)=x$ and $x^y=\\exp(y\\ln x)$ require $x>0$. For $b>0$, $b\\ne1$, and $x>0$, $\\log_b x=\\ln x/\\ln b$. Complex logarithms and powers use branch choices, commuting arguments are required for the exponential product law, and floating-point results are rounded approximations."
     (exp (:a -> :a))
     (pow (:a * :a -> :a))
     (ln  (:a -> :a))
-    (log (:a * :a -> :a)))
+    (log (:a * :a -> :a))
+    (tanh (Reciprocable :a => :a -> :a))
+    (asinh ((Reciprocable :a) (Radical :a) => :a -> :a)))
 
   (define-class (Radical :a)
-    "Obeys:
-
-    (^ (sqrt x) 2) = x = (^^ (nth-root n x) n)"
+    "Roots on an instance's domain. In exact arithmetic an $n$th root $r$ satisfies $r^n=x$. In the reals the square root is nonnegative, and an odd-index root of a negative real is negative. An even-index root of a negative real has no real value; a zero index is undefined. A negative index, when supported, takes the reciprocal and requires a nonzero radicand. Complex roots depend on the chosen branch. Raising a rounded root to its index need not recover the input exactly."
     (nth-root (Integer * :a -> :a))
-    (sqrt (:a -> :a)))
+    (sqrt (:a -> :a))
+    (hypot
+     "Compute $\\sqrt{x^2+y^2}$. Native real implementations avoid overflow or underflow of the intermediate squares."
+     ((Additive :a) (Multiplicative :a) => :a * :a -> :a)))
 
   (define-class ((ComplexComponent :a) (CommutativeRing :a) => Polar :a)
     "This type class includes `ComplexComponent` types that admit a magnitude and phase.
 
-For a complex number `z = (complex x y)`, the following identities hold:
+For a nonzero finite complex number `z = (complex x y)`, the following are mathematical identities (up to rounding and the instance's choice of principal angle):
 
     z = (* (magnitude z) (exp (* ii (phase z))))
     (polar z) = (values (magnitude z) (phase z))
@@ -91,11 +92,8 @@ For a complex number `z = (complex x y)`, the following identities hold:
   (inline)
   (declare magnitude ((ComplexComponent :a) (Radical :a) => Complex :a -> :a))
   (define (magnitude z)
-    "The magnitude $\\sqrt{x^2 + y^2}$ of a complex number $z = x + yi$:
-
-
-    (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
-    (sqrt (square-magnitude z)))
+    "The magnitude $\\sqrt{x^2+y^2}$ of $z=x+yi$, computed by the component type's `hypot` method."
+    (hypot (real-part z) (imag-part z)))
 
   (inline)
   (declare cis ((Trigonometric :a) (ComplexComponent :a) => :a -> Complex :a))
@@ -138,12 +136,19 @@ the point $(\\mathtt{x},\\mathtt{y})$."
   (define (cosh x)
     (/ (+ (exp x) (exp (neg x))) (from-int 2)))
 
-  (declare tanh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
-  (define (tanh x)
+  (declare canonical-hypot ((Additive :a) (Multiplicative :a) (Radical :a) => :a * :a -> :a))
+  (define (canonical-hypot x y)
+    "The algebraic formula for `hypot`, for instances without range or intermediate-rounding concerns."
+    (sqrt (+ (* x x) (* y y))))
+
+  (declare canonical-tanh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
+  (define (canonical-tanh x)
+    "The exponential formula for `tanh`, suitable for exact or formal arithmetic."
     (/ (sinh x) (cosh x)))
 
-  (declare asinh ((Reciprocable :f) (Exponentiable :f) (Radical :f) => :f -> :f))
-  (define (asinh x)
+  (declare canonical-asinh ((Reciprocable :f) (Exponentiable :f) (Radical :f) => :f -> :f))
+  (define (canonical-asinh x)
+    "The logarithmic formula for `asinh`, suitable for exact or formal arithmetic on its branch."
     (ln (+ x (sqrt (+ one (* x x))))))
 
   (declare acosh ((Reciprocable :f) (Exponentiable :f) (Radical :f) => :f -> :f))
@@ -154,29 +159,25 @@ the point $(\\mathtt{x},\\mathtt{y})$."
   (define (atanh x)
     (/ (- (ln (+ one x)) (ln (- one x))) (from-int 2)))
 
-  (inline)
-  (define (canonical-nth-root n x)
-    "By definition implementation of `nth-root` for reals"
-    (pow x (recip (from-int n))))
-
   (define (canonical-polar z)
     "By definition implementation of `polar`"
-    (let x = (real-part z))
-    (let y = (imag-part z))
-    (let r = (sqrt (+ (* x x) (* y y))))
-    (let theta =
-      (cond
-        ;; y /= 0
-        ((or (/= 0 (floor y)) (/= 0 (ceiling y)))
-         (* 2 (atan (/ (- r x) y))))
-        ;; x > 0
-        ((> (floor x) 0) 0)
-        ;; x < 0
-        ((< (ceiling x) 0) pi)
-        ;; x = 0, y = 0
-        ;; Pretend principal angle of 0 is 0
-        (True 0)))
-    (values r theta)))
+    (values (magnitude z) (atan2 (imag-part z) (real-part z)))))
+
+;; Split off the binary exponent before taking the floating power. Otherwise
+;; the rounding error in 1/n is multiplied by log(x), losing many ulps even
+;; for exact roots (for example the cube root of the least F64 subnormal).
+(cl:defun %positive-float-root (n a)
+  (cl:cond
+    ((cl:or (cl:zerop a) (ff:float-infinity-p a) (cl:= n 1)) a)
+    ((cl:= n 2) (cl:sqrt a))
+    (cl:t
+     (cl:multiple-value-bind (f exp) (cl:decode-float (cl:float a 1d0))
+       (cl:multiple-value-bind (q r) (cl:floor (cl:1- exp) n)
+         (cl:float (cl:scale-float
+                    (cl:* (cl:expt (cl:* 2 f) (cl:float (cl:/ n) 1d0))
+                          (cl:expt 2d0 (cl:float (cl:/ r n) 1d0)))
+                    q)
+                   a))))))
 
 (cl:defmacro %define-real-float-elementary (coalton-type underlying-type)
   "Defines the elementary instances for a lisp floating-point type."
@@ -279,6 +280,16 @@ the point $(\\mathtt{x},\\mathtt{y})$."
          (values (magnitude x) (phase x))))
 
      (define-instance (Exponentiable ,coalton-type)
+       (define (tanh x)
+         (cond
+           ((nan? x) x)
+           ((infinite? x) (if (< x 0) -1 1))
+           (True (lisp (-> ,coalton-type) (x) (cl:tanh x)))))
+       (define (asinh x)
+         (if (finite? x)
+             (lisp (-> ,coalton-type) (x) (cl:asinh x))
+             x))
+
        (inline)
        (define (pow x y)
          (cond
@@ -353,6 +364,12 @@ the point $(\\mathtt{x},\\mathtt{y})$."
            (True negative-infinity))))
 
      (define-instance (Radical ,coalton-type)
+       (define (hypot x y)
+         (cond
+           ((or (infinite? x) (infinite? y)) infinity)
+           ((or (nan? x) (nan? y)) nan)
+           (True (lisp (-> ,coalton-type) (x y) (cl:abs (cl:complex x y))))))
+
        (inline)
        (define (sqrt x)
          (if (or (nan? x) (< x 0))
@@ -364,7 +381,16 @@ the point $(\\mathtt{x},\\mathtt{y})$."
                     (cl:sqrt x))))))
        (inline)
        (define (nth-root n x)
-         (canonical-nth-root n x)))
+         (cond
+           ((or (== n 0) (nan? x) (and (< x 0) (even? n))) nan)
+           (True
+            (lisp (-> ,coalton-type) (n x)
+              (cl:let* ((d (cl:abs n))
+                        (r (%positive-float-root d (cl:abs x)))
+                        (signed (cl:if (cl:oddp d) (cl:float-sign x r) r)))
+                (cl:if (cl:minusp n)
+                       (ff:with-float-traps-masked cl:t (cl:/ signed))
+                       signed)))))))
 
      (define-instance (Elementary ,coalton-type)
        (define pi
@@ -397,6 +423,8 @@ the point $(\\mathtt{x},\\mathtt{y})$."
 
 (coalton-toplevel
   (define-instance ((Polar :a) (Elementary :a) => Exponentiable (Complex :a))
+    (define (tanh z) (canonical-tanh z))
+    (define (asinh z) (canonical-asinh z))
     (define (ln z)
       ;; The principal natural log of a complex number
       (let (values r theta) = (polar z))
@@ -417,6 +445,7 @@ the point $(\\mathtt{x},\\mathtt{y})$."
       (/ (ln x) (ln b))))
 
   (define-instance ((Polar :a) (Elementary :a) => Radical (Complex :a))
+    (define (hypot x y) (canonical-hypot x y))
     (define (sqrt z)
       (let (values r theta) = (polar z))
       (let sqrt-r = (sqrt r))

@@ -217,6 +217,10 @@ component."
             (* d1 (recip (+ one (sq p1)))))))
 
   (define-instance ((CommutativeRing :t) (Exponentiable :t) (Reciprocable :t) => Exponentiable (Dual :t))
+    (define (tanh (Dual p d))
+      (let sech = (recip (cosh p)))
+      (Dual (tanh p) (* d (* sech sech))))
+    (define (asinh x) (canonical-asinh x))
     (define (exp (Dual p1 d1))
       (let ((ep (exp p1)))
         (Dual ep (* d1 ep))))
@@ -234,6 +238,7 @@ component."
       (/ (ln dual2) (ln dual1))))
 
   (define-instance ((CommutativeRing :t) (Radical :t) (Reciprocable :t) => Radical (Dual :t))
+    (define (hypot x y) (canonical-hypot x y))
     (define (nth-root n (Dual p1 d1))
       (let ((f0 (nth-root n p1)))
         (Dual f0

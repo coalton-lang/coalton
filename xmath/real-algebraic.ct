@@ -2259,6 +2259,7 @@ No rationality decision or coefficient-dependent precision is needed."
     (define (inner-product a b) (* a b)))
 
   (define-instance (Radical RealAlgebraic)
+    (define (hypot x y) (canonical-hypot x y))
     (define (sqrt x)
       (cond
         ((< x 0)

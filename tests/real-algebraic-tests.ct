@@ -270,8 +270,8 @@
   (let z-frac = (the (Complex Fraction) (approx 20 z-alg)))
   (is (== (real-part z-frac) (neg (imag-part z-frac))))
   ;; A zero primal must not erase a separately certified derivative.
-  (let mv = (+ (cliff:scalar-mv (dual:Dual (the ra:RealAlgebraic 1) sqrt2))
-               (cliff:scalar-mv (dual:Dual (the ra:RealAlgebraic -1) 0))))
+  (let mv = (+ (cliff:multivector [(Tuple (dual:Dual (the ra:RealAlgebraic 1) sqrt2) 0)])
+               (cliff:multivector [(Tuple (dual:Dual (the ra:RealAlgebraic -1) 0) 0)])))
   (let mv-q = (the (cliff:Multivector (dual:Dual Fraction)) (approx 24 mv)))
   (let tangent = (the ra:RealAlgebraic (into (dual:dual-part (cliff:blade-coeff mv-q 0)))))
   (is (<= (abs (- tangent sqrt2)) (math:^^ 2 -24)))
