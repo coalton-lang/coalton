@@ -1,5 +1,18 @@
 (in-package #:coalton-native-tests)
 
+(coalton-toplevel
+  (define-type Mod12 Mod12)
+  (define ring12 (unwrap (qr:integer-quotient 12)))
+  (define-instance (qr:KnownQuotient Mod12 Integer)
+    (define (qr:fixed-quotient _) ring12)))
+
+(define-test test-fixed-residue-ring ()
+  (let a = (the (qr:ZMod Mod12) 8))
+  (is (== (* a 3) 0))
+  (is (== (qr:unit-inverse a) None))
+  (is (== (qr:unit-inverse (- a 3)) (Some 5)))
+  (is (== (poly:evaluate (poly:polynomial [1 2 3]) a) 5)))
+
 (define-test test-integer-residue-units ()
   (let r = (unwrap (qr:integer-quotient 12)))
   (let a = (qr:residue r -7))

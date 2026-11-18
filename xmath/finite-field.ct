@@ -5,6 +5,7 @@
 
 A `FieldPresentation` can be used as an explicit quotient context, or associated with a fixed type by `KnownField`. Only the latter gives `FieldElement` a context-free zero, one, and lawful field operations. The enumeration `field-element` differs from the integer embedding `from-int`: in an extension its index is read in base $q$ as the indices of successive polynomial coefficients.")
   (:use #:coalton #:coalton/builtin #:coalton/classes #:coalton/math/arith #:coalton/math/integral)
+  (:import-from #:coalton/xmath/quotient #:representative #:from-representative)
   (:local-nicknames
    (#:factor #:coalton/xmath/integer-factorization)
    (#:list #:coalton/list)
@@ -58,51 +59,23 @@ A `FieldPresentation` can be used as an explicit quotient context, or associated
     "A type-level name for one certified quotient: `presentation` must be immutable and independent of ambient state. Define a tag and an instance returning a previously constructed `FieldPresentation` to name another field."
     (presentation (types:Proxy :tag -> FieldPresentation :r)))
 
-  (repr :transparent)
-  (define-type (FieldElement :tag :r)
-    "A canonical representative of the fixed field named by the phantom type parameter."
-    (%Element :r))
+  ;; A field tag gets its ring from its checked presentation, never from
+  ;; an independently chosen KnownQuotient instance for the same user tag.
+  (define-type (Certified :tag) %Certified)
+  (define-instance (KnownField :tag :r => qr:KnownQuotient (Certified :tag) :r)
+    (define (qr:fixed-quotient _) (as-quotient (presentation (the (types:Proxy :tag) types:Proxy)))))
+
+  (define-type-alias (FieldElement :tag :r) (qr:ResidueClass (Certified :tag) :r)
+    "A canonical representative of the fixed field named by the phantom type parameter.")
 
   (define-type-alias (Fp :p) (FieldElement :p Integer)
     "An element of a statically named prime field.")
   (define-type-alias (Extension :tag :k) (FieldElement :tag (poly:Polynomial :k))
     "An element of a statically named extension of the coefficient field.")
 
-  (declare representative (FieldElement :tag :r -> :r))
-  (define (representative (%Element a)) a)
-
-  (declare from-representative (forall (:tag :r) KnownField :tag :r => :r -> FieldElement :tag :r))
-  (define (from-representative a)
-    "Map an integer or a coefficient polynomial into its fixed quotient."
-    (let field = (presentation (the (types:Proxy :tag) types:Proxy)))
-    (%Element (qr:reduce-representative (as-quotient field) a)))
-
-  (define-instance (Eq :r => Eq (FieldElement :tag :r))
-    (define (== (%Element a) (%Element b)) (== a b)))
-
-  (define-instance (KnownField :tag :r => Additive (FieldElement :tag :r))
-    (define (+ (%Element a) (%Element b)) (from-representative (+ a b)))
-    (define zero (%Element zero)))
-
-  (define-instance (KnownField :tag :r => AdditiveGroup (FieldElement :tag :r))
-    (define (neg (%Element a)) (from-representative (neg a)))
-    (define (- (%Element a) (%Element b)) (from-representative (- a b))))
-
-  (define-instance (KnownField :tag :r => Multiplicative (FieldElement :tag :r))
-    (define (* (%Element a) (%Element b)) (from-representative (* a b)))
-    (define one (%Element one)))
-
-  (define-instance (KnownField :tag :r => Semiring (FieldElement :tag :r)))
-  (define-instance (KnownField :tag :r => Ring (FieldElement :tag :r))
-    (define (from-int n) (from-representative (from-int n))))
-  (define-instance (KnownField :tag :r => Num (FieldElement :tag :r)))
-  (define-instance (KnownField :tag :r => CommutativeRing (FieldElement :tag :r)))
-
   (define-instance (KnownField :tag :r => Reciprocable (FieldElement :tag :r))
-    (define (recip (%Element a))
-      (let field = (presentation (the (types:Proxy :tag) types:Proxy)))
-      (let m = (qr:modulus (as-quotient field)))
-      (%Element (opt:from-some "Zero has no reciprocal in a field." (modular:mod-inv a m))))
+    (define (recip a)
+      (opt:from-some "Zero has no reciprocal in a field." (qr:unit-inverse a)))
     (define (/ a b) (* a (recip b))))
 
   (define-instance (KnownField :tag :r => DivisionRing (FieldElement :tag :r)))
@@ -125,7 +98,7 @@ A `FieldPresentation` can be used as an explicit quotient context, or associated
     (define (field-order _)
       (order (presentation (the (types:Proxy :tag) types:Proxy))))
     (define (field-element i)
-      (%Element (index-representative (presentation (the (types:Proxy :tag) types:Proxy)) i))))
+      (from-representative (index-representative (presentation (the (types:Proxy :tag) types:Proxy)) i))))
 
   (declare irreducible? (forall (:k) FiniteField :k => poly:Polynomial :k -> Boolean))
   (define (irreducible? f)
