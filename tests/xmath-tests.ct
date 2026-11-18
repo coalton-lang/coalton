@@ -445,6 +445,15 @@
   (is (== (dual:dual-part (* u v)) zero))
   (is (== (dual:dual-part (* v u)) zero)))
 
+(define-test test-clifford-mask-and-signature ()
+  (let width = (lisp (-> UFix) () (cl:integer-length cl:most-positive-fixnum)))
+  (let e = (the (cliff:Multivector Integer) (cliff:basis-vector (- width 1))))
+  (let sig = (the (UFix -> Integer) (fn (i) (if (== i (- width 1)) -1 1))))
+  (is (== (cliff:geometric-product-with sig e e) -1))
+  (is (== (cliff:with-clifford-signature sig (fn () (* e e))) -1))
+  (is (catch (progn (the (cliff:Multivector Integer) (cliff:basis-vector width)) False)
+        ((the Panic _) True))))
+
 (define-test test-quaternion-and-clifford ()
   ;; Non-commutative division ring and ConjugateRing anti-automorphism on Quaternion Fraction
   (let q1 = (quat:quaternion (the Fraction 1) 2 3 4))
