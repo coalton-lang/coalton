@@ -115,7 +115,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     "Types that specify a Clifford algebra metric signature $i \\mapsto e_i^2 \\in \\mathbb{Z}$."
     (signature-function (:s -> (UFix -> Integer))))
 
-  (define-instance (Integral :a => CliffordSignature (:a -> :a))
+  (define-instance ((Integral :a) (Integral :b) => CliffordSignature (:a -> :b))
     (define (signature-function f)
       (fn (i)
         (to-integer (f (from-nat i))))))
@@ -238,8 +238,10 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
 
   (declare basis-vector (Semiring :a => UFix -> Multivector :a))
   (define (basis-vector i)
-    "Construct the $i$-th orthogonal basis vector $e_i$ (with bitmask $2^i$)."
-    (basis-blade (lsh 1 i)))
+    "Construct the $i$-th orthogonal basis vector $e_i$ (with bitmask $2^i$). Signal an error if that bit does not fit in a `UFix`."
+    (let mask = (the UFix (lsh 1 i)))
+    (when (zero? mask) (error "Clifford basis-vector index exceeds the UFix blade width."))
+    (basis-blade mask))
 
   (declare blade-coeff (Additive :a => Multivector :a * UFix -> :a))
   (define (blade-coeff (%Multivector xs) mask)
