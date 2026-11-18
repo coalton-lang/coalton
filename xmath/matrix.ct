@@ -47,6 +47,7 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:adjoint
    #:trace
    #:mat-vec-mul
+   #:mat-pow
    #:det
    #:charpoly
    #:adjugate

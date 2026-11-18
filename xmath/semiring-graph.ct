@@ -1,0 +1,232 @@
+;;;; Directed walks and finite automata over semirings.
+
+(coalton/utils:defstdlib-package #:coalton/xmath/semiring-graph
+  (:documentation "Weighted walks in finite directed multigraphs and word evaluation in finite automata.
+
+A walk's weight is the product of its edge weights **in traversal order**. Alternative walks contribute by addition, so parallel edges need not be distinct in weight. The empty walk has weight `one`; a missing walk contributes `zero`. For the adjacency matrix $A_{ij}=\\sum_{e:i\\to j}w(e)$, `walks-of-length` computes $A^k$ over any `Semiring`, even when multiplication is noncommutative. Giving every edge integer weight 1 counts walks, not just simple paths.
+
+`all-pairs-closure` instead computes $A^*=I+A+A^2+\\cdots$ by eliminating vertices. It requires a `ClosedSemiring` with a total scalar `star`; it does not stop at an arbitrary length or assume that a numerical series converges. `Reachability` gives reflexive transitive closure. With finite integer costs, `MinPlus` gives shortest walk costs: a negative cycle makes an entry unbounded exactly when the source can reach that cycle and the cycle can reach the destination. `MaxPlus` is dual, with positive cycles.
+
+An automaton with initial row $\\lambda$, final column $\\rho$, and one transition matrix $M_a$ per letter assigns $a_1\\cdots a_k$ the weight $\\lambda M_{a_1}\\cdots M_{a_k}\\rho$. Each transition consumes exactly one letter; there are no implicit epsilon transitions. Neither graph operations nor word evaluation compare weights.")
+  (:use #:coalton #:coalton/classes #:coalton/experimental/loops)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:mat #:coalton/xmath/matrix)
+   (#:vec #:coalton/vector))
+  (:export
+   #:ClosedSemiring #:star
+   #:Reachability #:Reachable #:Unreachable
+   #:MinPlus #:MinFinite #:MinNoPath #:MinUnbounded
+   #:MaxPlus #:MaxFinite #:MaxNoPath #:MaxUnbounded
+   #:Edge #:Graph #:graph #:vertex-count #:adjacency-matrix
+   #:walks-of-length #:all-pairs-closure
+   #:Transition #:Automaton #:automaton #:word-weight))
+
+(in-package #:coalton/xmath/semiring-graph)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-class (Semiring :w => ClosedSemiring :w)
+    "A path semiring in which every scalar has a Kleene star $a^*=\\sum_{k\\geq 0}a^k$, including the empty product. The sum must respect regrouping of walks and distribution of multiplication on either side: $p a^* q=\\sum_{k\\geq 0}p a^k q$. In particular $0^*=1$ and $a^*=1+a a^*=1+a^*a$. Idempotent addition alone does not supply a star. There is deliberately no instance for ordinary integers."
+    (star "The weight of zero or more repetitions of a loop." (:w -> :w)))
+
+  (derive Eq)
+  (define-type Reachability
+    "The Boolean semiring: addition is disjunction, multiplication is conjunction."
+    Unreachable
+    Reachable)
+
+  (define-instance (Additive Reachability)
+    (define (+ a b) (match a ((Reachable) Reachable) ((Unreachable) b)))
+    (define zero Unreachable))
+
+  (define-instance (Multiplicative Reachability)
+    (define (* a b) (match a ((Reachable) b) ((Unreachable) Unreachable)))
+    (define one Reachable))
+
+  (define-instance (Semiring Reachability))
+  (define-instance (ClosedSemiring Reachability)
+    (define (star _) Reachable))
+
+  (derive Eq)
+  (define-type MinPlus
+    "Integer costs with minimum as addition and ordinary addition as multiplication. `MinNoPath` is $+\\infty$, `MinUnbounded` is $-\\infty$. Concatenating a missing path with any path gives a missing path, even if the other cost is unbounded."
+    MinNoPath
+    (MinFinite Integer)
+    MinUnbounded)
+
+  (define-instance (Additive MinPlus)
+    (define (+ a b)
+      (match (Tuple a b)
+        ((Tuple (MinNoPath) x) x)
+        ((Tuple x (MinNoPath)) x)
+        ((Tuple (MinFinite x) (MinFinite y)) (MinFinite (min x y)))
+        (_ MinUnbounded)))
+    (define zero MinNoPath))
+
+  (define-instance (Multiplicative MinPlus)
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (MinNoPath) _) MinNoPath)
+        ((Tuple _ (MinNoPath)) MinNoPath)
+        ((Tuple (MinFinite x) (MinFinite y)) (MinFinite (+ x y)))
+        (_ MinUnbounded)))
+    (define one (MinFinite 0)))
+
+  (define-instance (Semiring MinPlus))
+  (define-instance (ClosedSemiring MinPlus)
+    (define (star a)
+      (match a
+        ((MinNoPath) one)
+        ((MinFinite x) (if (< x 0) MinUnbounded one))
+        ((MinUnbounded) MinUnbounded))))
+
+  (derive Eq)
+  (define-type MaxPlus
+    "Integer scores with maximum as addition and ordinary addition as multiplication. `MaxNoPath` is $-\\infty$, `MaxUnbounded` is $+\\infty$. As with `MinPlus`, a missing path annihilates multiplication."
+    MaxNoPath
+    (MaxFinite Integer)
+    MaxUnbounded)
+
+  (define-instance (Additive MaxPlus)
+    (define (+ a b)
+      (match (Tuple a b)
+        ((Tuple (MaxNoPath) x) x)
+        ((Tuple x (MaxNoPath)) x)
+        ((Tuple (MaxFinite x) (MaxFinite y)) (MaxFinite (max x y)))
+        (_ MaxUnbounded)))
+    (define zero MaxNoPath))
+
+  (define-instance (Multiplicative MaxPlus)
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (MaxNoPath) _) MaxNoPath)
+        ((Tuple _ (MaxNoPath)) MaxNoPath)
+        ((Tuple (MaxFinite x) (MaxFinite y)) (MaxFinite (+ x y)))
+        (_ MaxUnbounded)))
+    (define one (MaxFinite 0)))
+
+  (define-instance (Semiring MaxPlus))
+  (define-instance (ClosedSemiring MaxPlus)
+    (define (star a)
+      (match a
+        ((MaxNoPath) one)
+        ((MaxFinite x) (if (> x 0) MaxUnbounded one))
+        ((MaxUnbounded) MaxUnbounded))))
+
+  (define-type (Edge :w)
+    "An edge `(Edge source target weight)`."
+    (Edge UFix UFix :w))
+
+  (define-type (Graph :w)
+    "A directed multigraph with vertices numbered from zero. Construct with `graph`."
+    (%Graph UFix (List (Edge :w))))
+
+  (declare %check-endpoints (UFix * UFix * UFix -> Void))
+  (define (%check-endpoints n i j)
+    (unless (and (< i n) (< j n))
+      (error "Edge endpoint outside the specified vertex range.")))
+
+  (declare graph (UFix * List (Edge :w) -> Graph :w))
+  (define (graph n edges)
+    "Construct an $n$-vertex graph, retaining parallel edges and isolated vertices. Signals an error if either endpoint is outside $[0,n)$."
+    (dolist (edge edges)
+      (let (Edge i j _) = edge)
+      (%check-endpoints n i j))
+    (%Graph n edges))
+
+  (declare vertex-count (Graph :w -> UFix))
+  (define (vertex-count (%Graph n _))
+    "The number of vertices, including isolated vertices."
+    n)
+
+  (declare %add-at! (Additive :w => vec:Vector :w * UFix * :w -> Void))
+  (define (%add-at! row j w)
+    (vec:set! j (+ (vec:index-unsafe j row) w) row))
+
+  (declare %adjacency-rows (Additive :w => Graph :w -> vec:Vector (vec:Vector :w)))
+  (define (%adjacency-rows (%Graph n edges))
+    (let rows = (vec:with-capacity n))
+    (dotimes (_ n)
+      (vec:push! (vec:with-initial-element n zero) rows))
+    (dolist (edge edges)
+      (let (Edge i j w) = edge)
+      (%add-at! (vec:index-unsafe i rows) j w))
+    rows)
+
+  (declare %to-matrix (vec:Vector (vec:Vector :w) -> mat:Matrix :w))
+  (define (%to-matrix rows)
+    (mat:from-rows [(into row) :for row :in rows]))
+
+  (declare adjacency-matrix (Additive :w => Graph :w -> mat:Matrix :w))
+  (define (adjacency-matrix g)
+    "The concrete square matrix of one-edge walks, summed over parallel edges. Rows are sources; columns are destinations."
+    (%to-matrix (%adjacency-rows g)))
+
+  (declare walks-of-length (Semiring :w => UFix * Graph :w -> mat:Matrix :w))
+  (define (walks-of-length k g)
+    "All-pairs weights of walks using **exactly** $k$ edges. At length zero the result is the identity matrix of the graph's size, including for the empty graph. Uses binary matrix powering, $O(n^3\\log(k+1))$ semiring operations after building the adjacency matrix."
+    (cond
+      ((== k 0) (mat:identity-matrix (vertex-count g)))
+      ((== k 1) (adjacency-matrix g))
+      (True (mat:mat-pow (adjacency-matrix g) k))))
+
+  (declare all-pairs-closure (ClosedSemiring :w => Graph :w -> mat:Matrix :w))
+  (define (all-pairs-closure g)
+    "Sum all finite walks, including the empty walk at each vertex. Uses $n$ scalar stars, $O(n^3)$ semiring operations and $O(n^2)$ auxiliary space; no iteration to convergence or equality test is involved."
+    (let n = (vertex-count g))
+    (let rows = (%adjacency-rows g))
+    (dotimes (k n)
+      (let pivot = (vec:index-unsafe k rows))
+      (let loops = (star (vec:index-unsafe k pivot)))
+      ;; Keep the old pivot row until every non-pivot row has used it.
+      ;; Each detour factors uniquely as entry, zero or more loops, exit.
+      (dotimes (i n)
+        (unless (== i k)
+          (let row = (vec:index-unsafe i rows))
+          (let via = (* (vec:index-unsafe k row) loops))
+          (dotimes (j n)
+            (unless (== j k)
+              (%add-at! row j (* via (vec:index-unsafe j pivot)))))
+          (vec:set! k via row)))
+      (dotimes (j n)
+        (unless (== j k)
+          (vec:set! j (* loops (vec:index-unsafe j pivot)) pivot)))
+      (vec:set! k loops pivot))
+    (%to-matrix rows))
+
+  (define-type (Transition :s :w)
+    "A labeled transition `(Transition source symbol target weight)`."
+    (Transition UFix :s UFix :w))
+
+  (define-type (Automaton :s :w)
+    "An epsilon-free finite automaton with weighted initial states, transitions, and final states. Construct with `automaton`."
+    (%Automaton (vec:Vector :w) (List (Transition :s :w)) (vec:Vector :w)))
+
+  (declare automaton (List :w * List (Transition :s :w) * List :w -> Automaton :s :w))
+  (define (automaton initial transitions final)
+    "Construct an automaton with one initial and final weight per state. Signals an error if their lengths differ or a transition refers to a nonexistent state."
+    (let n = (list:length initial))
+    (unless (== n (list:length final))
+      (error "Initial and final weights must have the same number of states."))
+    (dolist (transition transitions)
+      (let (Transition i _ j _) = transition)
+      (%check-endpoints n i j))
+    (%Automaton (into initial) transitions (into final)))
+
+  (declare word-weight ((Eq :s) (Semiring :w) => Automaton :s :w * List :s -> :w))
+  (define (word-weight (%Automaton initial transitions final) word)
+    "Sum the weights of runs consuming `word`. Each product starts with an initial weight and ends with a final weight, in that order. On the empty word this is $\\sum_i\\lambda_i\\rho_i$. Equality is required only on letters. For $n$ states and $m$ transitions, each letter costs $O(1+n+m)$ operations, with $O(n)$ working space."
+    (let n = (vec:length initial))
+    (rec read-word ((letters word) (current initial))
+      (match letters
+        ((Nil) (sumtimes (i n) (* (vec:index-unsafe i current) (vec:index-unsafe i final))))
+        ((Cons a rest)
+         (let next = (vec:with-initial-element n zero))
+         (dolist (transition transitions)
+           (let (Transition i label j w) = transition)
+           (when (== a label)
+             (%add-at! next j (* (vec:index-unsafe i current) w))))
+         (read-word rest next))))))

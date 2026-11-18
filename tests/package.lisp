@@ -61,6 +61,7 @@
    (#:poly #:coalton/xmath/polynomial)
    (#:series #:coalton/xmath/power-series)
    (#:mat #:coalton/xmath/matrix)
+   (#:sg #:coalton/xmath/semiring-graph)
    (#:diff #:coalton/xmath/differential)
    (#:gb #:coalton/xmath/groebner)
    (#:modmath #:coalton/xmath/modular)
