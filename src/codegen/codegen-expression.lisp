@@ -698,7 +698,7 @@ value is returned from the `handle` form."
             ;; Emit a `cl:if' expression on boolean matches
             ;; with exhaustive constructor pattern branches.
             (emit-if-p
-             `(if ,(codegen-expression (node-match-expr expr) env)
+             `(if ,subexpr
                   ,(codegen-expression then env)
                   ,(codegen-expression else env)))
 
