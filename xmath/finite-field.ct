@@ -1,0 +1,191 @@
+;;;; Certified finite fields and type-indexed coefficients
+
+(coalton/utils:defstdlib-package #:coalton/xmath/finite-field
+  (:documentation "Prime fields $\\mathbb{F}_p=\\mathbb{Z}/p\\mathbb{Z}$ and finite extensions $K[x]/(f)$. `prime-field` requires a proof of primality, not a probable-prime test. `extension-field` checks irreducibility over the actual coefficient field. If $|K|=q$ and $\\deg f=d$, the new field has $q^d$ elements and the same characteristic as $K$.
+
+A `FieldPresentation` can be used as an explicit quotient context, or associated with a fixed type by `KnownField`. Only the latter gives `FieldElement` a context-free zero, one, and lawful field operations. The enumeration `field-element` differs from the integer embedding `from-int`: in an extension its index is read in base $q$ as the indices of successive polynomial coefficients.")
+  (:use #:coalton #:coalton/builtin #:coalton/classes #:coalton/math/arith #:coalton/math/integral)
+  (:local-nicknames
+   (#:factor #:coalton/xmath/integer-factorization)
+   (#:list #:coalton/list)
+   (#:modular #:coalton/xmath/modular)
+   (#:opt #:coalton/optional)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:qr #:coalton/xmath/quotient)
+   (#:types #:coalton/types))
+  (:export
+   #:FieldPresentation #:prime-field #:extension-field #:as-quotient #:order #:characteristic
+   #:residue-at #:KnownField #:presentation #:FieldElement #:Fp #:Extension
+   #:P2 #:P3 #:P5 #:P17 #:GF4 #:representative #:from-representative
+   #:FiniteField #:field-order #:field-characteristic #:field-element #:irreducible?))
+
+(in-package #:coalton/xmath/finite-field)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (FieldPresentation :r)
+    "A quotient by a certified prime or irreducible modulus."
+    (%Field (qr:QuotientRing :r) Integer Integer (Integer -> :r)))
+
+  (declare as-quotient (FieldPresentation :r -> qr:QuotientRing :r))
+  (define (as-quotient (%Field ring _ _ _)) ring)
+
+  (declare characteristic (FieldPresentation :r -> Integer))
+  (define (characteristic (%Field _ p _ _)) p)
+
+  (declare order (FieldPresentation :r -> Integer))
+  (define (order (%Field _ _ q _)) q)
+
+  (declare index-representative (FieldPresentation :r * Integer -> :r))
+  (define (index-representative (%Field _ _ q index) i)
+    (index (mod i q)))
+
+  (declare residue-at (FieldPresentation :r * Integer -> qr:Residue :r))
+  (define (residue-at field i)
+    "Enumerate a dynamic field by index, taken modulo its order."
+    (qr:residue (as-quotient field) (index-representative field i)))
+
+  (declare prime-field (Integer -> Optional (FieldPresentation Integer)))
+  (define (prime-field p)
+    "Construct $\\mathbb{F}_p$ only for a proven prime. `None` includes inconclusive primality results."
+    (if (== (factor:primality p) factor:ProvenPrime)
+        (map (fn (ring) (%Field ring p p (fn (i) i))) (qr:integer-quotient p))
+        None))
+
+  (define-class ((Eq :r) (EuclideanDomain :r) => KnownField :tag :r (:tag -> :r))
+    "A type-level name for one certified quotient: `presentation` must be immutable and independent of ambient state. Define a tag and an instance returning a previously constructed `FieldPresentation` to name another field."
+    (presentation (types:Proxy :tag -> FieldPresentation :r)))
+
+  (repr :transparent)
+  (define-type (FieldElement :tag :r)
+    "A canonical representative of the fixed field named by the phantom type parameter."
+    (%Element :r))
+
+  (define-type-alias (Fp :p) (FieldElement :p Integer)
+    "An element of a statically named prime field.")
+  (define-type-alias (Extension :tag :k) (FieldElement :tag (poly:Polynomial :k))
+    "An element of a statically named extension of the coefficient field.")
+
+  (declare representative (FieldElement :tag :r -> :r))
+  (define (representative (%Element a)) a)
+
+  (declare from-representative (forall (:tag :r) KnownField :tag :r => :r -> FieldElement :tag :r))
+  (define (from-representative a)
+    "Map an integer or a coefficient polynomial into its fixed quotient."
+    (let field = (presentation (the (types:Proxy :tag) types:Proxy)))
+    (%Element (qr:reduce-representative (as-quotient field) a)))
+
+  (define-instance (Eq :r => Eq (FieldElement :tag :r))
+    (define (== (%Element a) (%Element b)) (== a b)))
+
+  (define-instance (KnownField :tag :r => Additive (FieldElement :tag :r))
+    (define (+ (%Element a) (%Element b)) (from-representative (+ a b)))
+    (define zero (%Element zero)))
+
+  (define-instance (KnownField :tag :r => AdditiveGroup (FieldElement :tag :r))
+    (define (neg (%Element a)) (from-representative (neg a)))
+    (define (- (%Element a) (%Element b)) (from-representative (- a b))))
+
+  (define-instance (KnownField :tag :r => Multiplicative (FieldElement :tag :r))
+    (define (* (%Element a) (%Element b)) (from-representative (* a b)))
+    (define one (%Element one)))
+
+  (define-instance (KnownField :tag :r => Semiring (FieldElement :tag :r)))
+  (define-instance (KnownField :tag :r => Ring (FieldElement :tag :r))
+    (define (from-int n) (from-representative (from-int n))))
+  (define-instance (KnownField :tag :r => Num (FieldElement :tag :r)))
+  (define-instance (KnownField :tag :r => CommutativeRing (FieldElement :tag :r)))
+
+  (define-instance (KnownField :tag :r => Reciprocable (FieldElement :tag :r))
+    (define (recip (%Element a))
+      (let field = (presentation (the (types:Proxy :tag) types:Proxy)))
+      (let m = (qr:modulus (as-quotient field)))
+      (%Element (opt:from-some "Zero has no reciprocal in a field." (modular:mod-inv a m))))
+    (define (/ a b) (* a (recip b))))
+
+  (define-instance (KnownField :tag :r => DivisionRing (FieldElement :tag :r)))
+  (define-instance (KnownField :tag :r => GcdDomain (FieldElement :tag :r))
+    (define (unit-part a) (if (zero? a) one a))
+    (define (normal-part a) (if (zero? a) zero one))
+    (define (exact-quot a b) (if (zero? b) None (Some (/ a b))))
+    (define (gcd a b) (if (and (zero? a) (zero? b)) zero one)))
+  (define-instance (KnownField :tag :r => Field (FieldElement :tag :r)))
+
+  (define-class ((Eq :a) (Field :a) => FiniteField :a)
+    "An exact field of order $q=p^d$ with a bijection from $[0,q)$ to its elements. The indices zero and one name the corresponding identities."
+    (field-characteristic (types:Proxy :a -> Integer))
+    (field-order (types:Proxy :a -> Integer))
+    (field-element (Integer -> :a)))
+
+  (define-instance (KnownField :tag :r => FiniteField (FieldElement :tag :r))
+    (define (field-characteristic _)
+      (characteristic (presentation (the (types:Proxy :tag) types:Proxy))))
+    (define (field-order _)
+      (order (presentation (the (types:Proxy :tag) types:Proxy))))
+    (define (field-element i)
+      (%Element (index-representative (presentation (the (types:Proxy :tag) types:Proxy)) i))))
+
+  (declare irreducible? (forall (:k) FiniteField :k => poly:Polynomial :k -> Boolean))
+  (define (irreducible? f)
+    "Test irreducibility over $\\mathbb{F}_q$. Any reducible polynomial of degree $d$ has an irreducible divisor of degree $1\\le i\\le d/2$, which divides $x^{q^i}-x$. Successive $q$th powers are computed modulo the monic associate of $f$. Constants (including zero) are not irreducible."
+    (let d = (poly:degree f))
+    (cond
+      ((== d 0) False)
+      ((== d 1) True)
+      (True
+       (let m = (normal-part f))
+       (let q = (field-order (the (types:Proxy :k) types:Proxy)))
+       (let x = poly:poly-var)
+       (rec test ((i 1) (h x))
+         (let next = (modular:mod-expt h q m))
+         (and (== one (euclidean-gcd m (- next x)))
+              (or (== i (quot d 2))
+                  (test (+ i 1) next)))))))
+
+  (declare extension-field
+    (forall (:k) FiniteField :k => poly:Polynomial :k -> Optional (FieldPresentation (poly:Polynomial :k))))
+  (define (extension-field f)
+    "Construct $K[x]/(f)$ as a field only if $f$ is irreducible over $K$."
+    (cond
+      ((not (irreducible? f)) None)
+      (True
+       (let base = (the (types:Proxy :k) types:Proxy))
+       (let q = (field-order base))
+       (let index =
+         (fn (i)
+           (poly:polynomial
+            (rec digits ((n i) (acc Nil))
+              (if (zero? n)
+                  (list:reverse acc)
+                  (digits (quot n q) (Cons (field-element (mod n q)) acc)))))))
+       (map (fn (ring) (%Field ring (field-characteristic base) (^ q (poly:degree f)) index))
+            (qr:polynomial-quotient f)))))
+
+  (define-type P2 P2)
+  (define-type P3 P3)
+  (define-type P5 P5)
+  (define-type P17 P17)
+
+  (define field2 (opt:from-some "Expected 2 to be prime." (prime-field 2)))
+  (define field3 (opt:from-some "Expected 3 to be prime." (prime-field 3)))
+  (define field5 (opt:from-some "Expected 5 to be prime." (prime-field 5)))
+  (define field17 (opt:from-some "Expected 17 to be prime." (prime-field 17)))
+  (define-instance (KnownField P2 Integer) (define (presentation _) field2))
+  (define-instance (KnownField P3 Integer) (define (presentation _) field3))
+  (define-instance (KnownField P5 Integer) (define (presentation _) field5))
+  (define-instance (KnownField P17 Integer) (define (presentation _) field17))
+
+  (define-type BinaryQuadratic BinaryQuadratic)
+  (define-type-alias GF4 (Extension BinaryQuadratic (Fp P2))
+    "The binary extension $\\mathbb{F}_2[x]/(x^2+x+1)$.")
+  (declare field4 (FieldPresentation (poly:Polynomial (Fp P2))))
+  (define field4
+    (opt:from-some "Expected x^2+x+1 to be irreducible over F2."
+                   (extension-field (poly:polynomial [1 1 1]))))
+  (define-instance (KnownField BinaryQuadratic (poly:Polynomial (Fp P2)))
+    (define (presentation _) field4)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/FINITE-FIELD")
