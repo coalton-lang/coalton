@@ -414,6 +414,8 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   monomial orderings and Buchberger's algorithm for reduced Gröbner bases.
 - **`coalton/xmath/modular`**: Modular arithmetic, the Chinese Remainder Theorem
   over Euclidean domains, and Lagrange polynomial interpolation.
+- **`coalton/xmath/integer-factorization`**: [Integer factorization and primality](#integer-factorization-and-primality)
+  with distinct results for proofs and probable primes.
 - **`coalton/xmath/recurrence`**: Padé rational approximants, Berlekamp–Massey
   recurrence synthesis, fast linear recurrence evaluation, difference calculus,
   and Gosper's algorithm for indefinite hypergeometric summation.
@@ -431,3 +433,38 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   dyadic rationals $m \cdot 2^k$, and constructive real arithmetic.
 - **`coalton/xmath/fft`**: Fast Fourier transforms over rings with roots of
   unity.
+
+### Integer factorization and primality
+
+With `ifact` as a local nickname for `coalton/xmath/integer-factorization`:
+
+```lisp
+(coalton (ifact:factor-integer-exact -360))
+;; => (Some (Factorization -1 [(Tuple 2 3) (Tuple 3 2) (Tuple 5 1)]))
+
+(coalton (ifact:factor-integer 3127 :rho-steps 0))
+;; => (PartialFactorization (Factorization 1 []) 3127)
+```
+
+The first result represents $-2^3 \cdot 3^2 \cdot 5$. Only **proved** primes
+appear in the list, sorted and paired with their multiplicities. Both units
+have empty lists. Zero has no finite prime factorization: `factor-integer`
+returns `ZeroFactorization` and `factor-integer-exact` returns `None`.
+
+Use `factor-integer` when an unfinished answer is preferable to a long
+exhaustive search. It strips small factors, detects exact powers, and uses
+Brent's batched Pollard rho with restarts to split composites. `:rho-steps`
+limits polynomial evaluations across the entire factorization (default $2^{20}$),
+not the time spent on primality or perfect powers. A `PartialFactorization`
+preserves the input: multiply its signed proved part by its unresolved
+cofactor. That cofactor is **not** known to be prime. `factor-integer-exact`
+can finish by trying divisors through the square root; on large inputs this
+may be impractical.
+
+For primality alone, `primality` returns `CompositeOrUnit` for nonprimes it
+can identify (including all $n<2$). Its Miller–Rabin results are exact below
+[the first strong pseudoprime to the first thirteen prime bases](https://doi.org/10.1090/mcom/3134),
+$3317044064679887385961981$. Beyond that range a witness can still disprove
+primality, and Proth's theorem can prove some primes. Otherwise, passing the
+fixed bases yields only `ProbablePrime`; it carries no randomized error bound.
+When constructing a field, accept only `ProvenPrime`.
