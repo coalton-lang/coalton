@@ -1,6 +1,71 @@
 (in-package #:coalton-native-tests)
 
 (coalton-toplevel
+  (define-type-alias FftTestArray (array:LispArray (Complex F64)))
+
+  (declare check-singleton-fft-into! ((FftTestArray * FftTestArray -> Void) -> Void))
+  (define (check-singleton-fft-into! transform!)
+    (let x = (complex 4.0d0 -3.0d0))
+    (let sentinel = (complex 7.0d0 1.0d0))
+    (let src = (array:make 1 x))
+    (let dst = (array:make 3 sentinel))
+    (transform! dst src)
+    (is (== (array:aref dst 0) x))
+    (is (== (array:aref dst 1) sentinel))
+    (is (== (array:aref dst 2) sentinel))
+    (is (== (array:aref src 0) x)))
+
+  ;; Length-only storage ensures even a regression in the raw bounds checks
+  ;; cannot perform an out-of-bounds native array access.
+  (define-type FftShape (FftShape UFix))
+  (define-instance (coalton/randomaccess:RandomAccess FftShape (Complex F64))
+    (define (coalton/randomaccess:make n _) (FftShape n))
+    (define coalton/randomaccess:make-uninitialized FftShape)
+    (define (coalton/randomaccess:length (FftShape n)) n)
+    (define (coalton/randomaccess:readable? _) True)
+    (define (coalton/randomaccess:writable? _) True)
+    (define (coalton/randomaccess:unsafe-aref _ _) (error "Unexpected FFT read."))
+    (define (coalton/randomaccess:unsafe-set! _ _ _) (error "Unexpected FFT write.")))
+
+  (declare check-raw-fft-boundaries ((FftShape * FftShape -> Void) -> Void))
+  (define (check-raw-fft-boundaries raw!)
+    (raw! (FftShape 3) (FftShape 0))
+    (is (string-contains? "radix-2"
+          (catch (progn (raw! (FftShape 4) (FftShape 3)) "")
+            ((the Panic p) (lisp (-> String) (p) (cl:princ-to-string p))))))
+    (is (string-contains? "longer"
+          (catch (progn (raw! (FftShape 0) (FftShape 1)) "")
+            ((the Panic p) (lisp (-> String) (p) (cl:princ-to-string p))))))))
+
+(define-test fft-singleton-test ()
+  (let x = (complex 4.0d0 -3.0d0))
+  (let src = (array:make 1 x))
+  (is (== (fft:fft! (array:copy src)) src))
+  (is (== (fft:ifft! (array:copy src)) src))
+  (is (== (the FftTestArray (fft:fft src)) src))
+  (is (== (the FftTestArray (fft:ifft src)) src))
+  (check-singleton-fft-into! (fn (dst src) (fft:fft-into! dst src) (values)))
+  (check-singleton-fft-into! (fn (dst src) (fft:ifft-into! dst src) (values)))
+  (check-singleton-fft-into! fft:dif-fft-raw)
+  (check-singleton-fft-into! fft:dif-ifft-raw)
+  (check-singleton-fft-into! fft:dit-fft-raw)
+  (check-singleton-fft-into! fft:dit-ifft-raw))
+
+(define-test fft-raw-length-checks-test ()
+  (check-raw-fft-boundaries fft:dif-fft-raw)
+  (check-raw-fft-boundaries fft:dif-ifft-raw)
+  (check-raw-fft-boundaries fft:dit-fft-raw)
+  (check-raw-fft-boundaries fft:dit-ifft-raw))
+
+(define-test fft-allocates-vector-test ()
+  (let impulse = (array:make 4 (complex 0.0d0 0.0d0)))
+  (array:set! impulse 0 (complex 4.0d0 0.0d0))
+  (is (== (the (vector:Vector (Complex F64)) (fft:fft impulse))
+          (vector:with-initial-element 4 (complex 4.0d0 0.0d0))))
+  (is (== (the (vector:Vector (Complex F64)) (fft:ifft impulse))
+          (vector:with-initial-element 4 (complex 1.0d0 0.0d0)))))
+
+(coalton-toplevel
   (declare dft/c64 (array:LispArray (Complex F32) -> array:LispArray (Complex F32)))
   (define (dft/c64 v)
     (let ((n (array:length v))

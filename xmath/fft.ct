@@ -5,7 +5,7 @@
 
 For a sequence $(x_0, \\ldots, x_{n-1})$ of length $n = 2^k$ over a ring $R$ equipped with a principal $n$-th root of unity $\\omega_n$ (`root-of-unity`), the discrete Fourier transform and its inverse are
 $$X_k = \\sum_{j=0}^{n-1} x_j \\omega_n^{-jk}, \\qquad x_j = \\frac{1}{n} \\sum_{k=0}^{n-1} X_k \\omega_n^{jk}.$$
-Both decimation-in-frequency (`dif-fft-raw`, `dif-ifft-raw`) and decimation-in-time (`dit-fft-raw`, `dit-ifft-raw`) butterflies are provided alongside in-place (`fft!`, `ifft!`), preallocated (`fft-into!`, `ifft-into!`), and allocating (`fft`, `ifft`) transforms over any `RandomAccess` storage.")
+Both decimation-in-frequency (`dif-fft-raw`, `dif-ifft-raw`) and decimation-in-time (`dit-fft-raw`, `dit-ifft-raw`) butterflies are provided alongside in-place (`fft!`, `ifft!`), preallocated (`fft-into!`, `ifft-into!`), and allocating (`fft`, `ifft`) transforms over any `RandomAccess` storage. All accept the empty transform and treat a singleton as the identity. Otherwise the source length must be a power of two. The destination must be at least as long as the source; only that prefix is written. Source and destination may be identical or disjoint, not partially overlapping views.")
   (:nicknames
    #:coalton/algorithms/fft
    #:coalton-library/algorithms/fft)
@@ -31,6 +31,7 @@ Both decimation-in-frequency (`dif-fft-raw`, `dif-ifft-raw`) and decimation-in-t
    #:>
    #:<
    #:<=
+   #:==
    #:Additive
    #:zero
    #:+
@@ -99,20 +100,21 @@ Both decimation-in-frequency (`dif-fft-raw`, `dif-ifft-raw`) and decimation-in-t
 
 (coalton-toplevel
 
-  (declare copy-bit-reversed-permutation
-           ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-            => :c -> :d))
-  (define (copy-bit-reversed-permutation storage)
-    "Create a copy of `storage` in bit-reversed order. Assumes `(power-of-2? (ram:length storage))`."
-    (let ((n (ram:length storage))
-          (nbits (ilog2 n))
-          (dst (ram:make-uninitialized n)))
-      (loops:dotimes (i n)
-        (let ((j (inline (bits:reverse-n-bits nbits i))))
-          (if (< i j)
-              (ram:unsafe-set! dst i (ram:unsafe-aref storage j))
-              (ram:unsafe-set! dst j (ram:unsafe-aref storage i)))))
-      dst)))
+  (declare transform-length ((ram:RandomAccess :c :t) => :c -> UFix))
+  (define (transform-length src)
+    (let n = (ram:length src))
+    (unless (or (zero? n) (power-of-2? n))
+      (error "Currently, only radix-2 FFTs are supported."))
+    n)
+
+  (declare prepare-transform! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t) => :d * :c -> UFix))
+  (define (prepare-transform! dst src)
+    (let n = (transform-length src))
+    (when (> n (ram:length dst))
+      (error "`src` cannot be longer than `dst`."))
+    (when (== n 1)
+      (ram:unsafe-set! dst 0 (ram:unsafe-aref src 0)))
+    n))
 
 ;;; Define the roots-of-unity class that supports a discrete Fourier transform.
 
@@ -124,6 +126,7 @@ Both decimation-in-frequency (`dif-fft-raw`, `dif-ifft-raw`) and decimation-in-t
 Examples include complex numbers (`Complex F32`, `Complex F64`, `Complex BigFloat`, `Complex CReal`, where $\\omega_n = e^{2\\pi i / n}$) and finite prime fields $\\mathbb{F}_p$.
 
 Laws (for supported transform lengths $n \\ge 1$ and $\\omega_n = \\text{(root-of-unity } n\\text{)}$):
+- Unit normalization: $n \\cdot 1$ is invertible, so inverse transforms can scale by its reciprocal. In positive characteristic a length divisible by that characteristic is not supported.
 - Periodicity ($n$-th root): `(^ (root-of-unity n) n) == one`
 - Subgroup coherence (halving): for $d \\mid n$, `(^ (root-of-unity (* d m)) d) == (root-of-unity m)`, and `(root-of-unity 2) == (neg one)`
 - Orthogonality (cancellation): for $1 \\le k < n$, $\\sum_{j=0}^{n-1} \\omega_n^{jk} = 0$"
@@ -231,6 +234,24 @@ Laws (for supported transform lengths $n \\ge 1$ and $\\omega_n = \\text{(root-o
 
 (coalton-toplevel
 
+  (declare dif-transform! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t) (RootsOfUnity :t)
+                           => Boolean * Boolean * :c * :d -> Void))
+  (define (dif-transform! inverse? ordered? dst src)
+    (let n = (prepare-transform! dst src))
+    (when (> n 1)
+      (let root = (root-of-unity n))
+      (let wm = (if inverse? root (recip root)))
+      (let normalize? = (and inverse? ordered?))
+      ;; Obtain the inverse length before mutating dst.
+      (let norm = (if normalize? (recip (math:integral->num n)) one))
+      (let half = (bits:shift -1 n))
+      (dif-kernel-initial n n half wm one 0 half dst src)
+      (when ordered?
+        (bit-reversed-permutation! n dst))
+      (when normalize?
+        (loops:dotimes (i n)
+          (ram:unsafe-set! dst i (* norm (ram:unsafe-aref dst i)))))))
+
   (declare dif-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                         (RootsOfUnity :t)
                         => :c * :d -> Void))
@@ -240,14 +261,7 @@ Laws (for supported transform lengths $n \\ge 1$ and $\\omega_n = \\text{(root-o
 Input: natural order
 Output: bit-reversed order
 Normalization: none"
-    (let n    = (ram:length src))
-    (let m    = n)
-    (let m/2  = (bits:shift -1 m))
-    (let wm   = (recip (root-of-unity m)))
-    (let w    = one)
-    (let j    = 0)
-    (let k    = m/2)
-    (dif-kernel-initial n m m/2 wm w j k dst src)))
+    (dif-transform! False False dst src)))
 
 (coalton-toplevel
 
@@ -260,14 +274,7 @@ Normalization: none"
 Input: natural order
 Output: bit-reversed order
 Normalization: none"
-    (let n    = (ram:length src))
-    (let m    = n)
-    (let m/2  = (bits:shift -1 m))
-    (let wm   = (root-of-unity m))
-    (let w    = one)
-    (let j    = 0)
-    (let k    = m/2)
-    (dif-kernel-initial n m m/2 wm w j k dst src)))
+    (dif-transform! True False dst src)))
 
 ;;; Define the decimation-in-time raw FFT and inverse FFT.
 
@@ -373,6 +380,15 @@ Normalization: none"
 
 (coalton-toplevel
 
+  (declare dit-transform! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t) (RootsOfUnity :t)
+                           => Boolean * :c * :d -> Void))
+  (define (dit-transform! inverse? dst src)
+    (let n = (prepare-transform! dst src))
+    (when (> n 1)
+      (let root = (root-of-unity 2))
+      (let wm = (if inverse? root (recip root)))
+      (dit-kernel-initial inverse? n 2 1 wm one 0 1 dst src)))
+
   (declare dit-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                         (RootsOfUnity :t)
                         => :c * :d -> Void))
@@ -382,15 +398,7 @@ Normalization: none"
 Input: bit-reversed order
 Output: natural order
 Normalization: none"
-    (let inv? = False)
-    (let n    = (ram:length src))
-    (let m    = 2)
-    (let m/2  = (bits:shift -1 m))
-    (let wm   = (recip (root-of-unity m)))
-    (let w    = one)
-    (let j    = 0)
-    (let k    = m/2)
-    (dit-kernel-initial inv? n m m/2 wm w j k dst src)))
+    (dit-transform! False dst src)))
 
 (coalton-toplevel
 
@@ -403,15 +411,7 @@ Normalization: none"
 Input: bit-reversed order
 Output: natural order
 Normalization: none"
-    (let inv? = True)
-    (let n    = (ram:length src))
-    (let m    = 2)
-    (let m/2  = (bits:shift -1 m))
-    (let wm   = (root-of-unity m))
-    (let w    = one)
-    (let j    = 0)
-    (let k    = m/2)
-    (dit-kernel-initial inv? n m m/2 wm w j k dst src)))
+    (dit-transform! True dst src)))
 
 ;;; Define the primary interface.
 
@@ -422,112 +422,44 @@ Normalization: none"
                  => :c -> :c))
   (define (fft! storage)
     "Perform an in-place fast Fourier transform on `storage`."
-    (let ((n (ram:length storage)))
-      (cond
-        ((zero? n)
-         storage)
-        ((power-of-2? n)
-         (dif-fft-raw storage storage)
-         (bit-reversed-permutation! n storage)
-         storage)
-        (True
-         (error "Currently, only radix-2 ffts are supported.")))))
+    (fft-into! storage storage))
 
   (declare ifft! ((ram:RandomAccess :c :t)
                   (RootsOfUnity :t)
                   => :c -> :c))
   (define (ifft! storage)
     "Perform an in-place inverse fast Fourier transform on `storage`."
-    (let ((n (ram:length storage)))
-      (cond
-        ((zero? n)
-         storage)
-        ((power-of-2? n)
-         (dif-ifft-raw storage storage)
-         (bit-reversed-permutation! n storage)
-         (let ((norm (recip (math:integral->num n))))
-           (loops:dotimes (i n)
-             (let ((x (* norm (ram:unsafe-aref storage i))))
-               (ram:unsafe-set! storage i x))))
-         storage)
-        (True
-         (error "Currently, only radix-2 ffts are supported.")))))
+    (ifft-into! storage storage))
 
   (declare fft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                       (RootsOfUnity :t)
                       => :d * :c -> :d))
   (define (fft-into! dst src)
     "Perform a fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
-    (let ((n (ram:length src)))
-      (assert (<= n (ram:length dst)) "`src` cannot be longer than `dst`.")
-      (cond
-        ((zero? n)
-         dst)
-        ((power-of-2? n)
-         (dif-fft-raw dst src)
-         (bit-reversed-permutation! n dst)
-         dst)
-        (True
-         (error "Currently, only radix-2 ffts are supported.")))))
+    (dif-transform! False True dst src)
+    dst)
 
   (declare ifft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                        (RootsOfUnity :t)
                        => :d * :c -> :d))
   (define (ifft-into! dst src)
     "Perform an inverse fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
-    (let ((n (ram:length src)))
-      (assert (<= n (ram:length dst)) "`src` cannot be longer than `dst`.")
-      (cond
-        ((zero? n)
-         dst)
-        ((power-of-2? n)
-         (dif-ifft-raw dst src)
-         (bit-reversed-permutation! n dst)
-         (let ((norm (recip (math:integral->num n))))
-           (loops:dotimes (i n)
-             (let ((x (* norm (ram:unsafe-aref dst i))))
-               (ram:unsafe-set! dst i x))))
-         dst)
-        (True
-         (error "Currently, only radix-2 ffts are supported.")))))
+    (dif-transform! True True dst src)
+    dst)
 
   (declare fft ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                 (RootsOfUnity :t)
                 => :c -> :d))
   (define (fft storage)
     "Perform a fast Fourier transform on the data in `storage`."
-    (let ((n (ram:length storage)))
-      (cond
-        ((zero? n)
-         (ram:make-uninitialized 0))
-        ((power-of-2? n)
-         (let ((dst (ram:make-uninitialized n)))
-           (dif-fft-raw dst storage)
-           (bit-reversed-permutation! n dst)
-           dst))
-        (True
-         (error "Currently, only radix-2 ffts are supported.")))))
+    (fft-into! (ram:make-uninitialized (transform-length storage)) storage))
 
   (declare ifft ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                  (RootsOfUnity :t)
                  => :c -> :d))
   (define (ifft storage)
     "Perform an inverse fast Fourier transform on the data in `storage`."
-    (let ((n (ram:length storage)))
-      (cond
-        ((zero? n)
-         (ram:make-uninitialized 0))
-        ((power-of-2? n)
-         (let ((dst (ram:make-uninitialized n)))
-           (dif-ifft-raw dst storage)
-           (bit-reversed-permutation! n dst)
-           (let ((norm (recip (math:integral->num n))))
-             (loops:dotimes (i n)
-               (let ((x (* norm (ram:unsafe-aref dst i))))
-                 (ram:unsafe-set! dst i x))))
-           dst))
-        (True
-         (error "Currently, only radix-2 ffts are supported."))))))
+    (ifft-into! (ram:make-uninitialized (transform-length storage)) storage)))
 
 ;; Define instances and specializations for efficiently computing FFTs
 ;; with Complex numbers.
