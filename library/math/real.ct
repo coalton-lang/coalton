@@ -42,15 +42,11 @@
 
 (coalton-toplevel
   (define-class ((Ord :a) (Ring :a) => Quantizable :a)
-    "An Archimedean ordered ring whose elements lie between consecutive integers and support rounding to `Integer`.
+    "Integer rounding for finite real values (or the real projection specified by an instance).
 
-By the **Archimedean property**, for every element $x$ there exist integers $m, n \\in \\mathbb{Z}$ with $m \\le x \\le n$, so a greatest integer $\\lfloor x \\rfloor$ (`floor`) at most $x$ and a least integer $\\lceil x \\rceil$ (`ceiling`) at least $x$ are well-defined.
+Interpreting the results as mathematical integers, $\\lfloor x\\rfloor\\le x<\\lfloor x\\rfloor+1$ and $\\lceil x\\rceil-1<x\\le\\lceil x\\rceil$. They coincide exactly at integers. `proper` returns the integer truncated toward zero and a remainder of the same sign as $x$ or zero, of magnitude less than one.
 
-Invariants:
-- Floor bound: `(<= (from-int (floor x)) x)` and `(< x (from-int (+ (floor x) 1)))`
-- Ceiling bound: `(< (from-int (- (ceiling x) 1)) x)` and `(<= x (from-int (ceiling x)))`
-- Exact integer agreement: `(<=> (floor x) (ceiling x)) == EQ` iff `x == (from-int (floor x))`
-- Proper decomposition: `(proper x) == (values (truncate x) (- x (from-int (truncate x))))` where `(truncate x) == (* (sign x) (floor (abs x)))` and the fractional remainder $r$ satisfies $0 \\le r < 1$ when $x \\ge 0$ and $-1 < r \\le 0$ when $x \\le 0$."
+These are not identities involving `from-int` outside the representable range of a bounded type, nor do they apply to infinities or NaN. For constructive reals, integer rounding can be undecidable at an exact integer."
     (proper (:a -> Integer * :a))
     (floor (:a -> Integer))
     (ceiling (:a -> Integer)))
@@ -302,13 +298,15 @@ remainders expressed as values of type of X."
   (declare round-half-up (Quantizable :a => :a -> Integer))
   (define (round-half-up x)
     "Return the nearest integer to X, with ties breaking toward positive infinity."
-    (ceiling/ (floor (* (from-int 2) x)) 2))
+    (let (values n r) = (proper x))
+    (+ n (ceiling/ (floor (+ r r)) 2)))
 
   (inline)
   (declare round-half-down (Quantizable :a => :a -> Integer))
   (define (round-half-down x)
     "Return the nearest integer to X, with ties breaking toward negative infinity."
-    (floor/ (ceiling (* (from-int 2) x)) 2))
+    (let (values n r) = (proper x))
+    (+ n (floor/ (ceiling (+ r r)) 2)))
 
   (declare safe/ ((Eq :a) (Additive :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
   (define (safe/ x y)

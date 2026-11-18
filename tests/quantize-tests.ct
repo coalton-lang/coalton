@@ -1,6 +1,11 @@
 (in-package #:coalton-native-tests)
 
 (define-test test-rounding ()
+  (is (== (math:round-half-up (the U8 200)) 200))
+  (is (== (math:round-half-down (the I8 -128)) -128))
+  (let huge = (lisp (-> F64) () cl:most-positive-double-float))
+  (is (== (math:round-half-up huge) (floor huge)))
+  (is (== (math:round-half-down (neg huge)) (ceiling (neg huge))))
   (is (== 0 (floor 0.1)))
   (is (== 1 (ceiling 0.1)))
   (is (== 0 (round 0.1)))

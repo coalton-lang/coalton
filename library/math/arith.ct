@@ -181,6 +181,8 @@ For types with `AdditiveGroup :a`, `negative-infinity` is `(neg infinity)`. For 
   (define-class (Transfinite :a => IEEEFloat :a)
     "Floating-point types supporting an IEEE 754 indeterminate Not-a-Number (`nan`) value.
 
+`F32`, `F64` and `BigFloat` retain IEEE equality (a NaN is unequal to everything, including itself). Their sorting order `<=>` places all NaNs before every non-NaN and returns `EQ` between two NaNs. Ordered predicates, `min` and `max` use that sorting order, not IEEE unordered comparison.
+
 Laws:
 - `(nan? nan) == True`
 - `(finite? nan) == False`
