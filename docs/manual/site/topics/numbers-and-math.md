@@ -467,6 +467,9 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   over Euclidean domains, and Lagrange polynomial interpolation.
 - **`coalton/xmath/integer-factorization`**: [Integer factorization and primality](#integer-factorization-and-primality)
   with distinct results for proofs and probable primes.
+- **`coalton/xmath/quotient`** and **`coalton/xmath/finite-field`**:
+  [Residue rings and finite fields](#residue-rings-and-finite-fields), including
+  polynomial extensions and exact number-theoretic transforms.
 - **`coalton/xmath/recurrence`**: Padé rational approximants, Berlekamp–Massey
   recurrence synthesis, fast linear recurrence evaluation, difference calculus,
   and Gosper's algorithm for indefinite hypergeometric summation.
@@ -484,6 +487,39 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   dyadic rationals $m \cdot 2^k$, and constructive real arithmetic.
 - **`coalton/xmath/fft`**: Fast Fourier transforms over rings with roots of
   unity.
+
+### Residue rings and finite fields
+
+Use `qr`, `ff`, and `poly` as local nicknames for `coalton/xmath/quotient`,
+`coalton/xmath/finite-field`, and `coalton/xmath/polynomial`. For a modulus
+chosen at runtime, elements carry their quotient with them:
+
+```lisp
+(coalton
+  (let ((r (unwrap (qr:integer-quotient 12))))
+    (qr:residue-inverse (qr:residue r 8))))
+;; => None: 8 is nonzero, but 8 * 3 = 0 modulo 12.
+
+(coalton
+  (let ((a (the ff:GF4 (ff:from-representative poly:poly-var))))
+    (== (* a a) (+ a 1))))
+;; => True: GF4 is F2[x]/(x^2 + x + 1).
+```
+
+`integer-quotient` accepts any positive modulus. `polynomial-quotient` accepts
+any nonconstant polynomial over an exact field, reducing the modulus to its
+monic associate. `residue+`, `residue-`, and `residue*` reject mismatched
+contexts. When the modulus is fixed in a type, a `KnownQuotient` instance
+provides ordinary ring operations on `ResidueClass` (or `ZMod` for integers).
+
+Use `prime-field` or `extension-field` to **check** a field presentation;
+they require proven primality or irreducibility respectively. A
+`KnownField` tag names such a presentation for use as a coefficient type,
+e.g. `(ff:Fp ff:P17)`. For a field of order $q$, `try-root-of-unity` returns
+`Some` only for positive orders dividing $q-1$. `ntt` and `inverse-ntt`
+work on vectors of these coefficients and additionally require a power-of-two
+length: four samples can be transformed over $\mathbb{F}_{17}$, but not over
+$\mathbb{F}_4$.
 
 ### Integer factorization and primality
 

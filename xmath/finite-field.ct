@@ -3,22 +3,29 @@
 (coalton/utils:defstdlib-package #:coalton/xmath/finite-field
   (:documentation "Prime fields $\\mathbb{F}_p=\\mathbb{Z}/p\\mathbb{Z}$ and finite extensions $K[x]/(f)$. `prime-field` requires a proof of primality, not a probable-prime test. `extension-field` checks irreducibility over the actual coefficient field. If $|K|=q$ and $\\deg f=d$, the new field has $q^d$ elements and the same characteristic as $K$.
 
-A `FieldPresentation` can be used as an explicit quotient context, or associated with a fixed type by `KnownField`. Only the latter gives `FieldElement` a context-free zero, one, and lawful field operations. The enumeration `field-element` differs from the integer embedding `from-int`: in an extension its index is read in base $q$ as the indices of successive polynomial coefficients.")
+A `FieldPresentation` can be used as an explicit quotient context, or associated with a fixed type by `KnownField`. Only the latter gives `FieldElement` a context-free zero, one, and lawful field operations. The enumeration `field-element` differs from the integer embedding `from-int`: in an extension its index is read in base $q$ as the indices of successive polynomial coefficients.
+
+The multiplicative group of $\\mathbb{F}_q$ is cyclic of order $q-1$, so a primitive $n$th root exists exactly when $n>0$ divides $q-1$. `try-root-of-unity` returns a coherent family of such roots. The `RootsOfUnity` method signals an error for unsupported orders; `ntt` and `inverse-ntt` return `None` unless the vector length is also a power of two. Both transforms use the radix-two FFT butterflies, with the forward sign and inverse normalization of `coalton/xmath/fft`.")
   (:use #:coalton #:coalton/builtin #:coalton/classes #:coalton/math/arith #:coalton/math/integral)
+  (:import-from #:coalton/functions #:/=)
   (:import-from #:coalton/xmath/quotient #:representative #:from-representative)
   (:local-nicknames
+   (#:bits #:coalton/bits)
    (#:factor #:coalton/xmath/integer-factorization)
+   (#:fft #:coalton/xmath/fft)
    (#:list #:coalton/list)
    (#:modular #:coalton/xmath/modular)
    (#:opt #:coalton/optional)
    (#:poly #:coalton/xmath/polynomial)
    (#:qr #:coalton/xmath/quotient)
-   (#:types #:coalton/types))
+   (#:types #:coalton/types)
+   (#:vec #:coalton/vector))
   (:export
    #:FieldPresentation #:prime-field #:extension-field #:as-quotient #:order #:characteristic
    #:residue-at #:KnownField #:presentation #:FieldElement #:Fp #:Extension
    #:P2 #:P3 #:P5 #:P17 #:GF4 #:representative #:from-representative
-   #:FiniteField #:field-order #:field-characteristic #:field-element #:irreducible?))
+   #:FiniteField #:field-order #:field-characteristic #:field-element #:irreducible?
+   #:residue-root-of-unity #:try-root-of-unity #:ntt #:inverse-ntt))
 
 (in-package #:coalton/xmath/finite-field)
 
@@ -159,6 +166,82 @@ A `FieldPresentation` can be used as an explicit quotient context, or associated
                    (extension-field (poly:polynomial [1 1 1]))))
   (define-instance (KnownField BinaryQuadratic (poly:Polynomial (Fp P2)))
     (define (presentation _) field4)))
+
+(coalton-toplevel
+  (declare residue-root-of-unity
+    ((Eq :r) (EuclideanDomain :r) => FieldPresentation :r * UFix -> Optional (qr:Residue :r)))
+  (define (residue-root-of-unity field n)
+    "Return a primitive root of order $n$ in this explicit field, or `None` if the order is impossible. Factors only $n$, not the field order minus one. Finding a non-power by deterministic enumeration can be expensive in large extensions."
+    (let ring = (as-quotient field))
+    (let size = (- (order field) 1))
+    (let n = (to-integer n))
+    (cond
+      ((or (== n 0) (/= 0 (rem size n))) None)
+      ((== n 1) (Some (qr:residue ring one)))
+      ((== n 2) (Some (qr:residue ring (neg one))))
+      (True
+       (let m = (qr:modulus ring))
+       (let power = (fn (a e) (qr:reduce-representative ring (modular:mod-expt a e m))))
+       (let (factor:Factorization _ powers) =
+         (opt:from-some "A positive order has a factorization." (factor:factor-integer-exact n)))
+       (rec combine ((factors powers) (w one))
+         (match factors
+           ((Nil) (Some (qr:residue ring w)))
+           ((Cons (Tuple ell e) rest)
+            ;; The first ell-th non-power depends only on the field and ell,
+            ;; not on n. Its successive ell-power roots are thus compatible.
+            (let witness =
+              (rec search ((i 2))
+                (when (> i size)
+                  (error "Finite field enumeration has no non-power."))
+                (let a = (index-representative field i))
+                (if (/= (power a (quot size ell)) one)
+                    a
+                    (search (+ i 1)))))
+            (let h = (^ ell e))
+            ;; w^(n/h) must be witness^((q-1)/h). Combine these independent
+            ;; prime-power projections by CRT in the exponents.
+            (let weight = (opt:from-some "Distinct prime powers are coprime."
+                                         (modular:mod-inv (quot n h) h)))
+            (let component = (power witness (* (quot size h) weight)))
+            (combine rest (qr:reduce-representative ring (* w component)))))))))
+
+  (declare try-root-of-unity
+    (forall (:tag :r) KnownField :tag :r => UFix -> Optional (FieldElement :tag :r)))
+  (define (try-root-of-unity n)
+    "Return a primitive $n$th root if $n\\mid(q-1)$ and $n>0$. For $d\\mid n$, the $d$th power of the chosen $n$th root is the chosen $(n/d)$th root."
+    (let field = (presentation (the (types:Proxy :tag) types:Proxy)))
+    (map (fn (a) (from-representative (qr:residue-value a)))
+         (residue-root-of-unity field n)))
+
+  (define-instance (KnownField :tag :r => fft:RootsOfUnity (FieldElement :tag :r))
+    (define (fft:root-of-unity n)
+      (opt:from-some "A finite-field root order must be positive and divide the field order minus one."
+                     (try-root-of-unity n))))
+
+  (declare transform
+    (forall (:tag :r) KnownField :tag :r =>
+     Boolean * vec:Vector (FieldElement :tag :r) -> Optional (vec:Vector (FieldElement :tag :r))))
+  (define (transform inverse? xs)
+    (let n = (vec:length xs))
+    (let q = (field-order (the (types:Proxy (FieldElement :tag :r)) types:Proxy)))
+    (cond
+      ((or (== n 0) (/= 0 (bits:and n (- n 1))) (/= 0 (rem (- q 1) (to-integer n)))) None)
+      ((== n 1) (Some (vec:copy xs)))
+      (inverse? (Some (fft:ifft! (vec:copy xs))))
+      (True (Some (fft:fft! (vec:copy xs))))))
+
+  (declare ntt
+    (KnownField :tag :r => vec:Vector (FieldElement :tag :r) -> Optional (vec:Vector (FieldElement :tag :r))))
+  (define (ntt xs)
+    "Compute the allocating radix-two number-theoretic transform, or return `None` for an unsupported length."
+    (transform False xs))
+
+  (declare inverse-ntt
+    (KnownField :tag :r => vec:Vector (FieldElement :tag :r) -> Optional (vec:Vector (FieldElement :tag :r))))
+  (define (inverse-ntt xs)
+    "Invert `ntt` with the same length preconditions and the normalization $1/n$."
+    (transform True xs)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/FINITE-FIELD")
