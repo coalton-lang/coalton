@@ -36,8 +36,8 @@
   (define-eq U32)
   (define-eq I64)
   (define-eq U64)
-  (define-eq F32)
-  (define-eq F64)
+  (define-eq F32 :floatp cl:t)
+  (define-eq F64 :floatp cl:t)
 
 
 ;;;
@@ -56,8 +56,8 @@
   (define-ord U32)
   (define-ord I64)
   (define-ord U64)
-  (define-ord F32)
-  (define-ord F64)
+  (define-float-ord F32)
+  (define-float-ord F64)
 
 
 ;;;

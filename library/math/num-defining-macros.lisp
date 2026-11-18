@@ -28,6 +28,7 @@
    #:+unsigned-fixnum-bits+
    #:define-eq
    #:define-ord
+   #:define-float-ord
    #:define-num-checked
    #:%handle-8bit-overflow
    #:%handle-16bit-overflow
@@ -54,17 +55,32 @@
 
 
 ;;; Utilities to define Eq types.
-(cl:defmacro define-eq (type)
+(cl:defmacro define-eq (type cl:&key floatp)
   `(define-instance (Eq ,type)
      (inline)
      (define (== a b)
        (coalton++:unsafe
          (lisp (-> Boolean) (a b)
            ;; Use cl:= so that (== 0.0 -0.0) => True
-           (cl:= a b))))))
+           (cl:and ,@(cl:when floatp
+                       '((cl:not (ff:float-nan-p a)) (cl:not (ff:float-nan-p b))))
+                   (cl:= a b)))))))
 
 
 ;;; Utilities to define Ord types.
+(cl:defmacro define-float-ord (type)
+  ;; Preserve the sorting order in polymorphic and monomorphic calls alike;
+  ;; native <, <=, min and max need not implement this order on NaN.
+  `(define-instance (Ord ,type)
+     (inline)
+     (define (<=> a b)
+       (cond
+         ((nan? a) (if (nan? b) EQ LT))
+         ((nan? b) GT)
+         (True
+          (lisp (-> Ordering) (a b)
+            (cl:cond ((cl:< a b) LT) ((cl:> a b) GT) (cl:t EQ))))))))
+
 (cl:defmacro define-ord (type)
   (cl:let ((>-spec (alexandria:format-symbol cl:*package* "~A->" type))
            (>=-spec (alexandria:format-symbol cl:*package* "~A->=" type))

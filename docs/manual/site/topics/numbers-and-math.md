@@ -166,12 +166,16 @@ and extended number systems represent infinite and indeterminate values:
 - **`Transfinite :a`**: types with an infinity representation (`infinity`, `negative-infinity`, `infinite?`, `finite?`).
 - **`IEEEFloat :a`**: floating-point types supporting IEEE 754 Not-a-Number (`nan`, `nan?`).
 
+`F32`, `F64` and `BigFloat` place NaNs before all other values for sorting
+with `<=>` and its derived comparisons. Two NaNs compare `EQ` for ordering,
+but `(== nan nan)` is false. Use `nan?` to test for NaN.
+
 #### Rounding and Approximation (`coalton/math/real`)
 
 Real-valued types can be rounded to nearby integers or approximated to a chosen
 number of binary digits in another numeric representation:
 
-- **`Quantizable :a`**: ordered rings whose elements lie between consecutive integers and support rounding to `Integer` (e.g., `floor`, `ceiling`, `truncate`, `round`).
+- **`Quantizable :a`**: rounding finite real values (or an instance's real projection) to `Integer`, e.g. `floor`, `ceiling`, `truncate`, `round`. The mathematical bounds on the result do not require neighboring integers to fit back into `:a`.
 - **`Approximable :a :b`**: `(approx bits x)` guarantees *absolute* error at most $2^{-\mathtt{bits}}$, component by component. It signals an error when it cannot certify that bound. For example, no `F32` lies within $1/2$ of the integer $16777217$. Use `from-int`, `fromfrac`, or `big-float:round-to-f32` / `round-to-f64` for ordinary rounded conversion without this guarantee.
 - **`Rationalizable :a`**: `(simplest-fraction bits x)` returns a fraction of least positive denominator in the **closed** tolerance interval, breaking ties by least absolute numerator. `simplest-fraction-between` takes two exact rational endpoints. `CReal` supplies an approximation oracle, not decidable endpoint comparisons: use `rational-approx` or `creal:rationalize` for a guaranteed approximation without global minimality.
 

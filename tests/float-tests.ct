@@ -426,7 +426,12 @@
   (define (opaque-real q)
     (lisp (-> creal:CReal) (q)
       (computable-reals:make-real
-       (cl:lambda (k) (cl:round (cl:ash (cl:numerator q) k) (cl:denominator q)))))))
+       (cl:lambda (k) (cl:round (cl:ash (cl:numerator q) k) (cl:denominator q))))))
+
+  (declare order-operations (Ord :a => :a * :a -> Boolean))
+  (define (order-operations a b)
+    (and (< a b) (<= a b) (not (> a b)) (not (>= a b))
+         (== (<=> a b) LT) (== (<=> b a) GT) (== (max a b) b))))
 
 (define-test certified-absolute-approximation ()
   (is (== (the F32 (approx 0 (the Integer 16777217))) 16777216f0))
@@ -459,3 +464,12 @@
         (is (<= (abs (- (exact-fraction (the big-float:BigFloat (approx 65 ra))) q)) (math:^^ 2 -65)))
         (is (<= (abs (+ (exact-fraction (the big-float:BigFloat (approx 65 cr))) q)) (math:^^ 2 -65))))
       :precision 1 :rounding mode))))
+
+(define-test floating-sort-order ()
+  (is ((noinline order-operations) (the F32 math:nan) math:negative-infinity))
+  (is ((noinline order-operations) (the F64 math:nan) -1d0))
+  (is ((noinline order-operations) (the big-float:BigFloat math:nan) 0))
+  (is (< (the F64 math:nan) 0d0))
+  (is (math:nan? (min 7d0 (the F64 math:nan))))
+  (is (== (<=> (the F32 math:nan) math:nan) EQ))
+  (is (not (== (the F64 math:nan) math:nan))))
