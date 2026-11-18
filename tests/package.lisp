@@ -70,6 +70,8 @@
    (#:ifact #:coalton/xmath/integer-factorization)
    (#:qr #:coalton/xmath/quotient)
    (#:ff #:coalton/xmath/finite-field)
+   (#:factor #:coalton/xmath/polynomial-factor)
+   (#:nfield #:coalton/xmath/number-field)
    (#:recur #:coalton/xmath/recurrence)
    (#:quat #:coalton/xmath/quaternion)
    (#:cliff #:coalton/xmath/clifford-algebra)))
