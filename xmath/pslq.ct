@@ -1,0 +1,269 @@
+(coalton/utils:defstdlib-package #:coalton/xmath/pslq
+  (:documentation "Bounded, arbitrary-precision PSLQ searches for integer relations among real numbers.")
+  (:use #:coalton #:coalton-prelude #:coalton/math/integral)
+  (:local-nicknames (#:w #:coalton/xmath/internal/matrix-workspace)
+                    (#:vec #:coalton/vector)
+                    (#:list #:coalton/list)
+                    (#:frac #:coalton/math/fraction)
+                    (#:ra #:coalton/xmath/real-algebraic)
+                    (#:cr #:coalton/xmath/computable-reals))
+  (:export #:RelationInput #:exact-dot-zero? #:PSLQResult #:ExactRelation #:RelationCandidate
+           #:NoRelation #:CoefficientLimit #:IterationLimit #:PrecisionExhausted #:pslq))
+
+(in-package #:coalton/xmath/pslq)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-class (Approximable :a Fraction => RelationInput :a)
+    "A source of absolute-error-bounded approximations, optionally with an exact test for an integer linear relation. Given equally long lists, `exact-dot-zero?` returns `Some` only for an exact decision on whether $\\sum_i c_i x_i=0$. `None` requests independent numerical verification."
+    (exact-dot-zero? (List Integer * List :a -> Optional Boolean)))
+
+  (declare %dot (Ring :a => List Integer * List :a -> :a))
+  (define (%dot cs xs)
+    (rec dot ((cs cs) (xs xs) (sum zero))
+      (match (Tuple cs xs)
+        ((Tuple (Cons c cs) (Cons x xs))
+         (dot cs xs (if (zero? c) sum (+ sum (* (from-int c) x)))))
+        (_ sum))))
+
+  (define-instance (RelationInput Integer)
+    (define (exact-dot-zero? cs xs) (Some (zero? (%dot cs xs)))))
+  (define-instance (RelationInput Fraction)
+    (define (exact-dot-zero? cs xs) (Some (zero? (%dot cs xs)))))
+  (define-instance (RelationInput ra:RealAlgebraic)
+    (define (exact-dot-zero? cs xs) (Some (zero? (%dot cs xs)))))
+  (define-instance (RelationInput cr:CReal)
+    (define (exact-dot-zero? cs xs)
+      ;; CReal stores known rationals exactly. Never invoke its threshold-based
+      ;; Eq instance to decide a relation involving an arbitrary computable real.
+      (rec dot ((cs cs) (xs xs) (sum (the Fraction 0)))
+        (match (Tuple cs xs)
+          ((Tuple (Cons c cs) (Cons x xs))
+           (cond
+             ((zero? c) (dot cs xs sum))
+             ((lisp (-> Boolean) (x) (cl:rationalp x))
+              (let q = (lisp (-> Fraction) (x) (cl:the cl:rational x)))
+              (dot cs xs (+ sum (* (from-int c) q))))
+             (True None)))
+          (_ (Some (zero? sum)))))))
+
+  (define-type PSLQResult
+    "Only `ExactRelation` certifies equality. `RelationCandidate` carries coefficients and an absolute upper bound on the residual. `NoRelation` is used only for trivial, decidable dimensions. The three limit results do not prove absence of a relation."
+    (ExactRelation (List Integer))
+    (RelationCandidate (List Integer) Fraction)
+    NoRelation
+    CoefficientLimit
+    IterationLimit
+    PrecisionExhausted)
+
+  (declare %nearest (Integer * Integer -> Integer))
+  (define (%nearest a b)
+    (lisp (-> Integer) (a b) (cl:nth-value 0 (cl:round a b))))
+
+  (declare %isqrt (Integer -> Integer))
+  (define (%isqrt n)
+    (lisp (-> Integer) (n) (cl:isqrt n)))
+
+  (declare %scale (Approximable :a Fraction => List :a * UFix -> Fraction))
+  (define (%scale xs bits)
+    ;; Discover a common exponent even for very small inputs. Bound the
+    ;; probes: arbitrary computable reals cannot be distinguished from zero.
+    (rec probe ((p bits) (remaining 3))
+      (let m = (fold (fn (m x) (max m (abs (the Fraction (approx p x))))) 0 xs))
+      (if (or (nonzero? m) (zero? remaining))
+          m
+          (probe (* 2 p) (1- remaining)))))
+
+  (declare %sample-bits (UFix * Fraction -> UFix))
+  (define (%sample-bits bits scale)
+    ;; Approx has an absolute-error contract. Request enough fractional bits
+    ;; that this error is < 1/8 fixed-point unit *after* normalizing by scale.
+    (lisp (-> UFix) (bits scale)
+      (cl:max 0 (cl:+ bits 4 (cl:integer-length (cl:denominator scale))
+                     (cl:- (cl:integer-length (cl:numerator scale)))))))
+
+  (declare %hyperplane (vec:Vector Integer * Integer -> w:Grid Integer))
+  (define (%hyperplane x s)
+    ;; H has orthonormal columns perpendicular to x. Store round(s * H).
+    (let n = (vec:length x))
+    (let tails = (vec:with-initial-element (1+ n) 0))
+    (for ((end n (1- end))) :while (> end 0)
+      (let i = (1- end))
+      (vec:set! i (+ (vec:index-unsafe end tails) (^ (vec:index-unsafe i x) 2)) tails))
+    ;; Carry extra bits in the square-root denominator; rounding the
+    ;; unscaled length first would lose accuracy for a short suffix.
+    (let ss = (* s s))
+    (let den = (the (vec:Vector Integer)
+                 [(%isqrt (* (* ss (vec:index-unsafe j tails)) (vec:index-unsafe (1+ j) tails)))
+                  :for j :below (1- n)]))
+    (w:tabulate n (1- n)
+      (fn (i j)
+        (let d = (vec:index-unsafe j den))
+        (cond
+          ((< i j) 0)
+          ((== i j) (%nearest (* ss (vec:index-unsafe (1+ j) tails)) d))
+          (True (%nearest (neg (* (* ss (vec:index-unsafe i x)) (vec:index-unsafe j x))) d))))))
+
+  (declare %hermite-reduce! (w:Grid Integer * w:Grid Integer * vec:Vector Integer *
+                             UFix * UFix * Integer -> Boolean))
+  (define (%hermite-reduce! h bt y first last-column safe-height)
+    ;; Modified Hermite reduction. If H_i -= q H_j, the inverse operation
+    ;; is B_j += q B_i on *columns*, tracked as rows of bt. Thus y = x B
+    ;; holds exactly for the rounded input; no floating-point update to y.
+    (for ((i first (1+ i))) :while (< i (w:.height h))
+      (for ((end (min i (1+ last-column)) (1- end))) :while (> end 0)
+        (let j = (1- end))
+        (let d = (w:at h j j))
+        (when (<= (abs d) 4) (return False))
+        (let q = (%nearest (w:at h i j) d))
+        (unless (zero? q)
+          (for ((k 0 (1+ k))) :while (<= k j)
+            (w:put! h i k (- (w:at h i k) (* q (w:at h j k)))))
+          (w:add-row! bt j i q)
+          (vec:set! j (+ (vec:index-unsafe j y) (* q (vec:index-unsafe i y))) y)
+          (for ((k 0 (1+ k))) :while (< k (w:.width bt))
+            (when (> (abs (w:at bt j k)) safe-height) (return False))))))
+    True)
+
+  (declare %exchange! (w:Grid Integer * w:Grid Integer * vec:Vector Integer -> UFix))
+  (define (%exchange! h bt y)
+    ;; With gamma = sqrt(2), maximizing gamma^i |H_ii| is exactly the
+    ;; same as maximizing 2^i H_ii^2, without approximating gamma.
+    (let k =
+      (for ((i 1 (1+ i))
+            (best 0 (if (> (lsh (^ (w:at h i i) 2) i)
+                           (lsh (^ (w:at h best best) 2) best)) i best)))
+           :returns best :while (< i (w:.width h))))
+    (let next = (1+ k))
+    (w:swap-rows! h k next)
+    (w:swap-rows! bt k next)
+    (let x = (vec:index-unsafe k y))
+    (vec:set! k (vec:index-unsafe next y) y)
+    (vec:set! next x y)
+    k)
+
+  (declare %remove-corner! (w:Grid Integer * UFix * Integer -> Boolean))
+  (define (%remove-corner! h k s)
+    (let j = (1+ k))
+    (when (< j (w:.width h))
+      (let a = (w:at h k k))
+      (let b = (w:at h k j))
+      (let norm = (+ (* a a) (* b b)))
+      (when (<= norm 16) (return False))
+      (let d = (%isqrt (* (* s s) norm)))
+      (for ((i k (1+ i))) :while (< i (w:.height h))
+        (let x = (w:at h i k))
+        (let y = (w:at h i j))
+        (w:put! h i k (%nearest (* s (+ (* a x) (* b y))) d))
+        (w:put! h i j (%nearest (* s (- (* a y) (* b x))) d))))
+    True)
+
+  (declare %orient (List Integer -> List Integer))
+  (define (%orient cs)
+    ;; Rows of a unimodular matrix are already primitive.
+    (rec first ((xs cs))
+      (match xs
+        ((Nil) (error "pslq: zero row in unimodular transform."))
+        ((Cons x rest)
+         (cond ((zero? x) (first rest))
+               ((< x 0) (map neg cs))
+               (True cs))))))
+
+  (declare %verify (RelationInput :a => List Integer * List :a * UFix * Integer * Integer -> PSLQResult))
+  (define (%verify cs xs check-bits weight s)
+    (match (exact-dot-zero? cs xs)
+      ((Some exact?) (if exact? (ExactRelation cs) PrecisionExhausted))
+      ((None)
+       ;; Re-evaluate the *original* inputs. If zero is not in this interval,
+       ;; the working grid has run out of resolving power. Inclusion is not proof.
+       ;; Do not let large coefficients consume all the verification guard bits.
+       (when (> weight s) (return PrecisionExhausted))
+       (let center = (%dot cs (the (List Fraction) [(approx check-bits x) :for x :in xs])))
+       (let radius = (frac:make-fraction weight (lsh 1 check-bits)))
+       (if (<= (abs center) radius)
+           (RelationCandidate cs (+ (abs center) radius))
+           PrecisionExhausted))))
+
+  (declare %check-columns (RelationInput :a => w:Grid Integer * vec:Vector Integer *
+                           List :a * UFix * Integer * Integer -> Optional PSLQResult))
+  (define (%check-columns bt y xs check-bits limit s)
+    (rec check ((i 0) (stop None))
+      (cond
+        ((== i (w:.height bt)) stop)
+        (True
+         (let weight =
+           (for ((j 0 (1+ j)) (s 0 (+ s (abs (w:at bt i j)))))
+             :returns s :while (< j (w:.width bt))))
+         (cond
+           ((> (abs (vec:index-unsafe i y)) weight) (check (1+ i) stop))
+           (True
+            (let cs = [(w:at bt i j) :for j :below (w:.width bt)])
+            (cond
+              ((> (fold (fn (m c) (max m (abs c))) 0 cs) limit)
+               (check (1+ i) (Some CoefficientLimit)))
+              (True
+               (match (%verify (%orient cs) xs check-bits weight s)
+                 ((PrecisionExhausted) (check (1+ i) (Some PrecisionExhausted)))
+                 (result (Some result)))))))))))
+
+  (declare %search (RelationInput :a => List :a * vec:Vector Integer * Integer *
+                    UFix * Integer * UFix -> PSLQResult))
+  (define (%search xs y s check-bits limit iterations)
+    (let n = (vec:length y))
+    (let h = (%hyperplane y s))
+    (let bt = (w:identity-grid n))
+    (let safe-height = (%isqrt s))
+    (let initial-ok = (%hermite-reduce! h bt y 1 (1- (w:.width h)) safe-height))
+    (rec search ((steps 0) (resolved initial-ok))
+      (match (%check-columns bt y xs check-bits limit s)
+        ((Some answer) answer)
+        ((None)
+         (let diagonal =
+           (for ((i 0 (1+ i)) (m 0 (max m (abs (w:at h i i)))))
+             :returns m :while (< i (w:.width h))))
+         (cond
+           ((not resolved) PrecisionExhausted)
+           ;; In exact PSLQ, 1/max |H_ii| bounds a relation's Euclidean
+           ;; norm below. A rounded H is a stopping heuristic, not a proof.
+           ((< (* (to-integer n) (^ (* limit diagonal) 2)) (* s s)) CoefficientLimit)
+           ((== steps iterations) IterationLimit)
+           (True
+            (let k = (%exchange! h bt y))
+            (let ok = (and (%remove-corner! h k s)
+                           (%hermite-reduce! h bt y (1+ k) (1+ k) safe-height)))
+            (search (1+ steps) ok)))))))
+
+  (declare pslq (RelationInput :a => List :a
+                 &key (:bits UFix) (:max-coefficient Integer) (:max-iterations UFix) -> PSLQResult))
+  (define (pslq xs &key (bits 128) (max-coefficient 1000000) (max-iterations 1000))
+    "Search for a nonzero primitive $c\\in\\mathbb{Z}^n$ satisfying $c\\cdot x=0$ by PSLQ (Ferguson, Bailey and Arno). `:bits` specifies the binary fixed-point working precision after scaling by the largest input magnitude. `:max-coefficient` bounds $\\max_i |c_i|$ inclusively; `:max-iterations` bounds exchanges after initial Hermite reduction.
+
+With `Integer`, `Fraction`, or `RealAlgebraic` inputs an answer is checked exactly. For general `CReal` inputs, a candidate is checked against fresh approximations with at least twice the working precision; the reported bound on $|c\\cdot x|$ applies to the original, unscaled inputs. Even an exceedingly small bound is not a proof. Values rounded before being supplied cannot acquire additional accuracy.
+
+Inconclusive stops are not nonexistence certificates. Use more bits or rescale if magnitudes cannot be resolved; fewer than 16 working bits are rejected. A known zero component gives its exact unit relation."
+    (when (< max-coefficient 1)
+      (error "pslq: max-coefficient must be positive."))
+    (let n = (list:length xs))
+    (when (== n 0) (return NoRelation))
+    (when (< bits 16) (return PrecisionExhausted))
+    (let s = (lsh (the Integer 1) bits))
+    (let scale = (%scale xs bits))
+    (let work-bits = (if (zero? scale) bits (%sample-bits bits scale)))
+    (let unit = (if (zero? scale) 1 (/ (from-int s) scale)))
+    (let y = (the (vec:Vector Integer)
+               [(round (* unit (the Fraction (approx work-bits x)))) :for x :in xs]))
+    ;; A vanishing tail would make H singular. Accept an isolated zero input
+    ;; only after an exact check, never because its rounded value is small.
+    (let unresolved =
+      (for ((i 0 (1+ i)) (small False (or small (<= (abs (vec:index-unsafe i y)) 4))))
+           :returns small :while (< i n)
+        (when (<= (abs (vec:index-unsafe i y)) 4)
+          (let cs = [(if (== j i) 1 0) :for j :below n])
+          (when (== (exact-dot-zero? cs xs) (Some True))
+            (return (ExactRelation cs))))))
+    (cond
+      ((or unresolved (zero? scale)) PrecisionExhausted)
+      ((== n 1) NoRelation)
+      (True (%search xs y s (+ work-bits bits) max-coefficient max-iterations)))))
