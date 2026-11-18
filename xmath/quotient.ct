@@ -1,0 +1,103 @@
+;;;; Integer and polynomial quotient rings
+
+(coalton/utils:defstdlib-package #:coalton/xmath/quotient
+  (:documentation "Residue classes in $\\mathbb{Z}/n\\mathbb{Z}$ and $K[x]/(f)$ for an exact field $K$. A `QuotientRing` fixes a positive integer modulus or a monic polynomial of positive degree. A `Residue` carries that context and its canonical representative: an integer in $[0,n)$ or a polynomial of degree less than $\\deg f$ (including zero).
+
+Binary arithmetic rejects unequal moduli rather than silently coercing the operands. Independent constructions of the same normalized modulus are compatible. Given $sa+tm=1$, the class of $s$ is the inverse of the class of $a$; `residue-inverse` returns `None` when $\\gcd(a,m)\\ne1$. Neither primality nor irreducibility is assumed, so these quotients can have zero divisors.")
+  (:use #:coalton #:coalton/classes #:coalton/math/arith #:coalton/math/integral)
+  (:local-nicknames
+   (#:modular #:coalton/xmath/modular)
+   (#:poly #:coalton/xmath/polynomial))
+  (:export
+   #:QuotientRing #:integer-quotient #:polynomial-quotient #:modulus #:reduce-representative
+   #:Residue #:residue #:residue-ring #:residue-value
+   #:residue+ #:residue- #:residue* #:residue-negate #:residue-power #:residue-inverse))
+
+(in-package #:coalton/xmath/quotient)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (QuotientRing :r)
+    "A normalized modulus and its canonical reduction map."
+    (%Ring :r (:r -> :r)))
+
+  (declare modulus (QuotientRing :r -> :r))
+  (define (modulus (%Ring m _)) m)
+
+  (declare reduce-representative (QuotientRing :r * :r -> :r))
+  (define (reduce-representative (%Ring _ reduce) a)
+    (reduce a))
+
+  (define-instance (Eq :r => Eq (QuotientRing :r))
+    (define (== r s) (== (modulus r) (modulus s))))
+
+  (declare integer-quotient (Integer -> Optional (QuotientRing Integer)))
+  (define (integer-quotient n)
+    "Construct $\\mathbb{Z}/n\\mathbb{Z}$ for $n>0$, including the zero ring for $n=1$."
+    (if (> n 0)
+        (Some (%Ring n (fn (a) (modular:canonical-mod a n))))
+        None))
+
+  (declare polynomial-quotient
+    ((Eq :k) (Field :k) =>
+     poly:Polynomial :k -> Optional (QuotientRing (poly:Polynomial :k))))
+  (define (polynomial-quotient f)
+    "Construct $K[x]/(f)$ for nonconstant $f$, identifying moduli differing by a nonzero scalar."
+    (cond
+      ((zero? (poly:degree f)) None)
+      (True
+       (let m = (normal-part f))
+       (Some (%Ring m (fn (a) (rem a m)))))))
+
+  (define-type (Residue :r)
+    "An element of an explicitly specified quotient, with a reduced representative."
+    (%Residue (QuotientRing :r) :r))
+
+  (declare residue (QuotientRing :r * :r -> Residue :r))
+  (define (residue ring a)
+    (%Residue ring (reduce-representative ring a)))
+
+  (declare residue-ring (Residue :r -> QuotientRing :r))
+  (define (residue-ring (%Residue ring _)) ring)
+
+  (declare residue-value (Residue :r -> :r))
+  (define (residue-value (%Residue _ a)) a)
+
+  (define-instance (Eq :r => Eq (Residue :r))
+    (define (== (%Residue r a) (%Residue s b))
+      (and (== r s) (== a b))))
+
+  (declare lift-binary
+    (Eq :r => (:r * :r -> :r) * Residue :r * Residue :r -> Optional (Residue :r)))
+  (define (lift-binary op (%Residue r a) (%Residue s b))
+    (if (== r s)
+        (Some (residue r (op a b)))
+        None))
+
+  (declare residue+ ((Eq :r) (Additive :r) => Residue :r * Residue :r -> Optional (Residue :r)))
+  (define (residue+ a b) (lift-binary + a b))
+
+  (declare residue- ((Eq :r) (AdditiveGroup :r) => Residue :r * Residue :r -> Optional (Residue :r)))
+  (define (residue- a b) (lift-binary - a b))
+
+  (declare residue* ((Eq :r) (Multiplicative :r) => Residue :r * Residue :r -> Optional (Residue :r)))
+  (define (residue* a b) (lift-binary * a b))
+
+  (declare residue-negate (AdditiveGroup :r => Residue :r -> Residue :r))
+  (define (residue-negate (%Residue r a))
+    (residue r (neg a)))
+
+  (declare residue-power (EuclideanDomain :r => Residue :r * Integer -> Residue :r))
+  (define (residue-power (%Residue r a) n)
+    "Compute the $n$th power for $n\\ge0$, reducing after every product."
+    (residue r (modular:mod-expt a n (modulus r))))
+
+  (declare residue-inverse ((Eq :r) (EuclideanDomain :r) => Residue :r -> Optional (Residue :r)))
+  (define (residue-inverse (%Residue r a))
+    "Return an inverse if and only if this residue is a unit."
+    (map (fn (b) (residue r b)) (modular:mod-inv a (modulus r)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/QUOTIENT")

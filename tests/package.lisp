@@ -64,6 +64,8 @@
    (#:gb #:coalton/xmath/groebner)
    (#:modmath #:coalton/xmath/modular)
    (#:ifact #:coalton/xmath/integer-factorization)
+   (#:qr #:coalton/xmath/quotient)
+   (#:ff #:coalton/xmath/finite-field)
    (#:recur #:coalton/xmath/recurrence)
    (#:quat #:coalton/xmath/quaternion)
    (#:cliff #:coalton/xmath/clifford-algebra)))
