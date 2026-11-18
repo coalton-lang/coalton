@@ -47,11 +47,10 @@
 (in-package #:coalton/math/num-defining-macros)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defconstant +fixnum-bits+
-    #+sbcl sb-vm:n-fixnum-bits
-    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
   (cl:defconstant +unsigned-fixnum-bits+
-    (cl:1- +fixnum-bits+)))
+    (cl:integer-length cl:most-positive-fixnum))
+  (cl:defconstant +fixnum-bits+
+    (cl:1+ +unsigned-fixnum-bits+)))
 
 
 ;;; Utilities to define Eq types.

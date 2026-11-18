@@ -747,11 +747,13 @@ Returns a `node'.")
                  (make-node-literal :type tc:*integer-type*
                                     :value val))
                 (coalton:IFix
-                 (make-node-literal :type tc:*ifix-type*
-                                    :value val))
+                 (if (typep val 'fixnum)
+                     (make-node-literal :type tc:*ifix-type* :value val)
+                     (make-full-call)))
                 (coalton:UFix
-                 (make-node-literal :type tc:*ufix-type*
-                                    :value val))
+                 (if (typep val 'util:ufixnum)
+                     (make-node-literal :type tc:*ufix-type* :value val)
+                     (make-full-call)))
                 (coalton:F32
                  (make-node-literal :type tc:*single-float-type*
                                     :value (coerce val 'single-float)))

@@ -158,45 +158,14 @@ Laws:
   (declare even? (Integral :a => :a -> Boolean))
   (define (even? n)
     "Is `n` even?"
-    (== 0 (mod n 2)))
+    (let n = (to-integer n))
+    (lisp (-> Boolean) (n) (to-boolean (cl:evenp n))))
 
   (declare odd? (Integral :a => :a -> Boolean))
   (define (odd? n)
     "Is `n` odd?"
-    (== 1 (mod n 2)))
-
-  (declare ^ ((Multiplicative :a) (Integral :int) => (:a * :int -> :a)))
-  (define (^ base power)
-    "Exponentiate `base` to a non-negative `power`."
-    (let (
-          ;; (g x n b) = (* (x ^ n) b)
-          (g 
-            (fn (a n b)
-              (cond
-                ((even? n) (g (* a a) (quot n 2) b))
-                ((> n 1) (g (* a a) (quot n 2) (* a b)))
-                (True (* a b)))))
-          ;; (f a n) = (a ^ n)
-          (f
-            (fn (a n)
-              (cond
-                ((even? n) (f (* a a) (quot n 2)))
-                ((> n 1) (g (* a a) (quot n 2) a))
-                (True a)))))
-      (cond
-        ((> power 3) (f base power))
-        ((== power 3) (* (* base base) base))
-        ((== power 2) (* base base))
-        ((== power 1) base)
-        ((== power 0) one)
-        (True (error "Can't exponentiate with a negative exponent.")))))
-
-  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a * :int -> :a)))
-  (define (^^ base power)
-    "Exponentiate `base` to a signed `power`."
-    (if (< power 0)
-        (^ (recip base) (neg power))
-        (^ base power)))
+    (let n = (to-integer n))
+    (lisp (-> Boolean) (n) (to-boolean (cl:oddp n))))
 
   (declare extended-gcd ((Eq :a) (EuclideanDomain :a) => :a * :a -> :a * :a * :a))
   (define (extended-gcd a b)
@@ -223,28 +192,31 @@ Laws:
        (error "Cannot FACTORIAL a negative number."))
       (True
        (rec % ((a n) (acc 1))
-         (if (== 0 n)
+         (if (== 0 a)
              acc
              (% (- a 1) (* a acc)))))))
 
   (declare ilog ((Integral :int) => :int * :int -> :int))
   (define (ilog b x)
     "The floor of the logarithm $\\lfloor \\log_b x \\rfloor$ with base $b > 1$ of $x \\geq 1$."
-    ;; See GHC's wordLogBase#
-    (let ((ilog-rec 
-            (fn (y)
-              (if (< x y)
-                  (the (Tuple :a :a) (Tuple x 0))
-                  (match (ilog-rec (* y y))
-                    ((Tuple a b)
-                     (if (< a y)
-                         (Tuple a (* 2 b))
-                         (Tuple (quot a y) (+ (* 2 b) 1)))))))))
-      (cond
-        ((== x 1) 0)
-        ((< x 1) (error "Power of ILOG must be greater than or equal to 1."))
-        ((<= b 1) (error "Base of ILOG must be greater than 1."))
-        (True (match (ilog-rec b) ((Tuple _ b) b))))))
+    (when (<= b 1) (error "Base of ILOG must be greater than 1."))
+    (when (< x 1) (error "Power of ILOG must be greater than or equal to 1."))
+    (cond
+      ((< x b) 0)
+      (True
+       (let ((ilog-rec
+               (fn (y)
+                 (let q = (quot x y))
+                 ;; y*y would exceed x, and might not even fit in the type.
+                 (if (< q y)
+                     (Tuple q 1)
+                     (match (ilog-rec (* y y))
+                       ((Tuple a e)
+                        (if (< a y)
+                            (Tuple a (* 2 e))
+                            (Tuple (quot a y) (+ (* 2 e) 1)))))))))
+         (let (Tuple _ exponent) = (ilog-rec b))
+         exponent))))
 
   (declare isqrt ((Integral :int) => :int -> :int))
   (define (isqrt x)
@@ -291,8 +263,6 @@ Laws:
 (cl:defmacro %define-integral-native (type signed)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
            (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
-           (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
-           (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
        (%define-remainder-native ,type)
@@ -315,29 +285,6 @@ Laws:
          (define (,odd? n)
            (coalton++:unsafe
              (lisp (-> Boolean) (n) (to-boolean (cl:oddp n)))))
-
-         (specialize ^ ,^ (,type * ,type -> ,type))
-         (declare ,^ (,type * ,type -> ,type))
-         ,(cl:cond
-            (signed
-             `(define (,^ base power)
-                (if (< power 0)
-                    (error "Can't exponentiate with a negative exponent.")
-                    (coalton++:unsafe
-                      (lisp (-> ,type) (base power) (cl:expt base power))))))
-            (cl:t
-             `(progn
-                (inline)
-                (define (,^ base power)
-                  (coalton++:unsafe
-                    (lisp (-> ,type) (base power) (cl:expt base power)))))))
-
-         (specialize ^^ ,^^ (,type * ,type -> ,type))
-         (inline)
-         (declare ,^^ (,type * ,type -> ,type))
-         (define (,^^ base power)
-           (coalton++:unsafe
-             (lisp (-> ,type) (base power) (cl:expt base power))))
 
          (specialize isqrt ,isqrt (,type -> ,type))
          (declare ,isqrt (,type -> ,type))
@@ -391,6 +338,41 @@ Laws:
   (define (integer-lcm a b)
     (coalton++:unsafe
       (lisp (-> Integer) (a b) (cl:lcm a b)))))
+
+(coalton-toplevel
+  (declare ^ ((Multiplicative :a) (Integral :int) => :a * :int -> :a))
+  (define (^ base power)
+    "Exponentiate `base` to a non-negative `power`, using the overflow behavior of the base's multiplication."
+    ;; In particular, 2 cannot be represented by a Bit exponent.
+    (let n = (to-integer power))
+    (when (< n 0) (error "Can't exponentiate with a negative exponent."))
+    (when (== n 0) (return one))
+    ;; Start at the leading one bit: no multiplication by the identity and
+    ;; no square beyond the requested power, even at a checked type's limit.
+    (rec square ((i (lisp (-> Integer) (n) (cl:- (cl:integer-length n) 2)))
+                 (acc base))
+      (cond
+        ((< i 0) acc)
+        (True
+         (let a = (* acc acc))
+         (let bit-set? = (lisp (-> Boolean) (i n) (to-boolean (cl:logbitp i n))))
+         (square (- i 1) (if bit-set? (* a base) a))))))
+
+  (declare ^^ ((Reciprocable :a) (Integral :int) => :a * :int -> :a))
+  (define (^^ base power)
+    "Exponentiate `base` to a signed `power`."
+    (let n = (to-integer power))
+    (if (< n 0)
+        (^ (recip base) (neg n))
+        (^ base n)))
+
+  ;; Fixed-width bases use `*` in the generic algorithm, including its
+  ;; overflow checks or wrapping. Only unbounded integers use EXPT directly.
+  (specialize ^ integer-^ (Integer * Integer -> Integer))
+  (declare integer-^ (Integer * Integer -> Integer))
+  (define (integer-^ base power)
+    (when (< power 0) (error "Can't exponentiate with a negative exponent."))
+    (lisp (-> Integer) (base power) (cl:expt base power))))
 
 (cl:defmacro %define-native-expt (type)
   (cl:let ((^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))

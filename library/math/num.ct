@@ -77,6 +77,7 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
+  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
   (define-instance (cls:Additive Bit)
     (inline)
@@ -146,69 +147,6 @@ whether it's even or odd)."
     (inline)
     (define (arith:inner-product x y) (cls:* x y)))
   (define-instance (arith:InnerSpace Bit Bit))
-
-  ;; UFixes are unsafe and depend on implementation.
-  (define-instance (cls:Additive UFix)
-    (inline)
-    (define (cls:+ a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:+ a b)))))
-
-    (define cls:zero
-      (coalton++:unsafe
-        (lisp (-> UFix) () 0))))
-
-  (define-instance (cls:AdditiveGroup UFix)
-    (inline)
-    (define (cls:- a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:- a b)))))
-
-    (inline)
-    (define (cls:neg a)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:- 0 a))))))
-
-  (define-instance (cls:Multiplicative UFix)
-    (inline)
-    (define (cls:* a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:* a b)))))
-
-    (define cls:one
-      (coalton++:unsafe
-        (lisp (-> UFix) () 1))))
-
-  (define-instance (cls:Semiring UFix))
-
-  (define-instance (cls:Ring UFix)
-    (inline)
-    (define (cls:from-int x)
-      (coalton++:unsafe
-        (lisp (-> UFix) (x)
-          (cl:mod x #.(cl:expt 2 +fixnum-bits+))))))
-
-  (define-instance (cls:Num UFix))
-  (define-instance (arith:CommutativeRing UFix))
-
-  (define-instance (arith:Scale UFix UFix)
-    (inline)
-    (define (arith:scale a b) (cls:* a b)))
-
-  (define-instance (arith:Module UFix UFix))
-
-  (define-instance (arith:ConjugateRing UFix)
-    (inline)
-    (define (arith:conjugate x) x))
-
 
 ;;;
 ;;; Float Num instances
