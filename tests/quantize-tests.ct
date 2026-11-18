@@ -34,6 +34,25 @@
   (is (== (lisp (-> Integer) ()  (cl:round 0.5)) (round 0.5)))
   (is (== (lisp (-> Integer) ()  (cl:round -0.5)) (round -0.5))))
 
+(define-test simplest-closed-fractions ()
+  (is (== (math:simplest-fraction 2 (the Fraction 1/5)) 0))
+  (is (== (math:simplest-fraction 2 (the Fraction 3/4)) 1))
+  (is (== (math:simplest-fraction 0 (the Integer -5)) -4))
+  ;; Exhaust small closed intervals against direct denominator enumeration,
+  ;; including point intervals, negative endpoints and tied integers.
+  (is (lisp (-> Boolean) ()
+        (cl:loop :for d :from 1 :to 12 :always
+          (cl:loop :for i :from -24 :to 24 :always
+            (cl:loop :for j :from i :to 24
+                     :for lo = (cl:/ i d) :for hi = (cl:/ j d)
+                     :always
+                     (cl:= (math:simplest-fraction-between lo hi)
+                           (cl:loop :for q :from 1 :to d
+                                    :for a = (cl:ceiling (cl:* lo q))
+                                    :for b = (cl:floor (cl:* hi q))
+                                    :when (cl:<= a b)
+                                      :return (cl:/ (cl:max a (cl:min 0 b)) q)))))))))
+
 (define-test test-integer-division-quotients ()
   (let ((cases (the (List (Tuple Integer Integer))
                     [(Tuple 7 2) (Tuple -7 2) (Tuple 7 -2) (Tuple -7 -2)

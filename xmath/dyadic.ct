@@ -16,6 +16,7 @@ Dyadic rationals form the smallest subring of $\\mathbb{Q}$ containing $\\mathbb
      #:coalton/builtin
      #:coalton/classes
      #:coalton/math/arith
+     #:coalton/math/fraction
      #:coalton/math/integral
      #:coalton/math/real)
   (:local-nicknames
@@ -263,18 +264,41 @@ numbers."
     (inline)
     (define (approx _ x) x))
 
+  (define-instance (Rationalizable Dyadic)
+    (define (simplest-fraction bits x)
+      (simplest-fraction bits (the Fraction (into x)))))
+
+  (declare fraction-for-native (UFix * Dyadic * Integer * Integer -> Fraction))
+  (define (fraction-for-native bits x min-exp max-exp)
+    ;; Do not materialize 2^e when e itself is an arbitrary-size integer.
+    (let (Dyadic m e) = x)
+    (let top = (+ e (dyadic-bit-length m)))
+    (cond
+      ((== m 0) 0)
+      ((> top (+ 1 max-exp)) (error "Dyadic is outside the native float range."))
+      ((< top min-exp)
+       (when (> (Dyadic (abs m) e) (Dyadic 1 (neg (to-integer bits))))
+         (error "Dyadic is too small to approximate to the requested absolute precision."))
+       0)
+      (True (into x))))
+
   (define-instance (Approximable Dyadic F32)
-    (inline)
-    (define (approx _ x) (fromfrac (into x))))
+    (define (approx bits x)
+      (approx bits (fraction-for-native bits x -149 128))))
 
   (define-instance (Approximable Dyadic F64)
-    (inline)
-    (define (approx _ x) (fromfrac (into x))))
+    (define (approx bits x)
+      (approx bits (fraction-for-native bits x -1074 1024))))
 
   (define-instance (Approximable Fraction Dyadic)
     (define (approx bits q)
-      (let k = (to-integer bits))
-      (Dyadic (round (* q (^^ 2 k))) (neg k))))
+      (let den = (denominator q))
+      (cond
+        ((== 0 (bits:and den (- den 1)))
+         (Dyadic (numerator q) (- 1 (dyadic-bit-length den))))
+        (True
+         (let k = (to-integer bits))
+         (Dyadic (round/ (lsh (numerator q) k) den) (neg k))))))
 
   (define-instance (Approximable Integer Dyadic)
     (inline)
