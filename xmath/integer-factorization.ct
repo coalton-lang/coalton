@@ -1,0 +1,87 @@
+;;;; Primality and factorization of arbitrary-precision integers
+
+(coalton/utils:defstdlib-package #:coalton/xmath/integer-factorization
+  (:documentation "Primality testing for arbitrary-precision integers. `primality` distinguishes a proof of primality from passing strong probable-prime tests.")
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:modular #:coalton/xmath/modular))
+  (:export
+   #:Primality #:ProvenPrime #:CompositeOrUnit #:ProbablePrime
+   #:primality))
+
+(in-package #:coalton/xmath/integer-factorization)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (derive Eq)
+  (repr :enum)
+  (define-type Primality
+    "`ProvenPrime` certifies primality. `CompositeOrUnit` means definitely not prime (including all $n < 2$). `ProbablePrime` means inconclusive, not a proof."
+    ProvenPrime
+    CompositeOrUnit
+    ProbablePrime)
+
+  (declare small-primes (List Integer))
+  (define small-primes [2 3 5 7 11 13 17 19 23 29 31 37 41])
+
+  ;; For positive n, extract the odd part and the exact exponent of two.
+  (declare remove-twos (Integer -> Integer * Integer))
+  (define (remove-twos n)
+    (let s = (lisp (-> Integer) (n)
+               (cl:1- (cl:integer-length (cl:logand n (cl:- n))))))
+    (values (rsh n s) s))
+
+  ;; n - 1 = d * 2^s, with d odd and 1 < a < n.
+  (declare passes-base? (Integer * Integer * Integer * Integer -> Boolean))
+  (define (passes-base? n d s a)
+    (let x = (modular:mod-expt a d n))
+    (or (== x 1)
+        (rec square ((y x) (rounds s))
+          (cond
+            ((== y (- n 1)) True)
+            ((or (== rounds 1) (== y 1)) False)
+            (True (square (rem (* y y) n) (- rounds 1)))))))
+
+  ;; Caller has already excluded all factors through 41 and n = 1.
+  (declare miller-rabin (Integer -> Primality))
+  (define (miller-rabin n)
+    (let (values d s) = (remove-twos (- n 1)))
+    (let passes? = (fn (a) (passes-base? n d s a)))
+    (cond
+      ((not (list:all passes? small-primes)) CompositeOrUnit)
+      ;; Sorenson & Webster, Math. Comp. 86 (2017), Thm 1.1:
+      ;; this is the *least* strong pseudoprime to the first 13 prime bases.
+      ((< n 3317044064679887385961981) ProvenPrime)
+      ((not (list:all passes? [43 47 53 59])) CompositeOrUnit)
+      ;; Proth's theorem: the witness forces 2^s | p-1 for every prime p | n.
+      ;; If d < 2^s, every such p then exceeds sqrt(n).
+      ((and (< d (lsh 1 s))
+            (list:any (fn (a) (== (- n 1) (modular:mod-expt a (rsh n 1) n)))
+                      small-primes))
+       ProvenPrime)
+      (True ProbablePrime)))
+
+  (declare primality (Integer -> Primality))
+  (define (primality n)
+    "Classify $n$ by trial division and strong Miller--Rabin tests. The answer is exact for $n < 3317044064679887385961981$ (including every 64-bit integer). Beyond that bound a Miller--Rabin witness still proves compositeness and a Proth witness can prove primality. Otherwise, passing all tested bases is only `ProbablePrime`. The bases are fixed, not independent random samples."
+    (if (< n 2)
+        CompositeOrUnit
+        (rec trial ((primes small-primes))
+          (match primes
+            ((Nil) (miller-rabin n))
+            ((Cons p rest)
+             (cond
+               ((< n (* p p)) ProvenPrime)
+               ((== 0 (rem n p)) CompositeOrUnit)
+               (True (trial rest)))))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/INTEGER-FACTORIZATION")
