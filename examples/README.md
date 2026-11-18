@@ -2,10 +2,6 @@
 
 This folder contains example Coalton projects to show off the features as well as provide a set of good real-world tests.
 
-[Normal forms and lattices](normal-forms-and-lattices.lisp) is a standalone
-example showing how to check Hermite, Smith, and LLL transformations and how
-to distinguish an exact PSLQ relation from a numerical candidate.
-
 ## Projects
 
 - `small-coalton-programs`: A collection of small, example programs in Coalton for educational or illustrative purposes.
