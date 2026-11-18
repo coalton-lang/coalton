@@ -37,3 +37,33 @@
   (let b = (qr:residue r y))
   (is (== (qr:residue-power b 4) (qr:residue r (+ y 1))))
   (is (== (qr:residue-power b 16) b)))
+
+(define-test test-coherent-field-roots ()
+  ;; Check mixed (not only radix-two) orders by restriction in F13.
+  (let field = (unwrap (ff:prime-field 13)))
+  (let root = (fn (n) (unwrap (ff:residue-root-of-unity field n))))
+  (is (== (qr:residue-power (root 12) 3) (root 4)))
+  (is (== (qr:residue-power (root 12) 2) (root 6)))
+  (is (== (qr:residue-power (root 6) 2) (root 3)))
+  (is (/= (root 3) (root 1)))
+  (is (== (qr:residue-power (root 4) 2) (qr:residue (ff:as-quotient field) -1)))
+  (let a = (the ff:GF4 (fft:root-of-unity 3)))
+  (is (/= a 1))
+  (is (== (^ a 3) 1))
+  (is (== (the (Optional ff:GF4) (ff:try-root-of-unity 2)) None))
+  (is (== (ff:residue-root-of-unity field 0) None)))
+
+(define-test test-number-theoretic-transform ()
+  (let xs = (the (vector:Vector (ff:Fp ff:P17)) [1 2 3 4]))
+  (let ys = (unwrap (ff:ntt xs)))
+  ;; Independent DFT values, not just an inverse-pair test.
+  (is (== ys [10 7 15 6]))
+  (is (== (ff:inverse-ntt ys) (Some xs)))
+  ;; A cyclic convolution is pointwise multiplication in transform space.
+  (is (== (ff:inverse-ntt (map (fn (x) (* x x)) ys))
+          (Some [9 11 9 3])))
+  (let single = (the (vector:Vector ff:GF4) [1]))
+  (is (== (ff:ntt single) (Some single)))
+  (is (== (ff:ntt (the (vector:Vector ff:GF4) [0 1])) None))
+  (is (== (ff:ntt (the (vector:Vector (ff:Fp ff:P17)) [])) None))
+  (is (== (ff:ntt (the (vector:Vector (ff:Fp ff:P17)) [1 2 3])) None)))
