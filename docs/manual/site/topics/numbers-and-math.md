@@ -172,7 +172,8 @@ Real-valued types can be rounded to nearby integers or approximated to a chosen
 number of binary digits in another numeric representation:
 
 - **`Quantizable :a`**: ordered rings whose elements lie between consecutive integers and support rounding to `Integer` (e.g., `floor`, `ceiling`, `truncate`, `round`).
-- **`Approximable :a :b`**: approximating a value `x` to within $2^{-\mathtt{bits}}$ in target type `:b` via `(approx bits x)`.
+- **`Approximable :a :b`**: `(approx bits x)` guarantees *absolute* error at most $2^{-\mathtt{bits}}$, component by component. It signals an error when it cannot certify that bound. For example, no `F32` lies within $1/2$ of the integer $16777217$. Use `from-int`, `fromfrac`, or `big-float:round-to-f32` / `round-to-f64` for ordinary rounded conversion without this guarantee.
+- **`Rationalizable :a`**: `(simplest-fraction bits x)` returns a fraction of least positive denominator in the **closed** tolerance interval, breaking ties by least absolute numerator. `simplest-fraction-between` takes two exact rational endpoints. `CReal` supplies an approximation oracle, not decidable endpoint comparisons: use `rational-approx` or `creal:rationalize` for a guaranteed approximation without global minimality.
 
 #### Roots, Exponentials, and Trigonometry (`coalton/math/elementary`)
 

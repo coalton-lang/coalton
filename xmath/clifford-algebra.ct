@@ -551,9 +551,11 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
              ((> ba bb) (loop a more-b acc))
              (True (loop more-a more-b (+ acc (* cb (conjugate ca)))))))))))
 
-  (define-instance ((Approximable :a :b) (Eq :b) (Additive :b) => Approximable (Multivector :a) (Multivector :b))
+  (define-instance (Approximable :a :b => Approximable (Multivector :a) (Multivector :b))
     (define (approx bits (%Multivector xs))
-      (multivector (map (fn ((Tuple c b)) (Tuple (approx bits c) b)) xs)))))
+      ;; The masks are already sorted and unique. Do not elide a component
+      ;; by testing approximate equality of the newly converted coefficient.
+      (%Multivector (map (fn ((Tuple c b)) (Tuple (approx bits c) b)) xs)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/CLIFFORD-ALGEBRA")

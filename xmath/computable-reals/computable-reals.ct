@@ -405,23 +405,18 @@ $$"
     "Produce a rational approximation of `x` called $r$ such that
 
 $$
-\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}}.
+\\vert r - \\mathtt{x} \\vert \\le 2^{-\\mathtt{k}}.
 $$"
     (lisp (-> Fraction) (x k)
       (cr:rational-approx-r x k)))
 
   (declare rationalize (CReal * UFix -> Fraction))
   (define (rationalize x k)
-    "Produce a rational approximation of `x` called $r$ such that
-
-$$
-\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}},
-$$
-
-taking into account the maximum precision specified by `k` to return
-the simplest possible such approximation."
-    (lisp (-> Fraction) (x k)
-      (cr:rationalize-r x k)))
+    "Return a simple fraction within $2^{-k}$ of `x`. For an oracle, minimize the denominator in a certified inner interval; minimality in the entire tolerance interval is not decidable in general."
+    (let q = (lisp (-> Fraction) (x k)
+               (cr:rational-approx-r x (cl:1+ k))))
+    (let half-eps = (math:make-fraction 1 (math:lsh 2 (to-integer k))))
+    (math:simplest-fraction-between (- q half-eps) (+ q half-eps)))
 
   ;; this is just for testing purposes. Intentionally not exported.
   (define (raw-approx x)
@@ -463,13 +458,28 @@ the simplest possible such approximation."
 
   (define-instance (math:Approximable CReal bf:BigFloat)
     (define (approx prec x)
-      (let p = (max 1 prec))
-      (approx p (the dyadic:Dyadic (approx (+ p 4) x)))))
+      (into (the dyadic:Dyadic (approx prec x)))))
+
+  (declare native-approx ((math:Approximable Fraction :f) (math:Approximable :f Fraction)
+                          (math:Dividable Integer :f) => UFix * CReal * :f -> :f))
+  (define (native-approx bits x largest)
+    (match (lisp (-> (Optional Fraction)) (x)
+             (cl:if (cl:rationalp x) (Some x) None))
+      ((Some q) (approx bits q))
+      ((None)
+       (let q = (lisp (-> Fraction) (x bits) (cr:rational-approx-r x (cl:+ bits 4))))
+       (let eps = (math:make-fraction 1 (math:lsh 1 (to-integer bits))))
+       (let limit = (the Fraction (approx 0 largest)))
+       (let y = (fromfrac (min limit (max (neg limit) q))))
+       ;; A conservative decision terminates even at a closed-ball boundary.
+       (unless (<= (+ (abs (- (the Fraction (approx 0 y)) q)) (/ eps 16)) eps)
+         (error "Cannot certify the requested native float precision from this CReal enclosure."))
+       y)))
 
   (define-instance (math:Approximable CReal F32)
     (define (approx prec x)
-      (fromfrac (creal-rational-approx x (max prec 24)))))
+      (native-approx prec x (lisp (-> F32) () cl:most-positive-single-float))))
 
   (define-instance (math:Approximable CReal F64)
     (define (approx prec x)
-      (fromfrac (creal-rational-approx x (max prec 53))))))
+      (native-approx prec x (lisp (-> F64) () cl:most-positive-double-float)))))

@@ -2093,24 +2093,6 @@ unbounded refinement loop."
          (< q hi)
          (== (poly-sign-at p q) 0)))
 
-  (declare simplest-rational-closed (Fraction * Fraction -> Fraction))
-  (define (simplest-rational-closed lo hi)
-    "Find a rational of minimum denominator in [lo,hi] by continued fractions.
-
-The integer Mobius transform (a*y+b)/(c*y+d) accumulates the common
-continued-fraction prefix without growing the call stack."
-    (rec go ((l lo) (h hi) (a 1) (b 0) (c 0) (d 1))
-      (let k = (floor l))
-      (cond
-        ((== l (from-int k))
-         (make-fraction (+ (* a k) b) (+ (* c k) d)))
-        ((< k (floor h))
-         (let j = (+ k 1))
-         (make-fraction (+ (* a j) b) (+ (* c j) d)))
-        (True
-         (go (/ 1 (- h (from-int k)))
-             (/ 1 (- l (from-int k)))
-             (+ (* a k) b) a (+ (* c k) d) c)))))
   (declare linear-rational-root (Poly Integer -> (Optional Fraction)))
   (define (linear-rational-root p)
     "Extract exact root for a linear polynomial an*x + a0."
@@ -2138,7 +2120,7 @@ certifies it. This also handles polynomials with an irrelevant zero root."
        (let tight = (refine-to-width (make-fraction 1 (* 2 (* bound bound))) x))
        (let lo = (lower-bound tight))
        (let hi = (upper-bound tight))
-       (let q = (simplest-rational-closed lo hi))
+       (let q = (simplest-fraction-between lo hi))
        (if (and (<= (denominator q) bound)
                 (candidate-rational-root? p lo hi q))
            (Some q)
@@ -2336,20 +2318,51 @@ No rationality decision or coefficient-dependent precision is needed."
 
   (define-instance (Approximable RealAlgebraic dyadic:Dyadic)
     (define (approx bits x)
-      (approx bits (approx-fraction (+ bits 1) x))))
+      ;; The midpoint of a width-eps interval and nearest-grid rounding
+      ;; each contribute at most eps/2.
+      (approx bits (approx-fraction bits x))))
 
   (define-instance (Approximable RealAlgebraic bf:BigFloat)
     (define (approx bits x)
-      (let p = (max 1 bits))
-      (bf:with-precision (fn () (into (approx-fraction (+ p 4) x))) :precision p)))
+      (into (the dyadic:Dyadic (approx bits x)))))
+
+  (declare in-rational-ball? (RealAlgebraic * Fraction * Fraction -> Boolean))
+  (define (in-rational-ball? x q eps)
+    (and (>= x (from-fraction (- q eps))) (<= x (from-fraction (+ q eps)))))
+
+  (define-instance (Rationalizable RealAlgebraic)
+    (define (simplest-fraction bits x)
+      (let eps = (approx-eps bits))
+      (rec go ((a (refine-to-width eps x)))
+        (let q = (simplest-fraction-between (- (lower-bound a) eps) (+ (upper-bound a) eps)))
+        ;; The true interval is a subset. Rejecting a candidate eventually
+        ;; removes it by refinement; equality at an endpoint is decidable.
+        (if (in-rational-ball? a q eps) q (go (refine-native a))))))
+
+  (declare native-approx ((Dividable Integer :f) (Approximable :f Fraction)
+                          => UFix * RealAlgebraic * :f -> :f))
+  (define (native-approx bits x largest)
+    (let eps = (approx-eps bits))
+    (let a = (refine-to-width (/ eps 2) x))
+    (let limit = (the Fraction (approx 0 largest)))
+    (let candidate = (fn (q) (fromfrac (min limit (max (neg limit) q)))))
+    ;; If a float lies inside the enclosure, rounding either endpoint
+    ;; misses x by at most twice its width. Otherwise the only candidates
+    ;; are the neighboring floats outside it.
+    (let l = (candidate (lower-bound a)))
+    (let h = (candidate (upper-bound a)))
+    (cond
+      ((in-rational-ball? a (approx 0 l) eps) l)
+      ((in-rational-ball? a (approx 0 h) eps) h)
+      (True (error "No native float satisfies the requested absolute error."))))
 
   (define-instance (Approximable RealAlgebraic F32)
     (define (approx bits x)
-      (fromfrac (approx-fraction (max bits 24) x))))
+      (native-approx bits x (lisp (-> F32) () cl:most-positive-single-float))))
 
   (define-instance (Approximable RealAlgebraic F64)
     (define (approx bits x)
-      (fromfrac (approx-fraction (max bits 53) x)))))
+      (native-approx bits x (lisp (-> F64) () cl:most-positive-double-float)))))
 
 (coalton/math/complex::%define-standard-complex-instances RealAlgebraic)
 (coalton/math/integral::%define-field-gcd-domain (coalton/math/complex:Complex RealAlgebraic))

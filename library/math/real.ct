@@ -20,7 +20,9 @@
    #:Approximable
    #:approx
    #:rational-approx
+   #:Rationalizable
    #:simplest-fraction
+   #:simplest-fraction-between
    #:Quantization
    #:quantize
    #:round-half-up
@@ -60,8 +62,43 @@ For scalar numeric types, `(approx bits x)` returns an approximation $y$ satisfy
 
 $$\\vert y - x \\vert \\le 2^{-\\mathtt{bits}}.$$
 
-For composite structures (such as `Complex`, `Dual`, `Polynomial`, `Matrix`, `Quaternion`, or `Multivector`), `approx` approximates each component to within $2^{-\\mathtt{bits}}$."
+`bits` counts binary places after the point, not significant mantissa bits. An instance signals an error rather than returning an uncertified value (for example, when a fixed-precision target is too coarse, or the input is not finite). For ordinary rounded conversion without this bound, use `from-int`, `fromfrac`, or the target's rounding operation.
+
+For composite structures (such as `Complex`, `Dual`, `Polynomial`, `Matrix`, `Quaternion`, or `Multivector`), the same bound applies to each component, not to the norm of the whole structure."
     (approx (UFix * :a -> :b)))
+
+  (define-class (Rationalizable :a)
+    "Types for which the simplest fraction in a closed tolerance interval can be determined. An approximation oracle alone cannot decide whether a rational is exactly on an endpoint."
+    (simplest-fraction
+     "Of the fractions $p/q$ within $2^{-\\mathtt{bits}}$ of the finite input (including the endpoints), return one minimizing first $q>0$ and then $|p|$."
+     (UFix * :a -> Fraction)))
+
+  (declare simplest-fraction-between (Fraction * Fraction -> Fraction))
+  (define (simplest-fraction-between lo hi)
+    "Return the fraction in the closed interval $[\\mathtt{lo},\\mathtt{hi}]$ with least positive denominator, breaking ties by least absolute numerator."
+    (when (> lo hi)
+      (error "Reversed interval in simplest-fraction-between."))
+    (cond
+      ((< hi 0) (neg (simplest-fraction-between (neg hi) (neg lo))))
+      ((<= lo 0) 0)
+      (True
+       ;; Accumulate the common continued-fraction prefix as (a*t+b)/(c*t+d).
+       ;; After removing each prefix digit t >= 1. The first integer in
+       ;; the remaining closed interval minimizes c*n+d*m for t=n/m.
+       (rec go ((l lo) (h hi) (a 1) (b 0) (c 0) (d 1))
+         (let j = (neg (div (neg (numerator l)) (denominator l))))
+         (cond
+           ((<= (from-int j) h)
+            (make-fraction (+ (* a j) b) (+ (* c j) d)))
+           (True
+            (let k = (- j 1))
+            (go (recip (- h (from-int k))) (recip (- l (from-int k)))
+                (+ (* a k) b) a (+ (* c k) d) c)))))))
+
+  (declare simplest-around-fraction (UFix * Fraction -> Fraction))
+  (define (simplest-around-fraction bits q)
+    (let eps = (make-fraction 1 (lsh 1 (to-integer bits))))
+    (simplest-fraction-between (- q eps) (+ q eps)))
 
   (inline)
   (declare rational-approx (Approximable :a Fraction => UFix * :a -> Fraction))
@@ -108,6 +145,24 @@ $$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{b
       ;; Zero r
       ((EQ) n))))
 
+;; Check the error of the actual native result as a rational. Right shifting
+;; the denominator also handles exact results at arbitrarily large bit counts
+;; without constructing 2^bits.
+(cl:defun %approx-native (bits x prototype limit)
+  (cl:when (cl:and (cl:floatp x)
+                   (cl:or (float-features:float-nan-p x)
+                          (float-features:float-infinity-p x)))
+    (cl:error "Cannot approximate a non-finite float."))
+  (cl:let* ((q (cl:rational x))
+            (y (cl:cond ((cl:> q limit) limit)
+                        ((cl:< q (cl:- limit)) (cl:- limit))
+                        (cl:t (cl:float x prototype))))
+            (diff (cl:- (cl:rational y) q)))
+    (cl:unless (cl:<= (cl:abs (cl:numerator diff))
+                      (cl:ash (cl:denominator diff) (cl:- bits)))
+      (cl:error "Cannot approximate to ~D absolute bits in ~S." bits (cl:type-of prototype)))
+    y))
+
 (cl:defmacro %define-integer-roundings (coalton-type)
   `(coalton-toplevel
      (define-instance (Quantizable ,coalton-type)
@@ -123,13 +178,21 @@ $$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{b
        (inline)
        (define (approx _ x) (from-int (to-integer x))))
 
+     (define-instance (Rationalizable ,coalton-type)
+       (define (simplest-fraction bits x)
+         (simplest-around-fraction bits (into x))))
+
      (define-instance (Approximable ,coalton-type F32)
        (inline)
-       (define (approx _ x) (from-int (to-integer x))))
+       (define (approx bits x)
+         (lisp (-> F32) (bits x)
+           (%approx-native bits x 1f0 cl:most-positive-single-float))))
 
      (define-instance (Approximable ,coalton-type F64)
        (inline)
-       (define (approx _ x) (from-int (to-integer x))))))
+       (define (approx bits x)
+         (lisp (-> F64) (bits x)
+           (%approx-native bits x 1d0 cl:most-positive-double-float))))))
 
 (%define-integer-roundings Bit)
 (%define-integer-roundings U8)
@@ -144,7 +207,7 @@ $$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{b
 (%define-integer-roundings IFix)
 (%define-integer-roundings Integer)
 
-(cl:defmacro %define-native-rationals (type)
+(cl:defmacro %define-native-rationals (type cl:&key floatp)
   (cl:let
       ((round (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ROUND")))
        (trunc (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-TRUNCATE"))))
@@ -177,21 +240,26 @@ $$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{b
        (define-instance (Approximable ,type Fraction)
          (inline)
          (define (approx _ x)
+           ,@(cl:when floatp '((unless (finite? x) (error "Cannot approximate a non-finite float."))))
            (coalton++:unsafe
              (lisp (-> Fraction) (x)
                (cl:rational x)))))
 
+       (define-instance (Rationalizable ,type)
+         (define (simplest-fraction bits x)
+           (simplest-around-fraction bits (approx bits x))))
+
        (define-instance (Approximable ,type F32)
          (inline)
-         (define (approx _ x)
-           (lisp (-> F32) (x)
-             (cl:coerce x 'cl:single-float))))
+         (define (approx bits x)
+           (lisp (-> F32) (bits x)
+             (%approx-native bits x 1f0 cl:most-positive-single-float))))
 
        (define-instance (Approximable ,type F64)
          (inline)
-         (define (approx _ x)
-           (lisp (-> F64) (x)
-             (cl:coerce x 'cl:double-float))))
+         (define (approx bits x)
+           (lisp (-> F64) (bits x)
+             (%approx-native bits x 1d0 cl:most-positive-double-float))))
 
        (specialize round ,round (,type -> Integer))
        (inline)
@@ -202,37 +270,10 @@ $$\\vert \\text{rational-approx}(\\text{bits}, x) - x \\vert \\le 2^{-\\mathtt{b
              (cl:nth-value 0 (cl:round x))))))))
 
 (%define-native-rationals Fraction)
-(%define-native-rationals F32)
-(%define-native-rationals F64)
+(%define-native-rationals F32 :floatp cl:t)
+(%define-native-rationals F64 :floatp cl:t)
 
 (coalton-toplevel
-  (declare simplest-fraction (Approximable :a Fraction => UFix * :a -> Fraction))
-  (define (simplest-fraction bits x)
-    "Return the simplest `Fraction` $p/q$ (minimal positive denominator $q$, then minimal $\\vert p \\vert$) within $2^{-\\mathtt{bits}}$ of `x`:
-
-$$\\left\\vert \\frac{p}{q} - x \\right\\vert \\le 2^{-\\mathtt{bits}}.$$"
-    ;; See figure 3 in https://doi.org/10.1145/142675.142726
-    ;; Approximate x to 2^-(bits + 1), then find the simplest convergent within 2^-(bits + 1) of q.
-    ;; By the triangle inequality, |p/q - x| <= |p/q - q| + |q - x| <= 2^-bits.
-    (let q = (the Fraction (approx (+ bits 1) x)))
-    (let epsilon = (the Fraction (^^ 2 (neg (+ (to-integer bits) 1)))))
-    (let ((approximate-rec
-            (fn (e0 p0 q0 e1 p1 q1)
-              (cond
-                ((and (/= q1 0)
-                      (<= (abs (- (make-fraction p1 q1) q)) epsilon))
-                 (make-fraction p1 q1))
-                ((/= 0 e1)
-                 (let r = (floor (/ e0 e1)))
-                 (approximate-rec e1 p1 q1
-                                  (- e0 (* (from-int r) e1))
-                                  (- p0 (* r p1))
-                                  (- q0 (* r q1))))
-                ;; SBCL cannot prove this branch unreachable for the initial
-                ;; p1=1, q1=0 seed; inlining exposes a spurious division by zero.
-                (True (noinline (make-fraction p1 q1)))))))
-      (approximate-rec q 0 1 -1 1 0)))
-
   (define-struct (Quantization :a)
     "Represents an integer quantization of `:a`."
     (value       "A value of type `:a`."
