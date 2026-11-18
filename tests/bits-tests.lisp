@@ -1,5 +1,50 @@
 (in-package #:coalton-native-tests)
 
+(coalton-toplevel
+  (declare integral-parity (math:Integral :a => :a -> Tuple Boolean Boolean))
+  (define (integral-parity n)
+    (Tuple (math:even? n) (math:odd? n))))
+
+(define-test test-bounded-integer-kernels ()
+  (is (== (math:factorial (the I8 4)) 24))
+  (is (== (math:factorial (the Bit 0)) 1))
+  (is (== (math:ilog (the U8 2) 128) 7))
+  (is (== (math:ilog (the I8 2) 127) 6))
+  (is (== (catch (Some (math:ilog (the Integer 1) 1)) (_ None)) None))
+  (is (== (^ (the Fraction 5) (the Bit 0)) 1))
+  (is (== (^ (the Fraction 5) (the Bit 1)) 5))
+  (is (== (modmath:mod-expt (the Integer 5) (the Bit 1) 7) 5))
+  (is (== (noinline (integral-parity (the Bit 0))) (Tuple True False)))
+  (is (== (noinline (integral-parity (the Bit 1))) (Tuple False True)))
+  (is (== (^^ (the Fraction 2) (the I8 -128)) (/ 1 (^ 2 (the Integer 128)))))
+  (is (== (^ (the U8 16) (the U8 2)) 0))
+  ;; A checked overflow offers CONTINUE to wrap, unlike a Lisp type error.
+  (is (== (lisp (-> I8) ()
+            (cl:handler-bind ((cl:simple-error #'cl:continue))
+              (coalton (^ (the I8 2) (the I8 7)))))
+          -128))
+  (is (== (lisp (-> I8) ()
+            (cl:handler-bind ((cl:simple-error #'cl:continue))
+              (coalton (abs (the I8 -128)))))
+          -128)))
+
+(define-test test-unsigned-fixnum-wraps-at-its-bound ()
+  (let hi = (the UFix math:max-bound))
+  (let modulus = (+ (math:to-integer hi) 1))
+  (is (== (math:to-integer (the UFix -1)) (math:to-integer hi)))
+  (is (== (the UFix (from-int modulus)) 0))
+  (is (== (neg (the UFix 1)) hi))
+  (is (== (- (the UFix 0) 1) hi))
+  (is (== (+ hi 1) 0))
+  (is (== (* hi hi) 1))
+  (is (== (bits:not (the UFix 0)) hi)))
+
+(define-test test-out-of-range-fixnum-literal ()
+  (is (== (lisp (-> IFix) ()
+            (cl:handler-bind ((cl:simple-error #'cl:continue))
+              (coalton (the IFix #.(cl:1+ cl:most-positive-fixnum)))))
+          math:min-bound)))
+
 ;;; The tests below check the laws documented on `bits:Bits`,
 ;;; `bits:ldb`, `bits:dpb`, and `bits:ReverseBits` against a reference
 ;;; model: the operations on unbounded integers, computed directly in

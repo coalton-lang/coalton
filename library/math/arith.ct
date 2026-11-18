@@ -361,11 +361,7 @@ Laws:
 (%define-sign-native F64)
 
 (%define-abs-native Integer)
-(%define-abs-native I8)
-(%define-abs-native I16)
-(%define-abs-native I32)
-(%define-abs-native I64)
-(%define-abs-native IFix)
+;; `abs` on signed fixed-width types must use checked `neg` at the minimum.
 (%define-abs-native U8)
 (%define-abs-native U16)
 (%define-abs-native U32)

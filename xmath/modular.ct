@@ -90,6 +90,7 @@ the operands to `Integer`; their machine product may already have overflowed."
     ((EuclideanDomain :a) (Integral :int) => :a * :int * :a -> :a))
   (define (mod-expt a exponent m)
     "Compute $a^e \\bmod m$ by binary exponentiation, reducing with `rem` after each product. Signal an error for a negative exponent."
+    (let exponent = (to-integer exponent))
     (when (< exponent 0)
       (error "mod-expt requires a nonnegative exponent."))
     (rec power ((base (rem a m)) (e exponent) (acc (rem one m)))
