@@ -436,6 +436,15 @@
     ((None) (is False))
     ((Some y) (is (== (- (* (recur:rational-shift y 1) r) y) 1)))))
 
+(define-test test-dual-noncommuting-reciprocal ()
+  (let i = (quat:quaternion (the Fraction 0) 1 0 0))
+  (let j = (quat:quaternion (the Fraction 0) 0 1 0))
+  (let u = (dual:Dual i j))
+  (let v = (math:recip u))
+  ;; Dual equality only compares the primal parts.
+  (is (== (dual:dual-part (* u v)) zero))
+  (is (== (dual:dual-part (* v u)) zero)))
+
 (define-test test-quaternion-and-clifford ()
   ;; Non-commutative division ring and ConjugateRing anti-automorphism on Quaternion Fraction
   (let q1 = (quat:quaternion (the Fraction 1) 2 3 4))

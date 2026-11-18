@@ -189,7 +189,7 @@ component."
     (define (recip (Dual p1 d1))
       (let ((inv-p1 (recip p1)))
         (Dual inv-p1
-              (neg (* d1 (sq inv-p1)))))))
+              (neg (* (* inv-p1 d1) inv-p1))))))
 
   (define-instance ((CommutativeRing :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) => Trigonometric (Dual :t))
     (define (sin (Dual p1 d1))
