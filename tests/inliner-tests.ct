@@ -571,7 +571,7 @@
 
     (define (baz)
       (let x = (Some (Some (the UFix 2))))
-      (bar x)))"
+      (bar x))"
    '("baz" . "(Void -> Unit)")))
 
 (defun count-let-binding-type-mismatches (let-node)

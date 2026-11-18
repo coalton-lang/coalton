@@ -63,7 +63,7 @@
 (define-type (T-dt7 :a)
   T1-dt7         "This is an empty constructor"
   (T2-dt7 :a)    "This is a constructor"
-  (T3-dt7 :a :a) "This is a well-nourished constructor"))
+  (T3-dt7 :a :a) "This is a well-nourished constructor")
 
 ================================================================================
 100 Malformed type definition

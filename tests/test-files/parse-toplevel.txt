@@ -40,3 +40,37 @@ error: Invalid toplevel form
    |
  3 |  (unknown)
    |   ^^^^^^^ unknown toplevel form
+
+================================================================================
+102 Unmatched close parenthesis between forms
+================================================================================
+
+(package test-package)
+
+(define x 1)
+)
+(define y 2)
+
+--------------------------------------------------------------------------------
+
+error: Unmatched close parenthesis
+  --> test:4:0
+   |
+ 4 |  )
+   |  ^ no form is open here
+
+================================================================================
+103 Unmatched close parenthesis after a form
+================================================================================
+
+(package test-package)
+
+(define x 1))
+
+--------------------------------------------------------------------------------
+
+error: Unmatched close parenthesis
+  --> test:3:12
+   |
+ 3 |  (define x 1))
+   |              ^ no form is open here
