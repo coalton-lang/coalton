@@ -449,6 +449,10 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/polynomial`**: Univariate and recursive multivariate
   polynomials ($R[x]$ and $R[x][y]\cdots$), including polynomial GCDs,
   resultants, and square-free factorization.
+- **`coalton/xmath/polynomial-factor`**: Complete univariate factorization
+  over finite fields, the integers, and the rationals.
+- **`coalton/xmath/number-field`**: Arithmetic, trace, norm, and minimal
+  polynomials in a field defined by an irreducible rational polynomial.
 - **`coalton/xmath/ratio`**: Reduced fractions over any GCD domain (such as
   rational functions $p(x)/q(x)$ and Gaussian rationals), along with partial
   fraction decomposition and Hermite reduction for symbolic rational integration.
@@ -691,3 +695,90 @@ inclusively. `PrecisionExhausted` means the input scale, a pivot, or a
 proposed relation could not be resolved. `CoefficientLimit` and
 `IterationLimit` mean the search stopped, **not** that no other relation
 exists.
+
+### Factoring a polynomial completely
+
+The examples below use `poly`, `factor`, `ff`, and `nfield` as local package
+nicknames for `coalton/xmath/polynomial`, `coalton/xmath/polynomial-factor`,
+`coalton/xmath/finite-field`, and `coalton/xmath/number-field`.
+
+`factor:factor-integer`, `factor:factor-rational` (coefficients of type
+`Fraction`), and `factor:factor-finite` return two values: a scalar $c$ and a
+list of `(Tuple factor multiplicity)` pairs. The order of the pairs is not
+specified. The original polynomial is $c\prod_i g_i^{m_i}$. Field factors
+are monic; integer factors are primitive with positive leading coefficient,
+and $c$ is the **signed content**, not a list of integer primes. A constant,
+including zero, returns itself and an empty list.
+
+```lisp
+(coalton
+  (let ((x (the (poly:Polynomial Integer) poly:poly-var))
+        (g (+ (^ x 2) 1))
+        (h (+ (^ x 2) 4)))
+    (let (values c factors) = (factor:factor-integer (coalton/math:scale -6 (^ (* g h) 2))))
+    (Tuple c factors)))
+```
+
+Here $c=-6$ and the two factors are $x^2+1$ and $x^2+4$, each with
+multiplicity two. Looking for rational roots would find **neither**.
+Square-free decomposition alone would return their product.
+
+Over $\mathbb F_q$ of characteristic $p$, `factor:square-free-finite`
+recursively extracts $p$th roots when repeated factors remain after
+differentiation. The coefficient root of $a$ is $a^{q/p}$, which need
+not equal $a$ in an extension field:
+
+```lisp
+(coalton
+  (let ((x (the (poly:Polynomial ff:GF4) poly:poly-var))
+        (u (the ff:GF4 (ff:field-element 2))))
+    (let (values c factors) = (factor:factor-finite (coalton/math:scale u (^ (+ x (into u)) 2))))
+    (Tuple c factors)))
+```
+
+The derivative is zero, but the result is $c=u$ and the single factor
+$x+u$ with multiplicity two. To split square-free pieces, Berlekamp's
+algorithm separates the components of the fixed space of $v\mapsto v^q$ in
+$\mathbb F_q[x]/(f)$. It uses a dense matrix of size $\deg f$ and can
+enumerate all $q$ field elements.
+
+For integer and rational input, denominators are cleared on each square-free
+piece. The integer algorithm factors at a small prime preserving degree and
+square-freeness, lifts the modular factors by Hensel steps past a coefficient
+bound, and tests subset products by exact polynomial division. If all the
+configured primes are bad, Kronecker interpolation enumerates signed divisors
+of values at distinct integers, using `ifact:factor-integer-exact`.
+Recombination can be exponential in the number of modular factors;
+factoring the sample values and interpolating can be slow at large heights. There
+is no timeout reported as irreducibility or partial list presented as complete.
+
+### Working in a number field
+
+Given a nonconstant irreducible $f\in\mathbb Q[x]$, the field
+$K=\mathbb Q[x]/(f)$ contains a distinguished element $\alpha$ with
+$f(\alpha)=0$. Unlike an isolated real algebraic root, this does not choose
+any particular real or complex embedding.
+
+```lisp
+(coalton
+  (let ((x (the (poly:Polynomial Fraction) poly:poly-var))
+        (k (unwrap (nfield:number-field (- (^ x 4) 2))))
+        (a (nfield:generator k))
+        (b (unwrap (nfield:multiply a a))))
+    (values (nfield:representative (unwrap (nfield:inverse a)))
+            (nfield:trace b)
+            (nfield:norm b)
+            (nfield:minimal-polynomial b))))
+```
+
+Here $x^4-2$ is irreducible by Eisenstein at $2$, and
+$\alpha^{-1}=\alpha^3/2$. Multiplication by $b=\alpha^2$ on the
+four-dimensional space $K$ has trace $0$, norm $4$, and characteristic
+polynomial $(t^2-2)^2$. Its square-free part, $t^2-2$, is the **minimal
+polynomial of $b$**, not the defining quartic. In general the characteristic
+polynomial is $m_b(t)^{[K:\mathbb Q(b)]}$.
+
+`nfield:number-field` returns `None` for zero, constants, and reducible moduli
+such as $(x^2+1)(x^2+4)$. Each element carries its normalized defining
+polynomial; binary arithmetic on different presentations returns `None`,
+even if the fields are isomorphic. Inversion of zero also returns `None`.
