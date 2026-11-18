@@ -5,7 +5,7 @@
 (coalton/utils:defstdlib-package #:coalton/xmath/power-series
   (:documentation "The ring $R[[x]]$ of formal power series $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$, represented lazily with memoized coefficients.
 
-Over any semiring or ring $R$, formal power series form a ring under termwise addition and the Cauchy product $(fg)_n = \\sum_{k=0}^n a_k b_{n-k}$, with formal derivative $f'(x) = \\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$.
+Termwise addition and the Cauchy product $(fg)_n = \\sum_{k=0}^n a_k b_{n-k}$ make the series a semiring when $R$ is a semiring, and a ring when $R$ is a ring. The formal derivative is $f'(x) = \\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$. Equality of unrestricted series cannot be decided by comparing a finite prefix: `==` checks only the configured comparison order. Use `series-approx-equal?` to state the number of coefficients being compared explicitly.
 
 **Inversion and division.** A series $g(x) = \\sum_{n=0}^{\\infty} b_n x^n$ is a unit in $R[[x]]$ if and only if its constant term $b_0$ is invertible, in which case the coefficients of $c = g^{-1}$ are determined recursively by
 $$c_0 = b_0^{-1}, \\qquad c_n = -b_0^{-1} \\sum_{k=1}^n b_k c_{n-k} \\quad (n \\ge 1).$$

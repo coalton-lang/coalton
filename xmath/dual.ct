@@ -112,7 +112,7 @@ component."
     (* x x))
 
   (define-instance (Eq :t => Eq (Dual :t))
-    "Note: Eq only compares the primal component."
+    "Compare primal values for branching in automatic differentiation. This is not a test for algebraic zero: `(Dual 0 1)` compares equal to `(Dual 0 0)`."
     (inline)
     (define (== (Dual a _) (Dual p _))
       (== a p)))

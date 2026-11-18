@@ -5,7 +5,7 @@
 (coalton/utils:defstdlib-package #:coalton/xmath/matrix
   (:documentation "Dense $m \\times n$ matrices $A = (a_{ij})$ and linear algebra over semirings, rings, GCD domains, and fields.
 
-Over any semiring or ring, matrices support entrywise addition, transposition $(A^T)_{ij} = a_{ji}$, trace $\\operatorname{tr}(A) = \\sum_i a_{ii}$, matrix–vector and matrix–matrix multiplication $(AB)_{ij} = \\sum_k a_{ik} b_{kj}$, and binary exponentiation $A^e$. The ring constants `zero`, `one`, and `(from-int c)` represent dimensionless scalar matrices $cI$ that conform to the dimensions of any matrix they are combined with. Over a $\\ast$-ring (`ConjugateRing`), the Hermitian adjoint $(A^*)_{ij} = \\overline{a_{ji}}$ makes square matrices a $\\ast$-ring as well.
+Matrices of the same shape add entrywise. Over a semiring, an $m \\times n$ matrix times an $n \\times p$ matrix has entries $(AB)_{ij} = \\sum_k a_{ik} b_{kj}$. Square matrices of a fixed size admit powers $A^e$ and the trace $\\operatorname{tr}(A) = \\sum_i a_{ii}$. Over a $\\ast$-ring (`ConjugateRing`), the Hermitian adjoint $(A^*)_{ij} = \\overline{a_{ji}}$ makes these square matrices a $\\ast$-ring as well.
 
 **Fraction-free elimination over GCD domains.** Over any `GcdDomain` $D$ (such as $\\mathbb{Z}$, $\\mathbb{Z}[i]$, or a polynomial ring $D[x]$), Bareiss's fraction-free algorithm maintains $2 \\times 2$ Sylvester-identity minors
 $$a_{ij}^{(k)} = \\frac{a_{kk}^{(k-1)} a_{ij}^{(k-1)} - a_{ik}^{(k-1)} a_{kj}^{(k-1)}}{a_{k-1,k-1}^{(k-2)}},$$
@@ -70,7 +70,7 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
   (define-type (Matrix :a)
     "A dense matrix $M = (m_{ij})$ with entries stored in row-major order.
 
-The ring constants `zero`, `one`, `(from-int c)`, and integer literals of `Matrix` are dimensionless scalar matrices $cI$; they adapt to the size of any matrix they are added to, subtracted from, multiplied with, or compared with, but have no `rows` or `cols` of their own."
+Matrix literals, `zero`, and `one` represent dimensionless multiples of the identity, not matrices with a fixed shape. Use `(zero-matrix m n)` for the additive identity of an $m \\times n$ matrix, especially when it is rectangular. Compare concrete matrices when equality must distinguish dimensions: `one` compares equal to both `(identity-matrix 1)` and `(identity-matrix 2)`, which do not compare equal to each other."
     (%Matrix UFix UFix (vec:Vector :a))
     ;; A dimensionless scalar matrix c I, storing c and the zero of :a.
     (%Scalar :a :a))
