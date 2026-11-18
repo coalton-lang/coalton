@@ -600,6 +600,17 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                                              (- position 1)))
                                "missing close parenthesis"))))
 
+        (when (and (not presentp)
+                   (not eofp)
+                   (not (eq mode ':macro)))
+          (let ((position (file-position stream)))
+            (parse-error "Unmatched close parenthesis"
+                         (note source (source:stream-span-to-char-span
+                                       stream source
+                                       (cons (- position 1)
+                                             position))
+                               "no form is open here"))))
+
         (unless presentp
           (return))
 
