@@ -64,6 +64,7 @@
    (#:diff #:coalton/xmath/differential)
    (#:gb #:coalton/xmath/groebner)
    (#:modmath #:coalton/xmath/modular)
+   (#:ifact #:coalton/xmath/integer-factorization)
    (#:recur #:coalton/xmath/recurrence)
    (#:quat #:coalton/xmath/quaternion)
    (#:cliff #:coalton/xmath/clifford-algebra)))

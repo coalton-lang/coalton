@@ -1,0 +1,16 @@
+(in-package #:coalton-native-tests)
+
+(define-test test-integer-primality ()
+  (is (list:all (fn (n) (== (ifact:primality n) ifact:CompositeOrUnit))
+                [-7 -1 0 1 4 25 561 1105 1729
+                 ;; Strong pseudoprimes to the first 7, 11, 12 and 13 prime bases.
+                 341550071728321 3825123056546413051
+                 318665857834031151167461 3317044064679887385961981]))
+  (is (list:all (fn (n) (== (ifact:primality n) ifact:ProvenPrime))
+                [2 3 41 43 65537 2147483647 18446744073709551557
+                 18446744073709551629]))
+  ;; The 252-bit prime used by STARK fields has a Proth certificate.
+  (is (== (ifact:primality (+ 1 (* (+ (^ 2 59) 17) (^ 2 192))))
+          ifact:ProvenPrime))
+  ;; A known prime, but outside this test's proof range.
+  (is (== (ifact:primality (- (^ 2 127) 1)) ifact:ProbablePrime)))
