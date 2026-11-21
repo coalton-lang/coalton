@@ -31,6 +31,13 @@
 ;;; Tests
 ;;;
 
+(define-test test-throw-file-error ()
+  (let dir = (the file:Pathname (into "dir/")))
+  (let result = (file:file-exists? dir))
+  (is (result:err? result))
+  (is (catch (result:ok-or-throw result)
+        ((file:PathError _ path) (== path dir)))))
+
 (define-test test-pathnames ()
   (is (file:directory-pathname? "wow/"))
   (is (not (file:directory-pathname? "wow")))
