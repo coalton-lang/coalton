@@ -73,12 +73,14 @@
             (cl:t
              EQ))))))
 
-  (define-instance (Additive Fraction)
+  (define-instance (HasAdd Fraction)
     (inline)
     (define (+ p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
-          (cl:+ p q))))
+          (cl:+ p q)))))
+
+  (define-instance (Additive Fraction)
     (define zero
       (coalton++:unsafe
         (lisp (-> Fraction) () 0))))
@@ -95,12 +97,14 @@
         (lisp (-> Fraction) (q)
           (cl:- q)))))
 
-  (define-instance (Multiplicative Fraction)
+  (define-instance (HasMul Fraction)
     (inline)
     (define (* p q)
       (coalton++:unsafe
         (lisp (-> Fraction) (p q)
-          (cl:* p q))))
+          (cl:* p q)))))
+
+  (define-instance (Multiplicative Fraction)
     (define one
       (coalton++:unsafe
         (lisp (-> Fraction) () 1))))

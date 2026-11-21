@@ -151,12 +151,14 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
       (series-approx-equal? (lisp (-> UFix) () *series-comparison-order*) a b)))
 
   ;;
-  ;; Algebraic Hierarchy: Additive -> AdditiveGroup -> Multiplicative -> Semiring -> Ring -> Num
+  ;; Coefficient arithmetic
   ;;
 
-  (define-instance (Additive :a => Additive (PowerSeries :a))
+  (define-instance (HasAdd :a => HasAdd (PowerSeries :a))
     (define (+ a b)
-      (make-series (fn (n) (+ (series-coeff a n) (series-coeff b n)))))
+      (make-series (fn (n) (+ (series-coeff a n) (series-coeff b n))))))
+
+  (define-instance (Additive :a => Additive (PowerSeries :a))
     (define zero
       (make-series (fn (_) zero))))
 
@@ -166,7 +168,7 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
     (define (- a b)
       (make-series (fn (n) (- (series-coeff a n) (series-coeff b n))))))
 
-  (define-instance (Semiring :a => Multiplicative (PowerSeries :a))
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (PowerSeries :a))
     (define (* a b)
       (make-series
        (fn (n)
@@ -175,7 +177,9 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
            (let next = (+ acc term))
            (if (== k n)
                next
-               (cauchy (+ k 1) next))))))
+               (cauchy (+ k 1) next)))))))
+
+  (define-instance (Semiring :a => Multiplicative (PowerSeries :a))
     (define one
       (constant-series one)))
 
@@ -194,7 +198,7 @@ More generally, division $f / g$ cancels a common factor $x^v$ when $b_0 = \\cdo
     (inline)
     (define (embed-fraction q) (constant-series (embed-fraction q))))
 
-  (define-instance (Multiplicative :a => Scale :a (PowerSeries :a))
+  (define-instance (HasMul :a => Scale :a (PowerSeries :a))
     (define (scale c ps)
       (make-series (fn (n) (* c (series-coeff ps n))))))
 

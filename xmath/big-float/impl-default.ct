@@ -471,7 +471,7 @@
       ((BFValue (Dyadic m _)) (== m 0))
       (_ False)))
 
-  (define-instance (Additive BigFloat)
+  (define-instance (HasAdd BigFloat)
     (define (+ a b)
       (match (Tuple (resolve a) (resolve b))
         ((Tuple (BFNaN) _) BFNaN)
@@ -487,7 +487,9 @@
         ((Tuple x (BFNegZero)) (normalize x))
         ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
          (add-dyadic m1 e1 m2 e2))
-        (_ BFNaN)))
+        (_ BFNaN))))
+
+  (define-instance (Additive BigFloat)
     (define zero (normalize-dyadic 0 0)))
 
   (define-instance (AdditiveGroup BigFloat)
@@ -498,7 +500,7 @@
     (define (neg x)
       (bf-negate x)))
 
-  (define-instance (Multiplicative BigFloat)
+  (define-instance (HasMul BigFloat)
     (define (* a b)
       (let ra = (resolve a))
       (let rb = (resolve b))
@@ -519,7 +521,9 @@
          (match (Tuple ra rb)
            ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
             (normalize-dyadic (* m1 m2) (+ e1 e2)))
-           (_ BFNaN)))))
+           (_ BFNaN))))))
+
+  (define-instance (Multiplicative BigFloat)
     (define one (normalize-dyadic 1 0)))
 
   (define-instance (Semiring BigFloat))

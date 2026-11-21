@@ -8,13 +8,15 @@
                   "(coalton/xmath/polynomial:square-free-part (the (coalton/xmath/polynomial:Polynomial Bit) one))"
                   "(coalton/xmath/polynomial:integrate (the (coalton/xmath/polynomial:Polynomial Bit) one))"
                   "(coalton/xmath/recurrence:berlekamp-massey (the (List (coalton/xmath/dual:Dual Fraction)) Nil))"
-                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix F64) one))"))
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix F64)
+                                               (coalton/xmath/matrix:identity-matrix 1)))"))
     (signals tc:tc-error
       (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
 
 (deftest noncommuting-and-isotropic-quaternions-are-not-fields ()
   (dolist (form '("(recip (the (coalton/xmath/quaternion:Quaternion (coalton/xmath/quaternion:Quaternion Fraction)) one))"
-                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix (coalton/xmath/quaternion:Quaternion (Complex Fraction))) one))"
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix (coalton/xmath/quaternion:Quaternion (Complex Fraction)))
+                                               (coalton/xmath/matrix:identity-matrix 1)))"
                   "(coalton/xmath/groebner:groebner-basis coalton/xmath/groebner:Lex
                      (the (List (coalton/xmath/groebner:MPoly (coalton/xmath/quaternion:Quaternion Fraction))) Nil))"))
     (signals tc:tc-error
@@ -24,6 +26,13 @@
   (signals tc:tc-error
     (check-coalton-types
      "(define (bad-acos) (acos (the (coalton/xmath/power-series:PowerSeries Fraction) zero)))")))
+
+(deftest runtime-matrices-have-no-implicit-shape ()
+  (dolist (constant '("zero" "one" "1"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define (no-shape) (the (coalton/xmath/matrix:Matrix Integer) ~A))"
+               constant)))))
 
 (in-package #:coalton-native-tests)
 
@@ -246,6 +255,34 @@
   (let x = (the (series:PowerSeries F64) series:series-var))
   (is (== (series:series-prefix 3 (acos x)) [(acos 0.0d0) -1.0d0 0.0d0])))
 
+(define-test runtime-matrix-operators ()
+  (let a = (mat:from-rows [[(the Integer 1) 2 3] [4 5 6]]))
+  (let b = (mat:transpose a))
+  (is (/= a (mat:matrix 3 2 [1 2 3 4 5 6])))
+  (is (== (* a b) (mat:from-rows [[14 32] [32 77]])))
+  (is (== (* (mat:identity-matrix 2) a) (* a (mat:identity-matrix 3))))
+  (is (== (mat:mat-sub a a) (mat:zero-matrix 2 3)))
+  (is (mat:zero-matrix? (+ a (mat:mat-neg a))))
+  ;; Blocks only implement HasAdd, not Additive: no block shape is implicit.
+  (let blocks = (mat:matrix 1 1 [a]))
+  (is (== (+ blocks blocks) (mat:matrix 1 1 [(math:scale 2 a)])))
+  (is (catch (progn (+ a b) False) ((the Panic _) True)))
+  (is (catch (progn (* a a) False) ((the Panic _) True)))
+  (is (== (mat:mat-pow (* a b) 0) (mat:identity-matrix 2)))
+  (is (catch (progn (mat:mat-pow a 0) False) ((the Panic _) True))))
+
+(define-test runtime-matrix-empty-shapes ()
+  (let a = (the (mat:Matrix Integer) (mat:matrix 0 2 [])))
+  (let b = (the (mat:Matrix Integer) (mat:matrix 0 3 [])))
+  (is (/= a b))
+  (is (mat:zero-matrix? a))
+  (is (== (* (mat:transpose a) b) (mat:zero-matrix 2 3)))
+  (is (== (mat:transpose (mat:transpose b)) b))
+  ;; The area cannot wrap to zero and masquerade as an empty matrix.
+  (let r = (1+ (math:quot (the UFix math:max-bound) 2)))
+  (is (catch (progn (the (mat:Matrix Integer) (mat:matrix r 2 [])) False)
+        ((the Panic _) True))))
+
 (define-test test-matrix-algebra ()
   ;; Bareiss fraction-free determinant, characteristic polynomial, and adjugate over Integer
   (let a = (mat:from-rows [[(the Integer 2) 1 3]
@@ -286,12 +323,12 @@
     ((Some sol)
      (is (== sol [1 2]))))
 
-  ;; ConjugateRing (adjoint) and Hermitian Gram-Schmidt on Complex Fraction
+  ;; Hermitian adjoint and Gram-Schmidt on Complex Fraction
   (let cm = (mat:from-rows [[(math:complex (the Fraction 1) 2)
                              (math:complex 3 -1)]
                             [(math:complex 0 4)
                              (math:complex -2 0)]]))
-  (is (== (math:conjugate (math:conjugate cm)) cm))
+  (is (== (mat:adjoint (mat:adjoint cm)) cm))
   (let ortho = (mat:gram-schmidt [[(math:complex (the Fraction 1) 1)
                                    (math:complex 1 -1)]
                                   [(math:complex 2 0)

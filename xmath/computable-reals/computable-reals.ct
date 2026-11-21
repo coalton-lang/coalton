@@ -114,11 +114,13 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 
 (coalton-toplevel
   
-  (define-instance (Additive CReal)
+  (define-instance (HasAdd CReal)
     (inline)
     (define (+ a b)
       (lisp (-> CReal) (a b)
-        (cr:+r a b)))
+        (cr:+r a b))))
+
+  (define-instance (Additive CReal)
     (define zero
       (lisp (-> CReal) ()
         0)))
@@ -133,11 +135,13 @@ is no guarantee that the `CReal` will be accurate to any precision*."
       (lisp (-> CReal) (a)
         (cr:-r a))))
 
-  (define-instance (Multiplicative CReal)
+  (define-instance (HasMul CReal)
     (inline)
     (define (* a b)
       (lisp (-> CReal) (a b)
-        (cr:*r a b)))
+        (cr:*r a b))))
+
+  (define-instance (Multiplicative CReal)
     (define one
       (lisp (-> CReal) ()
         1)))

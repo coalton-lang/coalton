@@ -79,13 +79,14 @@
   (define-num-wrapping U64 64)
   (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
-  (define-instance (cls:Additive Bit)
+  (define-instance (cls:HasAdd Bit)
     (inline)
     (define (cls:+ a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
-          (cl:logxor a b))))
+          (cl:logxor a b)))))
 
+  (define-instance (cls:Additive Bit)
     (define cls:zero
       (coalton++:unsafe
         (lisp (-> Bit) () 0))))
@@ -101,13 +102,14 @@
     (define (cls:neg a)
       a))
 
-  (define-instance (cls:Multiplicative Bit)
+  (define-instance (cls:HasMul Bit)
     (inline)
     (define (cls:* a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
-          (cl:logand a b))))
+          (cl:logand a b)))))
 
+  (define-instance (cls:Multiplicative Bit)
     (define cls:one
       (coalton++:unsafe
         (lisp (-> Bit) () 1))))

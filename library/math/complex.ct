@@ -109,9 +109,11 @@ blackboard-bold 𝕚.)"
     (inline)
     (define (== a b) (complex-equal a b)))
 
-  (define-instance (ComplexComponent :a => Additive (Complex :a))
+  (define-instance (ComplexComponent :a => HasAdd (Complex :a))
     (inline)
-    (define (+ a b) (complex-plus a b))
+    (define (+ a b) (complex-plus a b)))
+
+  (define-instance (ComplexComponent :a => Additive (Complex :a))
     (define zero (complex-from-int 0)))
 
   (define-instance (ComplexComponent :a => AdditiveGroup (Complex :a))
@@ -120,9 +122,11 @@ blackboard-bold 𝕚.)"
     (inline)
     (define (neg a) (- zero a)))
 
-  (define-instance (ComplexComponent :a => Multiplicative (Complex :a))
+  (define-instance (ComplexComponent :a => HasMul (Complex :a))
     (inline)
-    (define (* a b) (complex-times a b))
+    (define (* a b) (complex-times a b)))
+
+  (define-instance (ComplexComponent :a => Multiplicative (Complex :a))
     (define one (complex-from-int 1)))
 
   (define-instance (ComplexComponent :a => Semiring (Complex :a)))

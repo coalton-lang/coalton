@@ -282,9 +282,11 @@ using Buchberger's first criterion to skip pairs with coprime leading monomials,
       (== (list:filter (fn ((Tuple c _)) (nonzero? c)) xs)
           (list:filter (fn ((Tuple c _)) (nonzero? c)) ys))))
 
-  (define-instance ((Eq :a) (Additive :a) => Additive (MPoly :a))
+  (define-instance ((Eq :a) (Additive :a) => HasAdd (MPoly :a))
     (define (+ (%MPoly xs) (%MPoly ys))
-      (%MPoly (%merge-terms Lex xs ys)))
+      (%MPoly (%merge-terms Lex xs ys))))
+
+  (define-instance ((Eq :a) (Additive :a) => Additive (MPoly :a))
     (define zero (%MPoly Nil)))
 
   (define-instance ((Eq :a) (AdditiveGroup :a) => AdditiveGroup (MPoly :a))
@@ -306,13 +308,15 @@ using Buchberger's first criterion to skip pairs with coprime leading monomials,
               (multiply rest acc)
               (multiply rest (Cons (Tuple product (monomial-mul m n)) acc))))))))
 
-  (define-instance ((Eq :a) (Semiring :a) => Multiplicative (MPoly :a))
+  (define-instance ((Eq :a) (Semiring :a) => HasMul (MPoly :a))
     (define (* (%MPoly terms) q)
       (rec multiply ((xs terms) (acc zero))
         (match xs
           ((Nil) acc)
           ((Cons (Tuple c m) rest)
-           (multiply rest (+ acc (%multiply-term c m q)))))))
+           (multiply rest (+ acc (%multiply-term c m q))))))))
+
+  (define-instance ((Eq :a) (Semiring :a) => Multiplicative (MPoly :a))
     (define one (mpoly-constant one)))
 
   (define-instance ((Eq :a) (Semiring :a) => Semiring (MPoly :a)))

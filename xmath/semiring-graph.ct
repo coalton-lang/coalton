@@ -38,12 +38,16 @@ An automaton with initial row $\\lambda$, final column $\\rho$, and one transiti
     Unreachable
     Reachable)
 
+  (define-instance (HasAdd Reachability)
+    (define (+ a b) (match a ((Reachable) Reachable) ((Unreachable) b))))
+
   (define-instance (Additive Reachability)
-    (define (+ a b) (match a ((Reachable) Reachable) ((Unreachable) b)))
     (define zero Unreachable))
 
+  (define-instance (HasMul Reachability)
+    (define (* a b) (match a ((Reachable) b) ((Unreachable) Unreachable))))
+
   (define-instance (Multiplicative Reachability)
-    (define (* a b) (match a ((Reachable) b) ((Unreachable) Unreachable)))
     (define one Reachable))
 
   (define-instance (Semiring Reachability))
@@ -57,22 +61,26 @@ An automaton with initial row $\\lambda$, final column $\\rho$, and one transiti
     (MinFinite Integer)
     MinUnbounded)
 
-  (define-instance (Additive MinPlus)
+  (define-instance (HasAdd MinPlus)
     (define (+ a b)
       (match (Tuple a b)
         ((Tuple (MinNoPath) x) x)
         ((Tuple x (MinNoPath)) x)
         ((Tuple (MinFinite x) (MinFinite y)) (MinFinite (min x y)))
-        (_ MinUnbounded)))
+        (_ MinUnbounded))))
+
+  (define-instance (Additive MinPlus)
     (define zero MinNoPath))
 
-  (define-instance (Multiplicative MinPlus)
+  (define-instance (HasMul MinPlus)
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (MinNoPath) _) MinNoPath)
         ((Tuple _ (MinNoPath)) MinNoPath)
         ((Tuple (MinFinite x) (MinFinite y)) (MinFinite (+ x y)))
-        (_ MinUnbounded)))
+        (_ MinUnbounded))))
+
+  (define-instance (Multiplicative MinPlus)
     (define one (MinFinite 0)))
 
   (define-instance (Semiring MinPlus))
@@ -90,22 +98,26 @@ An automaton with initial row $\\lambda$, final column $\\rho$, and one transiti
     (MaxFinite Integer)
     MaxUnbounded)
 
-  (define-instance (Additive MaxPlus)
+  (define-instance (HasAdd MaxPlus)
     (define (+ a b)
       (match (Tuple a b)
         ((Tuple (MaxNoPath) x) x)
         ((Tuple x (MaxNoPath)) x)
         ((Tuple (MaxFinite x) (MaxFinite y)) (MaxFinite (max x y)))
-        (_ MaxUnbounded)))
+        (_ MaxUnbounded))))
+
+  (define-instance (Additive MaxPlus)
     (define zero MaxNoPath))
 
-  (define-instance (Multiplicative MaxPlus)
+  (define-instance (HasMul MaxPlus)
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (MaxNoPath) _) MaxNoPath)
         ((Tuple _ (MaxNoPath)) MaxNoPath)
         ((Tuple (MaxFinite x) (MaxFinite y)) (MaxFinite (+ x y)))
-        (_ MaxUnbounded)))
+        (_ MaxUnbounded))))
+
+  (define-instance (Multiplicative MaxPlus)
     (define one (MaxFinite 0)))
 
   (define-instance (Semiring MaxPlus))

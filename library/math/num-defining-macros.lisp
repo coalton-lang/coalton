@@ -183,15 +183,16 @@
 (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 (cl:defmacro define-num-checked (type overflow-handler)
-  "Define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`, `Scale`, and `Module` instances for TYPE which signal on overflow."
+  "Define numeric operations and their class instances for TYPE, signaling on overflow."
   `(progn
-     (define-instance (Additive ,type)
+     (define-instance (HasAdd ,type)
        (inline)
        (define (+ a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
-             (,overflow-handler (cl:+ a b)))))
+             (,overflow-handler (cl:+ a b))))))
 
+     (define-instance (Additive ,type)
        (define zero
          (coalton++:unsafe
            (lisp (-> ,type) () 0))))
@@ -209,13 +210,14 @@
            (lisp (-> ,type) (a)
              (,overflow-handler (cl:- a))))))
 
-     (define-instance (Multiplicative ,type)
+     (define-instance (HasMul ,type)
        (inline)
        (define (* a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
-             (,overflow-handler (cl:* a b)))))
+             (,overflow-handler (cl:* a b))))))
 
+     (define-instance (Multiplicative ,type)
        (define one
          (coalton++:unsafe
            (lisp (-> ,type) () 1))))
@@ -243,15 +245,16 @@
        (define (conjugate x) x))))
 
 (cl:defmacro define-num-wrapping (type bits)
-  "Define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`, `Scale`, and `Module` instances for TYPE which wrap on overflow."
+  "Define numeric operations and their class instances for TYPE, wrapping on overflow."
   `(progn
-     (define-instance (Additive ,type)
+     (define-instance (HasAdd ,type)
        (inline)
        (define (+ a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
-             (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits))))))
+             (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))))
 
+     (define-instance (Additive ,type)
        (define zero
          (coalton++:unsafe
            (lisp (-> ,type) () 0))))
@@ -269,13 +272,14 @@
            (lisp (-> ,type) (a)
              (cl:values (cl:mod (cl:- a) ,(cl:expt 2 bits)))))))
 
-     (define-instance (Multiplicative ,type)
+     (define-instance (HasMul ,type)
        (inline)
        (define (* a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
-             (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits))))))
+             (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))))
 
+     (define-instance (Multiplicative ,type)
        (define one
          (coalton++:unsafe
            (lisp (-> ,type) () 1))))
@@ -305,7 +309,7 @@
 
 ;;; Float Num instances.
 (cl:defmacro define-num-float (type lisp-type plus-inf minus-inf)
-  "Define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`, `Scale`, and `Module` for the float type TYPE."
+  "Define the floating-point numeric operations and their class instances for TYPE."
 
   ;;
   ;; CCL has a tendency to re-enable float traps. The explicit float
@@ -318,15 +322,16 @@
   ;;
 
   `(progn
-     (define-instance (Additive ,type)
+     (define-instance (HasAdd ,type)
        (inline)
        (define (+ a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
              (#+(not ccl) cl:progn
                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                (cl:+ a b)))))
+                (cl:+ a b))))))
 
+     (define-instance (Additive ,type)
        (define zero
          (coalton++:unsafe
            (lisp (-> ,type) () ,(cl:coerce 0 lisp-type)))))
@@ -348,15 +353,16 @@
                 #+ccl ff:with-float-traps-masked #+ccl cl:t
                 (cl:- a))))))
 
-     (define-instance (Multiplicative ,type)
+     (define-instance (HasMul ,type)
        (inline)
        (define (* a b)
          (coalton++:unsafe
            (lisp (-> ,type) (a b)
              (#+(not ccl) cl:progn
                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                (cl:* a b)))))
+                (cl:* a b))))))
 
+     (define-instance (Multiplicative ,type)
        (define one
          (coalton++:unsafe
            (lisp (-> ,type) () ,(cl:coerce 1 lisp-type)))))

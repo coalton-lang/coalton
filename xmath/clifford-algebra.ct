@@ -165,7 +165,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     (%Multivector (List (Tuple :a UFix))))
 
   (declare %add-terms
-    (Additive :a => List (Tuple :a UFix) * List (Tuple :a UFix) -> List (Tuple :a UFix)))
+    (HasAdd :a => List (Tuple :a UFix) * List (Tuple :a UFix) -> List (Tuple :a UFix)))
   (define (%add-terms xs ys)
     (rec merge ((a xs) (b ys) (acc Nil))
       (match (Tuple a b)
@@ -475,9 +475,11 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
            (f ")")
            (loop more))))))
 
-  (define-instance (Additive :a => Additive (Multivector :a))
+  (define-instance (HasAdd :a => HasAdd (Multivector :a))
     (define (+ (%Multivector xs) (%Multivector ys))
-      (%Multivector (%add-terms xs ys)))
+      (%Multivector (%add-terms xs ys))))
+
+  (define-instance (Additive :a => Additive (Multivector :a))
     (define zero
       (%Multivector Nil)))
 
@@ -491,13 +493,15 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     (define (- a b)
       (+ a (neg b))))
 
-  (define-instance (Ring :a => Multiplicative (Multivector :a))
+  (define-instance (Ring :a => HasMul (Multivector :a))
     (define (* a b)
       (%Multivector
        (%product-raw (fn (_bx _by) True)
                      (%current-signature)
                      a
-                     b)))
+                     b))))
+
+  (define-instance (Ring :a => Multiplicative (Multivector :a))
     (define one
       (%Multivector (Cons (Tuple one 0) Nil))))
 

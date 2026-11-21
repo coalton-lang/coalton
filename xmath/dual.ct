@@ -129,10 +129,12 @@ component."
     (define (hash (Dual p1 _))
       (hash p1)))
 
-  (define-instance (Additive :t => Additive (Dual :t))
+  (define-instance (HasAdd :t => HasAdd (Dual :t))
     (inline)
     (define (+ (Dual p1 d1) (Dual p2 d2))
-      (Dual (+ p1 p2) (+ d1 d2)))
+      (Dual (+ p1 p2) (+ d1 d2))))
+
+  (define-instance (Additive :t => Additive (Dual :t))
     (define zero (Dual zero zero)))
 
   (define-instance (AdditiveGroup :t => AdditiveGroup (Dual :t))
@@ -143,11 +145,13 @@ component."
     (define (neg (Dual p d))
       (Dual (neg p) (neg d))))
 
-  (define-instance (Semiring :t => Multiplicative (Dual :t))
+  (define-instance ((HasAdd :t) (HasMul :t) => HasMul (Dual :t))
     (inline)
     (define (* (Dual p1 d1) (Dual p2 d2))
       (Dual (* p1 p2)
-            (+ (* p1 d2) (* d1 p2))))
+            (+ (* p1 d2) (* d1 p2)))))
+
+  (define-instance (Semiring :t => Multiplicative (Dual :t))
     (define one (Dual one zero)))
 
   (define-instance (Semiring :t => Semiring (Dual :t)))
@@ -162,7 +166,7 @@ component."
 
   (define-instance (Num :t => Num (Dual :t)))
 
-  (define-instance (Multiplicative :t => Scale :t (Dual :t))
+  (define-instance (HasMul :t => Scale :t (Dual :t))
     (inline)
     (define (scale k (Dual p d))
       (Dual (* k p) (* k d))))

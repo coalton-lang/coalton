@@ -295,7 +295,7 @@ Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, 
   ;; Algebraic structure: the Ore ring A[d; ']
   ;;
 
-  (define-instance (Additive :a => Additive (DiffOp :a))
+  (define-instance (HasAdd :a => HasAdd (DiffOp :a))
     (define (+ (%DiffOp va) (%DiffOp vb))
       (let la = (vec:length va))
       (let lb = (vec:length vb))
@@ -305,7 +305,9 @@ Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, 
                     (cond
                       ((>= i la) (vec:index-unsafe i vb))
                       ((>= i lb) (vec:index-unsafe i va))
-                      (True (+ (vec:index-unsafe i va) (vec:index-unsafe i vb))))))))
+                      (True (+ (vec:index-unsafe i va) (vec:index-unsafe i vb)))))))))
+
+  (define-instance (Additive :a => Additive (DiffOp :a))
     (define zero (%DiffOp (vec:new))))
 
   (define-instance (AdditiveGroup :a => AdditiveGroup (DiffOp :a))
@@ -334,7 +336,7 @@ Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, 
                    (True (+ (deriv (vec:index-unsafe j v))
                             (vec:index-unsafe (- j 1) v)))))))
 
-  (define-instance (DifferentialRing :a => Multiplicative (DiffOp :a))
+  (define-instance (DifferentialRing :a => HasMul (DiffOp :a))
     "Composition of operators: $A B = \\sum_i a_i \\left(\\partial^i B\\right)$, where each $\\partial^i B$ is obtained from $\\partial^{i-1} B$ by the Leibniz rule $\\partial b = b \\partial + b'$."
     (define (* (%DiffOp va) (%DiffOp vb))
       (let la = (vec:length va))
@@ -352,7 +354,9 @@ Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, 
                   (inner (+ j 1))))
               (if (== (+ i 1) la)
                   (%DiffOp out)
-                  (outer (+ i 1) (%d-left cur)))))))
+                  (outer (+ i 1) (%d-left cur))))))))
+
+  (define-instance (DifferentialRing :a => Multiplicative (DiffOp :a))
     (define one (%constant-op one)))
 
   (define-instance (DifferentialRing :a => Semiring (DiffOp :a)))

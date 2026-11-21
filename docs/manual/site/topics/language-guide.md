@@ -1212,7 +1212,8 @@ The most common standard library type classes fall into three groups:
 * `Eq` (`==`) — types that can be compared for equality.
 * `Ord` (`<=>`, `<`, `<=`, `>`, `>=`) — types with a total ordering.
 * `Hash` (`hash`) — types that can be hashed (for example, as `HashMap` keys).
-* `Num` (and its algebraic superclasses `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring`: `+`, `-`, `neg`, `*`, `zero`, `one`, `from-int`) — numeric and algebraic types.
+* `HasAdd` (`+`) and `HasMul` (`*`) — types with the respective binary operation, without assuming an identity.
+* `Num` and its algebraic superclasses — numeric types that also support `zero`, `one`, subtraction, negation, and integer literals.
 * `Semigroup` (`<>`) — types with an associative binary combining operation (such as string or list concatenation).
 * `Monoid` (`mempty`) — semigroups with an identity element.
 * `Default` (`default`) — types with a standard default value.
@@ -1327,7 +1328,7 @@ An unadorned floating-point literal such as `5.0` is read according to `cl:*read
 
 Coalton also provides fixed-width signed integers (`I8`, `I16`, `I32`, `I64`, `IFix`), fixed-width unsigned integers (`U8`, `U16`, `U32`, `U64`, `UFix`), and exact rational numbers (`Fraction`, the ratio of two `Integer`s).
 
-All numeric types implement the `Num` type class (and its algebraic superclasses `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring`), which provides `+`, `-`, `neg`, `*`, `zero`, `one`, and `from-int`. Integer literals in source code are polymorphic: `5` is shorthand for `(from-int 5)` and can stand for any `Ring` or `Num` type. For a complete guide to numeric types, rounding, approximation, elementary functions, and algebraic structures, see [Numbers and Math](/manual/topics/numbers-and-math/).
+The built-in numeric types implement `Num`, whose superclasses supply `+`, `-`, `neg`, `*`, `zero`, `one`, and `from-int`. Types can overload just `+` or `*` by implementing `HasAdd` or `HasMul`; this does not give them integer literals. Integer literals in source code are polymorphic: `5` is shorthand for `(from-int 5)` and can stand for any `Ring` type. For a complete guide to numeric types, rounding, approximation, elementary functions, and algebraic structures, see [Numbers and Math](/manual/topics/numbers-and-math/).
 
 ### Division, in short
 

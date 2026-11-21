@@ -111,10 +111,12 @@ Dyadic rationals form the smallest subring of $\\mathbb{Q}$ containing $\\mathbb
          (True
           (Dyadic (f (lsh n (- k j)) m) j))))))
 
-  (define-instance (Additive Dyadic)
+  (define-instance (HasAdd Dyadic)
     (inline)
     (define (+ a b)
-      (dyadic-group + a b))
+      (dyadic-group + a b)))
+
+  (define-instance (Additive Dyadic)
     (define zero (Dyadic 0 0)))
 
   (define-instance (AdditiveGroup Dyadic)
@@ -125,14 +127,16 @@ Dyadic rationals form the smallest subring of $\\mathbb{Q}$ containing $\\mathbb
     (define (neg (Dyadic n k))
       (Dyadic (neg n) k)))
 
-  (define-instance (Multiplicative Dyadic)
+  (define-instance (HasMul Dyadic)
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (Dyadic n k)
                 (Dyadic m j))
          (if (or (== n 0) (== m 0))
              (Dyadic 0 0)
-             (Dyadic (* n m) (+ j k))))))
+             (Dyadic (* n m) (+ j k)))))))
+
+  (define-instance (Multiplicative Dyadic)
     (define one (Dyadic 1 0)))
 
   (define-instance (Semiring Dyadic))
