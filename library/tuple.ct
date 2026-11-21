@@ -53,7 +53,7 @@
      (b <- b?)
      (pure (Tuple a b))))
 
-  (derive Eq Hash Default)
+  (derive Eq Ord Hash Default)
   (define-struct (Tuple3 :a :b :c)
     (first :a)
     (second :b)
@@ -71,7 +71,7 @@
      (c <- c?)
      (pure (Tuple3 a b c))))
 
-  (derive Eq Hash Default)
+  (derive Eq Ord Hash Default)
   (define-struct (Tuple4 :a :b :c :d)
     (first :a)
     (second :b)
@@ -91,7 +91,7 @@
      (d <- d?)
      (pure (Tuple4 a b c d))))
 
-  (derive Eq Hash Default)
+  (derive Eq Ord Hash Default)
   (define-struct (Tuple5 :a :b :c :d :e)
     (first :a)
     (second :b)
