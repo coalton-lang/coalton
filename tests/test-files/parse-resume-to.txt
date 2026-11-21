@@ -69,3 +69,21 @@ error: Invalid instance
    |
  6 |  (define-instance (coalton/classes:Resumption Local))
    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Resumption instances cannot be written manually; define the type with define-resumption
+
+================================================================================
+104 Resumption constructor with unknown type variable
+================================================================================
+
+(package test-package)
+
+(define-resumption (BadResumption :a))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:3:34
+   |
+ 3 |  (define-resumption (BadResumption :a))
+   |                     ------------------ in this resumption definition
+   |                                    ^^ Unknown type variable :A
+
