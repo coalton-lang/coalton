@@ -1231,7 +1231,7 @@ The most common standard library type classes fall into three groups:
 
 ### Automatically Deriving Type Class Instances (`derive`)
 
-Instances of `Eq`, `Hash`, `Default`, and `Show` can be derived automatically on `define-type` and `define-struct` definitions using `derive`:
+Instances of `Eq`, `Ord`, `Hash`, `Default`, and `Show` can be derived automatically on `define-type` and `define-struct` definitions using [`derive`](/manual/operators/derive/):
 
 ```lisp
 (coalton-toplevel

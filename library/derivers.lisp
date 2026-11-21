@@ -125,6 +125,66 @@
       :location location
       :inline nil))))
 
+(defmethod tc:derive-methods ((class (eql 'classes:Ord)) def env)
+  "Compare constructors in declaration order, then fields lexicographically."
+  (let ((location (source:location def)))
+    (labels ((var (name)
+               (parser:make-node-variable :location location :name name))
+             (binding (name)
+               (parser:make-pattern-var :location location :name name :orig-name name))
+             (call (name &rest vars)
+               (parser:make-node-application :location location :rator (var name)
+                                             :rands (mapcar #'var vars)))
+             (ctor-pattern (name patterns)
+               (parser:make-pattern-constructor :location location :name name :patterns patterns))
+             (wildcard ()
+               (parser:make-pattern-wildcard :location location))
+             (body (expr)
+               (parser:make-node-body :nodes nil :last-node expr))
+             (branch (pattern expr)
+               (parser:make-node-match-branch :location location :pattern pattern :body (body expr)))
+             (pair-branch (left right expr)
+               (branch (ctor-pattern 'classes:Tuple (list left right)) expr))
+             (compare-fields (left right)
+               (if (endp left)
+                   (var 'classes:EQ)
+                   (let ((cmp (call 'classes:<=> (first left) (first right))))
+                     (if (endp (rest left))
+                         cmp
+                         (let ((order (gensym "ORDER-")))
+                           (parser:make-node-match
+                            :location location
+                            :expr cmp
+                            :branches (list (branch (ctor-pattern 'classes:EQ nil)
+                                                    (compare-fields (rest left) (rest right)))
+                                            (branch (binding order) (var order)))))))))
+             (comparison-branches ()
+               ;; The parser accumulates constructors in reverse declaration order.
+               (loop :for (ctor . later) :on (reverse (parser:type-definition-ctors def))
+                     :for name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                     :for arity := (length (parser:type-definition-ctor-field-types ctor))
+                     :for left := (loop :repeat arity :collect (gensym "LEFT-"))
+                     :for right := (loop :repeat arity :collect (gensym "RIGHT-"))
+                     :collect (pair-branch (ctor-pattern name (mapcar #'binding left))
+                                           (ctor-pattern name (mapcar #'binding right))
+                                           (compare-fields left right))
+                     ;; Earlier constructors have already matched on either side.
+                     ;; If only one side matches this one, it is the lesser value.
+                     :when later
+                       :append (let ((pattern (ctor-pattern name (loop :repeat arity :collect (wildcard)))))
+                                 (list (pair-branch pattern (wildcard) (var 'classes:LT))
+                                       (pair-branch (wildcard) pattern (var 'classes:GT)))))))
+      (list
+       (parser:make-instance-method-definition
+        :location location
+        :name (var 'classes:<=>)
+        :params (list (binding 'a) (binding 'b))
+        :function-syntax-p t
+        :body (body (parser:make-node-match :location location
+                                            :expr (call 'classes:Tuple 'a 'b)
+                                            :branches (comparison-branches)))
+        :inline nil)))))
+
 (defun hash-symbols (symbol &rest symbols)
   (flet ((hash-symbol (sym)
            (hash:lisp-combine-hashes
