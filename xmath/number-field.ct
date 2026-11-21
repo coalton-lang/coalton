@@ -1,0 +1,131 @@
+;;;; Algebraic number fields in a power basis over Q.
+
+(coalton/utils:defstdlib-package #:coalton/xmath/number-field
+  (:documentation "Algebraic number fields $K=\\mathbb{Q}[x]/(f)$ with checked irreducible modulus $f$. An element carries its field and its canonical power-basis representative. Arithmetic never chooses an embedding between different presentations.")
+  (:shadow #:trace #:negate)
+  (:use #:coalton #:coalton/classes #:coalton/functions
+        #:coalton/math/arith #:coalton/math/integral)
+  (:import-from #:coalton/xmath/polynomial #:Polynomial)
+  (:local-nicknames
+   (#:factor #:coalton/xmath/polynomial-factor)
+   (#:list #:coalton/list)
+   (#:mat #:coalton/xmath/matrix)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:qr #:coalton/xmath/quotient))
+  (:export #:NumberField #:number-field #:defining-polynomial
+           #:Element #:element #:element-field #:representative #:generator
+           #:add #:subtract #:negate #:multiply #:inverse #:divide
+           #:trace #:norm #:minimal-polynomial))
+
+(in-package #:coalton/xmath/number-field)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (derive Eq)
+  (repr :transparent)
+  (define-type NumberField
+    "A validated presentation of $\\mathbb{Q}[x]/(f)$ by a monic irreducible polynomial."
+    (%NumberField (qr:QuotientRing (Polynomial Fraction))))
+
+  (declare number-field (Polynomial Fraction -> Optional NumberField))
+  (define (number-field f)
+    "Construct a number field if and only if $f$ is nonconstant and irreducible over $\\mathbb{Q}$. Nonzero scalar multiples give the same presentation."
+    (if (factor:irreducible-rational? f)
+        (map %NumberField (qr:polynomial-quotient f))
+        None))
+
+  (declare defining-polynomial (NumberField -> Polynomial Fraction))
+  (define (defining-polynomial (%NumberField k))
+    "The monic modulus of this presentation."
+    (qr:modulus k))
+
+  (derive Eq)
+  (repr :transparent)
+  (define-type Element
+    "An element of a specific number field, not a choice of one of its complex embeddings."
+    (%Element (qr:Residue (Polynomial Fraction))))
+
+  (declare element (NumberField * Polynomial Fraction -> Element))
+  (define (element (%NumberField k) a)
+    "The residue of $a(x)$ at the distinguished generator of the field."
+    (%Element (qr:residue k a)))
+
+  (declare element-field (Element -> NumberField))
+  (define (element-field (%Element a))
+    "The field in which this element was constructed."
+    (%NumberField (qr:residue-ring a)))
+
+  (declare representative (Element -> Polynomial Fraction))
+  (define (representative (%Element a))
+    "The unique polynomial of degree less than the defining degree representing this element (or zero)."
+    (qr:residue-value a))
+
+  (declare generator (NumberField -> Element))
+  (define (generator k)
+    "The distinguished residue class of $x$."
+    (element k poly:poly-var))
+
+  (declare add (Element * Element -> Optional Element))
+  (define (add (%Element a) (%Element b))
+    "Sum two elements of the same presentation, otherwise return `None`."
+    (map %Element (qr:residue+ a b)))
+
+  (declare subtract (Element * Element -> Optional Element))
+  (define (subtract (%Element a) (%Element b))
+    "Subtract elements of the same presentation, otherwise return `None`."
+    (map %Element (qr:residue- a b)))
+
+  (declare negate (Element -> Element))
+  (define (negate (%Element a))
+    "The additive inverse."
+    (%Element (qr:residue-negate a)))
+
+  (declare multiply (Element * Element -> Optional Element))
+  (define (multiply (%Element a) (%Element b))
+    "Multiply elements of the same presentation, otherwise return `None`."
+    (map %Element (qr:residue* a b)))
+
+  (declare inverse (Element -> Optional Element))
+  (define (inverse (%Element a))
+    "The inverse from the polynomial Bezout identity, or `None` for zero."
+    (map %Element (qr:residue-inverse a)))
+
+  (declare divide (Element * Element -> Optional Element))
+  (define (divide a b)
+    "The quotient in the common presentation; return `None` for a zero denominator or different presentations."
+    (do
+     (inv <- (inverse b))
+     (multiply a inv)))
+
+  (declare %multiplication-matrix (Element -> mat:Matrix Fraction))
+  (define (%multiplication-matrix a)
+    ;; Column j is the power-basis expansion of a*x^j.
+    (let f = (defining-polynomial (element-field a)))
+    (let n = (poly:degree f))
+    (mat:transpose
+     (mat:from-rows
+      (rec columns ((j 0) (v (representative a)) (acc Nil))
+        (if (== j n)
+            (list:reverse acc)
+            (columns (+ j 1) (rem (* v poly:poly-var) f)
+                     (Cons (the (List Fraction) [(poly:coeff v i) :for i :below n]) acc)))))))
+
+  (declare trace (Element -> Fraction))
+  (define (trace a)
+    "The absolute field trace $\\mathrm{Tr}_{K/\\mathbb{Q}}(a)$, the trace of multiplication by $a$ on $K$."
+    (mat:trace (%multiplication-matrix a)))
+
+  (declare norm (Element -> Fraction))
+  (define (norm a)
+    "The absolute field norm $\\mathrm{N}_{K/\\mathbb{Q}}(a)$, the determinant of multiplication by $a$ on $K$."
+    (mat:det (%multiplication-matrix a)))
+
+  (declare minimal-polynomial (Element -> Polynomial Fraction))
+  (define (minimal-polynomial a)
+    "The monic minimal polynomial of $a$ over $\\mathbb{Q}$. The multiplication characteristic polynomial is $m_a^{[K:\\mathbb{Q}(a)]}$; since $m_a$ is separable, its square-free part is exactly $m_a$."
+    (poly:square-free-part (mat:charpoly (%multiplication-matrix a)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/NUMBER-FIELD")

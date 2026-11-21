@@ -26,11 +26,11 @@ weight: 300
 ```lisp
 ;; Inspect the inferred type of a polymorphic expression at the REPL
 (coalton (type-of (fn (xs) (map ƒx.(+ x 1) xs))))
-; => ∀ (:F (Type → Type)) :A. (Num :A) (Functor :F) ⇒ :F :A → :F :A
+; => ∀ (:F (Type → Type)) :A. (Ring :A) (Functor :F) ⇒ :F :A → :F :A
 
 ;; Convert a reflected TypeScheme to a Coalton String
 (coalton (show-as-string (type-of (Tuple 1 "hello"))))
-; => "∀ :A. Num :A ⇒ Tuple :A String"
+; => "∀ :A. Ring :A ⇒ Tuple :A String"
 ```
 
 ## Other Notes

@@ -1,0 +1,570 @@
+;;;; differential.ct
+;;;;
+;;;; Differential algebra and linear differential operators
+
+(coalton/utils:defstdlib-package #:coalton/xmath/differential
+  (:documentation "Differential algebra: differential rings (`DifferentialRing`), Wronskian determinants, non-commutative linear differential operators (`DiffOp`), and formal power-series solutions of linear ordinary differential equations.
+
+A **differential ring** $(A, {}')$ is a ring $A$ equipped with a derivation $a \\mapsto a'$ (`deriv`) satisfying additivity $(a + b)' = a' + b'$ and the Leibniz rule $(ab)' = a'b + ab'$. Elements $c \\in A$ with $c' = 0$ form the subring of **constants**. Scalar numeric rings are constant differential rings; $R[x]$ and $R[[x]]$ carry the standard derivation $\\frac{d}{dx}$; and the fraction field $\\operatorname{Frac}(D)$ of any differential `GcdDomain` $D$ carries the quotient-rule derivation $\\left(\\frac{n}{d}\\right)' = \\frac{n'd - nd'}{d^2}$, making $\\mathbb{Q}(x)$ a differential field.
+
+**Wronskians.** The Wronskian matrix of $(f_1, \\ldots, f_n)$ has $(i, j)$-entry $\\partial^i f_j$ ($0 \\le i < n$), and its determinant $W(f_1, \\ldots, f_n) = \\det\\!\\left(\\partial^i f_j\\right)$ (`wronskian`) is computed fraction-free by Bareiss elimination. Over a differential domain, $W(f_1, \\ldots, f_n) \\neq 0$ certifies that $f_1, \\ldots, f_n$ are linearly independent over the constants.
+
+**Linear differential operators ($A[\\partial; {}']$).** `DiffOp` represents the Ore ring $A[\\partial; {}']$ of operators $L = \\sum_{k=0}^n c_k \\partial^k$ with coefficients in a differential ring $A$. Multiplication is **operator composition**, governed by the Leibniz commutation relation
+$$\\partial a = a \\partial + a', \\qquad \\partial^n a = \\sum_{k=0}^n \\binom{n}{k} a^{(n-k)} \\partial^k.$$
+In particular, for $A = R[x]$, $\\partial x - x \\partial = 1$ (the first Weyl algebra $A_1(R)$). Applying an operator via `apply-diff-op`, $L(y) = \\sum_k c_k y^{(k)}$, is a ring homomorphism into endomorphisms of $A$: $(L_1 L_2)(y) = L_1(L_2(y))$.
+
+**Right Euclidean structure and ODE factoring.** Over an exact differential division ring $K$ (`Eq`, `DivisionRing`, and `DifferentialRing`, such as $\\mathbb{Q}(x)$), $K[\\partial; {}']$ admits right Euclidean division:
+- Right division (`diff-op-right-divrem`) decomposes $A = QB + R$ with $\\operatorname{ord} R < \\operatorname{ord} B$;
+- The monic greatest common right divisor $G = \\operatorname{gcrd}(L_1, L_2) = S L_1 + T L_2$ (`diff-op-gcrd`, `diff-op-right-ext-gcd`) has solution space $\\ker G = \\ker L_1 \\cap \\ker L_2$;
+- The monic least common left multiple $M = \\operatorname{lclm}(L_1, L_2)$ (`diff-op-lclm`) has order $\\operatorname{ord} L_1 + \\operatorname{ord} L_2 - \\operatorname{ord} \\operatorname{gcrd}(L_1, L_2)$ and solution space $\\ker M = \\ker L_1 + \\ker L_2$.
+
+**Power-series solutions of linear ODEs.** Given an operator $L = \\sum_{k=0}^m p_k(x)\\partial^k$ with polynomial coefficients for which $x = 0$ is an ordinary point ($p_m(0) \\neq 0$) and initial values $(y(0), y'(0), \\ldots, y^{(m-1)}(0))$, `solve-ode-series` integrates $L(y) = 0$ into a lazy `PowerSeries` via the coefficient recurrence extracted from $[x^r] L(y) = 0$.")
+  (:nicknames
+   #:coalton/math/differential
+   #:coalton-library/math/differential)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:vec #:coalton/vector)
+   (#:show #:coalton/show)
+   (#:complex #:coalton/math/complex)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:ratio #:coalton/xmath/ratio)
+   (#:series #:coalton/xmath/power-series)
+   (#:mat #:coalton/xmath/matrix))
+  (:export
+   #:DifferentialRing
+   #:deriv
+   #:nth-deriv
+   #:wronskian-matrix
+   #:wronskian
+   #:DiffOp
+   #:diff-op
+   #:diff-op-monomial
+   #:diff-op-d
+   #:diff-op-order
+   #:diff-op-coeff
+   #:diff-op-coeffs
+   #:diff-op-leading
+   #:apply-diff-op
+   #:diff-op-right-divrem
+   #:diff-op-gcrd
+   #:diff-op-right-ext-gcd
+   #:diff-op-lclm
+   #:solve-ode-series))
+
+(in-package #:coalton/xmath/differential)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-class (Ring :a => DifferentialRing :a)
+    "A `Ring` equipped with a derivation `deriv`, written $a \\mapsto a'$.
+
+Laws:
+- Additivity: `(deriv (+ a b)) == (+ (deriv a) (deriv b))`
+- Leibniz rule: `(deriv (* a b)) == (+ (* (deriv a) b) (* a (deriv b)))`
+
+Consequently `(deriv one) == zero` and `(deriv zero) == zero`. Elements $c$ with $c' = 0$ are called **constants**; they form a subring."
+    (deriv (:a -> :a)))
+
+  (declare nth-deriv (DifferentialRing :a => UFix * :a -> :a))
+  (define (nth-deriv n x)
+    "The $n$-th derivative $x^{(n)}$ of `x`, with $x^{(0)} = x$."
+    (rec % ((k n) (acc x))
+      (if (== k 0)
+          acc
+          (% (- k 1) (deriv acc))))))
+
+(cl:defmacro %define-constant-differential-ring (type)
+  `(coalton-toplevel
+     (define-instance (DifferentialRing ,type)
+       (inline)
+       (define (deriv _)
+         zero))))
+
+(%define-constant-differential-ring Integer)
+(%define-constant-differential-ring IFix)
+(%define-constant-differential-ring I8)
+(%define-constant-differential-ring I16)
+(%define-constant-differential-ring I32)
+(%define-constant-differential-ring I64)
+(%define-constant-differential-ring Fraction)
+(%define-constant-differential-ring F32)
+(%define-constant-differential-ring F64)
+
+(coalton-toplevel
+  ;;
+  ;; Differential ring instances
+  ;;
+
+  (define-instance (complex:ComplexComponent :a => DifferentialRing (complex:Complex :a))
+    "Complex numbers over a numeric component type are constants."
+    (inline)
+    (define (deriv _)
+      zero))
+
+  (define-instance (Ring :a => DifferentialRing (poly:Polynomial :a))
+    "The usual derivation $\\frac{d}{dx}$ on $R[x]$, treating coefficients as constants."
+    (inline)
+    (define (deriv p)
+      (poly:differentiate p)))
+
+  (define-instance (Ring :a => DifferentialRing (series:PowerSeries :a))
+    "The usual derivation $\\frac{d}{dx}$ on $R[[x]]$, treating coefficients as constants."
+    (inline)
+    (define (deriv s)
+      (series:series-differentiate s)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) (DifferentialRing :d) => DifferentialRing (ratio:Ratio :d))
+    "The quotient rule $\\left(\\frac{n}{d}\\right)' = \\frac{n' d - n d'}{d^2}$."
+    (define (deriv r)
+      (let ((n (ratio:numerator r))
+            (d (ratio:denominator r)))
+        (ratio:make-ratio (- (* (deriv n) d) (* n (deriv d)))
+                       (* d d)))))
+
+  ;;
+  ;; Wronskians
+  ;;
+
+  (declare wronskian-2 (DifferentialRing :a => :a * :a -> :a))
+  (define (wronskian-2 f g)
+    "The Wronskian $W(f, g) = f g' - f' g$ of two elements."
+    (- (* f (deriv g)) (* (deriv f) g)))
+
+  (declare wronskian-matrix (DifferentialRing :a => List :a -> mat:Matrix :a))
+  (define (wronskian-matrix fs)
+    "The $n \\times n$ Wronskian matrix $W_{i,j} = \\partial^i f_j$ ($0 \\le i < n$) of the $n$ elements `fs` $= (f_1, \\ldots, f_n)$."
+    (let n = (list:length fs))
+    (if (== n 0)
+        (mat:from-rows Nil)
+        (rec build ((i 1) (row fs) (acc (Cons fs Nil)))
+          (if (== i n)
+              (mat:from-rows (list:reverse acc))
+              (let ((next (map deriv row)))
+                (build (+ i 1) next (Cons next acc)))))))
+
+  (declare wronskian ((Eq :a) (GcdDomain :a) (DifferentialRing :a) => List :a -> :a))
+  (define (wronskian fs)
+    "The Wronskian $W(f_1, \\ldots, f_n) = \\det\\left(\\partial^i f_j\\right)$, computed fraction-free by Bareiss elimination of `wronskian-matrix`.
+
+Over a differential domain, a nonzero Wronskian certifies that $f_1, \\ldots, f_n$ are linearly independent over the constants. The empty Wronskian is `one`."
+    (mat:det (wronskian-matrix fs)))
+
+  ;;
+  ;; Linear differential operators A[d; ']
+  ;;
+
+  (repr :transparent)
+  (define-type (DiffOp :a)
+    "A linear differential operator $L = c_0 + c_1 \\partial + \\cdots + c_n \\partial^n$ stored in ascending order of $\\partial$: `(diff-op-coeff L k)` is $c_k$.
+
+Over a `DifferentialRing` $A$, `DiffOp` forms the Ore ring $A[\\partial; {}']$, whose multiplication is operator composition subject to the Leibniz rule $\\partial a = a \\partial + a'$."
+    (%DiffOp (vec:Vector :a)))
+
+  (declare %list->vector (List :a -> vec:Vector :a))
+  (define (%list->vector xs)
+    (let v = (vec:with-capacity (list:length xs)))
+    (rec fill ((rest xs))
+      (match rest
+        ((Nil) v)
+        ((Cons x more)
+         (vec:push! x v)
+         (fill more)))))
+
+  (declare %generate (UFix * (UFix -> :a) -> vec:Vector :a))
+  (define (%generate n f)
+    (let v = (vec:with-capacity n))
+    (rec fill ((i 0))
+      (cond
+        ((== i n) v)
+        (True
+         (vec:push! (f i) v)
+         (fill (+ i 1))))))
+
+  (declare %effective-length-below ((Eq :a) (Additive :a) => vec:Vector :a * UFix -> UFix))
+  (define (%effective-length-below v n)
+    "The number of the first `n` coefficients that remain after removing trailing zeros."
+    (rec scan ((k (min n (vec:length v))))
+      (cond
+        ((== k 0) 0)
+        ((zero? (vec:index-unsafe (- k 1) v)) (scan (- k 1)))
+        (True k))))
+
+  (declare %effective-length ((Eq :a) (Additive :a) => vec:Vector :a -> UFix))
+  (define (%effective-length v)
+    "The number of coefficients excluding trailing zeros."
+    (%effective-length-below v (vec:length v)))
+
+  (declare %truncate ((Eq :a) (Additive :a) => DiffOp :a * UFix -> DiffOp :a))
+  (define (%truncate (%DiffOp v) n)
+    "The terms of order less than `n`, with trailing zeros removed."
+    (%DiffOp (%generate (%effective-length-below v n) (fn (i) (vec:index-unsafe i v)))))
+
+  (declare %trim ((Eq :a) (Additive :a) => DiffOp :a -> DiffOp :a))
+  (define (%trim (%DiffOp v))
+    (%DiffOp (%generate (%effective-length v) (fn (i) (vec:index-unsafe i v)))))
+
+  (declare %constant-op (:a -> DiffOp :a))
+  (define (%constant-op c)
+    (let v = (vec:with-capacity 1))
+    (vec:push! c v)
+    (%DiffOp v))
+
+  (declare diff-op (List :a -> DiffOp :a))
+  (define (diff-op cs)
+    "Construct the operator $c_0 + c_1 \\partial + \\cdots + c_n \\partial^n$ from the coefficients $(c_0, c_1, \\ldots, c_n)$ in ascending order of $\\partial$."
+    (%DiffOp (%list->vector cs)))
+
+  (declare diff-op-monomial (Additive :a => :a * UFix -> DiffOp :a))
+  (define (diff-op-monomial c k)
+    "Construct the operator $c \\partial^k$."
+    (%DiffOp (%generate (+ k 1) (fn (i) (if (== i k) c zero)))))
+
+  (inline)
+  (declare diff-op-scale-term (Additive :a => :a * UFix -> DiffOp :a))
+  (define (diff-op-scale-term c k)
+    "An alias for `diff-op-monomial`: the operator $c \\partial^k$."
+    (diff-op-monomial c k))
+
+  (declare diff-op-d (Semiring :a => DiffOp :a))
+  (define diff-op-d
+    "The derivation operator $\\partial$."
+    (diff-op-monomial one 1))
+
+  (declare diff-op-coeff (Additive :a => DiffOp :a * UFix -> :a))
+  (define (diff-op-coeff (%DiffOp v) k)
+    "The coefficient $c_k$ of $\\partial^k$ (`zero` beyond the stored terms)."
+    (if (< k (vec:length v))
+        (vec:index-unsafe k v)
+        zero))
+
+  (declare diff-op-order ((Eq :a) (Additive :a) => DiffOp :a -> UFix))
+  (define (diff-op-order (%DiffOp v))
+    "The order $n$ of $L = \\sum_{k=0}^n c_k \\partial^k$ with $c_n \\neq 0$ ($0$ for the zero operator)."
+    (let len = (%effective-length v))
+    (if (== len 0)
+        0
+        (- len 1)))
+
+  (declare diff-op-leading ((Eq :a) (Additive :a) => DiffOp :a -> :a))
+  (define (diff-op-leading (%DiffOp v))
+    "The leading coefficient $c_n$ of the highest-order nonzero term (`zero` for the zero operator)."
+    (let len = (%effective-length v))
+    (if (== len 0)
+        zero
+        (vec:index-unsafe (- len 1) v)))
+
+  (declare diff-op-coeffs ((Eq :a) (Additive :a) => DiffOp :a -> List :a))
+  (define (diff-op-coeffs (%DiffOp v))
+    "The canonical ascending coefficients $(c_0, c_1, \\ldots, c_n)$ with trailing zeros removed."
+    (rec build ((i (%effective-length v)) (acc Nil))
+      (if (== i 0)
+          acc
+          (let ((idx (- i 1)))
+            (build idx (Cons (vec:index-unsafe idx v) acc))))))
+
+  (define-instance ((Eq :a) (Additive :a) => Eq (DiffOp :a))
+    (define (== (%DiffOp va) (%DiffOp vb))
+      (let la = (%effective-length va))
+      (and (== la (%effective-length vb))
+           (rec check ((i 0))
+             (or (== i la)
+                 (and (== (vec:index-unsafe i va) (vec:index-unsafe i vb))
+                      (check (+ i 1))))))))
+
+  (define-instance ((Eq :a) (Additive :a) (show:Show :a) => show:Show (DiffOp :a))
+    (define (show:show-to f op)
+      (f "(diff-op")
+      (rec loop ((xs (diff-op-coeffs op)))
+        (match xs
+          ((Nil) (f ")"))
+          ((Cons c more)
+           (f " ")
+           (show:show-to f c)
+           (loop more))))))
+
+  ;;
+  ;; Algebraic structure: the Ore ring A[d; ']
+  ;;
+
+  (define-instance (HasAdd :a => HasAdd (DiffOp :a))
+    (define (+ (%DiffOp va) (%DiffOp vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (%DiffOp
+       (%generate (max la lb)
+                  (fn (i)
+                    (cond
+                      ((>= i la) (vec:index-unsafe i vb))
+                      ((>= i lb) (vec:index-unsafe i va))
+                      (True (+ (vec:index-unsafe i va) (vec:index-unsafe i vb)))))))))
+
+  (define-instance (Additive :a => Additive (DiffOp :a))
+    (define zero (%DiffOp (vec:new))))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (DiffOp :a))
+    (define (neg (%DiffOp v))
+      (%DiffOp (%generate (vec:length v) (fn (i) (neg (vec:index-unsafe i v))))))
+    (define (- (%DiffOp va) (%DiffOp vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (%DiffOp
+       (%generate (max la lb)
+                  (fn (i)
+                    (cond
+                      ((>= i la) (neg (vec:index-unsafe i vb)))
+                      ((>= i lb) (vec:index-unsafe i va))
+                      (True (- (vec:index-unsafe i va) (vec:index-unsafe i vb)))))))))
+
+  (declare %d-left (DifferentialRing :a => vec:Vector :a -> vec:Vector :a))
+  (define (%d-left v)
+    "The coefficients of $\\partial B$ from those of $B = \\sum_j b_j \\partial^j$, namely $\\partial B = \\sum_j \\left(b_j \\partial^{j+1} + b_j' \\partial^j\\right)$."
+    (let n = (vec:length v))
+    (%generate (+ n 1)
+               (fn (j)
+                 (cond
+                   ((== j 0) (deriv (vec:index-unsafe 0 v)))
+                   ((== j n) (vec:index-unsafe (- n 1) v))
+                   (True (+ (deriv (vec:index-unsafe j v))
+                            (vec:index-unsafe (- j 1) v)))))))
+
+  (define-instance (DifferentialRing :a => HasMul (DiffOp :a))
+    "Composition of operators: $A B = \\sum_i a_i \\left(\\partial^i B\\right)$, where each $\\partial^i B$ is obtained from $\\partial^{i-1} B$ by the Leibniz rule $\\partial b = b \\partial + b'$."
+    (define (* (%DiffOp va) (%DiffOp vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (if (or (== la 0) (== lb 0))
+          zero
+          (let ((out (vec:with-initial-element (- (+ la lb) 1) zero)))
+            (rec outer ((i 0) (cur vb))
+              (let ai = (vec:index-unsafe i va))
+              (rec inner ((j 0))
+                (when (< j (vec:length cur))
+                  (vec:set! j (+ (vec:index-unsafe j out)
+                                 (* ai (vec:index-unsafe j cur)))
+                            out)
+                  (inner (+ j 1))))
+              (if (== (+ i 1) la)
+                  (%DiffOp out)
+                  (outer (+ i 1) (%d-left cur))))))))
+
+  (define-instance (DifferentialRing :a => Multiplicative (DiffOp :a))
+    (define one (%constant-op one)))
+
+  (define-instance (DifferentialRing :a => Semiring (DiffOp :a)))
+
+  (define-instance (DifferentialRing :a => Ring (DiffOp :a))
+    (inline)
+    (define (from-int n)
+      (%constant-op (from-int n))))
+
+  (define-instance ((Eq :a) (DifferentialRing :a) => Num (DiffOp :a)))
+
+  (define-instance (Multiplicative :a => Scale :a (DiffOp :a))
+    "Left multiplication $c L = \\sum_k (c\\, c_k) \\partial^k$ by a coefficient $c$."
+    (define (scale c (%DiffOp v))
+      (%DiffOp (%generate (vec:length v) (fn (i) (* c (vec:index-unsafe i v)))))))
+
+  (define-instance (DifferentialRing :a => Module :a (DiffOp :a)))
+
+  (define-instance (Functor DiffOp)
+    (define (map f (%DiffOp v))
+      (%DiffOp (%generate (vec:length v) (fn (i) (f (vec:index-unsafe i v)))))))
+
+  (define-instance (Into :a (DiffOp :a))
+    (inline)
+    (define (into c)
+      (%constant-op c)))
+
+  ;;
+  ;; Action of operators
+  ;;
+
+  (declare apply-diff-op (DifferentialRing :a => DiffOp :a * :a -> :a))
+  (define (apply-diff-op (%DiffOp v) y)
+    "Apply the operator $L = \\sum_k c_k \\partial^k$ to `y`, giving $L(y) = \\sum_k c_k y^{(k)}$.
+
+This is a ring homomorphism into the endomorphisms of the differential ring: `(apply-diff-op (* L1 L2) y) == (apply-diff-op L1 (apply-diff-op L2 y))`."
+    (let n = (vec:length v))
+    (rec loop ((k 0) (dy y) (acc zero))
+      (if (== k n)
+          acc
+          (let ((next (+ acc (* (vec:index-unsafe k v) dy))))
+            (if (== (+ k 1) n)
+                next
+                (loop (+ k 1) (deriv dy) next))))))
+
+  ;;
+  ;; Right Euclidean structure over a differential field
+  ;;
+
+  (declare diff-op-monic ((Eq :a) (DivisionRing :a) => DiffOp :a -> DiffOp :a))
+  (define (diff-op-monic op)
+    "Scale `op` on the left by the inverse of its leading coefficient, so its leading coefficient is `one`. The zero operator is returned unchanged."
+    (let lc = (diff-op-leading op))
+    (if (zero? lc)
+        zero
+        (%trim (scale (recip lc) op))))
+
+  (declare diff-op-right-divrem
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
+     DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a))
+  (define (diff-op-right-divrem a b)
+    "Right Euclidean division over a differential field: returns `(values q r)` with $A = Q B + R$ and $\\operatorname{ord} R < \\operatorname{ord} B$ (or $R = 0$).
+
+Signals an error if `b` is the zero operator."
+    (let lb = (diff-op-leading b))
+    (when (zero? lb)
+      (error "diff-op-right-divrem: division by the zero operator."))
+    (let db = (diff-op-order b))
+    (let inv-lb = (recip lb))
+    (rec loop ((q zero) (r (%trim a)))
+      (let lr = (diff-op-leading r))
+      (let dr = (diff-op-order r))
+      (if (or (zero? lr) (< dr db))
+          (values (%trim q) r)
+          (let ((term (diff-op-monomial (* lr inv-lb) (- dr db))))
+            ;; The order-dr coefficient of r - term * b cancels exactly.
+            (loop (+ q term) (%truncate (- r (* term b)) dr))))))
+
+  (declare %right-euclid
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
+     DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a * DiffOp :a * DiffOp :a))
+  (define (%right-euclid a b)
+    "Run the extended right Euclidean algorithm, returning `(values g s t u)` where $g = s A + t B$ is a (non-normalized) GCRD and $u A$ is a least common left multiple."
+    (rec loop ((r0 (%trim a)) (s0 one) (t0 zero)
+               (r1 (%trim b)) (s1 zero) (t1 one))
+      (cond
+        ((zero? r1)
+         (values r0 s0 t0 s1))
+        (True
+         (let (values q r2) = (diff-op-right-divrem r0 r1))
+         (loop r1 s1 t1
+               r2 (- s0 (* q s1)) (- t0 (* q t1)))))))
+
+  (declare diff-op-right-ext-gcd
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
+     DiffOp :a * DiffOp :a -> DiffOp :a * DiffOp :a * DiffOp :a))
+  (define (diff-op-right-ext-gcd a b)
+    "The extended right Euclidean algorithm: returns `(values g s t)` with $g = \\operatorname{gcrd}(A, B) = S A + T B$ and $g$ monic (or zero when both operators are zero)."
+    (let (values g s t0 _) = (%right-euclid a b))
+    (let lc = (diff-op-leading g))
+    (if (zero? lc)
+        (values g s t0)
+        (let ((inv (recip lc)))
+          (values (%trim (scale inv g))
+                  (%trim (scale inv s))
+                  (%trim (scale inv t0))))))
+
+  (declare diff-op-gcrd
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
+     DiffOp :a * DiffOp :a -> DiffOp :a))
+  (define (diff-op-gcrd a b)
+    "The monic greatest common right divisor of `a` and `b` over a differential field. Its solution space is $\\ker A \\cap \\ker B$."
+    (rec euclid ((r0 (%trim a)) (r1 (%trim b)))
+      (cond
+        ((zero? r1) (diff-op-monic r0))
+        (True
+         (let (values _ r2) = (diff-op-right-divrem r0 r1))
+         (euclid r1 r2)))))
+
+  (declare diff-op-lclm
+    ((Eq :a) (DivisionRing :a) (DifferentialRing :a) =>
+     DiffOp :a * DiffOp :a -> DiffOp :a))
+  (define (diff-op-lclm a b)
+    "The monic least common left multiple of `a` and `b` over a differential field (`zero` if either is zero). Its solution space is $\\ker A + \\ker B$, and $\\operatorname{ord}(\\operatorname{lclm}) = \\operatorname{ord} A + \\operatorname{ord} B - \\operatorname{ord}(\\operatorname{gcrd})$."
+    (let (values _ _ _ u) = (%right-euclid a b))
+    (diff-op-monic (* u a)))
+
+  ;;
+  ;; Linear ODEs with polynomial coefficients over power series
+  ;;
+
+  (declare apply-poly-diff-op-series
+    (Semiring :a =>
+     DiffOp (poly:Polynomial :a) * series:PowerSeries :a -> series:PowerSeries :a))
+  (define (apply-poly-diff-op-series (%DiffOp v) y)
+    "Apply an operator $L = \\sum_k p_k(x) \\partial^k$ with polynomial coefficients to a power series $y$, giving $L(y) = \\sum_k p_k(x) y^{(k)}(x)$."
+    (let n = (vec:length v))
+    (rec loop ((k 0) (dy y) (acc zero))
+      (if (== k n)
+          acc
+          (let ((next (+ acc (* (into (vec:index-unsafe k v)) dy))))
+            (if (== (+ k 1) n)
+                next
+                (loop (+ k 1) (series:series-differentiate dy) next))))))
+
+  (declare %rising (Semiring :a => UFix * UFix -> :a))
+  (define (%rising j k)
+    "The product $(j + 1)(j + 2) \\cdots (j + k) = \\frac{(j + k)!}{j!}$."
+    (rec loop ((i 1) (acc one))
+      (if (> i k)
+          acc
+          (loop (+ i 1) (* acc (from-nat (+ j i)))))))
+
+  (declare %ode-recurrence-sum
+    ((Eq :a) (Semiring :a) =>
+     vec:Vector (poly:Polynomial :a) * vec:Vector UFix * vec:Vector :a * UFix * UFix -> :a))
+  (define (%ode-recurrence-sum ps degs ys m r)
+    "The sum $\\sum [x^{r-j}] p_k \\cdot (j+1) \\cdots (j+k) \\cdot y_{j+k}$ over $0 \\le k \\le m$ and $r - \\deg p_k \\le j \\le r$ with $j + k < r + m$, where `ps` holds $p_0, \\ldots, p_m$, `degs` their degrees, and `ys` the known coefficients $y_0, \\ldots, y_{r+m-1}$."
+    (let n = (+ r m))
+    (rec k-loop ((k 0) (acc zero))
+      (if (> k m)
+          acc
+          (let ((pk (vec:index-unsafe k ps))
+                (dk (vec:index-unsafe k degs))
+                (j0 (if (> r dk) (- r dk) 0)))
+            (k-loop (+ k 1)
+                    (rec j-loop ((j j0) (acc2 acc))
+                      (if (or (> j r) (>= (+ j k) n))
+                          acc2
+                          (let ((c (poly:coeff pk (- r j))))
+                            (j-loop (+ j 1)
+                                    (if (zero? c)
+                                        acc2
+                                        (+ acc2 (* c (* (%rising j k) (vec:index-unsafe (+ j k) ys))))))))))))))
+
+  (declare solve-ode-series
+    ((Eq :a) (DivisionRing :a) (CharacteristicZero :a) =>
+     DiffOp (poly:Polynomial :a) * List :a -> series:PowerSeries :a))
+  (define (solve-ode-series op inits)
+    "The formal power series solution $y(x) = \\sum_n y_n x^n$ of the linear ODE $L(y) = \\sum_{k=0}^m p_k(x) y^{(k)} = 0$ with initial values `inits` $= (y(0), y'(0), \\ldots, y^{(m-1)}(0))$.
+
+Requires an ordinary point at $x = 0$, i.e., $p_m(0) \\neq 0$, and exactly $m = \\operatorname{ord} L$ initial values. The coefficients are computed lazily by the recurrence obtained from $[x^r] L(y) = 0$, which determines $y_{r+m}$ from $y_0, \\ldots, y_{r+m-1}$:
+$$y_{r+m} = -\\frac{1}{p_m(0) \\, (r+1) \\cdots (r+m)} \\sum_{\\substack{0 \\le k \\le m,\\ 0 \\le j \\le r \\\\ j + k < r + m}} [x^{r-j}] p_k \\cdot (j+1) \\cdots (j+k) \\cdot y_{j+k}.$$
+
+For example, Airy's equation $y'' - x y = 0$ with $y(0) = 1$, $y'(0) = 0$ gives $1 + \\frac{1}{6}x^3 + \\frac{1}{180}x^6 + \\cdots$, and `(apply-poly-diff-op-series op (solve-ode-series op inits))` is `zero`."
+    (let m = (diff-op-order op))
+    (let ps = (%list->vector (diff-op-coeffs op)))
+    (let pm0 = (poly:coeff (diff-op-leading op) 0))
+    (when (zero? pm0)
+      (error "solve-ode-series requires an ordinary point at x = 0 (leading coefficient nonzero at 0)."))
+    (when (/= (list:length inits) m)
+      (error "solve-ode-series requires exactly as many initial values as the order of the operator."))
+    (let init-vec = (%list->vector inits))
+    (let degs = (%generate (+ m 1) (fn (k) (poly:degree (vec:index-unsafe k ps)))))
+    (let inv-pm0 = (recip pm0))
+    (let ys = (vec:new))
+    (series:make-series
+     (fn (n)
+       ;; `make-series` requests coefficients in order 0, 1, 2, ..., so
+       ;; `ys` holds exactly y_0, ..., y_{n-1} here.
+       (let yn =
+         (if (< n m)
+             (/ (vec:index-unsafe n init-vec) (%rising 0 n))
+             (let ((r (- n m)))
+               (neg (/ (* inv-pm0 (%ode-recurrence-sum ps degs ys m r))
+                       (%rising r m))))))
+       (vec:push! yn ys)
+       yn))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/DIFFERENTIAL")

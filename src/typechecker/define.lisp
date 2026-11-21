@@ -2189,12 +2189,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
     
-    (let* ((num
-             (util:find-symbol "NUM" "COALTON/CLASSES"))
+    (let* ((ring
+             (util:find-symbol "RING" "COALTON/CLASSES"))
            (tvar
              (tc:make-variable))
            (pred
-             (tc:make-ty-predicate :class num :types (list tvar) :location (source:location node))))
+             (tc:make-ty-predicate :class ring :types (list tvar) :location (source:location node))))
       (handler-case
           (progn
             (setf subs (tc:unify subs tvar expected-type))
@@ -4211,10 +4211,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (typecase pattern
     (pattern-literal
      (when (integerp (pattern-literal-value pattern))
-       (list (tc:make-ty-predicate
-              :class (util:find-symbol "NUM" "COALTON/CLASSES")
-              :types (list (tc:qualified-ty-type (pattern-type pattern)))
-              :location (source:location pattern)))))
+       (loop :for name :in '("RING" "EQ")
+             :collect (tc:make-ty-predicate
+                       :class (util:find-symbol name "COALTON/CLASSES")
+                       :types (list (tc:qualified-ty-type (pattern-type pattern)))
+                       :location (source:location pattern)))))
     (pattern-binding (pattern-predicates (pattern-binding-pattern pattern)))
     (pattern-constructor (pattern-predicates (pattern-constructor-patterns pattern)))
     (list (mapcan #'pattern-predicates pattern))))

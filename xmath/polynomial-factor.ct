@@ -1,0 +1,336 @@
+;;;; Complete univariate factorization over finite fields, Z, and Q.
+
+(coalton/utils:defstdlib-package #:coalton/xmath/polynomial-factor
+  (:documentation "Complete factorization of univariate polynomials over finite fields, $\\mathbb{Z}$ and $\\mathbb{Q}$. Each factor has positive degree and is paired with its multiplicity. The scalar returned separately includes the content over $\\mathbb{Z}$; zero and constants have an empty factor list.")
+  (:use #:coalton #:coalton/classes #:coalton/functions
+        #:coalton/math/arith #:coalton/math/integral)
+  (:import-from #:coalton/xmath/polynomial #:Polynomial)
+  (:import-from #:coalton/tuple #:Tuple3)
+  (:local-nicknames
+   (#:ff #:coalton/xmath/finite-field)
+   (#:frac #:coalton/math/fraction)
+   (#:ifact #:coalton/xmath/integer-factorization)
+   (#:list #:coalton/list)
+   (#:mat #:coalton/xmath/matrix)
+   (#:modmath #:coalton/xmath/modular)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:types #:coalton/types))
+  (:export #:square-free-finite #:factor-finite #:factor-integer #:factor-rational
+           #:irreducible-rational?))
+
+(in-package #:coalton/xmath/polynomial-factor)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (declare %map-coefficients
+    ((Eq :a) (Additive :a) => (:a -> :b) * Polynomial :a -> Polynomial :b))
+  (define (%map-coefficients f g)
+    (poly:polynomial (map f (poly:coefficients g))))
+
+  (declare %finite-layers
+    (ff:FiniteField :a => Polynomial :a * UFix -> List (Tuple (Polynomial :a) UFix)))
+  (define (%finite-layers f multiplicity)
+    (let repeated = (gcd f (poly:differentiate f)))
+    (rec layers ((w (exact-div f repeated)) (c repeated) (i 1) (acc Nil))
+      (cond
+        ((/= w one)
+         (let y = (gcd w c))
+         (let z = (exact-div w y))
+         (layers y (exact-div c y) (+ i 1)
+                 (if (== z one) acc (Cons (Tuple z (* i multiplicity)) acc))))
+        ((== c one) acc)
+        (True
+         ;; c is a nonconstant pth power, so p <= degree(c) fits UFix here.
+         (let field = (types:proxy-of (poly:leading-coefficient c)))
+         (let p = (ff:field-characteristic field))
+         (let step = (the UFix (from-int p)))
+         (let inverse-frobenius = (quot (ff:field-order field) p))
+         (let root = (poly:polynomial
+                      [(^ (poly:coeff c (* j step)) inverse-frobenius)
+                       :for j :below (+ 1 (quot (poly:degree c) step))]))
+         (list:append acc (%finite-layers root (* multiplicity step)))))))
+
+  (declare square-free-finite
+    (ff:FiniteField :a => Polynomial :a -> :a * List (Tuple (Polynomial :a) UFix)))
+  (define (square-free-finite f)
+    "Return `(values lc layers)` with one monic square-free product per multiplicity, in increasing order. In characteristic $p$, extract $p$th roots of both exponents and coefficients, including when $f'=0$."
+    (let lc = (poly:leading-coefficient f))
+    (if (zero? (poly:degree f))
+        (values lc Nil)
+        (values lc (list:sortBy (fn ((Tuple _ i) (Tuple _ j)) (<=> i j))
+                                (%finite-layers (normal-part f) 1)))))
+
+  (declare %berlekamp-basis
+    (forall (:a) ff:FiniteField :a => Polynomial :a -> List (Polynomial :a)))
+  (define (%berlekamp-basis f)
+    (let n = (poly:degree f))
+    (let q = (ff:field-order (types:proxy-of (poly:leading-coefficient f))))
+    (let xq = (modmath:mod-expt poly:poly-var q f))
+    ;; Column j is the image of x^j under u |-> u^q - u in F_q[x]/f.
+    (let columns =
+      (rec powers ((j 0) (u one) (acc Nil))
+        (if (== j n)
+            (list:reverse acc)
+            (let ((column (the (List :a) [(poly:coeff u i) :for i :below n])))
+              (powers (+ j 1) (modmath:mod-mul u xq f) (Cons column acc))))))
+    (let fixed = (mat:mat-sub (mat:transpose (mat:from-rows columns)) (mat:identity-matrix n)))
+    (map poly:polynomial (mat:nullspace fixed)))
+
+  (declare %split-fibers
+    (ff:FiniteField :a => Polynomial :a * Polynomial :a -> List (Polynomial :a)))
+  (define (%split-fibers b f)
+    (let q = (ff:field-order (types:proxy-of (poly:leading-coefficient f))))
+    (rec pieces ((rest f) (value (rem b f)) (k 0) (acc Nil))
+      (cond
+        ((zero? (poly:degree value)) (Cons rest acc))
+        (True
+         (when (>= k q)
+           (error "Berlekamp fixed-space vector has a component outside the base field."))
+         (let d = (gcd rest (- value (poly:polynomial [(ff:field-element k)]))))
+         (if (== d one)
+             (pieces rest value (+ k 1) acc)
+             (let ((h (exact-div rest d)))
+               (pieces h (rem value h) (+ k 1) (Cons d acc))))))))
+
+  (declare %berlekamp
+    (forall (:a) ff:FiniteField :a => Polynomial :a -> List (Polynomial :a)))
+  (define (%berlekamp f)
+    ;; Precondition: f is monic, nonconstant and square-free.
+    (cond
+      ((== (poly:degree f) 1) [f])
+      (True
+       (let basis = (%berlekamp-basis f))
+       (let count = (list:length basis))
+       (rec refine ((bs basis) (pieces (the (List (Polynomial :a)) [f])))
+         (cond
+           ((== (list:length pieces) count) pieces)
+           (True
+            (match bs
+              ((Nil) (error "Berlekamp basis did not separate the irreducible factors."))
+              ((Cons b more)
+               (refine more (if (zero? (poly:degree b))
+                                pieces
+                                (list:concatMap (fn (g) (%split-fibers b g)) pieces)))))))))))
+
+  (declare factor-finite
+    (ff:FiniteField :a => Polynomial :a -> :a * List (Tuple (Polynomial :a) UFix)))
+  (define (factor-finite f)
+    "Return `(values lc factors)` with distinct monic irreducibles in $\\mathbb{F}_q[x]$ and their multiplicities. Deterministic Berlekamp splitting can visit all $q$ field elements; these are enumerated on demand."
+    (let (values lc layers) = (square-free-finite f))
+    (values lc (list:concatMap (fn ((Tuple h i))
+                                 (map (fn (g) (Tuple g i)) (%berlekamp h)))
+                               layers)))
+
+  ;; Integer reconstruction
+
+  (declare %coefficient-mod (Integer * Polynomial Integer -> Polynomial Integer))
+  (define (%coefficient-mod m f)
+    (%map-coefficients (fn (c) (mod c m)) f))
+
+  (declare %center (Integer * Integer -> Integer))
+  (define (%center m c)
+    (let r = (mod c m))
+    (if (> (* 2 r) m) (- r m) r))
+
+  (declare %integer-subset
+    (Integer * Polynomial Integer * List (Polynomial Integer) ->
+     Optional (Tuple3 (Polynomial Integer) (List (Polynomial Integer)) (List (Polynomial Integer)))))
+  (define (%integer-subset m f lifted)
+    ;; Of a proper subset and its complement, exactly one omits the first factor.
+    (let lc = (poly:leading-coefficient f))
+    (let ((subsets
+            (fn (todo product chosen excluded)
+              (match todo
+                ((Nil) None)
+                ((Cons g gs)
+                 (let next = (%coefficient-mod m (* product g)))
+                 (let candidate = (poly:primitive-part
+                                   (%map-coefficients (fn (c) (%center m c)) (scale lc next))))
+                 (let selected = (Cons g chosen))
+                 (match (exact-quot f candidate)
+                   ((Some _) (Some (Tuple3 candidate selected (list:append gs excluded))))
+                   ((None)
+                    (match (subsets gs next selected excluded)
+                      ((Some split) (Some split))
+                      ((None) (subsets gs product chosen (Cons g excluded)))))))))))
+      (match lifted
+        ((Nil) (error "Cannot recombine an empty modular factorization."))
+        ((Cons reserved rest) (subsets rest one Nil [reserved])))))
+
+  (declare %recombine
+    (Integer * Polynomial Integer * List (Polynomial Integer) -> List (Polynomial Integer)))
+  (define (%recombine m f lifted)
+    (match (%integer-subset m f lifted)
+      ((None) [f])
+      ((Some (Tuple3 g gs hs))
+       (list:append (%recombine m g gs) (%recombine m (exact-div f g) hs)))))
+
+  (declare %lift
+    (ff:FiniteField :a => (:a -> Integer) * Integer * Polynomial Integer *
+                         List (Polynomial :a) -> Integer * List (Polynomial Integer)))
+  (define (%lift representative p f factors)
+    (let a = (poly:leading-coefficient f))
+    (let fbar = (%map-coefficients from-int f))
+    ;; For each g_i precompute the inverse of a product_{j != i} g_j modulo g_i.
+    (let inverses = (map (fn (g) (expect "Hensel lift requires coprime modular factors."
+                                         (modmath:mod-inv (exact-div fbar g) g)))
+                         factors))
+    ;; Mignotte bounds each coefficient of a primitive factor u of f by
+    ;; 2^deg(f) ||f||_2 in absolute value. Multiplying by a/lc(u)
+    ;; clears the unknown leading coefficient before symmetric reconstruction.
+    (let threshold = (* (* (* 2 a) (^ 2 (poly:degree f)))
+                        (fold (fn (s c) (+ s (abs c))) 0 (poly:coefficients f))))
+    (rec lift ((m p) (gs (map (fn (g) (%map-coefficients representative g)) factors)))
+      (cond
+        ((> m threshold) (values m gs))
+        (True
+         (let mp = (* m p))
+         (let product = (fold (fn (h g) (%coefficient-mod mp (* h g))) (into a) gs))
+         (let discrepancy =
+           (%map-coefficients (fn (c) (from-int (exact-div c m))) (- f product)))
+         ;; If g_i is corrected by m*d_i, the cross terms vanish modulo mp.
+         ;; Reducing the error equation separately modulo each g_i gives d_i.
+         (let corrections =
+           (list:zipWith (fn (g inverse)
+                           (%map-coefficients representative
+                                              (modmath:mod-mul discrepancy inverse g)))
+                         factors inverses))
+         (lift mp (list:zipWith (fn (g delta) (+ g (scale m delta))) gs corrections))))))
+
+  (declare %at-prime
+    (ff:KnownField :tag Integer =>
+     types:Proxy (ff:Fp :tag) * Polynomial Integer -> Optional (List (Polynomial Integer))))
+  (define (%at-prime field f)
+    (let g = (%map-coefficients (fn (c) (types:as-proxy-of (from-int c) field)) f))
+    (cond
+      ((or (/= (poly:degree g) (poly:degree f))
+           (/= (gcd g (poly:differentiate g)) one))
+       None)
+      (True
+       (let factors = (%berlekamp (normal-part g)))
+       (match factors
+         ((Cons _ (Nil)) (Some [f]))
+         (_
+          (let (values m lifted) = (%lift ff:representative (ff:field-order field) f factors))
+          (Some (%recombine m f lifted)))))))
+
+  (declare %positive-divisors (Integer -> List Integer))
+  (define (%positive-divisors n)
+    (let (ifact:Factorization _ powers) =
+      (expect "Kronecker interpolation requires nonzero sample values."
+              (ifact:factor-integer-exact n)))
+    (fold (fn (ds (Tuple p e))
+            (the (List Integer)
+              [(* pk d) :for k :below (+ 1 e) :with pk = (^ p k) :for d :in ds]))
+          (the (List Integer) [1]) powers))
+
+  (declare %kronecker-search
+    (Polynomial Integer * List (Tuple Integer (List Integer)) *
+     Polynomial Integer * Polynomial Integer -> Optional (Polynomial Integer)))
+  (define (%kronecker-search f samples h v)
+    (match samples
+      ((Nil)
+       (if (zero? (poly:degree h))
+           None
+           (map (fn (_) (poly:primitive-part h)) (exact-quot f h))))
+      ((Cons (Tuple x ys) rest)
+       ;; An integral factor agreeing with h at all previous points differs
+       ;; from h by v times an integral polynomial. Nonintegral Newton
+       ;; coefficients can therefore be discarded as soon as they appear.
+       (let hx = (poly:evaluate h x))
+       (let vx = (poly:evaluate v x))
+       (let next-v = (* v (- poly:poly-var (into x))))
+       (rec ordinates ((todo ys))
+         (match todo
+           ((Nil) None)
+           ((Cons y more)
+            (match (exact-quot (- y hx) vx)
+              ((None) (ordinates more))
+              ((Some z)
+               (match (%kronecker-search f rest (+ h (scale z v)) next-v)
+                 ((Some g) (Some g))
+                 ((None) (ordinates more)))))))))))
+
+  (declare %kronecker-split (Polynomial Integer -> Optional (Polynomial Integer)))
+  (define (%kronecker-split f)
+    ;; A proper factor (or its complement) has degree <= d. Its values at
+    ;; d+1 distinct integers divide f there, and determine it uniquely.
+    (let d = (quot (to-integer (poly:degree f)) 2))
+    (let points = (the (List (Tuple Integer Integer))
+                   [(Tuple x (poly:evaluate f x))
+                    :for i :below (+ d 1)
+                    :with x = (if (odd? i) (quot (+ i 1) 2) (neg (quot i 2)))]))
+    (match (list:find (fn ((Tuple _ y)) (zero? y)) points)
+      ((Some (Tuple x _)) (Some (- poly:poly-var (into x))))
+      ((None)
+       (let samples =
+         (map (fn ((Tuple x y))
+                (let ds = (%positive-divisors y))
+                (Tuple x (if (zero? x) ds (list:append ds (map neg ds)))))
+              points))
+       (%kronecker-search f samples zero one))))
+
+  (declare %prime-trials (List (Polynomial Integer -> Optional (List (Polynomial Integer)))))
+  (define %prime-trials
+    [(fn (f) (%at-prime (the (types:Proxy (ff:Fp ff:P2)) types:Proxy) f))
+     (fn (f) (%at-prime (the (types:Proxy (ff:Fp ff:P3)) types:Proxy) f))
+     (fn (f) (%at-prime (the (types:Proxy (ff:Fp ff:P5)) types:Proxy) f))
+     (fn (f) (%at-prime (the (types:Proxy (ff:Fp ff:P17)) types:Proxy) f))])
+
+  (declare %factor-square-free (Polynomial Integer -> List (Polynomial Integer)))
+  (define (%factor-square-free f)
+    ;; Precondition: f is primitive, positive-leading, nonconstant and square-free.
+    (cond
+      ((== (poly:degree f) 1) [f])
+      (True
+       (rec try-primes ((rest %prime-trials))
+         (match rest
+           ((Nil)
+            (match (%kronecker-split f)
+              ((None) [f])
+              ((Some g)
+               (list:append (%factor-square-free g) (%factor-square-free (exact-div f g))))))
+           ((Cons trial more)
+            (match (trial f)
+              ((Some factors) factors)
+              ((None) (try-primes more)))))))))
+
+  (declare %clear-denominators (Polynomial Fraction -> Polynomial Integer))
+  (define (%clear-denominators f)
+    (let d = (fold (fn (k c) (lcm k (frac:denominator c))) 1 (poly:coefficients f)))
+    (poly:primitive-part (%map-coefficients (fn (c) (frac:numerator (* (from-int d) c))) f)))
+
+  (declare %integer-factors (Polynomial Fraction -> List (Tuple (Polynomial Integer) UFix)))
+  (define (%integer-factors f)
+    (let (values _ layers) = (poly:square-free-factorization f))
+    (list:concatMap
+     (fn ((Tuple h i))
+       (map (fn (g) (Tuple g i)) (%factor-square-free (%clear-denominators h))))
+     layers))
+
+  (declare factor-integer
+    (Polynomial Integer -> Integer * List (Tuple (Polynomial Integer) UFix)))
+  (define (factor-integer f)
+    "Return `(values signed-content factors)` over $\\mathbb{Z}[x]$. Each listed factor is primitive, irreducible and positive-leading. The scalar is the unit (leading sign) times the nonnegative integer content; its prime factorization is a separate integer operation. Hensel lifting and exhaustive recombination have no search cutoff."
+    (let c = (* (unit-part (poly:leading-coefficient f)) (poly:content f)))
+    (values c (%integer-factors (%map-coefficients from-int f))))
+
+  (declare factor-rational
+    (Polynomial Fraction -> Fraction * List (Tuple (Polynomial Fraction) UFix)))
+  (define (factor-rational f)
+    "Return `(values lc factors)` over $\\mathbb{Q}[x]$. Factors are distinct monic irreducibles, not just square-free pieces or linear factors; zero and constants return `(values lc Nil)`."
+    (values (poly:leading-coefficient f)
+            (map (fn ((Tuple g i)) (Tuple (normal-part (%map-coefficients from-int g)) i))
+                 (%integer-factors f))))
+
+  (declare irreducible-rational? (Polynomial Fraction -> Boolean))
+  (define (irreducible-rational? f)
+    "Is $f$ a positive-degree irreducible polynomial over $\\mathbb{Q}$? A nonzero rational scalar does not change the answer."
+    (match (%integer-factors f)
+      ((Cons (Tuple _ 1) (Nil)) True)
+      (_ False))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/POLYNOMIAL-FACTOR")

@@ -38,7 +38,7 @@ weight: 100
 ; => #(1.0 2.0 3.0 4.0)
 
 ;; Resolve an ambiguous target type in a conversion
-(coalton (+ 1 (the Integer (unwrap (tryInto "41")))))
+(coalton (+ 1 (the Integer (unwrap (try-into "41")))))
 ; => 42
 
 ;; Catch any exception of type `BadEgg` and bind the exception value

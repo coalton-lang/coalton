@@ -269,7 +269,7 @@ does not have that suffix."
         (cl:prin1-to-string z))))
 
   (define-instance (TryInto String Integer)
-    (define (tryInto s)
+    (define (try-into s)
       (lisp (-> (Optional Integer)) (s)
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
           (cl:if (cl:null z)

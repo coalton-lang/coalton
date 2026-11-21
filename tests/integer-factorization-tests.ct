@@ -1,0 +1,103 @@
+(in-package #:coalton-native-tests)
+
+(coalton-toplevel
+  ;; Independent oracle, used only for factors small enough for trial division.
+  (declare factor-test-prime? (Integer -> Boolean))
+  (define (factor-test-prime? n)
+    (and (>= n 2)
+         (rec trial ((d 2))
+           (cond
+             ((> (* d d) n) True)
+             ((== (mod n d) 0) False)
+             (True (trial (+ d 1)))))))
+
+  (declare factor-test-reconstructs? (Integer * ifact:Factorization -> Boolean))
+  (define (factor-test-reconstructs? n (ifact:Factorization unit powers))
+    (and (== (abs unit) 1)
+         (rec check ((ps powers) (prev 1) (product unit))
+           (match ps
+             ((Nil) (== product n))
+             ((Cons (Tuple p e) rest)
+              (and (> p prev) (> e 0) (factor-test-prime? p)
+                   (check rest p (* product (^ p e))))))))))
+
+(define-test test-integer-primality ()
+  (is (list:all (fn (n) (== (ifact:primality n) ifact:CompositeOrUnit))
+                [-7 -1 0 1 4 25 561 1105 1729
+                 ;; Strong pseudoprimes to the first 7, 11, 12 and 13 prime bases.
+                 341550071728321 3825123056546413051
+                 318665857834031151167461 3317044064679887385961981]))
+  (is (list:all (fn (n) (== (ifact:primality n) ifact:ProvenPrime))
+                [2 3 41 43 65537 2147483647 18446744073709551557
+                 18446744073709551629]))
+  ;; The 252-bit prime used by STARK fields has a Proth certificate.
+  (is (== (ifact:primality (+ 1 (* (+ (^ 2 59) 17) (^ 2 192))))
+          ifact:ProvenPrime))
+  ;; A known prime, but outside this test's proof range.
+  (is (== (ifact:primality (- (^ 2 127) 1)) ifact:ProbablePrime)))
+
+(define-test test-integer-factorization-conventions ()
+  (is (== (ifact:factor-integer 0) ifact:ZeroFactorization))
+  (is (== (ifact:factor-integer-exact 0) None))
+  (is (== (ifact:factor-integer 1)
+          (ifact:CompleteFactorization (ifact:Factorization 1 []))))
+  (is (== (ifact:factor-integer-exact -1) (Some (ifact:Factorization -1 []))))
+  (rec check ((n -200))
+    (unless (> n 200)
+      (unless (== n 0)
+        (match (ifact:factor-integer n)
+          ((ifact:CompleteFactorization f) (is (factor-test-reconstructs? n f)))
+          (_ (is False))))
+      (check (+ n 1)))))
+
+(define-test test-integer-factorization-powers ()
+  ;; Remove both a large valuation and an odd prime power with no rho budget.
+  (let p = 4294967291)
+  (let n = (neg (* (* (^ 2 150) (^ 3 255)) (^ p 11))))
+  (is (== (ifact:factor-integer n :rho-steps 0)
+          (ifact:CompleteFactorization
+           (ifact:Factorization -1 [(Tuple 2 150) (Tuple 3 255) (Tuple p 11)]))))
+  ;; Square extraction multiplies exponents throughout the remaining tree.
+  (let m = (^ (* 1009 65537) 4))
+  (is (== (ifact:factor-integer-exact m)
+          (Some (ifact:Factorization 1 [(Tuple 1009 4) (Tuple 65537 4)])))))
+
+(define-test test-integer-factorization-semiprime ()
+  ;; Both primes are near 2^32, neither is a small trial divisor, and the
+  ;; positive product is larger than 2^64. No exhaustive fallback is allowed.
+  (let n = 18446744116659224501)
+  (match (ifact:factor-integer n)
+    ((ifact:CompleteFactorization f)
+     (is (== f (ifact:Factorization 1 [(Tuple 4294967291 1) (Tuple 4294967311 1)])))
+     (is (factor-test-reconstructs? n f)))
+    (_ (is False)))
+  (is (== (ifact:factor-integer 3825123056546413051)
+          (ifact:CompleteFactorization
+           (ifact:Factorization 1 [(Tuple 149491 1) (Tuple 747451 1) (Tuple 34233211 1)])))))
+
+(define-test test-integer-factorization-restarts ()
+  ;; With seed 2 and x^2+1, the block product vanishes modulo 43*53
+  ;; but a single difference splits it. For 53*107 that walk needs a restart.
+  (is (== (ifact:factor-integer (* 43 53) :rho-steps 64)
+          (ifact:CompleteFactorization (ifact:Factorization 1 [(Tuple 43 1) (Tuple 53 1)]))))
+  (is (== (ifact:factor-integer (* 53 107) :rho-steps 64)
+          (ifact:CompleteFactorization (ifact:Factorization 1 [(Tuple 53 1) (Tuple 107 1)])))))
+
+(define-test test-integer-factorization-inconclusive ()
+  ;; A proved composite left unsplit is not a prime factor.
+  (let m = (* 53 59))
+  (is (== (ifact:factor-integer (* -8 m) :rho-steps 0)
+          (ifact:PartialFactorization (ifact:Factorization -1 [(Tuple 2 3)]) m)))
+  ;; Exact mode can finish the same input without rho.
+  (is (== (ifact:factor-integer-exact (* -8 m) :rho-steps 0)
+          (Some (ifact:Factorization -1 [(Tuple 2 3) (Tuple 53 1) (Tuple 59 1)]))))
+  ;; The 127-bit Mersenne prime is not certified by the fast primality check.
+  (let p = (- (^ 2 127) 1))
+  (is (== (ifact:factor-integer (* -7 p))
+          (ifact:PartialFactorization (ifact:Factorization -1 [(Tuple 7 1)]) p)))
+  ;; This composite really does pass all seventeen fixed bases. Its known
+  ;; nontrivial divisors certify that promoting it to a prime would be wrong.
+  (let liar = (* 27778299663977101 55556599327954201))
+  (is (/= (ifact:primality liar) ifact:ProvenPrime))
+  (is (== (ifact:factor-integer liar :rho-steps 0)
+          (ifact:PartialFactorization (ifact:Factorization 1 []) liar))))

@@ -3,6 +3,9 @@
 ;;;; Reals library using computable-reals (https://github.com/stylewarning/computable-reals)
 
 (defpackage #:coalton/xmath/computable-reals
+  (:documentation "Constructive (computable) real numbers (`CReal`) backed by `computable-reals`.
+
+A computable real number $x \\in \\mathbb{R}$ is represented lazily as a function $k \\mapsto a_k \\in \\mathbb{Z}$ producing dyadic approximations $|a_k 2^{-k} - x| \\le 2^{-k}$ on demand to any requested bit precision $k$, supporting exact field and transcendental arithmetic (`Reciprocable`, `Elementary`, `Approximable`). Because exact equality and ordering of computable reals are undecidable in general, `Eq` and `Ord` compare approximations at a configurable bit threshold (`comparison-threshold`, `with-comparison-threshold`).")
   (:nicknames #:coalton/computable-reals
               #:coalton-library/computable-reals)
   (:use #:coalton
@@ -11,14 +14,14 @@
   (:local-nicknames (#:cr #:computable-reals)
                     (#:complex #:coalton/math/complex)
                     (#:math #:coalton/math)
+                    (#:dyadic #:coalton/xmath/dyadic)
+                    (#:bf #:coalton/xmath/big-float)
                     (#:cell #:coalton/cell))
   (:export
    #:CReal
    #:set-comparison-threshold!
    #:comparison-threshold
    #:with-comparison-threshold
-   #:approx
-   #:rational-approx
    #:rationalize
    #:cr-print))
 
@@ -26,6 +29,36 @@
 
 ;; Setting a default comparison threshold for Eq and Ord
 (cl:defvar *creal-comparison-threshold* 106)
+
+;; The backend's sqrt/log first determine the sign, which need not terminate
+;; at an oracle representing zero. Separate from zero only to the precision
+;; needed for this output digit; never ask an oracle to decide equality.
+(cl:defun %positive-index-root (n x)
+  (cl:labels ((root-away-from-zero (a)
+                (cl:cond
+                  ((cl:minusp a)
+                   (cl:when (cl:evenp n) (cl:error "Even root of a negative real."))
+                   (cr:-r (root-away-from-zero-positive (cr:-r x))))
+                  (cl:t (root-away-from-zero-positive x))))
+              (root-away-from-zero-positive (v)
+                (cl:if (cl:= n 2) (cr:sqrt-r v) (cr:expt-r v (cl:/ n)))))
+    (cl:cond
+      ((cl:= n 1) x)
+      ((cl:rationalp x) (cl:if (cl:zerop x) 0 (root-away-from-zero x)))
+      (cl:t
+       (cl:let ((root cl:nil))
+         (cr:make-real
+          (cl:lambda (k)
+            (cl:unless root
+              (cl:loop :with limit = (cl:* n (cl:1+ k))
+                       :for p = 0 :then (cl:min limit (cl:max 1 (cl:* 2 p)))
+                       :for a = (cr:approx-r x p)
+                       :when (cl:> (cl:abs a) 1)
+                         :do (cl:setf root (root-away-from-zero a)) (cl:return)
+                       :until (cl:= p limit)))
+            ;; At the limit |x| <= 2 * 2^(-n*(k+1)), so zero is a
+            ;; valid k-bit approximation to its nth root.
+            (cl:if root (cr:approx-r root k) 0))))))))
 
 ;;;
 ;;; Defining the CReal type as a wrapper around computable-reals
@@ -37,14 +70,15 @@
  (repr :native (cl:or cr:creal cl:rational))
  (define-type CReal)
 
- (declare set-comparison-threshold! (UFix -> Unit))
+ (declare set-comparison-threshold! (UFix -> Void))
  (define (set-comparison-threshold! k)
    "Sets the global `CReal` comparison threshold to k bits after the 'decimal' point.
 
 See `comparison-threshold` for more details."
-   (lisp (-> UFix) (k)
-         (cl:setq *creal-comparison-threshold* k))
-   Unit)
+   (lisp (-> Void) (k)
+     (cl:progn
+       (cl:setq *creal-comparison-threshold* k)
+       (cl:values))))
 
  (declare comparison-threshold (Void -> UFix))
  (define (comparison-threshold)
@@ -80,19 +114,47 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 
 (coalton-toplevel
   
-  (define-instance (Num CReal)
+  (define-instance (HasAdd CReal)
+    (inline)
     (define (+ a b)
       (lisp (-> CReal) (a b)
-        (cr:+r a b)))
+        (cr:+r a b))))
+
+  (define-instance (Additive CReal)
+    (define zero
+      (lisp (-> CReal) ()
+        0)))
+
+  (define-instance (AdditiveGroup CReal)
+    (inline)
     (define (- a b)
       (lisp (-> CReal) (a b)
         (cr:-r a b)))
+    (inline)
+    (define (neg a)
+      (lisp (-> CReal) (a)
+        (cr:-r a))))
+
+  (define-instance (HasMul CReal)
+    (inline)
     (define (* a b)
       (lisp (-> CReal) (a b)
-        (cr:*r a b)))
-    (define (fromint x)
+        (cr:*r a b))))
+
+  (define-instance (Multiplicative CReal)
+    (define one
+      (lisp (-> CReal) ()
+        1)))
+
+  (define-instance (Semiring CReal))
+
+  (define-instance (Ring CReal)
+    (inline)
+    (define (from-int x)
       (lisp (-> CReal) (x)
-        x))))
+        x)))
+
+  (define-instance (Num CReal)))
 
 (coalton-toplevel
   
@@ -112,100 +174,132 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
   
   (define-instance (Reciprocable CReal)
+    (inline)
     (define (/ a b)
       (lisp (-> CReal) (a b)
         (cr:/r a b)))
-    (define (math:reciprocal n)
+    (inline)
+    (define (math:recip n)
       (lisp (-> CReal) (n)
-        (cr:/r n)))))
+        (cr:/r n))))
+
+  (define-instance (math:Scale CReal CReal)
+    (inline)
+    (define (math:scale a b) (* a b)))
+
+  (define-instance (math:Module CReal CReal))
+  (define-instance (math:CommutativeRing CReal))
+
+  (define-instance (math:ConjugateRing CReal)
+    (inline)
+    (define (math:conjugate x) x))
+
+  (define-instance (math:HermitianForm CReal CReal)
+    (inline)
+    (define (math:inner-product a b) (* a b))))
 
 (coalton-toplevel
 
   (define-instance (Dividable Integer CReal)
+    (inline)
     (define (general/ a b)
-      (/ (fromint a) (fromint b)))))
+      (/ (from-int a) (from-int b)))))
 
 (coalton-toplevel
   
   (define-instance (math:Exponentiable CReal)
+    (define (math:tanh x) (math:canonical-tanh x))
+    (define (math:asinh x) (math:canonical-asinh x))
 
+    (inline)
     (define (math:exp x)
       (lisp (-> CReal) (x)
         (cr:exp-r x)))
 
+    (inline)
     (define (math:pow x y)
       (lisp (-> CReal) (x y)
         (cr:expt-r x y)))
 
+    (inline)
     (define (math:ln x)
       (lisp (-> CReal) (x)
         (cr:log-r x)))
 
+    (inline)
     (define (math:log b x)
       (lisp (-> CReal) (x b)
-        (cr:log-r x b)))
-
-    (define ee (exp 1))))
+        (cr:log-r x b)))))
 
 (coalton-toplevel
   
   (define-instance (math:Radical CReal)
+    (define (math:hypot x y) (math:canonical-hypot x y))
 
+    (inline)
     (define (math:nth-root n x)
       (lisp (-> CReal) (n x)
-        (cr:expt-r x (cl:/ n))))
+        (cl:cond
+          ((cl:zerop n) (cl:error "A zeroth root is undefined."))
+          ((cl:minusp n) (cr:/r (%positive-index-root (cl:- n) x)))
+          (cl:t (%positive-index-root n x)))))
 
+    (inline)
     (define (math:sqrt x)
       (lisp (-> CReal) (x)
-        (cr:sqrt-r x)))))
+        (%positive-index-root 2 x)))))
 
 (coalton-toplevel
   
   (define-instance (math:Trigonometric CReal)
 
+    (inline)
     (define (math:sin x)
       (lisp (-> CReal) (x)
         (cr:sin-r x)))
 
+    (inline)
     (define (math:cos x)
       (lisp (-> CReal) (x)
         (cr:cos-r x)))
 
+    (inline)
     (define (math:tan x)
       (lisp (-> CReal) (x)
         (cr:tan-r x)))
 
     (define (math:asin x)
-      (math:atan (/ x (sqrt (- 1 (* x x))))))
+      (* 2 (math:atan (/ x (+ 1 (sqrt (* (- 1 x) (+ 1 x))))))))
 
     (define (math:acos x)
-      (math:atan (/ (sqrt (- 1 (* x x))) x)))
+      (- (lisp (-> CReal) () cr:+pi/2-r+) (math:asin x)))
 
+    (inline)
     (define (math:atan x)
       (lisp (-> CReal) (x)
-        (cr:atan-r x)))
-
-    (define pi
-      (lisp (-> CReal) ()
-        cr:+pi-r+))))
+        (cr:atan-r x)))))
 
 
 (coalton-toplevel
 
   (define-instance (complex:ComplexComponent CReal)
+    (inline)
     (define (complex a b)
       (complex::%Complex a b))
 
+    (inline)
     (define (real-part z)
       (match z
         ((complex::%Complex a _) a)))
 
+    (inline)
     (define (imag-part z)
       (match z
         ((complex::%Complex _ b) b))))
 
   (overlap)
   (define-instance ((complex:ComplexComponent :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
+    (inline)
     (define (Into x)
       (Complex (Into (real-part x))
                (Into (imag-part x)))))
@@ -213,19 +307,26 @@ is no guarantee that the `CReal` will be accurate to any precision*."
   ;; Resolve the intersection with Into :a :a without rebuilding the number.
   (overlap)
   (define-instance (Into (Complex CReal) (Complex CReal))
+    (inline)
     (define (into z) z)))
 
 (coalton-toplevel
 
-  (define-instance (math:Polar CReal)
-    (define (phase z)
-      (math:atan2 (imag-part z) (real-part z)))
-    (define (polar z)
-      (values (magnitude z) (phase z)))))
+  (define-instance (Elementary CReal)
+    (define pi
+      (lisp (-> CReal) ()
+        cr:+pi-r+))
+    (define ee (exp 1))))
 
 (coalton-toplevel
 
-  (define-instance (Elementary CReal)))
+  (define-instance (math:Polar CReal)
+    (inline)
+    (define (phase z)
+      (math:atan2 (imag-part z) (real-part z)))
+    (inline)
+    (define (polar z)
+      (values (magnitude z) (phase z)))))
 
 ;;;
 ;;; Into's
@@ -234,71 +335,89 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
 
   (define-instance (Into F32 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         (cl:rational x))))
   
   (define-instance (Into F64 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         (cl:rational x))))
   
   (define-instance (Into Fraction CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
   
+  (define-instance (math:RationalScalars CReal)
+    (inline)
+    (define (math:embed-fraction q) (into q)))
+
   (define-instance (Into Integer CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into UFix CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into IFix CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into U64 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into I64 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
   
   (define-instance (Into U32 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into I32 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
   
   (define-instance (Into U16 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into I16 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
   
   (define-instance (Into U8 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x)))
 
   (define-instance (Into I8 CReal)
+    (inline)
     (define (Into x)
       (Lisp (-> CReal) (x)
         x))))
@@ -309,43 +428,35 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 
 (coalton-toplevel
 
-  (declare approx (CReal * UFix -> Integer))
-  (define (approx x k)
+  (declare approx-mantissa (CReal * UFix -> Integer))
+  (define (approx-mantissa x k)
     "Computes an approximation of the bits of a given
 `CReal`. Specifically, given an object of type `CReal` `x` and a
 non-negative integer `k`, return an integer $a$ with
 
 $$
 \\vert a\\cdot 2^{-\\mathtt{k}} - \\mathtt{x}\\vert \\leq 2^{-\\mathtt{k}}.
-$$
-
-See `rational` or `rationalize` to produce a rational approximation of
-`CReal`."
+$$"
     (lisp (-> Integer) (x k)
       (cr:approx-r x k)))
 
-  (declare rational-approx (CReal * UFix -> Fraction))
-  (define (rational-approx x k)
+  (declare creal-rational-approx (CReal * UFix -> Fraction))
+  (define (creal-rational-approx x k)
     "Produce a rational approximation of `x` called $r$ such that
 
 $$
-\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}}.
+\\vert r - \\mathtt{x} \\vert \\le 2^{-\\mathtt{k}}.
 $$"
     (lisp (-> Fraction) (x k)
       (cr:rational-approx-r x k)))
 
   (declare rationalize (CReal * UFix -> Fraction))
   (define (rationalize x k)
-    "Produce a rational approximation of `x` called $r$ such that
-
-$$
-\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}},
-$$
-
-taking into account the maximum precision specified by `k` to return
-the simplest possible such approximation."
-    (lisp (-> Fraction) (x k)
-      (cr:rationalize-r x k)))
+    "Return a simple fraction within $2^{-k}$ of `x`. For an oracle, minimize the denominator in a certified inner interval; minimality in the entire tolerance interval is not decidable in general."
+    (let q = (lisp (-> Fraction) (x k)
+               (cr:rational-approx-r x (cl:1+ k))))
+    (let half-eps = (math:make-fraction 1 (math:lsh 2 (to-integer k))))
+    (math:simplest-fraction-between (- q half-eps) (+ q half-eps)))
 
   ;; this is just for testing purposes. Intentionally not exported.
   (define (raw-approx x)
@@ -362,16 +473,53 @@ the simplest possible such approximation."
 (coalton-toplevel
 
   (define-instance (math:Quantizable CReal)
+    (inline)
     (define (floor x)
       (lisp (-> Integer) (x)
         (cr:floor-r x)))
+    (inline)
     (define (ceiling x)
       (lisp (-> Integer) (x)
         (cr:ceiling-r x)))
+    (inline)
     (define (proper x)
       (lisp (-> Integer * CReal) (x)
         (cr:truncate-r x))))
 
-  (define-instance (math:Real CReal)
-    (define (real-approx prec x)
-      (rational-approx x prec))))
+  (define-instance (math:Approximable CReal Fraction)
+    (inline)
+    (define (approx prec x)
+      (creal-rational-approx x prec)))
+
+  (define-instance (math:Approximable CReal dyadic:Dyadic)
+    (inline)
+    (define (approx prec x)
+      (dyadic:Dyadic (approx-mantissa x prec) (neg (to-integer prec)))))
+
+  (define-instance (math:Approximable CReal bf:BigFloat)
+    (define (approx prec x)
+      (into (the dyadic:Dyadic (approx prec x)))))
+
+  (declare native-approx ((math:Approximable Fraction :f) (math:Approximable :f Fraction)
+                          (math:Dividable Integer :f) => UFix * CReal * :f -> :f))
+  (define (native-approx bits x largest)
+    (match (lisp (-> (Optional Fraction)) (x)
+             (cl:if (cl:rationalp x) (Some x) None))
+      ((Some q) (approx bits q))
+      ((None)
+       (let q = (lisp (-> Fraction) (x bits) (cr:rational-approx-r x (cl:+ bits 4))))
+       (let eps = (math:make-fraction 1 (math:lsh 1 (to-integer bits))))
+       (let limit = (the Fraction (approx 0 largest)))
+       (let y = (fromfrac (min limit (max (neg limit) q))))
+       ;; A conservative decision terminates even at a closed-ball boundary.
+       (unless (<= (+ (abs (- (the Fraction (approx 0 y)) q)) (/ eps 16)) eps)
+         (error "Cannot certify the requested native float precision from this CReal enclosure."))
+       y)))
+
+  (define-instance (math:Approximable CReal F32)
+    (define (approx prec x)
+      (native-approx prec x (lisp (-> F32) () cl:most-positive-single-float))))
+
+  (define-instance (math:Approximable CReal F64)
+    (define (approx prec x)
+      (native-approx prec x (lisp (-> F64) () cl:most-positive-double-float)))))

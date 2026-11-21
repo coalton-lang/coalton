@@ -55,7 +55,7 @@ weight: 52
 
   (declare safe-recip (Integer -> (Optional Fraction)))
   (define (safe-recip n)
-    (catch (Some (/ 1 (fromInt n)))
+    (catch (Some (/ 1 (from-int n)))
       ((the DivisionByZero _) None))))
 ```
 

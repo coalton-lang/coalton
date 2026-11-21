@@ -57,12 +57,12 @@ supported 64-bit implementation."))))
     (forall (:src :target)
       ((Ord :src) (Bounded :target) => :src -> (Optional :target))))
   (define (cast-if-inbounds x)
-    "Cast X, minBound and maxBound to `Integer', and compare them. If X is within the bounds, `unsafe-cast' it to the result type."
-    (let max-bound = (the :target maxBound))
-    (let min-bound = (the :target minBound))
+    "Cast X, min-bound and max-bound to `Integer', and compare them. If X is within the bounds, `unsafe-cast' it to the result type."
+    (let upper-bound = (the :target max-bound))
+    (let lower-bound = (the :target min-bound))
     (let int = (the Integer (unsafe-cast x)))
-    (if (or (< int (unsafe-cast min-bound))
-            (> int (unsafe-cast max-bound)))
+    (if (or (< int (unsafe-cast lower-bound))
+            (> int (unsafe-cast upper-bound)))
         None
         (Some (the :target (unsafe-cast x))))))
 
@@ -84,7 +84,7 @@ Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot b
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
     `(define-instance (TryInto ,from-type ,to-type)
        (inline)
-       (define (tryInto x)
+       (define (try-into x)
          (cast-if-inbounds x))))
 
   (cl:defun definitely-subtype? (sub super)
@@ -174,7 +174,7 @@ cannot be represented in :TO. These fall into a few categories:
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
   (define-instance (TryInto Integer F32)
-    (define (tryInto x)
+    (define (try-into x)
       (lisp (-> (Optional F32)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
           (cl:if (cl:null y)
@@ -182,7 +182,7 @@ cannot be represented in :TO. These fall into a few categories:
                  (Some y))))))
 
   (define-instance (TryInto Integer F64)
-    (define (tryInto x)
+    (define (try-into x)
       (lisp (-> (Optional F64)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
           (cl:if (cl:null y)
@@ -190,9 +190,9 @@ cannot be represented in :TO. These fall into a few categories:
                  (Some y)))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
+  (cl:defmacro integer-try-into-float (integer lisp-float float pow)
     `(define-instance (TryInto ,integer ,float)
-       (define (tryInto x)
+       (define (try-into x)
          (lisp (-> (Optional ,float)) (x)
            (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
                   (cl:let ((y (cl:ignore-errors (cl:coerce x ',lisp-float))))
@@ -203,26 +203,26 @@ cannot be represented in :TO. These fall into a few categories:
 
 (coalton-toplevel
   ;; Single Float
-  (integer-tryinto-float I64 cl:single-float F32 24)
+  (integer-try-into-float I64 cl:single-float F32 24)
 
-  (integer-tryinto-float U64 cl:single-float F32 24)
+  (integer-try-into-float U64 cl:single-float F32 24)
 
-  (integer-tryinto-float IFix cl:single-float F32 24)
+  (integer-try-into-float IFix cl:single-float F32 24)
 
-  (integer-tryinto-float UFix cl:single-float F32 24)
+  (integer-try-into-float UFix cl:single-float F32 24)
 
-  (integer-tryinto-float U32 cl:single-float F32 24)
+  (integer-try-into-float U32 cl:single-float F32 24)
 
-  (integer-tryinto-float I32 cl:single-float F32 24)
+  (integer-try-into-float I32 cl:single-float F32 24)
 
   ;; Double Float
-  (integer-tryinto-float I64 cl:double-float F64 53)
+  (integer-try-into-float I64 cl:double-float F64 53)
 
-  (integer-tryinto-float U64 cl:double-float F64 53)
+  (integer-try-into-float U64 cl:double-float F64 53)
 
-  (integer-tryinto-float IFix cl:double-float F64 53)
+  (integer-try-into-float IFix cl:double-float F64 53)
 
-  (integer-tryinto-float UFix cl:double-float F64 53))
+  (integer-try-into-float UFix cl:double-float F64 53))
 
 
 #+sb-package-locks

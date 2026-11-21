@@ -30,7 +30,7 @@ weight: 150
   - **Variable patterns**: A bare identifier `⟨var⟩` (not `_` and not `*...*`) matches any value and binds `⟨var⟩` across the branch body. All variables bound within a single pattern must be distinct.
   - **Wildcard pattern**: [`_`](/manual/operators/wildcard/) matches any value without binding a variable.
   - **Alias (`=`) patterns**: `(= ⟨var⟩ ⟨pattern⟩)` matches `⟨pattern⟩` and also binds `⟨var⟩` to the entire subvalue matched by `⟨pattern⟩` (see [`=`](/manual/operators/pattern-bind/)).
-  - **Literal patterns**: Numeric, character, and string literals match equal values. Integer literals in patterns are overloaded via `(Num :a) (Eq :a) => ==` and `fromInt`, so they work on any numeric type implementing `Num` and `Eq`.
+  - **Literal patterns**: Numeric, character, and string literals match equal values. An integer pattern uses `from-int` to construct the value and `==` to compare it. It requires both `Ring` and `Eq`; a `Num` instance is sufficient but not necessary.
 - Each branch body is an implicit [`progn`](/manual/operators/progn/) (supporting multiple expressions and shorthand `let`).
 - All branch bodies must unify to the same result type, which may be a single value, `Void`, or multiple values.
 - The final expression of each branch body is in tail position when the `match` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).

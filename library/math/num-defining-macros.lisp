@@ -28,6 +28,7 @@
    #:+unsigned-fixnum-bits+
    #:define-eq
    #:define-ord
+   #:define-float-ord
    #:define-num-checked
    #:%handle-8bit-overflow
    #:%handle-16bit-overflow
@@ -47,25 +48,39 @@
 (in-package #:coalton/math/num-defining-macros)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defconstant +fixnum-bits+
-    #+sbcl sb-vm:n-fixnum-bits
-    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
   (cl:defconstant +unsigned-fixnum-bits+
-    (cl:1- +fixnum-bits+)))
+    (cl:integer-length cl:most-positive-fixnum))
+  (cl:defconstant +fixnum-bits+
+    (cl:1+ +unsigned-fixnum-bits+)))
 
 
 ;;; Utilities to define Eq types.
-(cl:defmacro define-eq (type)
+(cl:defmacro define-eq (type cl:&key floatp)
   `(define-instance (Eq ,type)
      (inline)
      (define (== a b)
        (coalton++:unsafe
          (lisp (-> Boolean) (a b)
            ;; Use cl:= so that (== 0.0 -0.0) => True
-           (cl:= a b))))))
+           (cl:and ,@(cl:when floatp
+                       '((cl:not (ff:float-nan-p a)) (cl:not (ff:float-nan-p b))))
+                   (cl:= a b)))))))
 
 
 ;;; Utilities to define Ord types.
+(cl:defmacro define-float-ord (type)
+  ;; Preserve the sorting order in polymorphic and monomorphic calls alike;
+  ;; native <, <=, min and max need not implement this order on NaN.
+  `(define-instance (Ord ,type)
+     (inline)
+     (define (<=> a b)
+       (cond
+         ((nan? a) (if (nan? b) EQ LT))
+         ((nan? b) GT)
+         (True
+          (lisp (-> Ordering) (a b)
+            (cl:cond ((cl:< a b) LT) ((cl:> a b) GT) (cl:t EQ))))))))
+
 (cl:defmacro define-ord (type)
   (cl:let ((>-spec (alexandria:format-symbol cl:*package* "~A->" type))
            (>=-spec (alexandria:format-symbol cl:*package* "~A->=" type))
@@ -168,63 +183,133 @@
 (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 (cl:defmacro define-num-checked (type overflow-handler)
-  "Define a `Num' instance for TYPE which signals on overflow."
-  `(define-instance (Num ,type)
-     (inline)
-     (define (+ a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (,overflow-handler (cl:+ a b)))))
+  "Define numeric operations and their class instances for TYPE, signaling on overflow."
+  `(progn
+     (define-instance (HasAdd ,type)
+       (inline)
+       (define (+ a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (,overflow-handler (cl:+ a b))))))
 
-     (inline)
-     (define (- a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (,overflow-handler (cl:- a b)))))
+     (define-instance (Additive ,type)
+       (define zero
+         (coalton++:unsafe
+           (lisp (-> ,type) () 0))))
 
-     (inline)
-     (define (* a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (,overflow-handler (cl:* a b)))))
+     (define-instance (AdditiveGroup ,type)
+       (inline)
+       (define (- a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (,overflow-handler (cl:- a b)))))
 
-     (inline)
-     (define (fromInt x)
-       (coalton++:unsafe
-         (lisp (-> ,type) (x)
-           (,overflow-handler x))))))
+       (inline)
+       (define (neg a)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a)
+             (,overflow-handler (cl:- a))))))
+
+     (define-instance (HasMul ,type)
+       (inline)
+       (define (* a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (,overflow-handler (cl:* a b))))))
+
+     (define-instance (Multiplicative ,type)
+       (define one
+         (coalton++:unsafe
+           (lisp (-> ,type) () 1))))
+
+     (define-instance (Semiring ,type))
+
+     (define-instance (Ring ,type)
+       (inline)
+       (define (from-int x)
+         (coalton++:unsafe
+           (lisp (-> ,type) (x)
+             (,overflow-handler x)))))
+
+     (define-instance (CommutativeRing ,type))
+     (define-instance (Num ,type))
+
+     (define-instance (Scale ,type ,type)
+       (inline)
+       (define (scale a b) (* a b)))
+
+     (define-instance (Module ,type ,type))
+
+     (define-instance (ConjugateRing ,type)
+       (inline)
+       (define (conjugate x) x))))
 
 (cl:defmacro define-num-wrapping (type bits)
-  "Define a `Num' instance for TYPE which wraps on overflow."
-  `(define-instance (Num ,type)
-     (inline)
-     (define (+ a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits))))))
+  "Define numeric operations and their class instances for TYPE, wrapping on overflow."
+  `(progn
+     (define-instance (HasAdd ,type)
+       (inline)
+       (define (+ a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))))
 
-     (inline)
-     (define (- a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits))))))
+     (define-instance (Additive ,type)
+       (define zero
+         (coalton++:unsafe
+           (lisp (-> ,type) () 0))))
 
-     (inline)
-     (define (* a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits))))))
+     (define-instance (AdditiveGroup ,type)
+       (inline)
+       (define (- a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits))))))
 
-     (inline)
-     (define (fromInt x)
-       (coalton++:unsafe
-         (lisp (-> ,type) (x)
-           (cl:values (cl:mod x ,(cl:expt 2 bits))))))))
+       (inline)
+       (define (neg a)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a)
+             (cl:values (cl:mod (cl:- a) ,(cl:expt 2 bits)))))))
+
+     (define-instance (HasMul ,type)
+       (inline)
+       (define (* a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))))
+
+     (define-instance (Multiplicative ,type)
+       (define one
+         (coalton++:unsafe
+           (lisp (-> ,type) () 1))))
+
+     (define-instance (Semiring ,type))
+
+     (define-instance (Ring ,type)
+       (inline)
+       (define (from-int x)
+         (coalton++:unsafe
+           (lisp (-> ,type) (x)
+             (cl:values (cl:mod x ,(cl:expt 2 bits)))))))
+
+     (define-instance (CommutativeRing ,type))
+     (define-instance (Num ,type))
+
+     (define-instance (Scale ,type ,type)
+       (inline)
+       (define (scale a b) (* a b)))
+
+     (define-instance (Module ,type ,type))
+
+     (define-instance (ConjugateRing ,type)
+       (inline)
+       (define (conjugate x) x))))
 
 
 ;;; Float Num instances.
 (cl:defmacro define-num-float (type lisp-type plus-inf minus-inf)
-  "Define `Num' for the float type TYPE."
+  "Define the floating-point numeric operations and their class instances for TYPE."
 
   ;;
   ;; CCL has a tendency to re-enable float traps. The explicit float
@@ -236,44 +321,82 @@
   ;; keep the behavior consistent with IEEE 754.
   ;;
 
-  `(define-instance (Num ,type)
-     (inline)
-     (define (+ a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (#+(not ccl) cl:progn
-              #+ccl ff:with-float-traps-masked #+ccl cl:t
-              (cl:+ a b)))))
+  `(progn
+     (define-instance (HasAdd ,type)
+       (inline)
+       (define (+ a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (#+(not ccl) cl:progn
+                #+ccl ff:with-float-traps-masked #+ccl cl:t
+                (cl:+ a b))))))
 
-     (inline)
-     (define (- a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (#+(not ccl) cl:progn
-              #+ccl ff:with-float-traps-masked #+ccl cl:t
-              (cl:- a b)))))
+     (define-instance (Additive ,type)
+       (define zero
+         (coalton++:unsafe
+           (lisp (-> ,type) () ,(cl:coerce 0 lisp-type)))))
 
-     (inline)
-     (define (* a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (#+(not ccl) cl:progn
-              #+ccl ff:with-float-traps-masked #+ccl cl:t
-              (cl:* a b)))))
+     (define-instance (AdditiveGroup ,type)
+       (inline)
+       (define (- a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (#+(not ccl) cl:progn
+                #+ccl ff:with-float-traps-masked #+ccl cl:t
+                (cl:- a b)))))
 
-     (inline)
-     (define (fromInt x)
-       (lisp (-> ,type) (x)
-         (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
-                (cl:if (cl:< x 0)
-                       ,minus-inf
-                       ,plus-inf))))))
+       (inline)
+       (define (neg a)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a)
+             (#+(not ccl) cl:progn
+                #+ccl ff:with-float-traps-masked #+ccl cl:t
+                (cl:- a))))))
+
+     (define-instance (HasMul ,type)
+       (inline)
+       (define (* a b)
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (#+(not ccl) cl:progn
+                #+ccl ff:with-float-traps-masked #+ccl cl:t
+                (cl:* a b))))))
+
+     (define-instance (Multiplicative ,type)
+       (define one
+         (coalton++:unsafe
+           (lisp (-> ,type) () ,(cl:coerce 1 lisp-type)))))
+
+     (define-instance (Semiring ,type))
+
+     (define-instance (Ring ,type)
+       (inline)
+       (define (from-int x)
+         (lisp (-> ,type) (x)
+           (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
+                  (cl:if (cl:< x 0)
+                         ,minus-inf
+                         ,plus-inf)))))
+
+     (define-instance (CommutativeRing ,type))
+     (define-instance (Num ,type))
+
+     (define-instance (Scale ,type ,type)
+       (inline)
+       (define (scale a b) (* a b)))
+
+     (define-instance (Module ,type ,type))
+
+     (define-instance (ConjugateRing ,type)
+       (inline)
+       (define (conjugate x) x))))
 
 
 ;;; Utility to define type -> Fraction conversions.
 (cl:defmacro define-float-fraction-conversion (type)
   `(define-instance (TryInto ,type Fraction)
-     (define (tryInto x)
+     (inline)
+     (define (try-into x)
        (if (finite? x)
            (Some (coalton++:unsafe
                    (lisp (-> Fraction) (x) (cl:rational x))))
@@ -282,52 +405,57 @@
 
 ;;; Utility to define Reciprocable instances on floats.
 (cl:defmacro define-reciprocable-float (type)
-  `(define-instance (Reciprocable ,type)
-     (inline)
-     (define (/ x y)
-       (cond
-         #+allegro
-         ((or (nan? x)
-              (nan? y))
-          nan)
+  `(progn
+     (define-instance (Reciprocable ,type)
+       (inline)
+       (define (/ x y)
+         (cond
+           #+allegro
+           ((or (nan? x)
+                (nan? y))
+            nan)
 
-         #+allegro
-         ((and (== x 0) (== y 0))
-          nan)
+           #+allegro
+           ((and (== x 0) (== y 0))
+            nan)
 
-         #+allegro
-         ((and (positive? x) (== y 0))
-          infinity)
+           #+allegro
+           ((and (positive? x) (== y 0))
+            infinity)
 
-         #+allegro
-         ((and (negative? x) (== y 0))
-         negative-infinity)
+           #+allegro
+           ((and (negative? x) (== y 0))
+           negative-infinity)
 
-         (True
-          (lisp (-> ,type) (x y)
-            (#+(not ccl) cl:progn
-               #+ccl ff:with-float-traps-masked #+ccl cl:t
-               (cl:/ x y))))))
+           (True
+            (lisp (-> ,type) (x y)
+              (#+(not ccl) cl:progn
+                 #+ccl ff:with-float-traps-masked #+ccl cl:t
+                 (cl:/ x y))))))
 
-     (inline)
-     (define (reciprocal x)
-       (cond
-         #+allegro
-         ((== x 0)
-         infinity)
+       (inline)
+       (define (recip x)
+         (cond
+           #+allegro
+           ((== x 0)
+           infinity)
 
-         (True
-          (lisp (-> ,type) (x)
-            (#+(not ccl) cl:progn
-               #+ccl ff:with-float-traps-masked #+ccl cl:t
-               (cl:/ x))))))))
+           (True
+            (lisp (-> ,type) (x)
+              (#+(not ccl) cl:progn
+                 #+ccl ff:with-float-traps-masked #+ccl cl:t
+                 (cl:/ x)))))))
+
+     (define-instance (HermitianForm ,type ,type)
+       (inline)
+       (define (inner-product a b) (* a b)))))
 
 (cl:defmacro define-dividable-float (type lisp-type)
   `(define-instance (Dividable Integer ,type)
      (inline)
        (define (general/ x y)
          (if (== y 0)
-             (/ (fromInt x) (fromInt y))
+             (/ (from-int x) (from-int y))
            (lisp (-> ,type) (x y)
              (cl:or (cl:ignore-errors (cl:coerce (cl:/ x y) ',lisp-type))
                     (cl:if (cl:eq (cl:< x 0) (cl:< y 0))

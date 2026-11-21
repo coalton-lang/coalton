@@ -23,7 +23,7 @@
 where the right-hand side is the Common Lisp `ldb` and `wrap` is as in
 `Bits`. A field that is narrower than the type and lies within its
 width is returned as a non-negative value."
-    (and (shift (coalton/math:negate (into position)) x)
+    (and (shift (coalton/math:neg (into position)) x)
          (not (shift (into size) (not (xor x x))))))
 
   (inline)

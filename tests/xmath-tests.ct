@@ -1,0 +1,519 @@
+(in-package #:coalton-tests)
+
+(deftest exact-algorithms-require-their-coefficient-laws ()
+  (dolist (form '("(coalton/math:exact-quot (the F64 1.0d-300) 1.0d300)"
+                  "(coalton/math:quotrem (the (coalton/xmath/polynomial:Polynomial F64) one) one)"
+                  "(coalton/xmath/modular:mod-mul (the U8 200) 200 251)"
+                  "(coalton/xmath/modular:mod-inv (the U8 5) 11)"
+                  "(coalton/xmath/polynomial:square-free-part (the (coalton/xmath/polynomial:Polynomial Bit) one))"
+                  "(coalton/xmath/polynomial:integrate (the (coalton/xmath/polynomial:Polynomial Bit) one))"
+                  "(coalton/xmath/recurrence:berlekamp-massey (the (List (coalton/xmath/dual:Dual Fraction)) Nil))"
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix F64)
+                                               (coalton/xmath/matrix:identity-matrix 1)))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
+
+(deftest noncommuting-and-isotropic-quaternions-are-not-fields ()
+  (dolist (form '("(recip (the (coalton/xmath/quaternion:Quaternion (coalton/xmath/quaternion:Quaternion Fraction)) one))"
+                  "(coalton/xmath/matrix:rank (the (coalton/xmath/matrix:Matrix (coalton/xmath/quaternion:Quaternion (Complex Fraction)))
+                                               (coalton/xmath/matrix:identity-matrix 1)))"
+                  "(coalton/xmath/groebner:groebner-basis coalton/xmath/groebner:Lex
+                     (the (List (coalton/xmath/groebner:MPoly (coalton/xmath/quaternion:Quaternion Fraction))) Nil))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define (not-admitted) ~A)" form)))))
+
+(deftest series-acos-requires-a-scalar-constant ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (bad-acos) (acos (the (coalton/xmath/power-series:PowerSeries Fraction) zero)))")))
+
+(deftest runtime-matrices-have-no-implicit-shape ()
+  (dolist (constant '("zero" "one" "1"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define (no-shape) (the (coalton/xmath/matrix:Matrix Integer) ~A))"
+               constant)))))
+
+(in-package #:coalton-native-tests)
+
+(coalton-toplevel
+  (declare vector-scale (math:VectorSpace :k :v => :k * :v -> :v))
+  (define (vector-scale k v) (math:scale k v)))
+
+(define-test left-scalar-hermitian-laws ()
+  ;; The same vectors admit both unrestricted and restricted scalars.
+  (let z = (math:complex (the Fraction 1) 2))
+  (is (== (vector-scale (the Fraction 2) z) (math:complex 2 4)))
+  (is (== (vector-scale (the (Complex Fraction) math:ii) z) (math:complex -2 1)))
+  (is (== (the Fraction (math:inner-product z z)) 5))
+  (is (== (the (Complex Fraction) (math:inner-product z z)) (math:complex 5 0)))
+
+  (let i = (the (quat:Quaternion Fraction) quat:q-i))
+  (let j = (the (quat:Quaternion Fraction) quat:q-j))
+  (let k = (* i j))
+  (let x = (quat:quaternion i zero zero zero))
+  (let y = (quat:quaternion j zero zero zero))
+  (is (== (math:inner-product x y) k))
+  (is (== (math:inner-product x (math:scale i y)) (* i k)))
+  (is (== (math:inner-product (math:scale i x) y) (* k (math:conjugate i))))
+  (is (== (math:inner-product y x) (math:conjugate k)))
+  (let blade = (the (cliff:Multivector (quat:Quaternion Fraction)) (cliff:basis-vector 0)))
+  (is (== (math:inner-product (math:scale i blade) (math:scale j blade)) k))
+  (let imag = (the (Complex Fraction) math:ii))
+  (let split = (quat:quaternion one imag zero zero))
+  (is (nonzero? split))
+  (is (zero? (* split (quat:quaternion one (neg imag) zero zero))))
+
+  ;; Multiplying the projection coefficient on the wrong side, or taking
+  ;; the conjugates on the wrong side, changes the sign of the j component.
+  (is (== (mat:gram-schmidt [[i one] [j zero]])
+          [[i one] [(math:scale (the Fraction 1/2) j) (math:scale (the Fraction -1/2) k)]]))
+  (is (== (mat:solve-vector (mat:from-rows [[i j] [zero i]]) [(+ k i) (neg j)])
+          (Some [j k])))
+  (let direct =
+    (rec advance ((n (the Integer 0)) (a i) (b j))
+      (if (== n 19) a (advance (+ n 1) b (+ (* i b) (* j a))))))
+  (is (== (recur:linear-recurrence-nth [i j] [i j] 19) direct))
+
+  ;; The standard dot product on F_2^2 is nondegenerate but isotropic.
+  (is (== (mat:try-gram-schmidt [[(the Bit 1) 1]]) None))
+  (is (== (mat:try-gram-schmidt [[(the Bit 1) 0] [1 0]]) (Some [[1 0]]))))
+
+(define-test test-exact-algebra-contracts ()
+  ;; Machine quotient/remainder survives without claiming a domain.
+  (let a = (the U8 200))
+  (let (values q r) = (math:quotrem a (the U8 11)))
+  (is (== q 18))
+  (is (== r 2))
+  (is (== (modmath:mod-mul (math:to-integer a) (math:to-integer a) 251) 91))
+  (is (== (modmath:mod-inv (math:to-integer (the U8 5)) 11) (Some 9)))
+
+  ;; In characteristic two, polynomial Euclidean division still works, even
+  ;; though the derivative of x^2 is zero and integration is unavailable.
+  (let x = (the (poly:Polynomial Bit) poly:poly-var))
+  (let dividend = (+ (* x x) one))
+  (let divisor = (+ x one))
+  (let (values q r) = (math:quotrem dividend divisor))
+  (is (== dividend (+ (* q divisor) r)))
+  (is (== q divisor))
+  (is (zero? r))
+  (is (zero? (poly:differentiate dividend)))
+
+  ;; Rational scalars suffice even when the coefficient ring has non-units.
+  (let t0 = (the (poly:Polynomial Fraction) poly:poly-var))
+  (let p = (poly:monomial t0 3))
+  (is (== (poly:differentiate (poly:integrate p)) p))
+  (is (== (recur:forward-diff (recur:antidifference-poly p)) p))
+
+  (let floats = (mat:from-rows [[1.0d-12 2.0d0] [0.0d0 4.0d0]]))
+  (let (values reduced pivots) = (mat:rref-with (fn (x) (< (abs x) 1.0d-8)) floats))
+  (is (== pivots [1]))
+  (is (== (mat:entry reduced 0 1) 1.0d0))
+  (is (== (mat:entry reduced 1 1) 0.0d0)))
+
+(define-test test-polynomial-and-ratio ()
+  (let x = (the (poly:Polynomial Fraction) poly:poly-var))
+  ;; (x^2 - 1) and (x^2 + 2x + 1) share factor (x + 1)
+  (let p = (- (^ x 2) 1))
+  (let q = (+ (+ (^ x 2) (* 2 x)) 1))
+  (let g = (math:gcd p q))
+  (is (== g (+ x 1)))
+
+  ;; Bezout identity on polynomials over Q
+  (let a = (+ (+ (^ x 3) (* 2 (^ x 2))) (+ x 2)))
+  (let b = (- (^ x 2) 1))
+  (let (values d s t) = (math:extended-gcd a b))
+  (is (== d 1))
+  (is (== (+ (* s a) (* t b)) d))
+
+  ;; Even a leading quotient far below the machine range must reconstruct.
+  (let tiny = (math:make-fraction 1 (^ 10 300)))
+  (let dividend = (+ (poly:monomial tiny 2) 1))
+  (let divisor = (poly:monomial (recip tiny) 1))
+  (let (values quotient remainder) = (math:quotrem dividend divisor))
+  (is (== dividend (+ (* quotient divisor) remainder)))
+  (is (== quotient (poly:monomial (* tiny tiny) 1)))
+  (is (== remainder 1))
+
+  ;; Evaluation, composition, calculus
+  (is (== (poly:evaluate p 3) 8))
+  (is (== (poly:compose p (+ x 1)) (+ (^ x 2) (* 2 x))))
+  (is (== (poly:differentiate (+ (+ (^ x 3) (* 3 (^ x 2))) 5))
+          (+ (* 3 (^ x 2)) (* 6 x))))
+  (is (== (poly:differentiate (poly:integrate q)) q))
+
+  ;; Polynomials over a non-Ring Semiring (TropicalMin)
+  (let tp = (poly:polynomial [(TropVal 2) (TropVal 5)]))
+  (is (== (poly:evaluate tp (TropVal 3)) (TropVal 2)))
+
+  ;; Rational functions Ratio (Polynomial Fraction) with automatic factor cancellation
+  (let rf1 = (ratio:make-ratio p q))
+  (is (== (ratio:numerator rf1) (- x 1)))
+  (is (== (ratio:denominator rf1) (+ x 1)))
+  (let rf2 = (ratio:make-ratio 2 (+ x 1)))
+  (is (== (+ rf1 rf2) 1))
+  (is (== (* rf1 (math:recip rf1)) 1))
+
+  ;; GcdDomain (Polynomial Integer): non-Euclidean GCD domain Z[x]
+  (let zx = (the (poly:Polynomial Integer) poly:poly-var))
+  ;; (6x^2 - 6) and (9x^2 + 18x + 9) have content-aware GCD 3x + 3 in Z[x]
+  (let zp = (- (* 6 (^ zx 2)) 6))
+  (let zq = (+ (+ (* 9 (^ zx 2)) (* 18 zx)) 9))
+  (is (== (poly:content zp) 6))
+  (is (== (poly:primitive-part zp) (- (^ zx 2) 1)))
+  (is (== (math:gcd zp zq) (+ (* 3 zx) 3)))
+  (is (== (math:exact-quot zp (+ zx 1)) (Some (- (* 6 zx) 6))))
+  (is (== (math:exact-quot zp (+ (* 4 zx) 4)) None))
+
+  ;; Rational functions Ratio (Polynomial Integer) over Z[x] (cleared denominators)
+  (let zrf = (ratio:make-ratio zp zq))
+  (is (== (ratio:numerator zrf) (- (* 2 zx) 2)))
+  (is (== (ratio:denominator zrf) (+ (* 3 zx) 3)))
+
+  ;; Multivariate polynomials Polynomial (Polynomial Integer) = Z[x][y]
+  (let y = (the (poly:Polynomial (poly:Polynomial Integer)) poly:poly-var))
+  (let cx = (the (poly:Polynomial (poly:Polynomial Integer)) (into zx)))
+  ;; (x^2 - y^2) and (x + y)^2 in Z[x][y] share GCD (x + y)
+  (let mp = (- (^ cx 2) (^ y 2)))
+  (let mq = (^ (+ cx y) 2))
+  (is (== (math:gcd mp mq) (+ cx y)))
+  (let mrf = (ratio:make-ratio mp mq))
+  (is (== (ratio:numerator mrf) (- cx y)))
+  (is (== (ratio:denominator mrf) (+ cx y))))
+
+(define-test test-power-series ()
+  (let x = (the (series:PowerSeries Fraction) series:series-var))
+
+  ;; Fibonacci generating function: x / (1 - x - x^2)
+  (let fib = (/ x (- (- 1 x) (* x x))))
+  (is (== (series:series-prefix 9 fib)
+          [0 1 1 2 3 5 8 13 21]))
+
+  ;; Catalan generating function: (1 - sqrt(1 - 4x)) / (2x)
+  ;; Equivalently 2 / (1 + sqrt(1 - 4x))
+  (let catalan = (/ 2 (+ 1 (sqrt (- 1 (* 4 x))))))
+  (is (== (series:series-prefix 7 catalan)
+          [1 1 2 5 14 42 132]))
+
+  ;; Valuation-cancelling division: Bernoulli generating function x / (exp(x) - 1) and log
+  (let ex = (exp x))
+  (let bernoulli = (/ x (- ex 1)))
+  (is (== (series:series-prefix 5 bernoulli)
+          [1 -1/2 1/12 0 -1/720]))
+  (is (== (math:log ex (exp (* 2 x))) 2))
+
+  ;; Elementary identities on PowerSeries Fraction
+  (let l1+x = (ln (+ 1 x)))
+  (is (== (series:series-prefix 6 ex)
+          [1 1 1/2 1/6 1/24 1/120]))
+  (is (== (series:series-prefix 6 l1+x)
+          [0 1 -1/2 1/3 -1/4 1/5]))
+  (is (== (exp l1+x) (+ 1 x)))
+  (is (== (ln ex) x))
+
+  ;; Trigonometric identities: sin^2(x) + cos^2(x) == 1, tan(x), atan(x), asin(x)
+  (let sx = (series:series-sin x))
+  (let cx = (series:series-cos x))
+  (is (== (+ (* sx sx) (* cx cx)) 1))
+  (is (== (series:series-differentiate sx) cx))
+  (is (== (series:series-differentiate cx) (neg sx)))
+  (is (== (series:series-prefix 6 (series:series-tan x))
+          [0 1 0 1/3 0 2/15]))
+  (is (== (series:series-prefix 6 (series:series-atan x))
+          [0 1 0 -1/3 0 1/5]))
+  (is (== (series:series-prefix 6 (series:series-asin x))
+          [0 1 0 1/6 0 3/40]))
+
+  ;; Hyperbolic functions on PowerSeries Fraction (enabled by relaxed Elementary/sinh/cosh/tanh/asinh/atanh constraints)
+  (is (== (series:series-prefix 6 (math:sinh x))
+          [0 1 0 1/6 0 1/120]))
+  (is (== (series:series-prefix 6 (math:cosh x))
+          [1 0 1/2 0 1/24 0]))
+  (is (== (series:series-prefix 6 (math:tanh x))
+          [0 1 0 -1/3 0 2/15]))
+  (is (== (series:series-prefix 6 (math:asinh x))
+          [0 1 0 -1/6 0 3/40]))
+  (is (== (series:series-prefix 6 (math:atanh x))
+          [0 1 0 1/3 0 1/5]))
+
+  ;; Composition and Lagrange reversion:
+  ;; (exp(x) - 1)^<-1> == ln(1 + x), and sin^<-1>(x) == asin(x)
+  (let expm1 = (- ex 1))
+  (is (series:series-approx-equal? 8 (series:series-revert expm1) l1+x))
+  (is (series:series-approx-equal? 8 (series:series-revert sx) (series:series-asin x)))
+  (is (series:series-approx-equal? 8 (series:series-compose sx (series:series-asin x)) x)))
+
+(define-test test-power-series-valuation-search ()
+  (let s = (the (series:PowerSeries Fraction) (series:series-shift 16 one)))
+  (let message =
+    (catch (progn (/ s s) "")
+      ((the Panic p) (lisp (-> String) (p) (cl:princ-to-string p)))))
+  (is (string-contains? "undetermined" message))
+  (is (== (series:series-prefix 3 (series:series-divide-through 16 s s)) [1 0 0])))
+
+(define-test test-power-series-acos ()
+  (let x = (the (series:PowerSeries F64) series:series-var))
+  (is (== (series:series-prefix 3 (acos x)) [(acos 0.0d0) -1.0d0 0.0d0])))
+
+(define-test runtime-matrix-operators ()
+  (let a = (mat:from-rows [[(the Integer 1) 2 3] [4 5 6]]))
+  (let b = (mat:transpose a))
+  (is (/= a (mat:matrix 3 2 [1 2 3 4 5 6])))
+  (is (== (* a b) (mat:from-rows [[14 32] [32 77]])))
+  (is (== (* (mat:identity-matrix 2) a) (* a (mat:identity-matrix 3))))
+  (is (== (mat:mat-sub a a) (mat:zero-matrix 2 3)))
+  (is (mat:zero-matrix? (+ a (mat:mat-neg a))))
+  ;; Blocks only implement HasAdd, not Additive: no block shape is implicit.
+  (let blocks = (mat:matrix 1 1 [a]))
+  (is (== (+ blocks blocks) (mat:matrix 1 1 [(math:scale 2 a)])))
+  (is (catch (progn (+ a b) False) ((the Panic _) True)))
+  (is (catch (progn (* a a) False) ((the Panic _) True)))
+  (is (== (mat:mat-pow (* a b) 0) (mat:identity-matrix 2)))
+  (is (catch (progn (mat:mat-pow a 0) False) ((the Panic _) True))))
+
+(define-test runtime-matrix-empty-shapes ()
+  (let a = (the (mat:Matrix Integer) (mat:matrix 0 2 [])))
+  (let b = (the (mat:Matrix Integer) (mat:matrix 0 3 [])))
+  (is (/= a b))
+  (is (mat:zero-matrix? a))
+  (is (== (* (mat:transpose a) b) (mat:zero-matrix 2 3)))
+  (is (== (mat:transpose (mat:transpose b)) b))
+  ;; The area cannot wrap to zero and masquerade as an empty matrix.
+  (let r = (1+ (math:quot (the UFix math:max-bound) 2)))
+  (is (catch (progn (the (mat:Matrix Integer) (mat:matrix r 2 [])) False)
+        ((the Panic _) True))))
+
+(define-test test-matrix-algebra ()
+  ;; Bareiss fraction-free determinant, characteristic polynomial, and adjugate over Integer
+  (let a = (mat:from-rows [[(the Integer 2) 1 3]
+                           [4 -1 2]
+                           [1 5 -2]]))
+  (let d = (mat:det a))
+  (is (== d 57))
+  (is (== (* a (mat:adjugate a)) (math:scale d (mat:identity-matrix 3))))
+  ;; Cayley-Hamilton: charpoly(A)(A) == 0
+  (let cp = (mat:charpoly a))
+  (is (== (poly:degree cp) 3))
+  (let c0 = (poly:coeff cp 0))
+  (let c1 = (poly:coeff cp 1))
+  (let c2 = (poly:coeff cp 2))
+  (let c3 = (poly:coeff cp 3))
+  (let i3 = (the (mat:Matrix Integer) (mat:identity-matrix 3)))
+  (let a2 = (* a a))
+  (let a3 = (* a2 a))
+  (is (== (+ (+ (math:scale c0 i3) (math:scale c1 a))
+             (+ (math:scale c2 a2) (math:scale c3 a3)))
+          (mat:zero-matrix 3 3)))
+
+  ;; Bareiss determinant over Polynomial Integer (Z[x])
+  (let x = (the (poly:Polynomial Integer) poly:poly-var))
+  (let pm = (mat:from-rows [[(+ x 1) (- x 1)]
+                            [(+ x 2) (+ x 3)]]))
+  (is (== (mat:det pm) (+ (* 3 x) 5)))
+
+  ;; Field linear algebra (solve, inv, rank, nullspace) over Fraction
+  (let af = (mat:from-rows [[(the Fraction 2) 1]
+                            [5 3]]))
+  (match (mat:inv af)
+    ((None) (is False))
+    ((Some af-inv)
+     (is (== (* af af-inv) (mat:identity-matrix 2)))))
+  (match (mat:solve-vector af [4 11])
+    ((None) (is False))
+    ((Some sol)
+     (is (== sol [1 2]))))
+
+  ;; Hermitian adjoint and Gram-Schmidt on Complex Fraction
+  (let cm = (mat:from-rows [[(math:complex (the Fraction 1) 2)
+                             (math:complex 3 -1)]
+                            [(math:complex 0 4)
+                             (math:complex -2 0)]]))
+  (is (== (mat:adjoint (mat:adjoint cm)) cm))
+  (let ortho = (mat:gram-schmidt [[(math:complex (the Fraction 1) 1)
+                                   (math:complex 1 -1)]
+                                  [(math:complex 2 0)
+                                   (math:complex 0 2)]]))
+  (is (== (list:length ortho) 2)))
+
+(define-test test-differential-and-hermite-reduction ()
+  (let x = (the (poly:Polynomial Fraction) poly:poly-var))
+  ;; DifferentialRing on Polynomial and Ratio (quotient rule)
+  (let f = (ratio:make-ratio (+ (^ x 2) 1) (- x 1)))
+  (is (== (diff:deriv f)
+          (ratio:make-ratio (- (- (^ x 2) (* 2 x)) 1)
+                         (^ (- x 1) 2))))
+
+  ;; Resultant and square-free factorization in coalton/xmath/polynomial: 3 (x - 1) (x + 2)^2
+  (is (== (poly:resultant (- (^ x 2) 1) (+ x 2)) 3))
+  (let p = (* 3 (* (- x 1) (^ (+ x 2) 2))))
+  (let (values lc sqf) = (poly:square-free-factorization p))
+  (is (== lc 3))
+  (is (== sqf [(Tuple (- x 1) 1) (Tuple (+ x 2) 2)]))
+
+  ;; Partial fraction decomposition, Hermite reduction, and Rothstein-Trager resultant in coalton/xmath/ratio
+  (let r = (ratio:make-ratio (+ (* 5 (^ x 2)) (+ (* 7 x) 8))
+                          (* (- x 1) (^ (+ x 1) 2))))
+  (let (values poly-part pf-terms) = (ratio:partial-fractions r))
+  (is (== (fold (fn (acc (Tuple3 num fac pow))
+                  (+ acc (ratio:make-ratio num (^ fac pow))))
+                (into poly-part)
+                pf-terms)
+          r))
+
+  ;; Hermite reduction: int r(x) dx = g(x) + int h(x) dx, so g'(x) + h(x) == r(x)
+  (let (values g h) = (ratio:hermite-reduce r))
+  (is (== (+ (diff:deriv g) h) r))
+  (is (== (poly:square-free-part (ratio:denominator h)) (ratio:denominator h)))
+
+  ;; Rothstein-Trager resultant for int 1 / (x^2 - 1) dx: roots are +/- 1/2, so t^2 - 1/4
+  (let rt = (ratio:rothstein-trager-resultant (ratio:make-ratio 1 (- (^ x 2) 1))))
+  (is (== rt (poly:polynomial [-1/4 0 1])))
+
+  ;; Wronskian determinant of {1, x, x^2} is 2
+  (is (== (diff:wronskian [1 x (^ x 2)]) 2))
+
+  ;; Non-commutative Ore differential operators A[d/dx]: Weyl relation d*x - x*d == 1
+  (let d = (the (diff:DiffOp (poly:Polynomial Fraction)) diff:diff-op-d))
+  (let mx = (diff:diff-op [x]))
+  (is (== (- (* d mx) (* mx d)) one))
+  ;; Operator composition matches sequential application
+  (let l1 = (+ d mx))
+  (let l2 = (- (^ d 2) mx))
+  (let target = (+ (^ x 3) (* 2 x)))
+  (is (== (diff:apply-diff-op (* l1 l2) target)
+          (diff:apply-diff-op l1 (diff:apply-diff-op l2 target))))
+
+  ;; Solving Airy's ODE y'' - x y = 0 with y(0) = 1, y'(0) = 0 as a lazy PowerSeries
+  (let airy-op = (- (^ d 2) mx))
+  (let airy-y = (diff:solve-ode-series airy-op [(the Fraction 1) 0]))
+  (is (== (series:series-prefix 7 airy-y)
+          [1 0 0 1/6 0 0 1/180]))
+  (is (== (diff:apply-diff-op (map into airy-op) airy-y) zero)))
+
+(define-test test-groebner-bases ()
+  (let x = (the (gb:MPoly Fraction) (gb:mpoly-var 0)))
+  (let y = (the (gb:MPoly Fraction) (gb:mpoly-var 1)))
+  ;; System: x^2 + y^2 - 1 = 0 and x - y = 0 => Lex Groebner basis [x - y, y^2 - 1/2]
+  (let f1 = (- (+ (* x x) (* y y)) 1))
+  (let f2 = (- x y))
+  (let basis = (gb:groebner-basis gb:Lex [f1 f2]))
+  (is (== basis [(- x y) (- (* y y) (into 1/2))]))
+  (is (gb:ideal-member? gb:Lex (- (* 2 (* x y)) 1) [f1 f2]))
+  (is (not (gb:ideal-member? gb:Lex (+ x y) [f1 f2]))))
+
+(define-test test-modular-and-recurrence ()
+  ;; Generic EuclideanDomain modular inverse and CRT on Integer
+  (is (== (modmath:mod-inv 3 11) (Some 4)))
+  (match (modmath:crt [(Tuple 2 3) (Tuple 3 5) (Tuple 2 7)])
+    ((None) (is False))
+    ((Some (Tuple r m))
+     (is (== r 23))
+     (is (== m 105))))
+
+  ;; Polynomial Lagrange interpolation via the same EuclideanDomain CRT
+  (let x = (the (poly:Polynomial Fraction) poly:poly-var))
+  (match (modmath:lagrange-interpolate [(Tuple 0 1) (Tuple 1 3) (Tuple 2 7)])
+    ((None) (is False))
+    ((Some interp)
+     (is (== interp (+ (+ (^ x 2) x) 1)))))
+
+  ;; Pade [2/2] approximant of exp(x) = (12 + 6x + x^2) / (12 - 6x + x^2)
+  (let sx = (the (series:PowerSeries Fraction) series:series-var))
+  (let pade-exp = (recur:pade-approximant 2 2 (exp sx)))
+  (is (== (ratio:numerator pade-exp) (poly:polynomial [12 6 1])))
+  (is (== (ratio:denominator pade-exp) (poly:polynomial [12 -6 1])))
+
+  ;; Berlekamp-Massey and rational generating function discovery on Fibonacci
+  (let fib-prefix = [(the Fraction 0) 1 1 2 3 5 8 13 21 34])
+  (is (== (recur:berlekamp-massey fib-prefix) [1 1]))
+  (is (== (recur:guess-generating-function fib-prefix)
+          (ratio:make-ratio (neg x) (- (+ (^ x 2) x) 1))))
+
+  ;; O(d^2 log n) linear recurrence evaluation
+  (is (== (recur:linear-recurrence-nth [(the Integer 1) 1]
+                                       [0 1]
+                                       50)
+          12586269025))
+
+  ;; Polynomial antidifference: Delta(F(x)) = x^2 => F(x) = x(x-1)(2x-1)/6
+  (let sum-sq = (recur:antidifference-poly (^ x 2)))
+  (is (== (recur:forward-diff sum-sq) (^ x 2)))
+  (is (== (poly:evaluate sum-sq 10) 285))
+
+  ;; Gosper's algorithm for indefinite hypergeometric summation:
+  ;; 1. t_n = n * n! has ratio t_{n+1}/t_n = (n+1)^2 / n -> certificate y(n) = 1/n
+  (let r-fact = (ratio:make-ratio (^ (+ x 1) 2) x))
+  (match (recur:gosper-solve r-fact)
+    ((None) (is False))
+    ((Some y)
+     (is (== y (ratio:make-ratio 1 x)))
+     (is (== (- (* (recur:rational-shift y 1) r-fact) y) 1))))
+  ;; 2. t_n = 1 / ((n+1)(n+2)) has ratio (n+1)/(n+3) -> certificate y(n) = -(n+2)
+  (let r-tele = (ratio:make-ratio (+ x 1) (+ x 3)))
+  (match (recur:gosper-solve r-tele)
+    ((None) (is False))
+    ((Some y)
+     (is (== (- (* (recur:rational-shift y 1) r-tele) y) 1))))
+  ;; 3. Harmonic term t_n = 1/(n+1) with ratio (n+1)/(n+2) is NOT Gosper-summable
+  (is (== (recur:gosper-solve (ratio:make-ratio (+ x 1) (+ x 2))) None)))
+
+(define-test test-large-linear-gosper-shifts ()
+  (let x = (the (poly:Polynomial Fraction) poly:poly-var))
+  (let shift = (the Integer 100000000000000000000000000000001))
+  (let shifted = (+ x (from-int shift)))
+  (is (== (recur::%gosper-shifts shifted x) [shift]))
+  (is (== (recur::%gosper-shifts x shifted) Nil))
+  (is (== (recur::%gosper-shifts (+ x (into 1/2)) x) Nil))
+  (is (== (recur::%gosper-shifts (* x (+ x 4)) x) [0 4]))
+  (is (== (recur::%gosper-shifts (* shifted (- (* x x) 2)) x) [shift]))
+  (is (catch (progn (recur::gosper-solve-key-equation one x shifted) False)
+        ((the Panic p) (string-contains? "maximum matrix size" (lisp (-> String) (p) (cl:princ-to-string p))))))
+  (let r = (ratio:make-ratio x shifted))
+  (match (recur:gosper-solve r)
+    ((None) (is False))
+    ((Some y) (is (== (- (* (recur:rational-shift y 1) r) y) 1)))))
+
+(define-test test-dual-noncommuting-reciprocal ()
+  (let i = (quat:quaternion (the Fraction 0) 1 0 0))
+  (let j = (quat:quaternion (the Fraction 0) 0 1 0))
+  (let u = (dual:Dual i j))
+  (let v = (math:recip u))
+  ;; Dual equality only compares the primal parts.
+  (is (== (dual:dual-part (* u v)) zero))
+  (is (== (dual:dual-part (* v u)) zero)))
+
+(define-test test-clifford-mask-and-signature ()
+  (let width = (lisp (-> UFix) () (cl:integer-length cl:most-positive-fixnum)))
+  (let e = (the (cliff:Multivector Integer) (cliff:basis-vector (- width 1))))
+  (let sig = (the (UFix -> Integer) (fn (i) (if (== i (- width 1)) -1 1))))
+  (is (== (cliff:geometric-product-with sig e e) -1))
+  (is (== (cliff:with-clifford-signature sig (fn () (* e e))) -1))
+  (is (catch (progn (the (cliff:Multivector Integer) (cliff:basis-vector width)) False)
+        ((the Panic _) True))))
+
+(define-test test-quaternion-and-clifford ()
+  ;; Non-commutative division ring and ConjugateRing anti-automorphism on Quaternion Fraction
+  (let q1 = (quat:quaternion (the Fraction 1) 2 3 4))
+  (let q2 = (quat:quaternion (the Fraction 2) -1 1 -3))
+  (is (/= (* q1 q2) (* q2 q1)))
+  (is (== (math:conjugate (* q1 q2))
+          (* (math:conjugate q2) (math:conjugate q1))))
+  (is (== (* q1 (math:recip q1)) one))
+  (is (== (* (math:recip q1) q1) one))
+  ;; 90-degree rotation around z-axis via q = 1 + k sends (1, 0, 0) to (0, 1, 0)
+  (let rot-z = (quat:quaternion (the Fraction 1) 0 0 1))
+  (is (== (quat:rotate-vector rot-z (Tuple3 1 0 0))
+          (Tuple3 0 1 0)))
+
+  ;; Clifford algebra Cl(3, 0, 0): e0^2 = 1, e0 * e1 = e0 ^ e1 = - e1 * e0
+  (let e0 = (the (cliff:Multivector Fraction) (cliff:basis-vector 0)))
+  (let e1 = (the (cliff:Multivector Fraction) (cliff:basis-vector 1)))
+  (is (== (* e0 e0) one))
+  (is (== (* e0 e1) (cliff:wedge e0 e1)))
+  (is (== (* e1 e0) (neg (cliff:wedge e0 e1))))
+  (is (== (cliff:wedge e0 e0) zero))
+  ;; ConjugateRing (reversion): ~(A B) == ~B ~A
+  (let mv1 = (+ (+ 1 e0) (* e0 e1)))
+  (let mv2 = (+ (- 2 e1) (* 3 (* e0 e1))))
+  (is (== (math:conjugate (* mv1 mv2))
+          (* (math:conjugate mv2) (math:conjugate mv1)))))

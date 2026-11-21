@@ -3,6 +3,7 @@
 ;;;; Number types and basic arithmetic.
 
 (coalton/utils:defstdlib-package #:coalton/math/arith
+  (:documentation "Division (`Reciprocable`, `Dividable`), conjugation (`ConjugateRing`), scaling and linear spaces (`Scale`, `Module`, `VectorSpace`, `InnerSpace`), transfinite and IEEE floating-point values (`Transfinite`, `IEEEFloat`), and basic arithmetic predicates and operations.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -11,18 +12,35 @@
    #:coalton/utils)
   (:export
    #:Reciprocable
+   #:CommutativeRing
+   #:DivisionRing
+   #:CharacteristicZero
+   #:RationalScalars
+   #:RationalAlgebra
+   #:embed-fraction
    #:/
+   #:recip
    #:reciprocal
    #:Dividable
    #:general/
-   #:/
+   #:ConjugateRing
+   #:conjugate
+   #:Scale
+   #:scale
+   #:Module
+   #:VectorSpace
+   #:HermitianForm
+   #:InnerSpace
+   #:inner-product
    #:Transfinite
    #:infinity
    #:infinite?
    #:finite?
    #:negative-infinity
+   #:IEEEFloat
    #:nan
    #:nan?
+   #:neg
    #:negate
    #:abs
    #:sign
@@ -46,68 +64,151 @@
   ;; Division
   ;;
 
-  (define-class (Num :a  => Reciprocable :a)
-    "Any number with a multiplicative inverse (reciprocal) where:
+  (define-class (Ring :a => Reciprocable :a)
+    "A `Ring` with a partial multiplicative inverse `recip` and division `/`.
 
+When every nonzero element is invertible, `:a` is a **division ring** (or **skew field**), and if multiplication is commutative, a **field**. Rings whose units are a subset of the nonzero elements (such as local rings like `Dual`, `Hyperdual`, and `PowerSeries`) may also implement `Reciprocable` by signaling a run-time error on non-units.
 
-    1 = (* (reciprocal x) x) = (* x (reciprocal x))
-    (/ x y) = (* x (reciprocal y))
+Laws (for invertible `x` and `y`):
+- Inverse: `(* (recip x) x) == (* x (recip x)) == one`
+- Division: `(/ x y) == (* x (recip y))`
 
-
-If no reciprocal exists for an element, produce a run-time error (e.g., zero).
-"
+This is an operational interface, not evidence that the ring is a field.
+Exact instances signal an error on attempting to invert a non-unit; machine
+arithmetic can instead produce an IEEE exceptional value or round the result."
     (/ (:a * :a -> :a))
-    (reciprocal (:a -> :a)))
+    (recip (:a -> :a)))
+
+  (define-class (Ring :a => CommutativeRing :a)
+    "A `Ring` whose multiplication commutes. As with `Ring`, machine arithmetic
+is subject to its usual rounding or overflow behavior; commutativity alone does
+not certify exact division or absence of zero divisors.")
+
+  (define-class (Reciprocable :a => DivisionRing :a)
+    "An exact nontrivial ring in which every nonzero element has a two-sided
+multiplicative inverse. Multiplication need not commute. Rounded machine
+arithmetic and rings with nonzero non-units are not instances.")
+
+  (define-class (Ring :a => CharacteristicZero :a)
+    "An exact ring in which `from-int` embeds the integers injectively. This
+does not imply that division by positive integers is possible.")
+
+  (define-class (Ring :a => RationalScalars :a)
+    "Central rational scalars, represented exactly or with the rounding of
+the coefficient type. `embed-fraction` is the canonical unital rational
+embedding (or its numerical approximation), not reduction modulo a prime."
+    (embed-fraction (Fraction -> :a)))
+
+  (define-class ((RationalScalars :a) (CharacteristicZero :a) => RationalAlgebra :a)
+    "A ring for which `embed-fraction` is an exact unital embedding into its
+center. Arbitrary coefficients need not commute or be invertible.")
+
+  (inline)
+  (declare reciprocal (Reciprocable :a => :a -> :a))
+  (define (reciprocal x)
+    "An alias for `recip`."
+    (recip x))
 
   (define-class (Dividable :arg-type :res-type)
-    "The representation of a type such that division within that type possibly results in another type. For instance,
+    "Division of two elements of `:arg-type` producing a `:res-type` (for example, `(Dividable Integer Fraction)` or `(Dividable F32 F32)`).
 
-
-    (Dividable Integer Fraction)
-
-
-establishes that division of two `Integer`s can result in a `Fraction`, whereas
-
-
-    (Dividable F32 F32)
-
-
-establishes that division of two `F32`s can result in a `F32`.
-
-Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
-
-The function `general/` is partial, and will error produce a run-time error if the divisor is zero.
-"
-    ;; This is a type that is more pragmatic and less mathematical in
-    ;; nature. It expresses a division relationship between one input
-    ;; type and one output type.
+`general/` is partial and signals a run-time error if the divisor is zero."
     (general/ (:arg-type * :arg-type -> :res-type)))
 
   (define-instance (Reciprocable :a => Dividable :a :a)
     (inline)
     (define (general/ a b) (/ a b)))
 
+  ;;
+  ;; Conjugation (*-Rings), Scaling, Modules, and Vector Spaces
+  ;;
+
+  (define-class (Ring :a => ConjugateRing :a)
+    "A `Ring` equipped with an involutive anti-automorphism `conjugate` (also known as a \"star ring\" or $\\ast$-ring).
+
+For real types, `conjugate` is the identity function; for complex numbers $a + bi$, it is $a - bi$.
+
+Laws:
+- Involution: `(conjugate (conjugate x)) == x`
+- Additivity: `(conjugate (+ x y)) == (+ (conjugate x) (conjugate y))`
+- Anti-multiplicativity: `(conjugate (* x y)) == (* (conjugate y) (conjugate x))`
+- Identity: `(conjugate one) == one`"
+    (conjugate (:a -> :a)))
+
+  (define-class (Scale :s :v)
+    "Left scaling action of a scalar `:s` on a value `:v`."
+    (scale (:s * :v -> :v)))
+
+  (define-class ((Ring :r) (AdditiveGroup :m) (Scale :r :m) => Module :r :m)
+    "An `AdditiveGroup` `:m` equipped with a linear scaling action by a `Ring` `:r`.
+
+Laws:
+- Left distributivity: `(scale r (+ x y)) == (+ (scale r x) (scale r y))`
+- Right distributivity: `(scale (+ r s) x) == (+ (scale r x) (scale s x))`
+- Compatibility: `(scale (* r s) x) == (scale r (scale s x))`
+- Identity: `(scale one x) == x`")
+
+  (define-class ((DivisionRing :k) (Module :k :v) => VectorSpace :k :v)
+    "A left module over an exact division ring. A vector type may be a
+vector space over several scalar types, as with complex and real scalars.")
+
+  (define-instance ((DivisionRing :k) (Module :k :v) => VectorSpace :k :v))
+
+  (define-class ((ConjugateRing :k) (Module :k :v) => HermitianForm :k :v)
+    "A Hermitian form on a left module, linear in the second argument. In
+coordinates the standard form is $\\langle x,y\\rangle=\\sum_i y_i\\bar{x}_i$;
+the order of multiplication matters over a noncommutative scalar ring.
+
+Laws:
+- Conjugate symmetry: `(inner-product x y) == (conjugate (inner-product y x))`
+- Linearity in second argument: `(inner-product x (+ (scale c y) z)) == (+ (* c (inner-product x y)) (inner-product x z))`
+- Conjugate linearity in first argument: `(inner-product (scale c x) y) == (* (inner-product x y) (conjugate c))`"
+    (inner-product (:v * :v -> :k)))
+
+  (define-class ((VectorSpace :k :v) (HermitianForm :k :v) => InnerSpace :k :v)
+    "A vector space with a nondegenerate Hermitian form: if
+$\\langle x,y\\rangle=0$ for every $y$, then $x=0$. This is weaker than
+anisotropy: a nonzero vector can be orthogonal to itself.")
+
   (define-class (Transfinite :a)
-    "Numeric type with a value for (positive) infinity and/or NaN."
+    "Types with a representation of positive infinity and finiteness predicates.
+
+For types with `AdditiveGroup :a`, `negative-infinity` is `(neg infinity)`. For types without indeterminate values, `(finite? x)` is `(not (infinite? x))`; for types that also implement `IEEEFloat`, `(finite? nan)` is `False`."
     (infinity :a)
     (infinite? (:a -> Boolean))
+    (finite? (:a -> Boolean)))
+
+  (define-class (Transfinite :a => IEEEFloat :a)
+    "Floating-point types supporting an IEEE 754 indeterminate Not-a-Number (`nan`) value.
+
+`F32`, `F64` and `BigFloat` retain IEEE equality (a NaN is unequal to everything, including itself). Their sorting order `<=>` places all NaNs before every non-NaN and returns `EQ` between two NaNs. Ordered predicates, `min` and `max` use that sorting order, not IEEE unordered comparison.
+
+Laws:
+- `(nan? nan) == True`
+- `(finite? nan) == False`
+- `(infinite? nan) == False`"
     (nan :a)
     (nan? (:a -> Boolean)))
 
-  (declare finite? ((Transfinite :a) => :a -> Boolean))
-  (define (finite? x)
-    "Neither infinite or NaN."
-    (not (or (infinite? x) (nan? x))))
-
-  (declare negative-infinity ((Transfinite :a) (Num :a) => :a))
+  (declare negative-infinity ((Transfinite :a) (AdditiveGroup :a) => :a))
   (define negative-infinity
-    (negate infinity))
+    (neg infinity))
 
   (define-instance (Transfinite F32)
     (define infinity
       (coalton++:unsafe
         (lisp (-> F32) ()
           float-features:single-float-positive-infinity)))
+    (inline)
+    (define (infinite? x)
+      (coalton++:unsafe
+        (Lisp (-> Boolean) (x)
+          (float-features:float-infinity-p x))))
+    (inline)
+    (define (finite? x)
+      (not (or (infinite? x) (nan? x)))))
+
+  (define-instance (IEEEFloat F32)
     (define nan
       (coalton++:unsafe
         (lisp (-> F32) ()
@@ -119,18 +220,23 @@ The function `general/` is partial, and will error produce a run-time error if t
           #+(not allegro)
           (float-features:float-NaN-p x)
           #+allegro
-          (cl:and (float-features:float-NaN-p x) cl:t))))
-    (inline)
-    (define (infinite? x)
-      (coalton++:unsafe
-        (Lisp (-> Boolean) (x)
-          (float-features:float-infinity-p x)))))
+          (cl:and (float-features:float-NaN-p x) cl:t)))))
 
   (define-instance (Transfinite F64)
     (define infinity
       (coalton++:unsafe
         (lisp (-> F64) ()
           float-features:double-float-positive-infinity)))
+    (inline)
+    (define (infinite? x)
+      (coalton++:unsafe
+        (Lisp (-> Boolean) (x)
+          (float-features:float-infinity-p x))))
+    (inline)
+    (define (finite? x)
+      (not (or (infinite? x) (nan? x)))))
+
+  (define-instance (IEEEFloat F64)
     (define nan
       (coalton++:unsafe
         (lisp (-> F64) ()
@@ -142,35 +248,24 @@ The function `general/` is partial, and will error produce a run-time error if t
           #+(not allegro)
           (float-features:float-NaN-p x)
           #+allegro
-          (cl:and (float-features:float-NaN-p x) cl:t))))
-    (inline)
-    (define (infinite? x)
-      (coalton++:unsafe
-        (Lisp (-> Boolean) (x)
-          (float-features:float-infinity-p x)))))
+          (cl:and (float-features:float-NaN-p x) cl:t)))))
 
   (inline)
-  (declare negate (Num :a => :a -> :a))
-  (define (negate x)
-    "The negation, or additive inverse, of `x`."
-    (- 0 x))
-
-  (inline)
-  (declare abs ((Ord :a) (Num :a) => :a -> :a))
+  (declare abs ((Ord :a) (AdditiveGroup :a) => :a -> :a))
   (define (abs x)
     "Absolute value of `x`."
-    (if (< x 0)
-        (negate x)
+    (if (< x zero)
+        (neg x)
         x))
 
   (inline)
-  (declare sign ((Ord :a) (Num :a) (Num :b) => :a -> :b))
+  (declare sign ((Ord :a) (Additive :a) (AdditiveGroup :b) (Multiplicative :b) => :a -> :b))
   (define (sign x)
-    "The sign of `x`, where `(sign 0) = 0`."
+    "The sign of `x`, where `(sign zero) == zero`."
     (cond
-      ((positive? x) 1)
-      ((negative? x) -1)
-      (True 0)))
+      ((positive? x) one)
+      ((negative? x) (neg one))
+      (True zero)))
 
   (inline)
   (declare ash (Integer * Integer -> Integer))
@@ -180,52 +275,52 @@ The function `general/` is partial, and will error produce a run-time error if t
       (lisp (-> Integer) (x n) (cl:ash x n))))
 
   (inline)
-  (declare 1+ ((Num :num) => :num -> :num))
+  (declare 1+ ((HasAdd :num) (Multiplicative :num) => :num -> :num))
   (define (1+ num)
     "Increment `num`."
-    (+ num 1))
+    (+ num one))
 
   (inline)
-  (declare 1- ((Num :num) => :num -> :num))
+  (declare 1- ((AdditiveGroup :num) (Multiplicative :num) => :num -> :num))
   (define (1- num)
     "Decrement `num`."
-    (- num 1))
+    (- num one))
 
   (inline)
-  (declare positive? ((Num :a) (Ord :a) => :a -> Boolean))
+  (declare positive? ((Additive :a) (Ord :a) => :a -> Boolean))
   (define (positive? x)
     "Is `x` positive?"
-    (> x 0))
+    (> x zero))
 
   (inline)
-  (declare negative? ((Num :a) (Ord :a) => :a -> Boolean))
+  (declare negative? ((Additive :a) (Ord :a) => :a -> Boolean))
   (define (negative? x)
     "Is `x` negative?"
-    (< x 0))
+    (< x zero))
 
   (inline)
-  (declare nonpositive? ((Num :a) (Ord :a) => :a -> Boolean))
+  (declare nonpositive? ((Additive :a) (Ord :a) => :a -> Boolean))
   (define (nonpositive? x)
     "Is `x` not positive?"
-    (<= x 0))
+    (<= x zero))
 
   (inline)
-  (declare nonnegative? ((Num :a) (Ord :a) => :a -> Boolean))
+  (declare nonnegative? ((Additive :a) (Ord :a) => :a -> Boolean))
   (define (nonnegative? x)
     "Is `x` not negative?"
-    (>= x 0))
+    (>= x zero))
 
   (inline)
-  (declare zero? (Num :a => :a -> Boolean))
+  (declare zero? ((Eq :a) (Additive :a) => :a -> Boolean))
   (define (zero? x)
     "Is `x` zero?"
-    (== x 0))
+    (== x zero))
 
   (inline)
-  (declare nonzero? (Num :a => :a -> Boolean))
+  (declare nonzero? ((Eq :a) (Additive :a) => :a -> Boolean))
   (define (nonzero? x)
     "Is `x` not zero?"
-    (/= x 0)))
+    (/= x zero)))
 
 (cl:defmacro %define-sign-native (type)
   (cl:let ((sign-spec (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-SIGN"))))
@@ -268,11 +363,7 @@ The function `general/` is partial, and will error produce a run-time error if t
 (%define-sign-native F64)
 
 (%define-abs-native Integer)
-(%define-abs-native I8)
-(%define-abs-native I16)
-(%define-abs-native I32)
-(%define-abs-native I64)
-(%define-abs-native IFix)
+;; `abs` on signed fixed-width types must use checked `neg` at the minimum.
 (%define-abs-native U8)
 (%define-abs-native U16)
 (%define-abs-native U32)

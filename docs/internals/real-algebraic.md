@@ -1,6 +1,6 @@
 # Certified real algebraic arithmetic
 
-`coalton/xmath/realalgebraic` represents an exact real root, rather than a
+`coalton/xmath/real-algebraic` represents an exact real root, rather than a
 floating-point approximation. Its public constructors and numeric instances
 remain unchanged. Coefficients are in descending degree order.
 
@@ -140,7 +140,7 @@ minimal defining polynomials.
 
 ## Regression tests and reproducible measurements
 
-`tests/realalgebraic-tests.ct` includes wrong-conjugate regressions, open Sturm
+`tests/real-algebraic-tests.ct` includes wrong-conjugate regressions, open Sturm
 endpoint counts, zero-factor division and rational recognition, integer and
 decimal boundary cases, deterministic rational and polynomial oracles, degree
 bounds, shared-generator inversions on reducible polynomials, and a 101st root.
@@ -155,8 +155,8 @@ To run the benchmark after making this checkout available to ASDF:
 
 ```lisp
 (ql:quickload :coalton/xmath)
-(load "scripts/benchmark-realalgebraic.lisp")
-(realalgebraic-benchmark:run :iterations 1000 :warmup 3)
+(load "scripts/benchmark-real-algebraic.lisp")
+(real-algebraic-benchmark:run :iterations 1000 :warmup 3)
 ```
 
 Development and release builds must use separate ASDF output caches. For an old

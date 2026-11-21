@@ -12,7 +12,9 @@
    #:coalton/math/arith
    #:Reciprocable #:/
    #:Fraction
+   #:recip
    #:reciprocal
+   #:neg
    #:negate
    #:abs
    #:1+
@@ -23,8 +25,10 @@
    #:nonzero?)
   (:export
    #:Reciprocable #:/
+   #:recip
    #:reciprocal
    #:Fraction
+   #:neg
    #:negate
    #:abs
    #:1+
@@ -36,17 +40,21 @@
 
   (:import-from
    #:coalton/math/real
+   #:Quantizable
    #:floor
    #:ceiling
+   #:truncate
    #:round
-   #:Real
-   #:Rational)
+   #:Approximable
+   #:approx)
   (:export
+   #:Quantizable
    #:floor
    #:ceiling
+   #:truncate
    #:round
-   #:Real
-   #:Rational)
+   #:Approximable
+   #:approx)
 
   (:import-from
    #:coalton/math/elementary

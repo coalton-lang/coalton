@@ -804,11 +804,11 @@
       (define-type (Dual :a) (Dual :a :a))
       (define (primal-part (Dual x _)) x)
       (define (dual-part (Dual _ dx)) dx)
-      (define-instance (Num :a => Num (Dual :a))
+      (define-num (Num :a => Dual :a)
         (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
         (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
         (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-        (define (fromInt n) (Dual (fromInt n) (fromInt 0))))
+        (define (from-int n) (Dual (from-int n) (from-int 0))))
 
       (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
       (define (differentiate f)
@@ -832,7 +832,7 @@
 
       (declare make-scaler (Integer -> (forall (:a) (Num :a => (:a -> :a)))))
       (define (make-scaler k)
-        (fn (x) (* (fromInt k) x)))
+        (fn (x) (* (from-int k) x)))
 
       (declare rank3 ((((forall (:a) (:a -> :a)) -> Tuple Integer String) -> Tuple Integer String)))
       (define (rank3 k)
@@ -853,7 +853,7 @@
       (define (vd f) (Tuple (f) (f)))
 
       (declare three (Num :a => Void -> :a))
-      (define (three) (fromInt 3))
+      (define (three) (from-int 3))
 
       ;; Monomorphize on a Rank-2 function with an outer Num :b constraint
       (monomorphize)
@@ -924,9 +924,9 @@
     (is (= 11 (codegen-test-eval "(gg (the Integer 10))")))
     (is (= 6 (codegen-test-eval "(apply3 scale-it)")))
     (is (= 30 (codegen-test-eval "(apply3-scaled scale-it)")))
-    (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd (fn () (fromInt 3))))")))
+    (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd (fn () (from-int 3))))")))
     (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd three))")))
-    (is (= 3 (codegen-test-eval "((the (forall (:a) (Num :a => (Void -> :a))) (fn () (fromInt 3))))")))
+    (is (= 3 (codegen-test-eval "((the (forall (:a) (Num :a => (Void -> :a))) (fn () (from-int 3))))")))
     (is (= 6.0f0 (codegen-test-eval "(call-diff-at-f32 3.0f0)")))
     (is (= (if coalton-impl/settings:*coalton-disable-specialization*
                6.0f0

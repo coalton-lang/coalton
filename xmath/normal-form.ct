@@ -1,0 +1,135 @@
+(coalton/utils:defstdlib-package #:coalton/xmath/normal-form
+  (:documentation "Exact row Hermite and Smith normal forms, with unimodular change-of-basis matrices.")
+  (:use #:coalton #:coalton-prelude #:coalton/math/integral)
+  (:local-nicknames (#:mat #:coalton/xmath/matrix)
+                    (#:w #:coalton/xmath/internal/matrix-workspace)
+                    (#:list #:coalton/list))
+  (:export #:hermite-normal-form #:smith-normal-form))
+
+(in-package #:coalton/xmath/normal-form)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (declare %pivot-row ((Eq :a) (Additive :a) => w:Grid :a * UFix * UFix -> Optional UFix))
+  (define (%pivot-row a start col)
+    (for ((i start (1+ i))) :while (< i (w:.height a))
+      (when (nonzero? (w:at a i col))
+        (return (Some i))))
+    None)
+
+  (declare %swap! (w:Grid :a * w:Grid :a * UFix * UFix -> Void))
+  (define (%swap! a u i k)
+    (w:swap-rows! a i k)
+    (w:swap-rows! u i k))
+
+  (declare %add! (Semiring :a => w:Grid :a * w:Grid :a * UFix * UFix * :a -> Void))
+  (define (%add! a u dst src c)
+    (w:add-row! a dst src c)
+    (w:add-row! u dst src c))
+
+  (declare %clear-below! ((Eq :a) (EuclideanDomain :a) =>
+                          w:Grid :a * w:Grid :a * UFix * UFix -> Void))
+  (define (%clear-below! a u k j)
+    ;; Apply the Euclidean algorithm to a pair of rows. A nonzero remainder
+    ;; becomes the next pivot, of strictly smaller Euclidean degree.
+    (for ((i (1+ k) (1+ i))) :while (< i (w:.height a))
+      (for () :while (nonzero? (w:at a i j))
+        (let (values q r) = (quotrem (w:at a i j) (w:at a k j)))
+        (unless (zero? q)
+          (%add! a u i k (neg q)))
+        (unless (zero? r)
+          (%swap! a u i k)))))
+
+  (declare %normalize! ((Eq :a) (EuclideanDomain :a) =>
+                        w:Grid :a * w:Grid :a * UFix * UFix -> Void))
+  (define (%normalize! a u i j)
+    (let unit = (unit-part (w:at a i j)))
+    (unless (== unit one)
+      (let inverse = (quot one unit))
+      (w:scale-row! a i inverse)
+      (w:scale-row! u i inverse)))
+
+  (declare %residue-quotient ((Eq :a) (EuclideanDomain :a) => :a * :a -> :a))
+  (define (%residue-quotient x pivot)
+    ;; Pick rem(pivot + rem(x,pivot), pivot). For positive integer pivots
+    ;; this corrects truncation to floor; for polynomials it preserves rem.
+    (let (values q r) = (quotrem x pivot))
+    (if (zero? r) q (+ q (- (quot (+ pivot r) pivot) one))))
+
+  (declare hermite-normal-form
+    ((Eq :a) (EuclideanDomain :a) => mat:Matrix :a &key (:quotient (:a * :a -> :a))
+     -> mat:Matrix :a * mat:Matrix :a * List UFix))
+  (define (hermite-normal-form input &key (quotient %residue-quotient))
+    "Return `(values H U pivot-columns)` for the **row** Hermite form $H=UA$ of a sized matrix $A$. The square $U$ is unimodular. Pivots are normalized associates in strictly increasing, zero-indexed columns; zero rows come last. The nonzero rows generate the original row module.
+
+Above a pivot $p$, the representative of $x$ is $x-qp$. The default `:quotient` gives $0\\le x-qp<p$ over the integers and the degree-reduced remainder over field polynomials. For other Euclidean domains, supply a quotient selecting a unique representative of each residue class to obtain a canonical form."
+    (let a = (w:copy-matrix input))
+    (let u = (w:identity-grid (w:.height a)))
+    (let pivots =
+      (rec echelon ((k 0) (j 0) (pivots Nil))
+        (cond
+          ((or (== k (w:.height a)) (== j (w:.width a)))
+           (list:reverse pivots))
+          (True
+           (match (%pivot-row a k j)
+             ((None) (echelon k (1+ j) pivots))
+             ((Some i)
+              (%swap! a u k i)
+              (%clear-below! a u k j)
+              (%normalize! a u k j)
+              (for ((i 0 (1+ i))) :while (< i k)
+                (let q = (quotient (w:at a i j) (w:at a k j)))
+                (unless (zero? q)
+                  (%add! a u i k (neg q))))
+              (echelon (1+ k) (1+ j) (Cons j pivots))))))))
+    (values (w:freeze a) (w:freeze u) pivots))
+
+  (declare %find-entry (w:Grid :a * UFix * (:a -> Boolean) -> Optional (Tuple UFix UFix)))
+  (define (%find-entry a start pred)
+    (for ((i start (1+ i))) :while (< i (w:.height a))
+      (for ((j start (1+ j))) :while (< j (w:.width a))
+        (when (pred (w:at a i j))
+          (return (Some (Tuple i j))))))
+    None)
+
+  (declare %smith-pivot! ((Eq :a) (EuclideanDomain :a) =>
+                          w:Grid :a * w:Grid :a * w:Grid :a * w:Grid :a * UFix -> Void))
+  (define (%smith-pivot! a u at vt k)
+    (for ()
+      (%clear-below! a u k k)
+      (%clear-below! at vt k k)
+      ;; A column swap in the second sweep can reintroduce entries below
+      ;; the pivot. Only accept it once it divides the whole trailing block.
+      (match (%pivot-row a (1+ k) k)
+        ((Some _) (continue))
+        ((None)
+         (let pivot = (w:at a k k))
+         (match (%find-entry a (1+ k) (fn (x) (nonzero? (rem x pivot))))
+           ((None) (break))
+           ((Some (Tuple i _))
+            ;; Expose a nondivisible entry to Euclidean reduction.
+            (%add! a u k i one))))))
+    (%normalize! a u k k))
+
+  (declare smith-normal-form
+    ((Eq :a) (EuclideanDomain :a) => mat:Matrix :a
+     -> mat:Matrix :a * mat:Matrix :a * mat:Matrix :a * List :a))
+  (define (smith-normal-form input)
+    "Return `(values D U V factors)` with $D=UAV$ diagonal of the same size as $A$. Both $U$ and $V$ are unimodular; `factors` lists the nonzero normalized diagonal entries $d_1\\mid\\cdots\\mid d_r$. The last $n-r$ columns of $V$ form a basis for the right kernel, and the first $r$ columns of $AV$ form a basis for the image over the original domain, not merely its fraction field."
+    (let a = (w:copy-matrix input))
+    (let u = (w:identity-grid (w:.height a)))
+    (let v = (w:identity-grid (w:.width a)))
+    (let at = (w:transpose-view a))
+    (let vt = (w:transpose-view v))
+    (let factors =
+      (rec diagonalize ((k 0) (factors Nil))
+        (match (%find-entry a k nonzero?)
+          ((None) (list:reverse factors))
+          ((Some (Tuple i j))
+           (%swap! a u k i)
+           (%swap! at vt k j)
+           (%smith-pivot! a u at vt k)
+           (diagonalize (1+ k) (Cons (w:at a k k) factors))))))
+    (values (w:freeze a) (w:freeze u) (w:freeze v) factors)))
