@@ -13,10 +13,24 @@
     (things (vector:Vector (DerivingThing :a)))))
 
 (coalton-toplevel
-  (derive Eq)
+  (derive Eq Ord)
   (define-type (DeriveTree :t)
     DeriveLeaf
-    (DeriveNode :t (DeriveTree :t) (DeriveTree :t))))
+    (DeriveNode :t (DeriveTree :t) (DeriveTree :t))
+    (DeriveBud :t)))
+
+(coalton-toplevel
+  (derive Eq Ord)
+  (define-struct (DeriveOrdPair :a)
+    (major Integer)
+    (minor :a))
+
+  (derive Eq)
+  (define-type Uncompared Uncompared)
+
+  (define-instance (Ord Uncompared)
+    (define (<=> _ _)
+      (error "Derived Ord compared a field after the ordering was decided."))))
 
 (coalton-toplevel
   (derive Eq Hash)
@@ -59,6 +73,23 @@
           (default)))
   (is (== (DFoo 0) (default)))
   (is (== DUnit (default))))
+
+(define-test derive-ord-constructors-test ()
+  (let leaf = (the (DeriveTree Integer) DeriveLeaf))
+  (let node = (DeriveNode 9 leaf leaf))
+  (let bud = (DeriveBud 1))
+  (is (== EQ (<=> leaf leaf)))
+  (is (== LT (<=> leaf node)))
+  (is (== LT (<=> node bud)))
+  (is (== GT (<=> bud node)))
+  (is (== GT (<=> bud leaf)))
+  (is (== GT (<=> (DeriveNode 0 node leaf) (DeriveNode 0 leaf bud)))))
+
+(define-test derive-ord-struct-test ()
+  (is (== LT (<=> (DeriveOrdPair 1 Uncompared) (DeriveOrdPair 2 Uncompared))))
+  (is (== GT (<=> (DeriveOrdPair 2 Uncompared) (DeriveOrdPair 1 Uncompared))))
+  (is (== LT (<=> (DeriveOrdPair 1 "a") (DeriveOrdPair 1 "b"))))
+  (is (== EQ (<=> (DeriveOrdPair 1 "a") (DeriveOrdPair 1 "a")))))
 
 (define-test derive-recursive-test ()
   "Ensure deriving works for single recursive types."
@@ -114,3 +145,17 @@
       (define-type NotEqAble (NotEqAbleThing UnEqAble))
       (define (definitely-not-eqable-2)
         (== (NotEqAbleThing UnEqAbleThing) (NotEqAbleThing UnEqAbleThing)))")))
+
+(deftest derive-ord-requires-instances-test ()
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(derive Ord)
+      (define-type MissingEq MissingEq)"))
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(derive Eq)
+      (define-type EqOnly EqOnly)
+      (derive Eq Ord)
+      (define-type (OrdBox :a) (OrdBox :a))
+      (define (compare-eq-only)
+        (<=> (OrdBox EqOnly) (OrdBox EqOnly)))")))

@@ -29,7 +29,7 @@ weight: 70
 - Each field `(f τ)` makes the field accessor `.f` available as a first-class unary function of type `(⟨struct-type⟩ -> τ)`.
 - Multiple struct types may define fields with the same name. Coalton resolves `.f` using the inferred type of the argument (or expected function type) and signals `"Ambiguous accessor"` if the struct type cannot be determined.
 - Struct values can also be destructured positionally in [`match`](/manual/operators/match/), [`let`](/manual/operators/let/), and function parameters using the pattern `(⟨struct-name⟩ p1 ... pn)`.
-- `define-struct` supports [`derive`](/manual/operators/derive/) (`Eq`, `Hash`, `Default`, `Show`) and `(repr :transparent)` (valid only when the struct has a single field). No other [`repr`](/manual/operators/repr/) modes are allowed on structs.
+- `define-struct` supports [`derive`](/manual/operators/derive/) (`Eq`, `Ord`, `Hash`, `Default`, `Show`) and `(repr :transparent)` (valid only when the struct has a single field). No other [`repr`](/manual/operators/repr/) modes are allowed on structs.
 
 ## Examples
 
