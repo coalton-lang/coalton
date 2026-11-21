@@ -63,6 +63,11 @@
        (mconcat (map XValue (make-list 1 2 3)))
        (X<> (XValue 1) (X<> (XValue 2) (XValue 3))))))
     
+(define-test test-tuple-ordering ()
+  (is (< (the (Tuple3 UFix UFix UFix) (Tuple3 1 9 9)) (Tuple3 2 0 0)))
+  (is (> (Tuple4 "a" True #\z False) (Tuple4 "a" True #\a True)))
+  (is (< (Tuple5 "a" "b" "c" "d" False) (Tuple5 "a" "b" "c" "d" True))))
+
 (define-test test-bifunctor ()
   (let ((orig (the (Result String String) (Ok "hi"))))
     (is (== (bimap id id orig)
