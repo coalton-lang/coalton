@@ -235,7 +235,7 @@
 `handle` expression can match."
   (declare (type catch-branch branch)
            (type tc:environment env))
-  (let ((pattern (catch-branch-pattern branch))
+  (let ((pattern (unwrap-pattern-binding (catch-branch-pattern branch)))
         (exception-type (catch-branch-exception-type branch)))
     (cond
       ;; `(the T pat)` branches catch the runtime type of T.

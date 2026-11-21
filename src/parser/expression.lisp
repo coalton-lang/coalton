@@ -2538,14 +2538,15 @@ operator of the enclosing form, used in error messages."
            :body (parse-body (cst:rest form) form source)
            :location (form-location source form)))))
 
-    (let ((pattern (parse-pattern (cst:first form) source)))
-      (when (pattern-var-p pattern)
+    (let* ((pattern (parse-pattern (cst:first form) source))
+           (inner-pattern (unwrap-pattern-binding pattern)))
+      (when (pattern-var-p inner-pattern)
         (parse-error
          message
          (note source (cst:first form)
                "use (the <exception-type> var) to bind a caught exception")))
 
-      (unless (typep pattern '(or pattern-constructor pattern-wildcard))
+      (unless (typep inner-pattern '(or pattern-constructor pattern-wildcard))
         (parse-error
          message
          (note source (cst:first form)
@@ -2574,8 +2575,9 @@ operator of the enclosing form, used in error messages."
     (parse-error "Malformed resumable branch"
                  (note-end source (cst:first form) "expected body")))
 
-  (let ((pattern (parse-pattern (cst:first form) source)))
-    (unless (typep pattern 'pattern-constructor)
+  (let* ((pattern (parse-pattern (cst:first form) source))
+         (inner-pattern (unwrap-pattern-binding pattern)))
+    (unless (typep inner-pattern 'pattern-constructor)
       (parse-error "Malformed resumable branch"
                    (note
                     source

@@ -620,3 +620,79 @@
              (catch (throw e)
                ((the exception:LispError _) "rethrown"))))
         (_ False))))
+
+;;;
+;;; Pattern aliasing in catch, handle, and resumable
+;;;
+
+(coalton-toplevel
+  (declare catch-and-release ((coalton/cell:Cell UFix) * (Void -> Void) -> Void))
+  (define (catch-and-release log thunk)
+    (catch (thunk)
+      ((= e _)
+       (coalton/cell:increment! log)
+       (throw e)))))
+
+(define-test test-catch-alias-patterns ()
+  ;; Issue #2039: aliasing a wildcard binds the caught error as LispError
+  ;; and rethrows the same condition instance.
+  (let count = (cell:new 0))
+  (let failure = (make-widget-failure 19))
+  (is (catch (the Boolean (progn
+                            (catch-and-release count (fn () (throw failure)))
+                            False))
+        ((the WidgetFailure caught)
+         (and (== 1 (cell:read count))
+              (lisp (-> Boolean) (caught failure)
+                (cl:eq caught failure))))))
+  ;; Wildcard aliases have type exception:LispError, so exception:message
+  ;; and exception:cast can inspect them directly.
+  (is (== "boom"
+          (catch (the String (error "boom"))
+            ((= e _) (exception:message e)))))
+  (is (== 11
+          (catch (the UFix (throw (Retry 11)))
+            ((= e1 (= e2 _))
+             (match (the (Optional Retry) (exception:cast e1))
+               ((Some r)
+                (if (lisp (-> Boolean) (e1 e2) (cl:eq e1 e2))
+                    (retry-number r)
+                    0))
+               ((None) 0))))))
+  ;; Aliasing an exception constructor tests field subpatterns before
+  ;; unwinding and binds both the condition and its fields.
+  (let original = (DeadlyEgg Xenomorph))
+  (is (catch (the Boolean
+                  (catch (the Boolean (throw original))
+                    ((= _e (DeadlyEgg (Goose _ _)))
+                     False)
+                    ((= e (DeadlyEgg (Xenomorph)))
+                     (throw e))))
+        ((= caught (DeadlyEgg (Xenomorph)))
+         (lisp (-> Boolean) (caught original)
+           (cl:eq caught original)))))
+  ;; Non-matching constructor aliases do not unwind before outer handlers.
+  (is (match (handle (resumable
+                         (catch (throw (DeadlyEgg (Goose False False)))
+                           ((= e (DeadlyEgg (Xenomorph)))
+                            (throw e)))
+                       ((ServeRaw (Goose (False) (False)))
+                        (Goose True True)))
+               ((= e (DeadlyEgg egg))
+                (match e
+                  ((DeadlyEgg _) (resume-to (ServeRaw egg)))
+                  ((UnCracked _) (Goose False False))))
+               ((= e _)
+                (throw e)))
+        ((Goose (True) (True)) True)
+        (_ False)))
+  ;; Aliasing a resumption constructor binds the resumption value and its fields.
+  (is (match (resumable
+                 (handle (throw (DeadlyEgg (Goose True False)))
+                   ((= _e _) (resume-to (ServeRaw (Goose True False)))))
+               ((= r (ServeRaw egg))
+                (match r
+                  ((ServeRaw _) egg))))
+        ((Goose (True) (False)) True)
+        (_ False))))
+

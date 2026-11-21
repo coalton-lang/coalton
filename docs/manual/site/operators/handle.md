@@ -13,9 +13,11 @@ weight: 267
 (handle ⟨expr⟩
   ⟨handle-branch⟩+)
 
-;; ⟨handle-branch⟩ := ((⟨exception-ctor⟩ ⟨pattern⟩*) ⟨body-element⟩* ⟨expr⟩)
-;;                  | ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨body-element⟩* ⟨expr⟩)
-;;                  | (_ ⟨body-element⟩* ⟨expr⟩)
+;; ⟨handle-branch⟩ := (⟨catch-pattern⟩ ⟨body-element⟩* ⟨expr⟩)
+;; ⟨catch-pattern⟩ := (⟨exception-ctor⟩ ⟨pattern⟩*)
+;;                  | (the ⟨exception-type⟩ ⟨var-or-_⟩)
+;;                  | _
+;;                  | (= ⟨var⟩ ⟨catch-pattern⟩)
 ```
 
 ## Semantics

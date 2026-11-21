@@ -164,3 +164,77 @@ error: Invalid catch type
    |
  5 |      ((the (List :a) _) x)))
    |            ^^^^^^^^^ the caught type cannot contain type variables
+
+================================================================================
+109 Catch branch aliasing a variable
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((= e x) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:5
+   |
+ 5 |      ((= e x) Unit))
+   |       ^^^^^^^ use (the <exception-type> var) to bind a caught exception
+
+================================================================================
+110 Catch branch aliasing a literal
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((= e 1) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:5
+   |
+ 5 |      ((= e 1) Unit))
+   |       ^^^^^^^ branch must be an exception constructor pattern, (the <exception-type> var), or a wildcard.
+
+================================================================================
+111 Catch branch aliasing a non-exception constructor
+================================================================================
+
+(package test-package)
+
+(define (f x)
+  (catch x
+    ((= e (Some y)) y)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid catch case
+  --> test:5:5
+   |
+ 5 |      ((= e (Some y)) y)))
+   |       ^^^^^^^^^^^^^^ Catch branch pattern must be an exception constructor pattern or a wildcard.
+
+================================================================================
+112 Catch branch with valid wildcard and constructor aliases
+================================================================================
+
+(package test-package)
+
+(define-exception BadEgg
+  (DeadlyEgg Integer))
+
+(declare catch-and-release ((Void -> Void) -> Void))
+(define (catch-and-release thunk)
+  (catch (thunk)
+    ((= e (DeadlyEgg _))
+     (throw e))
+    ((= e _)
+     (throw e))))
+
