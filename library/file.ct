@@ -151,8 +151,8 @@ trailing slash.")
 
 (coalton-toplevel
 
-  (define-type FileError
-    "Errors for file functions."
+  (define-exception FileError
+    "File functions return these errors in `Err`. Use `coalton/result:ok-or-throw` to throw a returned error instead."
     (FileError String)
     (PathError String Pathname)
     (LispError exception:LispError)
