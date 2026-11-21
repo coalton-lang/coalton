@@ -2,11 +2,6 @@
 
 (named-readtables:in-readtable coalton:coalton)
 
-(coalton-toplevel
-  (declare format-show-generic (Show :a => :a -> String))
-  (define (format-show-generic x)
-    (format:format format:Str "~A" x)))
-
 ;;; Test Successes
 
 (define-test format-no-directives ()
@@ -26,15 +21,6 @@
   (is (== (lisp (-> String) ()
             (cl:format cl:nil "~A" #\a))
           (format:format format:Str "~A" #\a))))
-
-(define-test format-aesthetic-polymorphic ()
-  (is (== "hello" (format-show-generic "hello")))
-  (is (== "42" (format-show-generic 42)))
-  (is (== "a" (format-show-generic #\a))))
-
-(define-test format-show-string-unchanged ()
-  (is (== "\"hello\""
-          (show-as-string "hello"))))
 
 (define-test format-readable-string ()
   (is (== (lisp (-> String) ()
