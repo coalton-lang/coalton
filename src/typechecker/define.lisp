@@ -1165,6 +1165,14 @@ Returns four values:
                          (entry   (tc:lookup-type (tc-env-env env) ty-name)))
     (tc:type-entry-resumption-p entry)))
 
+(defun lisp-error-type (env)
+  "Return the standard library's `LispError` type, or NIL if it is not yet defined."
+  (declare (type tc-env env)
+           (values (or null tc:ty) &optional))
+  (alexandria:when-let* ((name (lisp-error-type-name))
+                         (entry (tc:lookup-type (tc-env-env env) name :no-error t)))
+    (tc:type-entry-type entry)))
+
 (defun parse-catch-exception-type (type name env)
   "Parse TYPE, the type in a `((the TYPE pat) ...)` branch of a `catch` or
 `handle` expression, and ensure that it denotes an exception type. NAME is
@@ -2952,10 +2960,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    :for branch :in (parser:node-catch-branches node)
                    :for exception-type :in exception-types
                    :for pattern := (parser:node-catch-branch-pattern branch)
+                   :for wildcard-p := (typep (parser:unwrap-pattern-binding pattern)
+                                             'parser:pattern-wildcard)
                    :for (pat-ty pat-node subs_)
                      := (multiple-value-list
                          (infer-pattern-type pattern
-                                             (or exception-type (tc:make-variable))
+                                             (or exception-type
+                                                 (and wildcard-p (lisp-error-type env))
+                                                 (tc:make-variable))
                                              subs
                                              env))
                    :unless (or exception-type
@@ -4249,6 +4261,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
          pat-ty
          (make-pattern-binding
           :type (tc:qualify nil pat-ty)
+          :location (source:location pat)
           :var var
           :pattern bound)
          subs))))

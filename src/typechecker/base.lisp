@@ -24,6 +24,7 @@
    #:check-package                      ; FUNCTION
    #:exception-class-name               ; FUNCTION
    #:resumption-class-name              ; FUNCTION
+   #:lisp-error-type-name               ; FUNCTION
    #:with-pprint-variable-scope         ; MACRO
    #:with-pprint-variable-context       ; MACRO
    ))
@@ -47,6 +48,13 @@ if the package defining it does not exist yet."
   (let ((package (find-package "COALTON/CLASSES")))
     (and package
          (values (find-symbol "RESUMPTION" package)))))
+
+(defun lisp-error-type-name ()
+  "Return the symbol naming the standard library's `LispError` exception type,
+or NIL if the package defining it does not exist yet."
+  (let ((package (find-package "COALTON/EXCEPTION")))
+    (and package
+         (values (find-symbol "LISPERROR" package)))))
 
 ;;;
 ;;; Pretty printer control

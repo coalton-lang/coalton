@@ -70,3 +70,23 @@ error: Invalid handle type
    |
  5 |      ((the Integer e) e)))
    |            ^^^^^^^ type 'Integer' is not an exception type
+
+================================================================================
+104 Handle branch aliasing a variable
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (handle (g)
+    ((= e x) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed handle branch
+  --> test:5:5
+   |
+ 5 |      ((= e x) Unit))
+   |       ^^^^^^^ use (the <exception-type> var) to bind a caught exception
+

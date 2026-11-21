@@ -13,18 +13,21 @@ weight: 265
 (catch ⟨expr⟩
   ⟨catch-branch⟩+)
 
-;; ⟨catch-branch⟩ := ((⟨exception-ctor⟩ ⟨pattern⟩*) ⟨body-element⟩* ⟨expr⟩)
-;;                 | ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨body-element⟩* ⟨expr⟩)
-;;                 | (_ ⟨body-element⟩* ⟨expr⟩)
+;; ⟨catch-branch⟩ := (⟨catch-pattern⟩ ⟨body-element⟩* ⟨expr⟩)
+;; ⟨catch-pattern⟩ := (⟨exception-ctor⟩ ⟨pattern⟩*)
+;;                  | (the ⟨exception-type⟩ ⟨var-or-_⟩)
+;;                  | _
+;;                  | (= ⟨var⟩ ⟨catch-pattern⟩)
 ```
 
 ## Semantics
 
 - If `⟨expr⟩` completes normally without throwing, `catch` returns the value(s) of `⟨expr⟩`.
-- Each `⟨catch-branch⟩` matches one of three pattern forms:
+- Each `⟨catch-branch⟩` matches one of the following pattern forms:
   - `((⟨exception-ctor⟩ ⟨pattern⟩*) ...)`: matches a specific constructor of a Coalton exception type defined with [`define-exception`](/manual/operators/define-exception/) (including nullary constructors written `((MyException) ...)`).
   - `((the ⟨exception-type⟩ ⟨var-or-_⟩) ...)`: matches every exception of `⟨exception-type⟩` and binds the exception value to `⟨var-or-_⟩` (which can be inspected or rethrown with [`throw`](/manual/operators/throw/)). For a `(repr :native ...)` exception, this also matches any Common Lisp condition subtype.
-  - `(_ ...)`: catches every Common Lisp `cl:error`, including all Coalton exceptions and panics. (To bind any `cl:error` to a variable, use `((the coalton/exception:LispError e) ...)`; to catch only panics from `error`, `unwrap`, `unreachable`, and `assert`, use `((the Panic p) ...)`.)
+  - `(_ ...)`: catches every Common Lisp `cl:error`, including all Coalton exceptions and panics. (To catch only panics from `error`, `unwrap`, `unreachable`, and `assert`, use `((the Panic p) ...)`.)
+  - `((= ⟨var⟩ ⟨catch-pattern⟩) ...)`: matches a constructor or wildcard `⟨catch-pattern⟩` and binds the caught exception object to `⟨var⟩` (with type `coalton/exception:LispError` when aliasing `_`).
 - Branch patterns (including subpatterns on constructor fields) are tested in source order at the point where the exception is signaled. If no branch matches, the exception propagates to outer handlers without unwinding the stack.
 - Once a branch matches, the stack unwinds to the `catch` expression (running any intervening [`protect`](/manual/operators/protect/) cleanup forms and restoring dynamic bindings) before the selected branch body executes.
 - In the selected branch:

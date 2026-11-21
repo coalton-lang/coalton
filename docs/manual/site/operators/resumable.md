@@ -18,7 +18,7 @@ weight: 270
 ## Semantics
 
 - If `⟨expr⟩` finishes without invoking a matching resumption, `resumable` returns the value of `⟨expr⟩`.
-- Each branch head `(⟨resumption-ctor⟩ ⟨pattern⟩*)` must be a constructor pattern for a resumption type defined with [`define-resumption`](/manual/operators/define-resumption/) (bare variable or `_` branch heads are not permitted).
+- Each branch head `(⟨resumption-ctor⟩ ⟨pattern⟩*)` (optionally wrapped in an alias pattern `(= ⟨var⟩ ...)`) must match a constructor for a resumption type defined with [`define-resumption`](/manual/operators/define-resumption/) (bare variable or `_` branch heads are not permitted).
 - Multiple branches may match the same resumption constructor with different field subpatterns; patterns on constructor fields are tested in source order before unwinding.
 - If [`resume-to`](/manual/operators/resume-to/) is called with a resumption value that does not match any branch of the inner `resumable`, the value is forwarded to the next enclosing `resumable` handler for that resumption type. If no enclosing `resumable` matches, a runtime error is signaled.
 - Once a branch matches, control unwinds to the `resumable` expression and evaluates the selected branch body (an implicit [`progn`](/manual/operators/progn/)).

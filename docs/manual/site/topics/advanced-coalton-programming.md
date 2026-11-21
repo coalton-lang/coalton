@@ -549,7 +549,7 @@ Because `make-breakfast-for` uses `handle` rather than `catch`, `make-breakfast-
 
 Coalton's exception and resumption system is still evolving. Keep the following caveats in mind:
 
-1. A wildcard `_` branch in `catch` or `handle` catches any Common Lisp `error` condition, but cannot bind it to a variable. To bind a Lisp condition, match `(the T var)` with a native exception type such as `exception:LispError` or a type declared with `(repr :native ...)`. Because Coalton does not have subtyping, a condition caught as `exception:ArithmeticError` must be narrowed with `exception:cast` before being used as a `DivisionByZero`.
+1. A bare variable branch head `(e ...)` in `catch` or `handle` is not permitted because an unparenthesized identifier is ambiguous with a nullary constructor or exception type name. To bind a caught condition, use `(the T var)` with an exception type such as `exception:LispError` or a type declared with `(repr :native ...)`, or alias a wildcard or constructor pattern with `(= var _)` (which binds `var` as `exception:LispError`) or `(= var (Ctor ...))`. Because Coalton does not have subtyping, a condition caught as `exception:ArithmeticError` must be narrowed with `exception:cast` before being used as a `DivisionByZero`.
 2. `resumable` branches must match a concrete resumption constructor pattern; wildcard and type-assertion patterns are not supported there.
 3. Although the `Exception` and `Resumption` classes classify throwable and resumable types, function signatures do not currently track which exceptions or resumptions a function may signal.
 
