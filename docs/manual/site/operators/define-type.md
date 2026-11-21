@@ -28,7 +28,7 @@ weight: 50
 
 - `define-type` is a top-level form valid inside [`coalton-toplevel`](/manual/operators/coalton-toplevel/). Both `⟨type-name⟩` and all `⟨ctor-name⟩` symbols must belong to the current package.
 - A non-parametric type is written as a bare symbol `⟨type-name⟩`; a parametric type is written `(⟨type-name⟩ :a :b ...)` with one or more distinct keyword type variables.
-- Every type variable appearing in a constructor field type must be declared in `⟨type-head⟩`.
+- Every free type variable appearing in a constructor field type must be declared in `⟨type-head⟩` (unless bound locally by an explicit `forall` in that field type).
 - Kinds of type parameters are inferred from their uses in constructor fields (including higher-kinded parameters such as `:f` used as `(:f :a)`). The resulting type constructor produces a type of kind `Type`.
 - Variance of each type parameter is inferred automatically across mutually recursive type definitions. Unused (phantom) type parameters default to covariant; opaque types with zero constructors default to invariant.
 - Each `⟨constructor-spec⟩` defines a constructor in the current package:

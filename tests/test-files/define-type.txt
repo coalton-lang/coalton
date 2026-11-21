@@ -66,6 +66,16 @@
   (T3-dt7 :a :a) "This is a well-nourished constructor")
 
 ================================================================================
+8 Define type with phantom, higher-kinded, and locally quantified variables
+================================================================================
+
+(package coalton-unit-tests/define-type-8)
+
+(define-type (T-dt8 :f :a :phantom)
+  (T1-dt8 (:f :a))
+  (T2-dt8 (forall (:b) (&key (:x :a) -> :b))))
+
+================================================================================
 100 Malformed type definition
 ================================================================================
 
@@ -521,3 +531,64 @@ error: Cannot derive class DEFAULT for type MYKIND.
  5 | |   MyStar
  6 | |   (MyKfun MyKind MyKind))
    | |_________________________^ when deriving class DEFAULT for type MYKIND.
+
+================================================================================
+125 define-type, unknown type variable on non-parametric type
+================================================================================
+
+(package test-package)
+
+(define-type Material
+  (Metal :a)
+  (Lambertian :a))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:4:9
+   |
+ 3 |  (define-type Material
+   |               -------- in this type definition
+ 4 |    (Metal :a)
+   |           ^^ Unknown type variable :A
+
+================================================================================
+126 define-type, unknown type variable in later constructor
+================================================================================
+
+(package test-package)
+
+(define-type (Material :a)
+  (Metal :a)
+  (Lambertian (List (:a -> :b))))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:5:27
+   |
+ 3 |  (define-type (Material :a)
+   |               ------------- in this type definition
+ 4 |    (Metal :a)
+ 5 |    (Lambertian (List (:a -> :b))))
+   |                             ^^ Unknown type variable :B
+
+================================================================================
+127 define-type, unknown type variable inside locally quantified field
+================================================================================
+
+(package test-package)
+
+(define-type Box
+  (Box (forall (:a) (&key (:x :a) -> :b))))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:4:37
+   |
+ 3 |  (define-type Box
+   |               --- in this type definition
+ 4 |    (Box (forall (:a) (&key (:x :a) -> :b))))
+   |                                       ^^ Unknown type variable :B
+

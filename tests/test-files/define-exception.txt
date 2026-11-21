@@ -157,3 +157,23 @@ error: Invalid instance
    |
  6 |  (define-instance (coalton/classes:Exception Local))
    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Exception instances cannot be written manually; define the type with define-exception
+
+================================================================================
+108 Exception constructor with unknown type variable
+================================================================================
+
+(package test-package)
+
+(define-exception BadException
+  (BadException :a))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:4:16
+   |
+ 3 |  (define-exception BadException
+   |                    ------------ in this exception definition
+ 4 |    (BadException :a))
+   |                  ^^ Unknown type variable :A
+

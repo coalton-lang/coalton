@@ -345,6 +345,30 @@ itself without passing through a nominal type."
                     :do (tc:tc-error "Unused type variable in define-type-alias"
                                      (tc:tc-note defined-var "unused variable defined here"))))
 
+  ;; Ensure that every type variable used in a type constructor field
+  ;; is declared by the enclosing type head.
+  (loop :for type :in types
+        :for defined-vars := (mapcar #'parser:keyword-src-name
+                                     (parser:toplevel-define-type-vars type))
+        :do (loop :for ctor :in (reverse (parser:toplevel-define-type-ctors type))
+                  :do (loop :for used-var :in (parser:collect-type-variables ctor)
+                            :unless (member (parser:tyvar-name used-var) defined-vars :test #'eq)
+                              :do (tc:tc-error "Unknown type variable"
+                                               (tc:tc-note used-var
+                                                           "Unknown type variable ~S"
+                                                           (or (parser:tyvar-source-name used-var)
+                                                               (parser:tyvar-name used-var)))
+                                               (tc-secondary-location
+                                                (parser:toplevel-define-type-head-location type)
+                                                "in this ~A definition"
+                                                (cond
+                                                  ((parser:toplevel-define-type-exception-p type)
+                                                   "exception")
+                                                  ((parser:toplevel-define-type-resumption-p type)
+                                                   "resumption")
+                                                  (t
+                                                   "type")))))))
+
   ;; Ensure that every type variable used in a type alias is declared
   ;; by the alias head. This runs after the unused-variable check so
   ;; existing diagnostics keep the same precedence when both apply.
