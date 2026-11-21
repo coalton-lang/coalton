@@ -20,6 +20,7 @@ weight: 45
 - For each listed `⟨class-name⟩`, Coalton synthesizes a [`define-instance`](/manual/operators/define-instance/) for `(⟨class-name⟩ ⟨type⟩)` whose context requires `(⟨class-name⟩ ⟨field-type⟩)` for every constructor or struct field type `⟨field-type⟩`.
 - Built-in derivable classes in the standard library:
   - `Eq`: Implements `==` by checking that two values have the same constructor and recursively comparing corresponding fields left-to-right with `==`.
+  - `Ord`: Implements `<=>` by ordering constructors from first to last in declaration order. For the same constructor, it compares fields left-to-right with `<=>`, stopping at the first non-`EQ` result. Equal fields (or no fields) give `EQ`. The type must also have a compatible `Eq` instance, which can be derived with `(derive Eq Ord)`. Reordering constructors or fields can change the ordering.
   - `Hash`: Implements `hash` by seeding a constructor-specific hash from the type name and constructor name, then folding each field's `hash` with `coalton/hash:combine-hashes`.
   - `Default`: Implements `default` for single-constructor types and structs by calling `(default)` for every field. (Rejects sum types with multiple constructors.)
   - `Show`: Implements `show-to` by formatting nullary constructors as `"Ctor"` and constructors with fields as `"(Ctor field1 field2 ...)"`.
@@ -28,7 +29,7 @@ weight: 45
 
 ```lisp
 (coalton-toplevel
-  (derive Eq Hash Default Show)
+  (derive Eq Ord Hash Default Show)
   (define-struct (Point :a)
     (x :a)
     (y :a))
