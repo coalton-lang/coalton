@@ -18,6 +18,7 @@
    #:pattern-binding-pattern            ; ACCESSOR
    #:make-pattern-binding               ; CONSTRUCTOR
    #:pattern-binding-p                  ; FUNCTION
+   #:unwrap-pattern-binding             ; FUNCTION
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
@@ -63,6 +64,14 @@
             (:copier nil))
   (var     (util:required 'var)     :type pattern-var :read-only t)
   (pattern (util:required 'pattern) :type pattern     :read-only t))
+
+(defun unwrap-pattern-binding (pattern)
+  "Return the pattern inside any outer `pattern-binding` wrappers."
+  (declare (type pattern pattern)
+           (values pattern &optional))
+  (loop :while (pattern-binding-p pattern)
+        :do (setf pattern (pattern-binding-pattern pattern))
+        :finally (return pattern)))
 
 (defstruct (pattern-literal
             (:include pattern)

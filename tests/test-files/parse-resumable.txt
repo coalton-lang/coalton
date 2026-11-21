@@ -72,3 +72,23 @@ error: Malformed resumable branch
    |
  5 |      (_ Unit))
    |       ^ pattern must match a resumption constructor.
+
+================================================================================
+104 Malformed resumable branch aliasing a wildcard
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (resumable (make-breakfast-for 10)
+    ((= r _) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resumable branch
+  --> test:5:5
+   |
+ 5 |      ((= r _) Unit))
+   |       ^^^^^^^ pattern must match a resumption constructor.
+

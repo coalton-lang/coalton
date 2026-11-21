@@ -26,6 +26,8 @@
    #:pattern-binding-var                ; ACCESSOR
    #:pattern-binding-pattern            ; ACCESSOR
    #:make-pattern-binding               ; CONSTRUCTOR
+   #:pattern-binding-p                  ; FUNCTION
+   #:unwrap-pattern-binding             ; FUNCTION
    #:pattern-constructor                ; STRUCT
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
@@ -97,6 +99,14 @@ This is distinct from a a PATTERN-VAR pattern, which matches any
 runtime value and binds it to a variable."
   (var     (util:required 'var)     :type pattern-var :read-only t)
   (pattern (util:required 'pattern) :type pattern     :read-only t))
+
+(defun unwrap-pattern-binding (pattern)
+  "Return the pattern inside any outer `pattern-binding` wrappers."
+  (declare (type pattern pattern)
+           (values pattern &optional))
+  (loop :while (pattern-binding-p pattern)
+        :do (setf pattern (pattern-binding-pattern pattern))
+        :finally (return pattern)))
 
 (defstruct (pattern-constructor
             (:include pattern)
@@ -237,6 +247,16 @@ runtime value and binds it to a variable."
   (if *print-readably*
       (call-next-method)
       (princ "_" stream)))
+
+(defmethod print-object ((obj pattern-binding) stream)
+  (when *print-readably*
+    (return-from print-object (call-next-method)))
+
+  (princ "(= " stream)
+  (princ (pattern-binding-var obj) stream)
+  (princ " " stream)
+  (princ (pattern-binding-pattern obj) stream)
+  (princ ")" stream))
 
 (defmethod print-object ((obj pattern-constructor) stream)
   (when *print-readably*
