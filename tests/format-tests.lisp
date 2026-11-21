@@ -8,6 +8,28 @@
   (is (== "hello"
           (format:format format:Str "hello"))))
 
+(define-test format-aesthetic-string ()
+  (is (== "hello"
+          (format:format format:Str "~A" "hello")))
+  (is (== "Hello, world!"
+          (format:format format:Str "Hello, ~A!" "world")))
+  (is (== "a\"b"
+          (format:format format:Str "~A" "a\"b")))
+  (is (== "a b"
+          (format:format format:Str "~{~A~^ ~}"
+                         (make-list "a" "b"))))
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~A" #\a))
+          (format:format format:Str "~A" #\a))))
+
+(define-test format-readable-string ()
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~S" "hello"))
+          (format:format format:Str "~S" "hello")))
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~S" "a\"b"))
+          (format:format format:Str "~S" "a\"b"))))
+
 (define-test format-simple-directive ()
   (is (== (lisp (-> String) ()
             (cl:format cl:nil "~C" #\Space))
