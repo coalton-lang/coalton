@@ -1696,9 +1696,11 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
       (== (coefficients (poly-trim-desc a))
           (coefficients (poly-trim-desc b)))))
 
-  (define-instance (Additive (Poly Integer))
+  (define-instance (HasAdd (Poly Integer))
     (inline)
-    (define (+ a b) (poly-int-add a b))
+    (define (+ a b) (poly-int-add a b)))
+
+  (define-instance (Additive (Poly Integer))
     (define zero poly-int-zero))
 
   (define-instance (AdditiveGroup (Poly Integer))
@@ -1707,9 +1709,11 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (inline)
     (define (neg a) (poly-int-neg a)))
 
-  (define-instance (Multiplicative (Poly Integer))
+  (define-instance (HasMul (Poly Integer))
     (inline)
-    (define (* a b) (poly-int-mul a b))
+    (define (* a b) (poly-int-mul a b)))
+
+  (define-instance (Multiplicative (Poly Integer))
     (define one poly-int-one))
 
   (define-instance (Semiring (Poly Integer)))
@@ -1731,9 +1735,11 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
       (== (coefficients (poly-frac-trim a))
           (coefficients (poly-frac-trim b)))))
 
-  (define-instance (Additive (Poly Fraction))
+  (define-instance (HasAdd (Poly Fraction))
     (inline)
-    (define (+ a b) (poly-frac-add a b))
+    (define (+ a b) (poly-frac-add a b)))
+
+  (define-instance (Additive (Poly Fraction))
     (define zero poly-frac-zero))
 
   (define-instance (AdditiveGroup (Poly Fraction))
@@ -1742,9 +1748,11 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (inline)
     (define (neg a) (poly-frac-neg a)))
 
-  (define-instance (Multiplicative (Poly Fraction))
+  (define-instance (HasMul (Poly Fraction))
     (inline)
-    (define (* a b) (poly-frac-mul a b))
+    (define (* a b) (poly-frac-mul a b)))
+
+  (define-instance (Multiplicative (Poly Fraction))
     (define one (Poly (Cons 1 Nil))))
 
   (define-instance (Semiring (Poly Fraction)))
@@ -2177,10 +2185,12 @@ No rationality decision or coefficient-dependent precision is needed."
     (define (<=> a b)
       (compare-certified a b)))
 
-  (define-instance (Additive RealAlgebraic)
+  (define-instance (HasAdd RealAlgebraic)
     (inline)
     (define (+ a b)
-      (add-certified a b))
+      (add-certified a b)))
+
+  (define-instance (Additive RealAlgebraic)
     (define zero (from-integer 0)))
 
   (define-instance (AdditiveGroup RealAlgebraic)
@@ -2191,10 +2201,12 @@ No rationality decision or coefficient-dependent precision is needed."
     (define (neg a)
       (affine-certified -1 0 a)))
 
-  (define-instance (Multiplicative RealAlgebraic)
+  (define-instance (HasMul RealAlgebraic)
     (inline)
     (define (* a b)
-      (mul-certified a b))
+      (mul-certified a b)))
+
+  (define-instance (Multiplicative RealAlgebraic)
     (define one (from-integer 1)))
 
   (define-instance (Semiring RealAlgebraic))

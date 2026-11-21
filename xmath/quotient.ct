@@ -137,16 +137,20 @@ For a fixed modulus, let a `KnownQuotient` tag name an immutable quotient contex
   (define-instance (Eq :r => Eq (ResidueClass :tag :r))
     (define (== (%Class a) (%Class b)) (== a b)))
 
+  (define-instance (KnownQuotient :tag :r => HasAdd (ResidueClass :tag :r))
+    (define (+ (%Class a) (%Class b)) (from-representative (+ a b))))
+
   (define-instance (KnownQuotient :tag :r => Additive (ResidueClass :tag :r))
-    (define (+ (%Class a) (%Class b)) (from-representative (+ a b)))
     (define zero (%Class zero)))
 
   (define-instance (KnownQuotient :tag :r => AdditiveGroup (ResidueClass :tag :r))
     (define (neg (%Class a)) (from-representative (neg a)))
     (define (- (%Class a) (%Class b)) (from-representative (- a b))))
 
+  (define-instance (KnownQuotient :tag :r => HasMul (ResidueClass :tag :r))
+    (define (* (%Class a) (%Class b)) (from-representative (* a b))))
+
   (define-instance (KnownQuotient :tag :r => Multiplicative (ResidueClass :tag :r))
-    (define (* (%Class a) (%Class b)) (from-representative (* a b)))
     (define one (from-representative one)))
 
   (define-instance (KnownQuotient :tag :r => Semiring (ResidueClass :tag :r)))

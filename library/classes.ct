@@ -1,5 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/classes
-  (:documentation "Core type classes, algebraic hierarchy (`Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`), and fundamental data types (`Tuple`, `Optional`, `Result`).")
+  (:documentation "Core type classes, arithmetic operators (`HasAdd`, `HasMul`), their algebraic refinements, and fundamental data types (`Tuple`, `Optional`, `Result`).")
   (:use
    #:coalton)
   (:local-nicknames
@@ -18,9 +18,11 @@
    #:<=> #:> #:< #:>= #:<=
    #:max
    #:min
-   #:Additive #:+ #:zero
+   #:HasAdd #:+
+   #:Additive #:zero
    #:AdditiveGroup #:- #:neg #:negate
-   #:Multiplicative #:* #:one
+   #:HasMul #:*
+   #:Multiplicative #:one
    #:Semiring
    #:Ring #:from-int
    #:Num
@@ -143,14 +145,19 @@ Every type defined with `define-resumption` is an instance, and instances cannot
       (lisp (-> Boolean) (a b)
         (cl:equalp a b))))
 
-  (define-class (Additive :a)
+  (define-class (HasAdd :a)
+    "Addition of two values. This operation alone promises no identity or algebraic laws; an instance may require compatible operands, such as matrices of equal shape."
+    (+ (:a * :a -> :a)))
+
+  (define-class (HasAdd :a => Additive :a)
     "Types with an associative, commutative addition and an additive identity `zero`.
 
 Laws:
 - Associativity: `(+ (+ a b) c) == (+ a (+ b c))`
 - Identity: `(+ zero a) == (+ a zero) == a`
-- Commutativity: `(+ a b) == (+ b a)`"
-    (+ (:a * :a -> :a))
+- Commutativity: `(+ a b) == (+ b a)`
+
+Machine arithmetic is subject to rounding, exceptional values, or overflow. This class is not evidence that reassociation preserves machine results."
     (zero :a))
 
   (define-class (Additive :a => AdditiveGroup :a)
@@ -168,13 +175,18 @@ Laws:
     "An alias for `neg`."
     (neg x))
 
-  (define-class (Multiplicative :a)
+  (define-class (HasMul :a)
+    "Multiplication of two values. This operation alone promises no identity, associativity, or commutativity; an instance may require compatible operands."
+    (* (:a * :a -> :a)))
+
+  (define-class (HasMul :a => Multiplicative :a)
     "Types with an associative multiplication and a multiplicative identity `one`.
 
 Laws:
 - Associativity: `(* (* a b) c) == (* a (* b c))`
-- Identity: `(* one a) == (* a one) == a`"
-    (* (:a * :a -> :a))
+- Identity: `(* one a) == (* a one) == a`
+
+As with `Additive`, the laws do not license rewrites that change rounding, exceptional values, or overflow."
     (one :a))
 
   (define-class ((Additive :a) (Multiplicative :a) => Semiring :a)
@@ -769,7 +781,7 @@ Typical `fail` continuations are:
              `(,(cl:first def-form) neg ,@(cl:cddr def-form)))))
 
   (define-toplevel-macro define-ring (spec cl:&body body)
-    "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring` instances from `+`, `-`, `*`, and `from-int` (with optional `zero`, `neg`, and `one`)."
+    "Define `Ring` and its superclasses from `+`, `-`, `*`, and `from-int` (with optional `zero`, `neg`, and `one`)."
     (cl:let ((plus-forms cl:nil)
              (zero-forms cl:nil)
              (minus-forms cl:nil)
@@ -815,8 +827,9 @@ Typical `fail` continuations are:
         (cl:error "DEFINE-RING for ~S requires definitions for +, -, *, and from-int" spec))
       (cl:let ((x-sym (cl:gensym "X")))
         `(coalton:progn
+           (coalton:define-instance ,(%ring-instance-head spec 'HasAdd)
+             ,@plus-forms)
            (coalton:define-instance ,(%ring-instance-head spec 'Additive)
-             ,@plus-forms
              ,@(cl:or zero-forms
                       (cl:list (%synthesize-constant-from-from-int from-int-def 'zero 0))))
            (coalton:define-instance ,(%ring-instance-head spec 'AdditiveGroup)
@@ -824,8 +837,9 @@ Typical `fail` continuations are:
              ,@(cl:or neg-forms
                       `((coalton:inline)
                         (coalton:define (neg ,x-sym) (- zero ,x-sym)))))
+           (coalton:define-instance ,(%ring-instance-head spec 'HasMul)
+             ,@times-forms)
            (coalton:define-instance ,(%ring-instance-head spec 'Multiplicative)
-             ,@times-forms
              ,@(cl:or one-forms
                       (cl:list (%synthesize-constant-from-from-int from-int-def 'one 1))))
            (coalton:define-instance ,(%ring-instance-head spec 'Semiring))
@@ -833,7 +847,7 @@ Typical `fail` continuations are:
              ,@from-int-forms)))))
 
   (define-toplevel-macro define-num (spec cl:&body body)
-    "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, and `Num` instances from `+`, `-`, `*`, and `from-int` (with optional `zero`, `neg`, and `one`)."
+    "Define `Num` and its `Ring` hierarchy using the same methods as `define-ring`. An `Eq` instance must also be available."
     `(coalton:progn
        (define-ring ,spec ,@body)
        (coalton:define-instance ,(%ring-instance-head spec 'Num)))))

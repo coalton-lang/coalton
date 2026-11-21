@@ -131,10 +131,12 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). For
       (show:show-to f z)
       (f ")")))
 
-  (define-instance (Additive :a => Additive (Quaternion :a))
+  (define-instance (HasAdd :a => HasAdd (Quaternion :a))
     (inline)
     (define (+ (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
-      (Quaternion (+ w1 w2) (+ x1 x2) (+ y1 y2) (+ z1 z2)))
+      (Quaternion (+ w1 w2) (+ x1 x2) (+ y1 y2) (+ z1 z2))))
+
+  (define-instance (Additive :a => Additive (Quaternion :a))
     (define zero
       (Quaternion zero zero zero zero)))
 
@@ -146,13 +148,15 @@ is an involutive anti-automorphism ($\\overline{pq} = \\bar{q}\\,\\bar{p}$). For
     (define (neg (Quaternion w x y z))
       (Quaternion (neg w) (neg x) (neg y) (neg z))))
 
-  (define-instance (Ring :a => Multiplicative (Quaternion :a))
+  (define-instance ((AdditiveGroup :a) (HasMul :a) => HasMul (Quaternion :a))
     (define (* (Quaternion w1 x1 y1 z1) (Quaternion w2 x2 y2 z2))
       (Quaternion
        (- (- (- (* w1 w2) (* x1 x2)) (* y1 y2)) (* z1 z2))
        (- (+ (+ (* w1 x2) (* x1 w2)) (* y1 z2)) (* z1 y2))
        (+ (- (* w1 y2) (* x1 z2)) (+ (* y1 w2) (* z1 x2)))
-       (+ (- (+ (* w1 z2) (* x1 y2)) (* y1 x2)) (* z1 w2))))
+       (+ (- (+ (* w1 z2) (* x1 y2)) (* y1 x2)) (* z1 w2)))))
+
+  (define-instance (Ring :a => Multiplicative (Quaternion :a))
     (define one q-one))
 
   (define-instance (Ring :a => Semiring (Quaternion :a)))

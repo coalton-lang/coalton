@@ -114,7 +114,7 @@ value."
 
 ;;; operators on cells of numbers
   (inline)
-  (declare increment! ((Additive :counter) (Multiplicative :counter) => Cell :counter -> :counter))
+  (declare increment! ((HasAdd :counter) (Multiplicative :counter) => Cell :counter -> :counter))
   (define (increment! cel)
     "Add `one` to the contents of `cel`, storing and returning the new value."
     (update! ƒx.(+ x one) cel))

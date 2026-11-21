@@ -168,10 +168,10 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
            (loop more))))))
 
   ;;
-  ;; Algebraic Hierarchy: Additive -> AdditiveGroup -> Multiplicative -> Semiring -> Ring -> Num
+  ;; Coefficient arithmetic
   ;;
 
-  (define-instance (Additive :a => Additive (Polynomial :a))
+  (define-instance (Additive :a => HasAdd (Polynomial :a))
     (define (+ (%Polynomial va) (%Polynomial vb))
       (let la = (vec:length va))
       (let lb = (vec:length vb))
@@ -183,7 +183,9 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
             (let ((ca (if (< i la) (vec:index-unsafe i va) zero))
                   (cb (if (< i lb) (vec:index-unsafe i vb) zero)))
               (vec:push! (+ ca cb) out)
-              (loop (+ i 1))))))
+              (loop (+ i 1)))))))
+
+  (define-instance (Additive :a => Additive (Polynomial :a))
     (define zero (%Polynomial (vec:new))))
 
   (define-instance (AdditiveGroup :a => AdditiveGroup (Polynomial :a))
@@ -209,7 +211,7 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
               (vec:push! (- ca cb) out)
               (loop (+ i 1)))))))
 
-  (define-instance (Semiring :a => Multiplicative (Polynomial :a))
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (Polynomial :a))
     (define (* (%Polynomial va) (%Polynomial vb))
       (let la = (vec:length va))
       (let lb = (vec:length vb))
@@ -228,7 +230,9 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
                                        (* ai (vec:index-unsafe j vb)))
                                   out)
                         (inner (+ j 1))))
-                    (outer (+ i 1))))))))
+                    (outer (+ i 1)))))))))
+
+  (define-instance (Semiring :a => Multiplicative (Polynomial :a))
     (define one (constant-polynomial one)))
 
   (define-instance (Semiring :a => Semiring (Polynomial :a)))
@@ -246,7 +250,7 @@ The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of 
     (inline)
     (define (embed-fraction q) (constant-polynomial (embed-fraction q))))
 
-  (define-instance (Multiplicative :a => Scale :a (Polynomial :a))
+  (define-instance (HasMul :a => Scale :a (Polynomial :a))
     (define (scale c (%Polynomial v))
       (let len = (vec:length v))
       (let out = (vec:with-capacity len))

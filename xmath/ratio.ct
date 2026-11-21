@@ -127,9 +127,11 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
               (u (unit-part den)))
           (%Ratio (exact-div num u) (normal-part den)))))
 
-  (define-instance ((Eq :d) (GcdDomain :d) => Additive (Ratio :d))
+  (define-instance ((Eq :d) (GcdDomain :d) => HasAdd (Ratio :d))
     (inline)
-    (define (+ a b) (ratio-add a b))
+    (define (+ a b) (ratio-add a b)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Additive (Ratio :d))
     (define zero (%Ratio zero one)))
 
   (define-instance ((Eq :d) (GcdDomain :d) => AdditiveGroup (Ratio :d))
@@ -138,9 +140,11 @@ Every nonzero ratio $p / q \\in \\operatorname{Frac}(D)$ is maintained in canoni
     (inline)
     (define (neg a) (ratio-negate a)))
 
-  (define-instance ((Eq :d) (GcdDomain :d) => Multiplicative (Ratio :d))
+  (define-instance ((Eq :d) (GcdDomain :d) => HasMul (Ratio :d))
     (inline)
-    (define (* a b) (ratio-mul a b))
+    (define (* a b) (ratio-mul a b)))
+
+  (define-instance ((Eq :d) (GcdDomain :d) => Multiplicative (Ratio :d))
     (define one (%Ratio one one)))
 
   (define-instance ((Eq :d) (GcdDomain :d) => Semiring (Ratio :d)))

@@ -41,14 +41,18 @@
   (declare counts (RunCounts -> List UFix))
   (define (counts (RunCounts a b c)) [a b c])
 
-  (define-instance (Additive RunCounts)
+  (define-instance (HasAdd RunCounts)
     (define (+ (RunCounts a b c) (RunCounts x y z))
-      (capped-counts (+ a x) (+ b y) (+ c z)))
+      (capped-counts (+ a x) (+ b y) (+ c z))))
+
+  (define-instance (Additive RunCounts)
     (define zero (RunCounts 0 0 0)))
 
-  (define-instance (Multiplicative RunCounts)
+  (define-instance (HasMul RunCounts)
     (define (* (RunCounts a b c) (RunCounts x y z))
-      (capped-counts (* a x) (+ (* a y) (* b z)) (* c z)))
+      (capped-counts (* a x) (+ (* a y) (* b z)) (* c z))))
+
+  (define-instance (Multiplicative RunCounts)
     (define one (RunCounts 1 0 1)))
 
   (define-instance (Semiring RunCounts))

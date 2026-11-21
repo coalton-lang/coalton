@@ -275,7 +275,7 @@ Laws:
       (lisp (-> Integer) (x n) (cl:ash x n))))
 
   (inline)
-  (declare 1+ ((Additive :num) (Multiplicative :num) => :num -> :num))
+  (declare 1+ ((HasAdd :num) (Multiplicative :num) => :num -> :num))
   (define (1+ num)
     "Increment `num`."
     (+ num one))

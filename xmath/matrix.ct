@@ -38,6 +38,7 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:zero-matrix
    #:identity-matrix
    #:diagonal-matrix
+   #:zero-matrix?
    #:rows
    #:cols
    #:entry
@@ -46,6 +47,10 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:transpose
    #:adjoint
    #:trace
+   #:mat-add
+   #:mat-sub
+   #:mat-neg
+   #:mat-mul
    #:mat-vec-mul
    #:mat-pow
    #:det
@@ -68,26 +73,16 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
 
 (coalton-toplevel
   (define-type (Matrix :a)
-    "A dense matrix $M = (m_{ij})$ with entries stored in row-major order.
-
-Matrix literals, `zero`, and `one` represent dimensionless multiples of the identity, not matrices with a fixed shape. Use `(zero-matrix m n)` for the additive identity of an $m \\times n$ matrix, especially when it is rectangular. Compare concrete matrices when equality must distinguish dimensions: `one` compares equal to both `(identity-matrix 1)` and `(identity-matrix 2)`, which do not compare equal to each other."
-    (%Matrix UFix UFix (vec:Vector :a))
-    ;; A dimensionless scalar matrix c I, storing c and the zero of :a.
-    (%Scalar :a :a))
+    "A dense matrix with a runtime row count, column count, and row-major entries. Equality compares both dimensions and corresponding entries, even for empty shapes. Addition requires equal shapes; multiplication requires matching inner dimensions. Use `zero-matrix` and `identity-matrix` for the identities of a particular shape, and `scale` for scalar multiplication."
+    (%Matrix UFix UFix (vec:Vector :a)))
 
   ;;
   ;; Internal helpers
   ;;
 
-  (declare %scalar-error (Void -> :b))
-  (define (%scalar-error)
-    (error "A dimensionless scalar matrix has no fixed size."))
-
+  (inline)
   (declare %data (Matrix :a -> vec:Vector :a))
-  (define (%data m)
-    (match m
-      ((%Matrix _ _ v) v)
-      ((%Scalar _ _) (%scalar-error))))
+  (define (%data (%Matrix _ _ v)) v)
 
   (inline)
   (declare %get (vec:Vector :a * UFix * UFix * UFix -> :a))
@@ -109,9 +104,18 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
          (vec:push! x v)
          (fill more)))))
 
+  (declare %entry-count (UFix * UFix -> UFix))
+  (define (%entry-count r c)
+    ;; A wrapped product would let a concrete shape disagree with its storage.
+    (match (try-into (* (to-integer r) (to-integer c)))
+      ((Some n) n)
+      ((None) (error "matrix: the number of entries exceeds the index range."))))
+
   (declare %generate-vector (UFix * UFix * (UFix * UFix -> :a) -> vec:Vector :a))
   (define (%generate-vector r c f)
-    (let v = (vec:with-capacity (* r c)))
+    (let n = (%entry-count r c))
+    (let v = (vec:with-capacity n))
+    (when (== n 0) (return v))
     (rec outer ((i 0))
       (cond
         ((== i r) v)
@@ -126,53 +130,35 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
   (define (%generate r c f)
     (%Matrix r c (%generate-vector r c f)))
 
-  (declare %expand (UFix * Matrix :a -> Matrix :a))
-  (define (%expand n m)
-    "Materialize a dimensionless scalar matrix as an $n \\times n$ matrix; leave other matrices unchanged."
-    (match m
-      ((%Scalar c z) (%generate n n (fn (i j) (if (== i j) c z))))
-      (_ m)))
-
-  (declare %map ((:a -> :a) * Matrix :a -> Matrix :a))
-  (define (%map f m)
-    (match m
-      ((%Scalar c z) (%Scalar (f c) z))
-      ((%Matrix r c v)
-       (let n = (vec:length v))
-       (let out = (vec:with-capacity n))
-       (rec loop ((k 0))
-         (cond
-           ((== k n) (%Matrix r c out))
-           (True
-            (vec:push! (f (vec:index-unsafe k v)) out)
-            (loop (+ k 1))))))))
+  (declare %map ((:a -> :b) * Matrix :a -> Matrix :b))
+  (define (%map f (%Matrix r c v))
+    (let n = (vec:length v))
+    (let out = (vec:with-capacity n))
+    (rec loop ((k 0))
+      (cond
+        ((== k n) (%Matrix r c out))
+        (True
+         (vec:push! (f (vec:index-unsafe k v)) out)
+         (loop (+ k 1))))))
 
   (declare %zip-dense ((:a * :a -> :a) * String * Matrix :a * Matrix :a -> Matrix :a))
-  (define (%zip-dense f name a b)
-    (match (Tuple a b)
-      ((Tuple (%Scalar x z) (%Scalar y _)) (%Scalar (f x y) z))
-      ((Tuple (%Scalar _ _) (%Matrix r _ _)) (%zip-dense f name (%expand r a) b))
-      ((Tuple (%Matrix r _ _) (%Scalar _ _)) (%zip-dense f name a (%expand r b)))
-      ((Tuple (%Matrix ra ca va) (%Matrix rb cb vb))
-       (when (or (/= ra rb) (/= ca cb))
-         (error (<> name ": matrix dimensions do not match.")))
-       (let n = (vec:length va))
-       (let out = (vec:with-capacity n))
-       (rec loop ((k 0))
-         (cond
-           ((== k n) (%Matrix ra ca out))
-           (True
-            (vec:push! (f (vec:index-unsafe k va) (vec:index-unsafe k vb)) out)
-            (loop (+ k 1))))))))
+  (define (%zip-dense f name (%Matrix ra ca va) (%Matrix rb cb vb))
+    (when (or (/= ra rb) (/= ca cb))
+      (error (<> name ": matrix dimensions do not match.")))
+    (let n = (vec:length va))
+    (let out = (vec:with-capacity n))
+    (rec loop ((k 0))
+      (cond
+        ((== k n) (%Matrix ra ca out))
+        (True
+         (vec:push! (f (vec:index-unsafe k va) (vec:index-unsafe k vb)) out)
+         (loop (+ k 1))))))
 
   (declare %require-square (String * Matrix :a -> UFix))
-  (define (%require-square name m)
-    (match m
-      ((%Scalar _ _) (%scalar-error))
-      ((%Matrix r c _)
-       (unless (== r c)
-         (error (<> name " requires a square matrix.")))
-       r)))
+  (define (%require-square name (%Matrix r c _))
+    (unless (== r c)
+      (error (<> name " requires a square matrix.")))
+    r)
 
   (declare %find-pivot ((:a -> Boolean) * vec:Vector :a * UFix * UFix * UFix * UFix -> Optional UFix))
   (define (%find-pivot is-zero? v stride j start end)
@@ -201,7 +187,7 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
   (declare matrix (UFix * UFix * List :a -> Matrix :a))
   (define (matrix r c xs)
     "Construct an $r \\times c$ matrix from a list of $rc$ entries in row-major order, signaling an error if the list has the wrong length."
-    (unless (== (list:length xs) (* r c))
+    (unless (== (list:length xs) (%entry-count r c))
       (error "matrix: the number of entries does not equal rows * cols."))
     (%Matrix r c (%list->vector xs)))
 
@@ -213,7 +199,7 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
       ((Cons first _)
        (let c = (list:length first))
        (let r = (list:length rs))
-       (let v = (vec:with-capacity (* r c)))
+       (let v = (vec:with-capacity (%entry-count r c)))
        (rec fill-rows ((rest rs))
          (match rest
            ((Nil) (%Matrix r c v))
@@ -228,19 +214,17 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
                  (fill yr))))
             (fill-rows more)))))))
 
+  (inline)
   (declare rows (Matrix :a -> UFix))
-  (define (rows m)
+  (define (rows (%Matrix r _ _))
     "The number of rows of `m`."
-    (match m
-      ((%Matrix r _ _) r)
-      ((%Scalar _ _) (%scalar-error))))
+    r)
 
+  (inline)
   (declare cols (Matrix :a -> UFix))
-  (define (cols m)
+  (define (cols (%Matrix _ c _))
     "The number of columns of `m`."
-    (match m
-      ((%Matrix _ c _) c)
-      ((%Scalar _ _) (%scalar-error))))
+    c)
 
   (declare entry (Matrix :a * UFix * UFix -> :a))
   (define (entry m i j)
@@ -286,7 +270,15 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
   (declare zero-matrix (Additive :a => UFix * UFix -> Matrix :a))
   (define (zero-matrix r c)
     "The $r \\times c$ zero matrix."
-    (%Matrix r c (vec:with-initial-element (* r c) zero)))
+    (%Matrix r c (vec:with-initial-element (%entry-count r c) zero)))
+
+  (declare zero-matrix? ((Eq :a) (Additive :a) => Matrix :a -> Boolean))
+  (define (zero-matrix? (%Matrix _ _ v))
+    "Are all entries zero? This holds vacuously for every empty shape."
+    (let n = (vec:length v))
+    (rec check ((k 0))
+      (or (== k n)
+          (and (zero? (vec:index-unsafe k v)) (check (+ k 1))))))
 
   (declare identity-matrix (Semiring :a => UFix -> Matrix :a))
   (define (identity-matrix n)
@@ -305,64 +297,40 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
   ;;
 
   (define-instance (Eq :a => Eq (Matrix :a))
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (%Scalar x _) (%Scalar y _)) (== x y))
-        ((Tuple (%Scalar _ _) (%Matrix r _ _)) (== (%expand r a) b))
-        ((Tuple (%Matrix r _ _) (%Scalar _ _)) (== a (%expand r b)))
-        ((Tuple (%Matrix ra ca va) (%Matrix rb cb vb))
-         (let n = (vec:length va))
-         (and (== ra rb)
-              (== ca cb)
-              (rec check ((k 0))
-                (if (== k n)
-                    True
-                    (and (== (vec:index-unsafe k va) (vec:index-unsafe k vb))
-                         (check (+ k 1))))))))))
+    (define (== (%Matrix ra ca va) (%Matrix rb cb vb))
+      (and (== ra rb) (== ca cb) (== va vb))))
 
   (define-instance (show:Show :a => show:Show (Matrix :a))
     (define (show:show-to f m)
-      (match m
-        ((%Scalar c _)
-         (f "(scalar-matrix ")
-         (show:show-to f c)
-         (f ")"))
-        ((%Matrix _ _ _)
-         (f "(from-rows (")
-         (rec show-rows ((rs (to-rows m)) (first True))
-           (match rs
-             ((Nil) (f "))"))
-             ((Cons xs more)
-              (unless first (f " ") (values))
-              (f "(")
-              (rec show-entries ((ys xs) (first-entry True))
-                (match ys
-                  ((Nil) (f ")"))
-                  ((Cons y yr)
-                   (unless first-entry (f " ") (values))
-                   (show:show-to f y)
-                   (show-entries yr False))))
-              (show-rows more False))))))))
+      (f "(from-rows (")
+      (rec show-rows ((rs (to-rows m)) (first True))
+        (match rs
+          ((Nil) (f "))"))
+          ((Cons xs more)
+           (unless first (f " ") (values))
+           (f "(")
+           (rec show-entries ((ys xs) (first-entry True))
+             (match ys
+               ((Nil) (f ")"))
+               ((Cons y yr)
+                (unless first-entry (f " ") (values))
+                (show:show-to f y)
+                (show-entries yr False))))
+           (show-rows more False))))))
 
   ;;
   ;; Basic operations
   ;;
 
   (declare transpose (Matrix :a -> Matrix :a))
-  (define (transpose m)
+  (define (transpose (%Matrix r c v))
     "The transpose $M^T$ of `m`, with $(M^T)_{ij} = m_{ji}$."
-    (match m
-      ((%Scalar _ _) m)
-      ((%Matrix r c v)
-       (%generate c r (fn (i j) (%get v c j i))))))
+    (%generate c r (fn (i j) (%get v c j i))))
 
   (declare adjoint (ConjugateRing :a => Matrix :a -> Matrix :a))
-  (define (adjoint m)
+  (define (adjoint (%Matrix r c v))
     "The conjugate transpose (Hermitian adjoint) $M^* = \\overline{M}^T$ of `m`, with $(M^*)_{ij} = \\overline{m_{ji}}$."
-    (match m
-      ((%Scalar c z) (%Scalar (conjugate c) z))
-      ((%Matrix r c v)
-       (%generate c r (fn (i j) (conjugate (%get v c j i)))))))
+    (%generate c r (fn (i j) (conjugate (%get v c j i)))))
 
   (declare trace (Additive :a => Matrix :a -> :a))
   (define (trace m)
@@ -375,7 +343,7 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
           (loop (+ i 1) (+ acc (%get v n i i))))))
 
   (inline)
-  (declare mat-add (Additive :a => Matrix :a * Matrix :a -> Matrix :a))
+  (declare mat-add (HasAdd :a => Matrix :a * Matrix :a -> Matrix :a))
   (define (mat-add a b)
     "The entrywise sum $A + B$, signaling an error if the dimensions differ."
     (%zip-dense + "mat-add" a b))
@@ -392,41 +360,33 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
     "The entrywise negation $-M$."
     (%map neg m))
 
-  (declare mat-mul (Semiring :a => Matrix :a * Matrix :a -> Matrix :a))
-  (define (mat-mul a b)
+  (declare mat-mul ((Additive :a) (HasMul :a) => Matrix :a * Matrix :a -> Matrix :a))
+  (define (mat-mul (%Matrix n k va) (%Matrix kb p vb))
     "The matrix product $AB$ with $(AB)_{ij} = \\sum_k a_{ik} b_{kj}$, signaling an error if `(cols a)` differs from `(rows b)`."
-    (match (Tuple a b)
-      ((Tuple (%Scalar x z) (%Scalar y _)) (%Scalar (* x y) z))
-      ((Tuple (%Scalar x _) (%Matrix _ _ _)) (%map (fn (e) (* x e)) b))
-      ((Tuple (%Matrix _ _ _) (%Scalar y _)) (%map (fn (e) (* e y)) a))
-      ((Tuple (%Matrix n k va) (%Matrix kb p vb))
-       (when (/= k kb)
-         (error "mat-mul: matrix dimensions do not match."))
-       (%generate n p
-                  (fn (i j)
-                    (rec dot ((l 0) (acc zero))
-                      (if (== l k)
-                          acc
-                          (dot (+ l 1)
-                               (+ acc (* (%get va k i l) (%get vb p l j)))))))))))
+    (when (/= k kb)
+      (error "mat-mul: matrix dimensions do not match."))
+    (%generate n p
+               (fn (i j)
+                 (rec dot ((l 0) (acc zero))
+                   (if (== l k)
+                       acc
+                       (dot (+ l 1)
+                            (+ acc (* (%get va k i l) (%get vb p l j)))))))))
 
   (declare mat-pow (Semiring :a => Matrix :a * UFix -> Matrix :a))
   (define (mat-pow m e)
     "The matrix power $M^e$ of a square matrix `m` by binary exponentiation, with $M^0 = I$."
-    (match m
-      ((%Scalar c z) (%Scalar (^ c e) z))
-      ((%Matrix _ _ _)
-       (let n = (%require-square "mat-pow" m))
-       (rec loop ((base m) (k e) (acc (identity-matrix n)))
-         (if (== k 0)
-             acc
-             (let ((acc2 (if (odd? k) (mat-mul acc base) acc))
-                   (k2 (div k 2)))
-               (if (== k2 0)
-                   acc2
-                   (loop (mat-mul base base) k2 acc2))))))))
+    (let n = (%require-square "mat-pow" m))
+    (rec loop ((base m) (k e) (acc (identity-matrix n)))
+      (if (== k 0)
+          acc
+          (let ((acc2 (if (odd? k) (mat-mul acc base) acc))
+                (k2 (div k 2)))
+            (if (== k2 0)
+                acc2
+                (loop (mat-mul base base) k2 acc2))))))
 
-  (declare mat-vec-mul (Semiring :a => Matrix :a * List :a -> List :a))
+  (declare mat-vec-mul ((Additive :a) (HasMul :a) => Matrix :a * List :a -> List :a))
   (define (mat-vec-mul m x)
     "The matrix-vector product $Mx$ with $(Mx)_i = \\sum_j m_{ij} x_j$, signaling an error if the length of `x` differs from `(cols m)`."
     (let r = (rows m))
@@ -445,41 +405,17 @@ Matrix literals, `zero`, and `one` represent dimensionless multiples of the iden
                          (dot (+ j 1) (+ s (* (%get v c ii j) (vec:index-unsafe j xv))))))))
             (build ii (Cons s acc))))))
 
-  (define-instance (Additive :a => Additive (Matrix :a))
+  (define-instance (HasAdd :a => HasAdd (Matrix :a))
     (inline)
-    (define (+ a b) (mat-add a b))
-    (define zero (%Scalar zero zero)))
+    (define (+ a b) (mat-add a b)))
 
-  (define-instance (AdditiveGroup :a => AdditiveGroup (Matrix :a))
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (Matrix :a))
     (inline)
-    (define (neg m) (mat-neg m))
-    (inline)
-    (define (- a b) (mat-sub a b)))
+    (define (* a b) (mat-mul a b)))
 
-  (define-instance (Semiring :a => Multiplicative (Matrix :a))
-    (inline)
-    (define (* a b) (mat-mul a b))
-    (define one (%Scalar one zero)))
-
-  (define-instance (Semiring :a => Semiring (Matrix :a)))
-
-  (define-instance (Ring :a => Ring (Matrix :a))
-    (inline)
-    (define (from-int n)
-      (%Scalar (from-int n) zero)))
-
-  (define-instance (Num :a => Num (Matrix :a)))
-
-  (define-instance (Multiplicative :a => Scale :a (Matrix :a))
+  (define-instance (HasMul :a => Scale :a (Matrix :a))
     (define (scale c m)
       (%map (fn (x) (* c x)) m)))
-
-  (define-instance (Ring :a => Module :a (Matrix :a)))
-
-  (define-instance (ConjugateRing :a => ConjugateRing (Matrix :a))
-    (inline)
-    (define (conjugate m)
-      (adjoint m)))
 
   ;;
   ;; Determinants and related quantities over GCD domains
@@ -727,17 +663,7 @@ on a nonzero isotropic pivot; use `try-gram-schmidt` to handle that case."
 
   (define-instance (Approximable :a :b => Approximable (Matrix :a) (Matrix :b))
     (define (approx bits m)
-      (match m
-        ((%Scalar c z) (%Scalar (approx bits c) (approx bits z)))
-        ((%Matrix r c v)
-         (let n = (vec:length v))
-         (let out = (vec:with-capacity n))
-         (rec loop ((k 0))
-           (cond
-             ((== k n) (%Matrix r c out))
-             (True
-              (vec:push! (approx bits (vec:index-unsafe k v)) out)
-              (loop (+ k 1))))))))))
+      (%map (fn (x) (approx bits x)) m))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/MATRIX")

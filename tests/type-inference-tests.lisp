@@ -438,7 +438,7 @@
       (let (values a b) = (f))
       (+ a b))"
 
-   '("example2" . "(Additive :a => (Void -> :a * :a) -> :a)"))
+   '("example2" . "(HasAdd :a => (Void -> :a * :a) -> :a)"))
 
   (check-coalton-types
    "(declare unit-identity (Unit -> Integer))
@@ -1546,12 +1546,14 @@
    "(define short-id ƒx.x)
     (define short-zero ƒ.True)
     (define short-add ƒxy.(+ x y))
+    (define short-mul ƒxy.(* x y))
     (define short-nested-add ƒx.ƒy.(+ x y))
     (define short-ignore ƒ_x_.x)"
    '("short-id" . "(:a -> :a)")
    '("short-zero" . "(Void -> Boolean)")
-   '("short-add" . "(Additive :a => :a * :a -> :a)")
-   '("short-nested-add" . "(Additive :a => :a -> :a -> :a)")
+   '("short-add" . "(HasAdd :a => :a * :a -> :a)")
+   '("short-mul" . "(HasMul :a => :a * :a -> :a)")
+   '("short-nested-add" . "(HasAdd :a => :a -> :a -> :a)")
    '("short-ignore" . "(:a * :b * :c -> :b)"))
 
   (signals coalton-impl/parser:parse-error
@@ -1819,7 +1821,7 @@
   (check-coalton-types
    "(define f (fn (x) (fn (y) (+ x y))))"
 
-   '("f" . "(Additive :a => :a -> :a -> :a)")))
+   '("f" . "(HasAdd :a => :a -> :a -> :a)")))
 
 (deftest test-rank-n-types ()
   ;; Rank-2 polymorphic function arguments with and without constraints

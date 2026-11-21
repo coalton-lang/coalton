@@ -267,8 +267,16 @@ in the [Standard Library Reference](/reference/).
 
 ### Additive and Multiplicative Classes (`coalton/classes`)
 
+If a function only calls `+`, it needs `HasAdd :a`; if it only calls `*`, it
+needs `HasMul :a`. Neither constraint supplies an identity or permits changing
+the order or grouping of operations. For example, an entrywise matrix sum can
+check the two shapes at runtime without needing a matrix `zero`. Summing a
+possibly empty list without an explicit seed, on the other hand, needs `Additive`.
+
 ```mermaid
 graph TD
+    HasAdd --> Additive
+    HasMul --> Multiplicative
     Additive --> AdditiveGroup
     Additive --> Semiring
     Multiplicative --> Semiring
@@ -280,16 +288,20 @@ graph TD
 
 | Class | Methods | Typical Examples |
 |---|---|---|
-| `Additive :a` | `+`, `zero` | Numbers, vectors, matrices, polynomials |
+| `HasAdd :a` | `+` | Two values that can be added, including matrices of matching shape |
+| `HasMul :a` | `*` | Two values that can be multiplied, including matrices with matching inner dimensions |
+| `Additive :a` | `zero` | Numbers, fixed-dimensional vectors, polynomials |
 | `AdditiveGroup :a` | `-`, `neg` | Displacements, vectors, signed numbers |
-| `Multiplicative :a` | `*`, `one` | Numbers, square matrices, endomorphisms |
+| `Multiplicative :a` | `one` | Numbers, endomorphisms of a fixed space |
 | `Semiring :a` | — | Natural numbers, tropical $(\min, +)$ semiring, polynomials over a semiring |
-| `Ring :a` | `from-int` | Integers, matrices, computable reals (`CReal`), formal power series |
+| `Ring :a` | `from-int` | Integers, computable reals (`CReal`), formal power series |
 | `Num :a` | — | `Integer`, `Fraction`, `F32`, `F64`, `Complex :a`, `Polynomial :a` |
 
-For instance, a 2D vector type only needs `Additive` and `AdditiveGroup` to
-support `+`, `-`, `neg`, and `list:sum`—without defining a bogus vector-vector
-`*` or `from-int`:
+When defining instances manually, put `+` in `HasAdd` and `zero` in
+`Additive`; likewise, put `*` in `HasMul` and `one` in `Multiplicative`.
+The `define-ring` and `define-num` shorthands still accept the same methods.
+For instance, a 2D vector can support `+`, `-`, `neg`, and `list:sum`
+without defining a vector-vector `*` or `from-int`:
 
 ```lisp
 (coalton-toplevel
@@ -298,9 +310,11 @@ support `+`, `-`, `neg`, and `list:sum`—without defining a bogus vector-vector
     (x F64)
     (y F64))
 
-  (define-instance (Additive Vec2)
+  (define-instance (HasAdd Vec2)
     (define (+ (Vec2 x1 y1) (Vec2 x2 y2))
-      (Vec2 (+ x1 x2) (+ y1 y2)))
+      (Vec2 (+ x1 x2) (+ y1 y2))))
+
+  (define-instance (Additive Vec2)
     (define zero (Vec2 0.0d0 0.0d0)))
 
   (define-instance (AdditiveGroup Vec2)
@@ -476,6 +490,11 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/matrix`**: Dense matrices over semirings, rings, GCD domains,
   and fields, supporting fraction-free determinants and characteristic
   polynomials, linear system solving, and Gram–Schmidt orthogonalization.
+  A matrix always has a concrete shape. `+` and `*` check the operand shapes,
+  and `==` compares dimensions as well as entries. Use `zero-matrix` and
+  `identity-matrix` instead of bare `zero`, `one`, or a matrix literal.
+  `mat-sub`, `mat-neg`, `mat-pow`, and `adjoint` need no dimensionless
+  constants; `zero-matrix?` tests the entries of any shape.
 - **`coalton/xmath/semiring-graph`**: [Weighted graphs and automata](#weighted-graphs-and-automata),
   including exact-length walks and all-pairs closure.
 - **`coalton/xmath/normal-form`**, **`coalton/xmath/lattice`**, and

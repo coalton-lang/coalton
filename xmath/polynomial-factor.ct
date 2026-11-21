@@ -75,7 +75,7 @@
             (list:reverse acc)
             (let ((column (the (List :a) [(poly:coeff u i) :for i :below n])))
               (powers (+ j 1) (modmath:mod-mul u xq f) (Cons column acc))))))
-    (let fixed = (- (mat:transpose (mat:from-rows columns)) (mat:identity-matrix n)))
+    (let fixed = (mat:mat-sub (mat:transpose (mat:from-rows columns)) (mat:identity-matrix n)))
     (map poly:polynomial (mat:nullspace fixed)))
 
   (declare %split-fibers
