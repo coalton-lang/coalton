@@ -208,6 +208,10 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
   
   (define-instance (math:Exponentiable CReal)
+    (define (math:sinh x) (math:canonical-sinh x))
+    (define (math:cosh x) (math:canonical-cosh x))
+    (define (math:acosh x) (math:canonical-acosh x))
+    (define (math:atanh x) (math:canonical-atanh x))
     (define (math:tanh x) (math:canonical-tanh x))
     (define (math:asinh x) (math:canonical-asinh x))
 
@@ -313,6 +317,7 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 (coalton-toplevel
 
   (define-instance (Elementary CReal)
+    (define (math:atan2 y x) (math:canonical-atan2 y x))
     (define pi
       (lisp (-> CReal) ()
         cr:+pi-r+))

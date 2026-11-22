@@ -192,9 +192,12 @@ implement the subset they support:
 - **`Elementary :a`**: mathematical constants `pi` ($\pi$) and `ee` ($e$) on types supporting all elementary operations.
 
 `magnitude` uses the scalar `hypot` method, so it avoids unnecessary overflow
-even in polymorphic code. Existing custom `Radical` instances can implement
-`hypot` with `canonical-hypot`; existing `Exponentiable` instances can
-implement `tanh` and `asinh` with `canonical-tanh` and `canonical-asinh`.
+even in polymorphic code. The hyperbolic functions likewise dispatch through
+`Exponentiable`, and `atan2` through `Elementary`. Only the `atan2` method
+requires `Ord`, not the entire class. To retain the algebraic formulas in
+custom instances, forward these methods to their `canonical-` counterparts
+(for example, `canonical-hypot`, `canonical-sinh`, or `canonical-atan2`).
+These helpers compose ordinary operations; they do not promise single rounding.
 These algebraic formulas suit exact and formal arithmetic; a fixed-precision
 type should use its stable numerical kernels instead. Identities for
 logarithms, roots and inverse functions assume the appropriate real domain

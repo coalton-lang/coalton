@@ -1578,6 +1578,10 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
       (_ BFNaN)))
 
   (define-instance (Exponentiable BigFloat)
+    (define (sinh x) (canonical-sinh x))
+    (define (cosh x) (canonical-cosh x))
+    (define (acosh x) (canonical-acosh x))
+    (define (atanh x) (canonical-atanh x))
     (define (tanh x) (bf-hyperbolic x True))
     (define (asinh x) (bf-hyperbolic x False))
     (define (exp x)
@@ -1776,20 +1780,13 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
            (_ BFNaN))))))
 
   (define-instance (Elementary BigFloat)
+    (define (atan2 y x) (canonical-atan2 y x))
     (define pi (BFConst bf-pi))
     (define ee (BFConst bf-ee)))
 
   (define-instance (Polar BigFloat)
     (define (phase z)
-      (let x = (real-part z))
-      (let y = (imag-part z))
-      (match (Tuple (<=> x 0) (<=> y 0))
-        ((Tuple (GT) _)    (atan (/ y x)))
-        ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
-        ((Tuple (LT) _)    (+ (atan (/ y x)) pi))
-        ((Tuple (EQ) (GT)) (/ pi 2))
-        ((Tuple (EQ) (LT)) (/ pi -2))
-        ((Tuple (EQ) (EQ)) 0)))
+      (atan2 (imag-part z) (real-part z)))
     (define (polar z)
       (values (magnitude z) (phase z))))
 

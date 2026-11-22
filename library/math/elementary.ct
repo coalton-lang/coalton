@@ -34,8 +34,9 @@
    #:log #:pow #:exp #:ln
    #:Elementary
    #:canonical-hypot
-   #:canonical-tanh
-   #:canonical-asinh
+   #:canonical-sinh #:canonical-cosh #:canonical-tanh
+   #:canonical-asinh #:canonical-acosh #:canonical-atanh
+   #:canonical-atan2
    #:pi #:ee
    #:atan2))
 
@@ -66,8 +67,12 @@
     (pow (:a * :a -> :a))
     (ln  (:a -> :a))
     (log (:a * :a -> :a))
+    (sinh (Reciprocable :a => :a -> :a))
+    (cosh (Reciprocable :a => :a -> :a))
     (tanh (Reciprocable :a => :a -> :a))
-    (asinh ((Reciprocable :a) (Radical :a) => :a -> :a)))
+    (asinh ((Reciprocable :a) (Radical :a) => :a -> :a))
+    (acosh ((Reciprocable :a) (Radical :a) => :a -> :a))
+    (atanh (Reciprocable :a => :a -> :a)))
 
   (define-class (Radical :a)
     "Roots on an instance's domain. In exact arithmetic an $n$th root $r$ satisfies $r^n=x$. In the reals the square root is nonnegative, and an odd-index root of a negative real is negative. An even-index root of a negative real has no real value; a zero index is undefined. A negative index, when supported, takes the reciprocal and requires a nonzero radicand. Complex roots depend on the chosen branch. Raising a rounded root to its index need not recover the input exactly."
@@ -111,13 +116,13 @@ For a nonzero finite complex number `z = (complex x y)`, the following are mathe
        => Elementary :a)
     "Types supporting `Reciprocable`, `Trigonometric`, `Exponentiable`, and `Radical`, together with the transcendental constants $\\pi$ (`pi`) and $e$ (`ee`)."
     (pi :a)
-    (ee :a))
+    (ee :a)
+    (atan2 "Two-argument arctangent of $y,x$, accounting for the quadrant."
+           (Ord :a => :a * :a -> :a)))
 
-  (declare atan2 ((Ord :f) (Elementary :f) => :f * :f -> :f))
-  (define (atan2 y x)
-    "Computes the two-argument arctangent of `y` and `x`, which is roughly the same
-as `(atan (/ y x))` when defined and accounting for the quadrant of
-the point $(\\mathtt{x},\\mathtt{y})$."
+  (declare canonical-atan2 ((Ord :f) (Elementary :f) => :f * :f -> :f))
+  (define (canonical-atan2 y x)
+    "Quadrant formula for `atan2`; the division and angle correction are separate operations."
     (match (Tuple (<=> x zero) (<=> y zero))
       ((Tuple (GT) _)    (atan (/ y x)))
       ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
@@ -128,12 +133,14 @@ the point $(\\mathtt{x},\\mathtt{y})$."
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
-  (declare sinh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
-  (define (sinh x)
+  (declare canonical-sinh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
+  (define (canonical-sinh x)
+    "Exponential difference formula for `sinh`, not a single rounded operation."
     (/ (- (exp x) (exp (neg x))) (from-int 2)))
 
-  (declare cosh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
-  (define (cosh x)
+  (declare canonical-cosh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
+  (define (canonical-cosh x)
+    "Exponential sum formula for `cosh`, not a single rounded operation."
     (/ (+ (exp x) (exp (neg x))) (from-int 2)))
 
   (declare canonical-hypot ((Additive :a) (Multiplicative :a) (Radical :a) => :a * :a -> :a))
@@ -151,12 +158,14 @@ the point $(\\mathtt{x},\\mathtt{y})$."
     "The logarithmic formula for `asinh`, suitable for exact or formal arithmetic on its branch."
     (ln (+ x (sqrt (+ one (* x x))))))
 
-  (declare acosh ((Reciprocable :f) (Exponentiable :f) (Radical :f) => :f -> :f))
-  (define (acosh x)
+  (declare canonical-acosh ((Reciprocable :f) (Exponentiable :f) (Radical :f) => :f -> :f))
+  (define (canonical-acosh x)
+    "Logarithm and square-root formula for `acosh`, not a single rounded operation."
     (* (from-int 2) (ln (+ (sqrt (/ (+ x one) (from-int 2))) (sqrt (/ (- x one) (from-int 2)))))))
 
-  (declare atanh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
-  (define (atanh x)
+  (declare canonical-atanh ((Reciprocable :f) (Exponentiable :f) => :f -> :f))
+  (define (canonical-atanh x)
+    "Logarithmic difference formula for `atanh`, not a single rounded operation."
     (/ (- (ln (+ one x)) (ln (- one x))) (from-int 2)))
 
   (define (canonical-polar z)
@@ -280,6 +289,10 @@ the point $(\\mathtt{x},\\mathtt{y})$."
          (values (magnitude x) (phase x))))
 
      (define-instance (Exponentiable ,coalton-type)
+       (define (sinh x) (canonical-sinh x))
+       (define (cosh x) (canonical-cosh x))
+       (define (acosh x) (canonical-acosh x))
+       (define (atanh x) (canonical-atanh x))
        (define (tanh x)
          (cond
            ((nan? x) x)
@@ -393,6 +406,7 @@ the point $(\\mathtt{x},\\mathtt{y})$."
                        signed)))))))
 
      (define-instance (Elementary ,coalton-type)
+       (define (atan2 y x) (canonical-atan2 y x))
        (define pi
          (coalton++:unsafe
            (lisp (-> ,coalton-type) ()
@@ -423,6 +437,10 @@ the point $(\\mathtt{x},\\mathtt{y})$."
 
 (coalton-toplevel
   (define-instance ((Polar :a) (Elementary :a) => Exponentiable (Complex :a))
+    (define (sinh z) (canonical-sinh z))
+    (define (cosh z) (canonical-cosh z))
+    (define (acosh z) (canonical-acosh z))
+    (define (atanh z) (canonical-atanh z))
     (define (tanh z) (canonical-tanh z))
     (define (asinh z) (canonical-asinh z))
     (define (ln z)
@@ -500,6 +518,7 @@ the point $(\\mathtt{x},\\mathtt{y})$."
                 (+ ii z))))))
 
   (define-instance ((Polar :a) (Elementary :a) => Elementary (Complex :a))
+    (define (atan2 y x) (canonical-atan2 y x))
     (define pi (Complex pi 0))
     (define ee (Complex ee 0))))
 
