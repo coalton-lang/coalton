@@ -9,6 +9,7 @@
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
+   (#:env #:coalton-impl/typechecker/environment)
    (#:ast #:coalton-impl/codegen/ast)
    (#:traverse #:coalton-impl/codegen/traverse)
    (#:analysis #:coalton-impl/analysis)
