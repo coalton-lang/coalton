@@ -93,7 +93,8 @@ component types."
   (declare square-magnitude (ComplexComponent :a => Complex :a -> :a))
   (define (square-magnitude z)
     "The squared length of a complex number:
-$$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$"
+$$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$
+The component multiplications and addition are separate operations."
     (let ((r (real-part z))
           (i (imag-part z)))
        (+ (* r r) (* i i))))

@@ -12,6 +12,7 @@
   (derive Eq)
   (repr :enum)
   (define-type RoundingMode
+    "In directed modes (`rndu`, `rndd`, `rndz`, `rnda`), each scalar arithmetic or elementary operation returns the correctly rounded value at the active precision or signals `uncertified-rounding`."
     RoundNearAway
     RoundEven
     RoundToZero
@@ -84,6 +85,15 @@
     (lisp (-> RoundingMode) ()
       *bf-rounding-mode*))
 
+  (declare directed? (Void -> Boolean))
+  (define (directed?)
+    (match (get-rounding-mode)
+      ((RoundUp) True)
+      ((RoundDown) True)
+      ((RoundToZero) True)
+      ((RoundFromZero) True)
+      (_ False)))
+
   (declare with-precision-rounding
     (forall ((:a Values))
       ((Void -> :a) &key (:precision UFix) (:rounding RoundingMode) -> :a)))
@@ -105,7 +115,7 @@
   (declare with-rounding
     (forall ((:a Values)) ((Void -> :a) &key (:rounding RoundingMode) -> :a)))
   (define (with-rounding f &key (rounding (get-rounding-mode)))
-    "Call F with a temporary BigFloat ROUNDING mode."
+    "Call F with a temporary BigFloat ROUNDING mode. Each directed scalar elementary operation is correctly rounded or signals `uncertified-rounding`; the body of F is not rounded as a whole."
     (with-precision-rounding f :rounding rounding))
 
   (inline)
@@ -345,6 +355,35 @@
        (normalize-dyadic m e))
       (x x)))
 
+  (declare certify-bounds (String * (Integer -> Optional (Tuple BigFloat BigFloat)) -> BigFloat))
+  (define (certify-bounds op enclose)
+    ;; A bound alone, or two successive approximations that agree, cannot
+    ;; certify rounding. Round *both ends of one proven enclosure* in the
+    ;; caller's direction. Each directed rounding map is monotone.
+    (let p = (to-integer (get-precision)))
+    (rec refine ((extra 16))
+      (match (enclose (+ p extra))
+        ((Some (Tuple lo hi))
+         (let lower = (normalize lo))
+         (when (== lower (normalize hi)) (return lower)))
+        ((None) (values)))
+      (when (>= extra 1024)
+        (cannot-certify op "the enclosure still crosses a rounding boundary after 1024 extra bits"))
+      (refine (* 2 extra))))
+
+  (declare certify-grid (String * (Integer -> Optional Bounds) -> BigFloat))
+  (define (certify-grid op enclose)
+    (certify-bounds op
+      (fn (w)
+        (match (enclose w)
+          ((Some (Bounds lo hi))
+           (Some (Tuple (BFValue (Dyadic lo (neg w))) (BFValue (Dyadic hi (neg w))))))
+          ((None) None)))))
+
+  (declare certified-pi-multiple (Integer * Integer -> BigFloat))
+  (define (certified-pi-multiple n d)
+    (certify-grid "pi" (fn (w) (Some (bounds-div-int (bounds-times-int (pi-bounds w) n) d)))))
+
   (declare cap-dyadic-bits (Integer * Integer * Integer -> Dyadic))
   (define (cap-dyadic-bits m e max-bits)
     "Truncate M to at most MAX-BITS bits, preserving a sticky bit at bit 0."
@@ -391,7 +430,9 @@
             (True
              (match (+ (Dyadic m1 e1) (Dyadic m2 e2))
                ((Dyadic sm se)
-                (normalize-dyadic sm se))))))))))
+                (if (and (== sm 0) (== (get-rounding-mode) RoundDown))
+                    BFNegZero
+                    (normalize-dyadic sm se)))))))))))
 
   (declare div-dyadic (Integer * Integer * Integer * Integer -> BigFloat))
   (define (div-dyadic m1 e1 m2 e2)
@@ -483,8 +524,10 @@
         ((Tuple (BFNegInf) _) BFNegInf)
         ((Tuple _ (BFNegInf)) BFNegInf)
         ((Tuple (BFNegZero) (BFNegZero)) BFNegZero)
-        ((Tuple (BFNegZero) x) (normalize x))
-        ((Tuple x (BFNegZero)) (normalize x))
+        ((Tuple (BFNegZero) x)
+         (if (and (bf-zero? x) (== (get-rounding-mode) RoundDown)) BFNegZero (normalize x)))
+        ((Tuple x (BFNegZero))
+         (if (and (bf-zero? x) (== (get-rounding-mode) RoundDown)) BFNegZero (normalize x)))
         ((Tuple (BFValue (Dyadic m1 e1)) (BFValue (Dyadic m2 e2)))
          (add-dyadic m1 e1 m2 e2))
         (_ BFNaN))))
@@ -773,18 +816,6 @@
       ((BFInf) BFInf)
       ((BFNegInf) BFNegInf)
       ((BFNaN) BFNaN)
-      (_ BFNaN)))
-
-  (define (reciprocal-sqrt a)
-    "Reciprocal of the square root of A."
-    (match (resolve a)
-      ((BFValue (Dyadic m j))
-       (cond
-         ((< m 0) BFNaN)
-         ((== m 0) BFInf)
-         (True (recip (sqrt-dyadic m j)))))
-      ((BFNegZero) BFNegInf)
-      ((BFInf) (BFValue (Dyadic 0 0)))
       (_ BFNaN))))
 
 (complex::%define-standard-complex-instances BigFloat)
@@ -1006,13 +1037,15 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 
   (declare bf-pi (Void -> BigFloat))
   (define (bf-pi)
-    "Return the value of pi to the currently set precision."
+    "Return $\\pi$ at the active precision; directed results are correctly rounded."
+    (when (directed?) (return (certified-pi-multiple 1 1)))
     (match (raw-pi (to-integer (get-precision)))
       ((Dyadic m e) (normalize-dyadic m e))))
 
   (declare bf-ln2 (Void -> BigFloat))
   (define (bf-ln2)
-    "Return the value of (ln 2) to the currently set precision."
+    "Return $\\ln 2$ at the active precision; directed results are correctly rounded."
+    (when (directed?) (return (certify-grid "ln 2" (fn (w) (Some (ln2-bounds w))))))
     (match (raw-ln2 (to-integer (get-precision)))
       ((Dyadic m e) (normalize-dyadic m e))))
 
@@ -1152,6 +1185,55 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
           (Dyadic (if neg? (neg atan-final) atan-final)
                   (neg w2)))))))
 
+  (define (check-grid-range op x)
+    ;; Don't materialize an unbounded binary exponent as a fixed-point integer.
+    (when (> (abs (the Dyadic x)) (Dyadic 1024 0))
+      (cannot-certify op "the fixed-point kernel supports arguments of magnitude at most 1024")))
+
+  (define (directed-circle name op d)
+    (check-grid-range name d)
+    (certify-grid name (fn (w) (circular-bounds op d w))))
+
+  (declare directed-angle (BigFloat * BigFloat -> BigFloat))
+  (define (directed-angle y x)
+    (let sy = (if (bf-negative-sign? y) -1 1))
+    (let sx = (bf-negative-sign? x))
+    (let signed-zero = (if (< sy 0) BFNegZero zero))
+    (cond
+      ((or (nan? y) (nan? x)) BFNaN)
+      ((and (infinite? y) (infinite? x)) (certified-pi-multiple (* sy (if sx 3 1)) 4))
+      ((bf-zero? y)
+       (if (and sx (not (bf-zero? x))) (certified-pi-multiple sy 1) signed-zero))
+      ((or (bf-zero? x) (infinite? y)) (certified-pi-multiple sy 2))
+      ((infinite? x) (if sx (certified-pi-multiple sy 1) signed-zero))
+      (True
+       (let (Dyadic my ky) = (the Dyadic (approx 0 y)))
+       (let (Dyadic mx kx) = (the Dyadic (approx 0 x)))
+       (let e = (max (+ ky (bit-length my)) (+ kx (bit-length mx))))
+       (certify-grid "atan2"
+         (fn (w)
+           (angle-bounds (bounds-dyadic (Dyadic (abs my) (- ky e)) w)
+                         (bounds-dyadic (Dyadic (abs mx) (- kx e)) w)
+                         (< my 0) (< mx 0) w))))))
+
+  (define (directed-inverse-circle x acos?)
+    (cond
+      ((or (nan? x) (> (abs x) one)) BFNaN)
+      ((bf-zero? x) (if acos? (certified-pi-multiple 1 2) x))
+      ((== (abs x) one)
+       (cond ((not acos?) (certified-pi-multiple (if (< x zero) -1 1) 2))
+             ((< x zero) (certified-pi-multiple 1 1))
+             (True zero)))
+      (True
+       (let (Dyadic m k) = (the Dyadic (approx 0 x)))
+       (certify-grid (if acos? "acos" "asin")
+         (fn (w)
+           (let unit = (lsh 1 w))
+           (let a = (bounds-dyadic (Dyadic (abs m) k) w))
+           (let b = (bounds-sqrt (bounds- (Bounds unit unit) (bounds* a a unit)) unit))
+           (if acos? (angle-bounds b a False (< m 0) w)
+               (angle-bounds a b (< m 0) False w)))))))
+
   (define-instance (Trigonometric BigFloat)
     (define (sin x)
       (match (resolve x)
@@ -1159,6 +1241,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
          (cond
            ((== m 0)
             (BFValue (Dyadic 0 0)))
+           ((directed?) (directed-circle "sin" Sine (Dyadic m k)))
            (True
             (let prec = (to-integer (get-precision)))
             (let len-m = (bit-length m))
@@ -1180,6 +1263,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
          (cond
            ((== m 0)
             (normalize-dyadic 1 0))
+           ((directed?) (directed-circle "cos" Cosine (Dyadic m k)))
            (True
             (let prec = (to-integer (get-precision)))
             (let x-mag = (+ (bit-length m) k))
@@ -1197,6 +1281,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
          (cond
            ((== m 0)
             (BFValue (Dyadic 0 0)))
+           ((directed?) (directed-circle "tan" Tangent (Dyadic m k)))
            (True
             (let prec = (to-integer (get-precision)))
             (let len-m = (bit-length m))
@@ -1213,6 +1298,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
         ((BFNegZero) BFNegZero)
         (_ BFNaN)))
     (define (atan x)
+      (when (directed?) (return (directed-angle (resolve x) one)))
       (let prec = (to-integer (get-precision)))
       (match (resolve x)
         ((BFValue (Dyadic m k))
@@ -1229,6 +1315,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
            ((Dyadic pm pe) (normalize-dyadic (neg pm) (- pe 1)))))
         (_ BFNaN)))
     (define (asin x)
+      (when (directed?) (return (directed-inverse-circle (resolve x) False)))
       (let prec = (to-integer (get-precision)))
       (match (resolve x)
         ((BFNegZero) BFNegZero)
@@ -1269,6 +1356,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
                     ((Dyadic am ae) (normalize-dyadic am ae))))))))))
         (_ BFNaN)))
     (define (acos x)
+      (when (directed?) (return (directed-inverse-circle (resolve x) True)))
       (let prec = (to-integer (get-precision)))
       (match (resolve x)
         ((BFNegZero)
@@ -1543,6 +1631,105 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
             (True None)))
          ((None) None)))))
 
+  (declare directed-power (Dyadic * Dyadic -> BigFloat))
+  (define (directed-power x y)
+    ;; x > 0. Keep the exponent binary: no logarithm and no rounded 1/n.
+    (let (Dyadic a k) = (dyadic:simplify y))
+    (match (dyadic:simplify x)
+      ((Dyadic 1 e)
+       (match (dyadic:simplify (Dyadic (* e a) k))
+         ((Dyadic n j)
+          (when (>= j 0)
+            (return (normalize-dyadic 1 (lsh n j)))))))
+      (_ (values)))
+    (when (> (+ (abs k) (bit-length a)) 1024)
+      (cannot-certify "pow" "the exponent requires more than 1024 binary power/root steps"))
+    (let enclose-side =
+      (fn ()
+        ;; Invert the exact input *first* for negative powers. All later
+        ;; operations (square roots, squares and products) are monotone on
+        ;; positive operands, so a single working direction bounds this side.
+        (let b = (if (< a 0) (recip (BFValue x)) (BFValue x)))
+        (let root = (rec go ((v b) (j (max 0 (neg k))))
+                      (if (== j 0) v (go (sqrt v) (- j 1)))))
+        (^ root (lsh (abs a) (max 0 k)))))
+    (certify-bounds "pow"
+      (fn (w)
+        (let p = (from-int w))
+        (Some (Tuple (with-precision-rounding enclose-side :precision p :rounding RoundDown)
+                     (with-precision-rounding enclose-side :precision p :rounding RoundUp))))))
+
+  (declare odd-integer-log (Integer * Integer -> Optional Fraction))
+  (define (odd-integer-log b x)
+    ;; b > 1, x >= 1. For powers of a common integer the exponents follow
+    ;; Euclid's algorithm: x = b^q * r, then log_b(r) = 1/log_r(b).
+    (cond
+      ((== x 1) (Some 0))
+      ((< x b) (map recip (odd-integer-log x b)))
+      (True
+       (let q = (ilog b x))
+       (let (values r rem) = (quotrem x (^ b q)))
+       (if (== rem 0)
+           (map (fn (s) (+ (from-int q) s)) (odd-integer-log b r))
+           None))))
+
+  (define-type HyperbolicFunction
+    SinhFunction CoshFunction TanhFunction AsinhFunction AcoshFunction AtanhFunction)
+
+  (declare directed-hyperbolic (HyperbolicFunction * String * BigFloat -> BigFloat))
+  (define (directed-hyperbolic op name x)
+    (let negative? = (bf-negative-sign? x))
+    (cond
+      ((nan? x) BFNaN)
+      ((bf-zero? x)
+       (match op ((CoshFunction) one) ((AcoshFunction) BFNaN) (_ x)))
+      ((infinite? x)
+       (match op
+         ((CoshFunction) BFInf)
+         ((AcoshFunction) (if negative? BFNaN BFInf))
+         ((AtanhFunction) BFNaN)
+         ((TanhFunction) (if negative? (neg one) one))
+         (_ x)))
+      (True
+       (let (Dyadic m k) = (the Dyadic (approx 0 x)))
+       (let d = (Dyadic (abs m) k))
+       (let s = (sign m))
+       (match op
+         ((AcoshFunction)
+          (when (or negative? (< d (Dyadic 1 0))) (return BFNaN))
+          (when (== d (Dyadic 1 0)) (return zero)))
+         ((AtanhFunction)
+          (when (> d (Dyadic 1 0)) (return BFNaN))
+          (when (== d (Dyadic 1 0)) (return (if negative? BFNegInf BFInf))))
+         (_ (values)))
+       (check-grid-range name d)
+       (certify-grid name
+         (fn (w)
+           (let unit = (lsh 1 w))
+           (let one = (Bounds unit unit))
+           (let a = (bounds-dyadic d w))
+           (match op
+             ((AsinhFunction)
+              (let b = (bounds-sqrt (bounds+ (bounds* a a unit) one) unit))
+              (map (fn (v) (bounds-times-int v s)) (bounds-ln (bounds+ a b) w)))
+             ((AcoshFunction)
+              (let b = (bounds-sqrt (bounds- (bounds* a a unit) one) unit))
+              (bounds-ln (bounds+ a b) w))
+             ((AtanhFunction)
+              (do
+                (p <- (bounds-ln (bounds+ one a) w))
+                (n <- (bounds-ln (bounds- one a) w))
+                (pure (bounds-div-int (bounds-times-int (bounds- p n) s) 2))))
+             (_
+              (let p = (exp-bounds d w))
+              (let n = (exp-bounds (neg d) w))
+              (let diff = (bounds-times-int (bounds- p n) s))
+              (let sum = (bounds+ p n))
+              (match op
+                ((SinhFunction) (Some (bounds-div-int diff 2)))
+                ((CoshFunction) (Some (bounds-div-int sum 2)))
+                (_ (bounds/ diff sum unit))))))))))
+
   (declare bf-hyperbolic (BigFloat * Boolean -> BigFloat))
   (define (bf-hyperbolic x tanh?)
     (let prec = (to-integer (get-precision)))
@@ -1561,8 +1748,12 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
           (let s = (max 3 (- (+ prec 3) (bit-length m))))
           (normalize-dyadic (* (sign m) (- (lsh (abs m) s) 1)) (- e s)))
          ((and tanh? (> (Dyadic (abs m) e) (Dyadic (+ prec 2) 0)))
+          ;; 0 < 1 - tanh(a) < 2 exp(-2a) < 2^-prec here.
           (let p = (+ prec 3))
           (normalize-dyadic (* (sign m) (- (lsh 1 p) 1)) (neg p)))
+         ((directed?)
+          (directed-hyperbolic (if tanh? TanhFunction AsinhFunction)
+                               (if tanh? "tanh" "asinh") (BFValue (Dyadic m e))))
          (True
           (normalize
            (with-precision-rounding
@@ -1578,16 +1769,30 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
       (_ BFNaN)))
 
   (define-instance (Exponentiable BigFloat)
-    (define (sinh x) (canonical-sinh x))
-    (define (cosh x) (canonical-cosh x))
-    (define (acosh x) (canonical-acosh x))
-    (define (atanh x) (canonical-atanh x))
+    (define (sinh x)
+      (if (directed?) (directed-hyperbolic SinhFunction "sinh" (resolve x)) (canonical-sinh x)))
+    (define (cosh x)
+      (if (directed?) (directed-hyperbolic CoshFunction "cosh" (resolve x)) (canonical-cosh x)))
+    (define (acosh x)
+      (if (directed?) (directed-hyperbolic AcoshFunction "acosh" (resolve x)) (canonical-acosh x)))
+    (define (atanh x)
+      (if (directed?) (directed-hyperbolic AtanhFunction "atanh" (resolve x)) (canonical-atanh x)))
     (define (tanh x) (bf-hyperbolic x True))
     (define (asinh x) (bf-hyperbolic x False))
     (define (exp x)
       (let prec = (to-integer (get-precision)))
       (match (resolve x)
         ((BFValue (Dyadic m k))
+         (when (== m 0) (return (normalize-dyadic 1 0)))
+         (when (directed?)
+           (let d = (Dyadic m k))
+           (check-grid-range "exp" d)
+           ;; For |x| this small, |exp(x)-1| < 2|x|, strictly on the
+           ;; side indicated by x and inside the adjacent target interval.
+           (when (< (+ (bit-length m) k) (neg (+ prec 2)))
+             (let p = (+ prec 2))
+             (return (normalize-dyadic (+ (lsh 1 p) (sign m)) (neg p))))
+           (return (certify-grid "exp" (fn (w) (Some (exp-bounds d w))))))
          (match (exp-dyadic m k prec)
            ((Dyadic em ee-exp) (normalize-dyadic em ee-exp))))
         ((BFNegZero) (normalize-dyadic 1 0))
@@ -1601,6 +1806,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
          (cond
            ((< m 0) BFNaN)
            ((== m 0) BFNegInf)
+           ((directed?) (certify-grid "ln" (fn (w) (Some (ln-bounds (Dyadic m k) w)))))
            (True
             (match (ln-dyadic m k prec)
               ((Dyadic lm le) (normalize-dyadic lm le))))))
@@ -1616,6 +1822,12 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
         ((and (bf-zero? rx) (bf-zero? ry)) BFNaN)
         ((< rx 0) BFNaN)
         ((bf-zero? rx)
+         (when (and (directed?) (bf-negative-sign? rx))
+           (match ry
+             ((BFValue d)
+              (let (Dyadic _ e) = (dyadic:simplify d))
+              (when (== e 0) (return (if (< ry zero) BFNegInf BFNegZero))))
+             (_ (values))))
          (if (< ry 0)
              BFInf
              (BFValue (Dyadic 0 0))))
@@ -1628,7 +1840,9 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
              BFNaN
              (normalize-dyadic 1 0)))
         ((or (infinite? rx) (infinite? ry))
-         (exp (* ry (ln rx))))
+         (if (directed?)
+             (if (== (> rx one) (> ry zero)) BFInf zero)
+             (exp (* ry (ln rx)))))
         (True
          (match (Tuple rx ry)
            ((Tuple (BFValue (Dyadic mx kx)) (BFValue (Dyadic my ky)))
@@ -1642,6 +1856,7 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
             (match (bounded-algebraic-power (Dyadic mx kx) (Dyadic my ky))
               ((Some v) (return v))
               ((None) (values)))
+            (when (directed?) (return (directed-power (Dyadic mx kx) (Dyadic my ky))))
             (cond
               (x-pow2?
                (let prod-d = (Dyadic (* p2-exp my) ky))
@@ -1685,6 +1900,31 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
                  ((Dyadic em ee-exp) (normalize-dyadic em ee-exp))))))
            (_ BFNaN)))))
     (define (log b x)
+      (when (directed?)
+        (let b = (resolve b))
+        (let x = (resolve x))
+        ;; Match the extended-real ln(x)/ln(b) convention without rounding
+        ;; either logarithm first. For infinities and zeros only signs matter.
+        (when (or (nan? b) (nan? x) (< b zero) (< x zero)) (return BFNaN))
+        (let exceptional = (fn (v) (or (bf-zero? v) (infinite? v) (== v one))))
+        (when (or (exceptional b) (exceptional x))
+          (let log-sign = (fn (v) (cond ((bf-zero? v) BFNegInf) ((infinite? v) BFInf)
+                                        ((== v one) zero) ((< v one) (neg one)) (True one))))
+          (return (/ (log-sign x) (log-sign b))))
+        (when (== b x) (return one))
+        (let bd = (dyadic:simplify (the Dyadic (approx 0 b))))
+        (let xd = (dyadic:simplify (the Dyadic (approx 0 x))))
+        (let (Dyadic mb eb) = bd)
+        (let (Dyadic mx ex) = xd)
+        (when (and (== mb 1) (== mx 1)) (return (div-dyadic ex 0 eb 0)))
+        (when (and (> mb 1) (> mx 1))
+          (match (odd-integer-log mb mx)
+            ((Some q)
+             ;; The odd parts agree by construction; check powers of two.
+             (when (== (* eb (numerator q)) (* ex (denominator q))) (return (into q))))
+            ((None) (values))))
+        (return (certify-grid "log"
+                  (fn (w) (bounds/ (ln-bounds xd w) (ln-bounds bd w) (lsh 1 w))))))
       (normalize
        (with-precision-rounding
          (fn () (/ (ln x) (ln b)))
@@ -1693,13 +1933,26 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
 
   (declare bf-ee (Void -> BigFloat))
   (define (bf-ee)
-    "Return the value of ee = exp(1) to the currently set precision."
+    "Return $e$ at the active precision; directed results are correctly rounded."
+    (when (directed?) (return (exp one)))
     (match (raw-ee (to-integer (get-precision)))
       ((Dyadic m e) (normalize-dyadic m e))))
 
   (define-instance (Radical BigFloat)
     (define (hypot x y)
-      (if (or (infinite? x) (infinite? y)) BFInf (canonical-hypot x y)))
+      (cond
+        ((or (infinite? x) (infinite? y)) BFInf)
+        ((not (directed?)) (canonical-hypot x y))
+        ((or (nan? x) (nan? y)) BFNaN)
+        (True
+         ;; The square of *every* candidate p-bit result fits in 2p bits.
+         ;; Rounding the sum of the exact squares to 2p in the same direction
+         ;; therefore preserves the comparison that chooses the p-bit root.
+         (let (Dyadic a e) = (the Dyadic (approx 0 x)))
+         (let (Dyadic b f) = (the Dyadic (approx 0 y)))
+         (sqrt (with-precision
+                 (fn () (add-dyadic (* a a) (* 2 e) (* b b) (* 2 f)))
+                 :precision (* 2 (get-precision)))))))
     (define (sqrt x)
       (match (resolve x)
         ((BFValue (Dyadic m e))
@@ -1724,10 +1977,22 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
         ((nan? x) BFNaN)
         ((== n 1) (normalize x))
         ((== n 2) (sqrt x))
-        ((<= (abs n) 64)
+        ((or (<= (abs n) 64) (and (directed?) (<= (abs n) 256)))
          (let (Dyadic m e) = (the Dyadic (approx 0 x)))
          (round-rational-root (abs n) (if (> n 0) (abs m) 1) (if (> n 0) 1 (abs m))
                               (if (> n 0) e (neg e)) (< m 0)))
+        ((directed?)
+         (let (Dyadic m e) = (dyadic:simplify (the Dyadic (approx 0 x))))
+         (let (values q r) = (quotrem e n))
+         (when (and (== (abs m) 1) (== r 0)) (return (normalize-dyadic (sign m) q)))
+         ;; A nontrivial integer root requires |m| >= 2^|n|. Test it
+         ;; without ever constructing a huge power from a tiny radicand.
+         (when (and (== r 0) (< (abs n) (bit-length m)))
+           (let t = (integer-root (abs n) (abs m)))
+           (when (== (^ t (abs n)) (abs m))
+             (let signed = (* (sign m) t))
+             (return (if (> n 0) (normalize-dyadic signed q) (div-dyadic 1 q signed 0)))))
+         (cannot-certify "nth-root" "indices above 256 in magnitude require a perfect dyadic root"))
         ((bf-negative-sign? x)
          (let mode = (match (get-rounding-mode)
                        ((RoundUp) RoundDown)
@@ -1779,8 +2044,15 @@ Returns (Tuple q (Tuple r-fixed work-prec))."
                      (normalize-dyadic em (+ ee-exp q-exp)))))))))
            (_ BFNaN))))))
 
+  (define (reciprocal-sqrt a)
+    "Reciprocal square root, rounded once in directed modes."
+    (cond ((not (directed?)) (recip (sqrt a)))
+          ((and (bf-zero? a) (bf-negative-sign? a)) BFNegInf)
+          (True (nth-root -2 a))))
+
   (define-instance (Elementary BigFloat)
-    (define (atan2 y x) (canonical-atan2 y x))
+    (define (atan2 y x)
+      (if (directed?) (directed-angle (resolve y) (resolve x)) (canonical-atan2 y x)))
     (define pi (BFConst bf-pi))
     (define ee (BFConst bf-ee)))
 

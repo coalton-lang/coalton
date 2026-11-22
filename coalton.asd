@@ -151,6 +151,7 @@
                 :serial t
                 :components ((:file "package")
                              (:file "portable-big-float-macros")
+                             (:ct-file "enclosures")
                              (:ct-file "impl-default")))
                (:module "computable-reals"
                 :serial t

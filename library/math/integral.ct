@@ -342,7 +342,7 @@ Laws:
 (coalton-toplevel
   (declare ^ ((Multiplicative :a) (Integral :int) => :a * :int -> :a))
   (define (^ base power)
-    "Exponentiate `base` to a non-negative `power`, using the overflow behavior of the base's multiplication."
+    "Exponentiate `base` to a non-negative `power`. The generic algorithm composes multiplications with their usual rounding and overflow behavior; it does not promise a single rounded power."
     ;; In particular, 2 cannot be represented by a Bit exponent.
     (let n = (to-integer power))
     (when (< n 0) (error "Can't exponentiate with a negative exponent."))
@@ -360,7 +360,7 @@ Laws:
 
   (declare ^^ ((Reciprocable :a) (Integral :int) => :a * :int -> :a))
   (define (^^ base power)
-    "Exponentiate `base` to a signed `power`."
+    "Exponentiate `base` to a signed `power`. For a negative exponent the generic algorithm powers the reciprocal, rounding each operation separately on floating-point types."
     (let n = (to-integer power))
     (if (< n 0)
         (^ (recip base) (neg n))

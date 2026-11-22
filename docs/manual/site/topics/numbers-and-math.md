@@ -209,10 +209,21 @@ requires `Ord`, not the entire class. To retain the algebraic formulas in
 custom instances, forward these methods to their `canonical-` counterparts
 (for example, `canonical-hypot`, `canonical-sinh`, or `canonical-atan2`).
 These helpers compose ordinary operations; they do not promise single rounding.
-These algebraic formulas suit exact and formal arithmetic; a fixed-precision
-type should use its stable numerical kernels instead. Identities for
-logarithms, roots and inverse functions assume the appropriate real domain
-or complex branch; they are not bitwise identities for rounded numbers.
+Identities for logarithms, roots and inverse functions assume the appropriate
+real domain or complex branch; they are not bitwise identities for rounded numbers.
+
+For `BigFloat`, a **single** arithmetic or real elementary operation in
+`rndu`, `rndd`, `rndz`, or `rnda` returns the correctly rounded value at the
+selected precision or signals `big-float:uncertified-rounding`. Up and down
+mean the *nearest* representable upper and lower neighbors, not just bounds.
+This includes `pow`, `hypot`, the hyperbolic functions, `atan2`, and the
+constants `pi` and `ee`. For example, the fourth root of a stored $81$ is
+exactly $3$ in either direction at four bits. The proof is for the stored
+operands: `^`, `^^`, the `canonical-` formulas, and generic complex arithmetic
+compose separately rounded operations. Nearest-mode transcendental results
+retain their existing approximation semantics. See the
+[BigFloat README](https://github.com/coalton-lang/coalton/tree/main/xmath/big-float)
+for supported ranges, exact shortcuts, and refinement limits.
 
 #### Complex Numbers (`coalton/math/complex`)
 
