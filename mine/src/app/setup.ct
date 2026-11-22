@@ -10,7 +10,8 @@
    (#:cellw #:mine/text/width)
    (#:render #:mine/widget/render)
    (#:wt #:mine/widget/types)
-   (#:cfg #:mine/config/types))
+   (#:cfg #:mine/config/types)
+   (#:comp #:mine/app/completion))
   (:export
    #:run-setup))
 
@@ -288,14 +289,6 @@
        (let len = (cellw:string-cell-width s))
        (max len (%max-string-length rest)))))
 
-  ;;; Directory path tab completion
-
-  (declare %complete-dir (String -> (Tuple String (List String))))
-  (define (%complete-dir text)
-    "Tab-complete a directory path. Returns (completed-text, candidates)."
-    (lisp (-> (Tuple String (List String))) (text)
-      (%setup-complete-dir text)))
-
   ;;; Completion display
 
   (declare %max-cand-len ((List String) * UFix -> UFix))
@@ -465,7 +458,7 @@
          ((input:IEvKey (input:KeyEnter) _) text)
          ((input:IEvKey (input:KeyEscape) _) "")
          ((input:IEvKey (input:KeyTab) _)
-          (match (%complete-dir text)
+          (match (comp:complete-directory-path text)
             ((Tuple completed new-cands)
              (let new-len = (lisp (-> UFix) (completed) (cl:length completed)))
              (%text-input-loop terminal title description
@@ -945,108 +938,3 @@
     (show-done terminal)
 
     (term:terminal-shutdown terminal)))
-
-;;; CL helpers for directory tab completion
-
-(cl:defun %setup-list-dirs (dir-path)
-  "List subdirectory names in DIR-PATH. Returns a list of name strings with trailing /."
-  (cl:handler-case
-      (cl:let* ((dir (cl:pathname dir-path))
-                (wild (cl:make-pathname :name ':wild :type ':wild :defaults dir))
-                (entries (cl:directory wild :resolve-symlinks cl:nil)))
-        (cl:remove cl:nil
-          (cl:mapcar
-           (cl:lambda (entry)
-             (cl:handler-case
-                 (cl:let ((name (cl:file-namestring entry)))
-                   (cl:if (cl:string= name "")
-                          ;; Directory entry -- extract last dir component
-                          (cl:let ((dirs (cl:pathname-directory entry)))
-                            (cl:if (cl:and dirs (cl:consp dirs))
-                                   (cl:let ((last-dir (cl:car (cl:last dirs))))
-                                     (cl:if (cl:stringp last-dir)
-                                            (cl:concatenate 'cl:string last-dir "/")
-                                            cl:nil))
-                                   cl:nil))
-                          cl:nil))
-               (cl:error () cl:nil)))
-           entries)))
-    (cl:error () cl:nil)))
-
-(cl:defun %setup-common-prefix (strings)
-  "Return the longest common prefix of a list of strings."
-  (cl:if (cl:null strings) ""
-         (cl:let ((first (cl:first strings)))
-           (cl:loop :for i :from 0 :below (cl:length first)
-                    :while (cl:every
-                            (cl:lambda (s)
-                              (cl:and (cl:< i (cl:length s))
-                                      (cl:char= (cl:char first i)
-                                                 (cl:char s i))))
-                            strings)
-                    :finally (cl:return (cl:subseq first 0 i))))))
-
-(cl:defun %setup-strings-to-coalton-list (strings)
-  "Convert a CL list of strings to a Coalton (List String)."
-  (cl:if (cl:null strings)
-         coalton:Nil
-         (Cons (cl:first strings)
-               (%setup-strings-to-coalton-list (cl:rest strings)))))
-
-(cl:defun %setup-complete-dir (text)
-  "Complete a directory path. Returns (Tuple completed-text candidates)."
-  (cl:handler-case
-      (cl:let* (;; Expand ~ to home directory
-                (expanded (cl:if (cl:and (cl:plusp (cl:length text))
-                                         (cl:char= (cl:char text 0) #\~))
-                                 (cl:let ((home (cl:namestring
-                                                 (cl:user-homedir-pathname))))
-                                   (cl:concatenate 'cl:string
-                                     (cl:string-right-trim "/" home)
-                                     (cl:subseq text 1)))
-                                 text))
-                ;; Split into directory and prefix
-                (dir-end (cl:or (cl:position #\/ expanded :from-end cl:t) -1))
-                (dir-part (cl:if (cl:>= dir-end 0)
-                                 (cl:subseq expanded 0 (cl:1+ dir-end))
-                                 ""))
-                (prefix (cl:if (cl:>= dir-end 0)
-                               (cl:subseq expanded (cl:1+ dir-end))
-                               expanded))
-                ;; List directories only
-                (search-dir (cl:if (cl:string= dir-part "")
-                                   (cl:namestring (cl:truename "."))
-                                   dir-part))
-                (entries (%setup-list-dirs search-dir))
-                ;; Filter by prefix and sort
-                (matches (cl:remove-if-not
-                          (cl:lambda (name)
-                            (cl:and (cl:>= (cl:length name) (cl:length prefix))
-                                    (cl:string= prefix name
-                                                :end2 (cl:length prefix))))
-                          entries))
-                (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
-        (cl:if (cl:null sorted)
-               (Tuple text coalton:Nil)
-               (cl:let* ((common (%setup-common-prefix sorted))
-                         (completed (cl:concatenate 'cl:string dir-part common))
-                         ;; Re-insert ~ if we expanded it
-                         (display
-                          (cl:if (cl:and (cl:plusp (cl:length text))
-                                         (cl:char= (cl:char text 0) #\~))
-                                 (cl:let ((home (cl:namestring
-                                                 (cl:user-homedir-pathname))))
-                                   (cl:if (cl:and (cl:>= (cl:length completed)
-                                                          (cl:length home))
-                                                  (cl:string= home completed
-                                                              :end2 (cl:length home)))
-                                          (cl:concatenate 'cl:string "~/"
-                                            (cl:subseq completed (cl:length home)))
-                                          completed))
-                                 completed))
-                         (cands (cl:if (cl:= (cl:length sorted) 1)
-                                       coalton:Nil
-                                       (%setup-strings-to-coalton-list sorted))))
-                 (Tuple display cands))))
-    (cl:error ()
-      (Tuple text coalton:Nil))))
