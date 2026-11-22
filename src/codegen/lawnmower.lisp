@@ -12,6 +12,8 @@ later passes and Lisp compilers see simpler code.")
    #:coalton-impl/codegen/transformations
    #:node-mutated-variables
    #:node-variables
+   #:inlined-some-operand
+   #:inlined-cons-operands
    #:rename-type-variables)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
@@ -25,7 +27,6 @@ later passes and Lisp compilers see simpler code.")
    #:traverse-with-binding-list)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:lawnmow))
@@ -371,56 +372,6 @@ and result types before beta-reducing."
      (copy-node (node-abstraction-subexpr abstraction)
                 (node-type application)))))
 
-(defun inlined-some-arg (node)
-  "If NODE is an inlined `coalton:Some` wrapper, return its argument variable node."
-  (declare (type node node)
-           (values (or null node-local-variable) &optional))
-  (when (and (node-lisp-p node)
-             (= 1 (length (node-lisp-vars node)))
-             (= 1 (length (node-lisp-form node)))
-             (tc:tapp-p (node-type node))
-             (tc:tycon-p (tc:tapp-from (node-type node)))
-             (eq 'coalton:Optional (tc:tycon-name (tc:tapp-from (node-type node)))))
-    (let ((binding (first (node-lisp-vars node)))
-          (form (first (node-lisp-form node))))
-      (when (and (consp form)
-                 (eq 'rt:cl-some (first form))
-                 (consp (cdr form))
-                 (null (cddr form))
-                 (eq (car binding) (second form)))
-        (make-node-local-variable
-         :type (tc:tapp-to (node-type node))
-         :value (cdr binding))))))
-
-(defun inlined-cons-args (node)
-  "If NODE is an inlined `coalton:Cons` wrapper, return its two argument variable nodes."
-  (declare (type node node)
-           (values list boolean &optional))
-  (when (and (node-lisp-p node)
-             (= 2 (length (node-lisp-vars node)))
-             (= 1 (length (node-lisp-form node)))
-             (tc:tapp-p (node-type node))
-             (tc:tycon-p (tc:tapp-from (node-type node)))
-             (eq 'coalton:List (tc:tycon-name (tc:tapp-from (node-type node)))))
-    (let ((car-binding (first (node-lisp-vars node)))
-          (cdr-binding (second (node-lisp-vars node)))
-          (form (first (node-lisp-form node))))
-      (when (and (consp form)
-                 (eq 'cl:cons (first form))
-                 (consp (cdr form))
-                 (consp (cddr form))
-                 (null (cdddr form))
-                 (eq (car car-binding) (second form))
-                 (eq (car cdr-binding) (third form)))
-        (values
-         (list (make-node-local-variable
-                :type (tc:tapp-to (node-type node))
-                :value (cdr car-binding))
-               (make-node-local-variable
-                :type (node-type node)
-                :value (cdr cdr-binding)))
-         t)))))
-
 (defun known-constructor-application-p (name arity env)
   (declare (type parser:identifier name)
            (type fixnum arity)
@@ -462,9 +413,9 @@ and result types before beta-reducing."
            (values name nil t t)
            (values nil nil nil nil))))
     (node-lisp
-     (alexandria:if-let ((some-arg (inlined-some-arg node)))
+     (alexandria:if-let ((some-arg (inlined-some-operand node)))
        (values 'coalton:Some (list some-arg) t t)
-       (multiple-value-bind (cons-args cons-p) (inlined-cons-args node)
+       (multiple-value-bind (cons-args cons-p) (inlined-cons-operands node)
          (if cons-p
              (values 'coalton:Cons cons-args t t)
              (values nil nil nil nil)))))

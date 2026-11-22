@@ -28,6 +28,8 @@ calling conventions.")
    #:traverse-with-binding-list)
   (:import-from
    #:coalton-impl/codegen/transformations
+   #:inlined-some-operand
+   #:inlined-cons-operands
    #:node-abstraction-bound-variables
    #:node-free-p
    #:non-capturing-higher-order-rator-p
@@ -35,7 +37,6 @@ calling conventions.")
    #:non-escaping-let-function-names)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:rt #:coalton-impl/runtime)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -594,56 +595,6 @@ captured by escaping closures."
         (when (node-free-p rewritten (list name))
           rewritten)))))
 
-(defun inlined-some-arg (node)
-  "If NODE is an inlined `coalton:Some` wrapper, return its argument node."
-  (declare (type node node)
-           (values (or null node-local-variable) &optional))
-  (when (and (node-lisp-p node)
-             (= 1 (length (node-lisp-vars node)))
-             (= 1 (length (node-lisp-form node)))
-             (tc:tapp-p (node-type node))
-             (tc:tycon-p (tc:tapp-from (node-type node)))
-             (eq 'coalton:Optional (tc:tycon-name (tc:tapp-from (node-type node)))))
-    (let ((binding (first (node-lisp-vars node)))
-          (form (first (node-lisp-form node))))
-      (when (and (consp form)
-                 (eq 'rt:cl-some (first form))
-                 (consp (cdr form))
-                 (null (cddr form))
-                 (eq (car binding) (second form)))
-        (make-node-local-variable
-         :type (tc:tapp-to (node-type node))
-         :value (cdr binding))))))
-
-(defun inlined-cons-args (node)
-  "If NODE is an inlined `coalton:Cons` wrapper, return its argument nodes."
-  (declare (type node node)
-           (values list boolean &optional))
-  (when (and (node-lisp-p node)
-             (= 2 (length (node-lisp-vars node)))
-             (= 1 (length (node-lisp-form node)))
-             (tc:tapp-p (node-type node))
-             (tc:tycon-p (tc:tapp-from (node-type node)))
-             (eq 'coalton:List (tc:tycon-name (tc:tapp-from (node-type node)))))
-    (let ((car-binding (first (node-lisp-vars node)))
-          (cdr-binding (second (node-lisp-vars node)))
-          (form (first (node-lisp-form node))))
-      (when (and (consp form)
-                 (eq 'cl:cons (first form))
-                 (consp (cdr form))
-                 (consp (cddr form))
-                 (null (cdddr form))
-                 (eq (car car-binding) (second form))
-                 (eq (car cdr-binding) (third form)))
-        (values
-         (list (make-node-local-variable
-                :type (tc:tapp-to (node-type node))
-                :value (cdr car-binding))
-               (make-node-local-variable
-                :type (node-type node)
-                :value (cdr cdr-binding)))
-         t)))))
-
 (defun constructed-adt (node env)
   "Recognize a saturated constructor expression for an eligible struct or ADT.
 Returns (VALUES CTOR-ENTRY TYPE-ENTRY ARG-NODES)."
@@ -686,29 +637,17 @@ Returns (VALUES CTOR-ENTRY TYPE-ENTRY ARG-NODES)."
                   (zerop (tc:constructor-entry-arity ctor)))
          (values ctor type nil))))
     (node-lisp
-     (alexandria:if-let ((some-arg (inlined-some-arg node)))
+     (alexandria:if-let ((some-arg (inlined-some-operand node)))
        (values (tc:lookup-constructor env 'coalton:Some)
                (tc:lookup-type env 'coalton:Optional)
                (list some-arg))
-       (multiple-value-bind (cons-args cons-p) (inlined-cons-args node)
+       (multiple-value-bind (cons-args cons-p) (inlined-cons-operands node)
          (when cons-p
            (values (tc:lookup-constructor env 'coalton:Cons)
                    (tc:lookup-type env 'coalton:List)
                    cons-args)))))
     (t
      (values nil nil nil))))
-
-(defun constructed-struct (node env)
-  "Recognize a fully applied constructor for an ordinary single-constructor
-struct or algebraic data type."
-  (declare (type node node)
-           (type tc:environment env))
-  (multiple-value-bind (ctor type rands) (constructed-adt node env)
-    (when (and ctor
-               type
-               (= 1 (length (tc:type-entry-constructors type)))
-               (null (tc:type-entry-explicit-repr type)))
-      (values ctor type rands))))
 
 (defun force-value-binding-node (node)
   (declare (type node node)
@@ -917,27 +856,6 @@ hidden in Lisp escapes, direct calls, and keyword arguments."
                          (eq name (node-variable-value (node-match-expr node))))
                 (nth-value 0
                            (reduce-match-on-known-constructor node ctor fields env))))))))
-    (when (node-free-p body (list name))
-      body)))
-
-(defun replace-struct-reads (body name readers fields)
-  (declare (type node body)
-           (type symbol name)
-           (type list readers fields))
-  (let ((body
-          (traverse
-           body
-           (list
-            (action (:traverse node-abstraction node) node)
-            (action (:after node-direct-application node)
-              (let ((args (node-direct-application-rands node))
-                    (index (position (node-direct-application-rator node) readers)))
-                (when (and index
-                           (null (node-direct-application-keyword-rands node))
-                           (= 1 (length args))
-                           (node-local-variable-p (first args))
-                           (eq name (node-variable-value (first args))))
-                  (copy-node (nth index fields) (node-type node)))))))))
     (when (node-free-p body (list name))
       body)))
 
