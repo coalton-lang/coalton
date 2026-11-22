@@ -10,6 +10,7 @@ later passes and Lisp compilers see simpler code.")
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
+   #:node-mutated-variables
    #:node-variables
    #:rename-type-variables)
   (:import-from
@@ -31,14 +32,13 @@ later passes and Lisp compilers see simpler code.")
 
 (in-package #:coalton-impl/codegen/lawnmower)
 
-(defvar *loop-step-variables* nil
-  "Identifiers assigned by loop steps in the current lawnmower traversal.
-Binders have unique renamed identifiers, so retaining these names after leaving
-a loop is conservative. Reading one takes a snapshot, not an immutable alias.")
+(defvar *mutated-variables* nil
+  "Identifiers assigned in the current lawnmower traversal.
+Reading one takes a snapshot, not an immutable alias.")
 
 (defun stable-alias-target-p (node)
   (and (typep node '(or node-local-variable node-global-variable))
-       (not (member (node-variable-value node) *loop-step-variables* :test #'eq))))
+       (not (member (node-variable-value node) *mutated-variables* :test #'eq))))
 
 (defun identifiers-disjoint-p (left right)
   (declare (type parser:identifier-list left right)
@@ -172,7 +172,7 @@ push OUTER-BRANCHES into the inner match branches."
            (values (or null node-local-variable node-global-variable) &optional))
   (let ((name (car binding))
         (expr (cdr binding)))
-    (when (and (not (member name *loop-step-variables* :test #'eq))
+    (when (and (not (member name *mutated-variables* :test #'eq))
                (stable-alias-target-p expr)
                (not (eq name (node-variable-value expr))))
       expr)))
@@ -988,7 +988,7 @@ Returns a status keyword and a replacement body. Status is one of:
        (values (copy-node expr (node-type node)) t))
 
       ;; (bind x y body[x]) -> body[y]
-      ((and (not (member name *loop-step-variables* :test #'eq))
+      ((and (not (member name *mutated-variables* :test #'eq))
             (stable-alias-target-p expr)
             (not (eq name (node-variable-value expr)))
             (alias-bind-safe-p name (node-variable-value expr) body))
@@ -1005,7 +1005,7 @@ Returns a status keyword and a replacement body. Status is one of:
             (null (node-abstraction-keyword-params expr))
             (single-value-function-p expr)
             (not (member name (node-variables expr) :test #'eq))
-            (null (intersection (node-variables expr) *loop-step-variables* :test #'eq))
+            (null (intersection (node-variables expr) *mutated-variables* :test #'eq))
             (let ((direct-count (direct-application-occurrence-count body name))
                   (total-count (node-name-occurrence-count body name)))
               (and (plusp direct-count)
@@ -1152,34 +1152,13 @@ Returns a status keyword and a replacement body. Status is one of:
          (t
           (values node nil)))))))
 
-(defun collect-mutated-variables (node)
-  (declare (type node node)
-           (values parser:identifier-list &optional))
-  (let ((mutated nil))
-    (traverse
-     node
-     (list
-      (action (:before node-for node)
-        (dolist (binding (node-for-bindings node))
-          (let ((step (node-for-binding-step binding)))
-            (when (and step
-                       (not (and (node-local-variable-p step)
-                                 (eq (node-for-binding-name binding)
-                                     (node-variable-value step)))))
-              (pushnew (node-for-binding-name binding) mutated :test #'eq))))
-        (values))
-      (action (:before node-setq node)
-        (pushnew (node-setq-name node) mutated :test #'eq)
-        (values))))
-    mutated))
-
 (defun lawnmow (node &optional env)
   "Simplify administrative AST forms left behind by optimization passes."
   (declare (type node node)
            (type (or null tc:environment) env)
            (values node boolean &optional))
   (let ((changed? nil)
-        (*loop-step-variables* (collect-mutated-variables node)))
+        (*mutated-variables* (node-mutated-variables node)))
     (values
      (traverse
       node

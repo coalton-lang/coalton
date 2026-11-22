@@ -125,4 +125,10 @@ Code generation is responsible for both optimization and code generation. The st
 
 The entry point to optimization is `src/codegen/optimizer.lisp`.
 
+Inlining can bring an already optimized function body back through constant
+propagation. For example, scalar replacement can turn a `Cell` into a mutable
+lexical variable. Constant propagation and alias elimination use
+`node-mutated-variables` to distinguish bindings that are assigned from
+immutable ones; a constant initializer alone does not make a binding constant.
+
 Actual code generation is handled in the respective files: `codegen-*.lisp`. Of special note is `intrinsic-applications.lisp` which handles "special" functions like `inline`.

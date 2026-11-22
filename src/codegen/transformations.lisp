@@ -11,6 +11,7 @@
    #:rename-type-variables
    #:node-variables
    #:node-dynamic-variables
+   #:node-mutated-variables
    #:node-free-p
    #:node-abstraction-bound-variables
    #:non-capturing-higher-order-rator-p
@@ -135,6 +136,30 @@ both CL namespaces appearing in `node`"
               (adjoin (node-variable-value node) dynamic-vars))
         (values))))
     dynamic-vars))
+
+(defun node-mutated-variables (node)
+  "Return lexical identifiers assigned anywhere in NODE, including nested
+functions. A SETQ or a non-identity loop step makes a binding mutable even if
+its initializer is constant."
+  (declare (type node node)
+           (values parser:identifier-list &optional))
+  (let ((mutated nil))
+    (traverse
+     node
+     (list
+      (action (:before node-for node)
+        (dolist (binding (node-for-bindings node))
+          (let ((step (node-for-binding-step binding)))
+            (when (and step
+                       (not (and (node-local-variable-p step)
+                                 (eq (node-for-binding-name binding)
+                                     (node-variable-value step)))))
+              (pushnew (node-for-binding-name binding) mutated :test #'eq))))
+        (values))
+      (action (:before node-setq node)
+        (pushnew (node-setq-name node) mutated :test #'eq)
+        (values))))
+    mutated))
 
 (defun node-free-p (node bound-variables)
   "Return true if every variable in `node` is free with respect to

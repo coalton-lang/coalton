@@ -14,6 +14,9 @@
   (:import-from
    #:coalton-impl/codegen/monomorphize
    #:dictionary-node-p)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:node-mutated-variables)
   (:export
    #:propagate-constants))
 
@@ -120,9 +123,16 @@ If not, returns NIL"
       x
       (subseq x 0 16)))
 
-(defun propagate-constants (node env)
+(defun propagate-constants (node env &aux (mutated-variables (node-mutated-variables node)))
+  "Propagate constant values without eliminating bindings assigned in NODE."
   (declare (optimize debug))
-  (labels ((propagate-constants-node-variable (node constant-bindings)
+  (labels ((constant-binding-value (name value constant-bindings &key scalar-only)
+             (unless (member name mutated-variables :test #'eq)
+               (if scalar-only
+                   (scalar-constant-node-p env value constant-bindings)
+                   (constant-node-p env value constant-bindings))))
+
+           (propagate-constants-node-variable (node constant-bindings)
              (declare (type node-variable node))
              (let ((x (constant-node-p env node constant-bindings)))
                (if (not (null x))
@@ -133,7 +143,8 @@ If not, returns NIL"
              (declare (type node-bind node))
              (let* ((var (node-bind-name node))
                     (propagated-value-node (funcall *traverse* (node-bind-expr node) constant-bindings))
-                    (scalar-const (scalar-constant-node-p env propagated-value-node constant-bindings)))
+                    (scalar-const (constant-binding-value var propagated-value-node
+                                                          constant-bindings :scalar-only t)))
                (if scalar-const
                    (funcall *traverse*
                             (node-bind-body node)
@@ -152,7 +163,7 @@ If not, returns NIL"
                (loop :for (var . value) :in node-bindings
                      :for propagated-value-node := (funcall *traverse* value constant-bindings)
                      :do (cond
-                           ((constant-node-p env propagated-value-node constant-bindings)
+                           ((constant-binding-value var propagated-value-node constant-bindings)
                             (push (cons var propagated-value-node)
                                   new-constant-bindings))
                            (t
@@ -189,7 +200,7 @@ If not, returns NIL"
                          (loop :for binding :in nonconstant-bindings
                                :for (var . value) := binding
                                :for new-value := (funcall *traverse* value new-constant-bindings)
-                               :if (constant-node-p env new-value new-constant-bindings)
+                               :if (constant-binding-value var new-value new-constant-bindings)
                                  :do (push (cons var new-value) new-constant-bindings)
                                      (setf continue t)
                                :else
