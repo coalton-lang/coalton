@@ -376,3 +376,62 @@ error: Context conflicts with functional dependencies
     |
  12 |    (g (dm x) (dm x)))
     |               ^^ the predicates C :A String and C :A Integer conflict with functional dependencies
+
+================================================================================
+118 Subclasses can agree on a hidden superclass dependent
+================================================================================
+
+(package coalton-unit-test/fundep-siblings)
+
+(define-class (Parent :x :y (:x -> :y))
+  (get-y (:x -> :y)))
+(define-class (Parent :x :y => LeftChild :x)
+  (left-id (:x -> :x)))
+(define-class (Parent :x :y => RightChild :x)
+  (right-id (:x -> :x)))
+
+(declare both ((LeftChild :x) (RightChild :x) => :x -> :x))
+(define (both x) (left-id (right-id x)))
+
+(declare expose ((Parent :x :result) (LeftChild :x) => :x -> :result))
+(define (expose x) (get-y (left-id x)))
+
+================================================================================
+119 Separate uses of a subclass can have different superclass dependents
+================================================================================
+
+(package coalton-unit-test/fundep-separate-uses)
+
+(define-class (Parent :x :y (:x -> :y)))
+(define-class (Parent :x :y => Child :x))
+
+(declare independent ((Child :a) (Child :b) (Parent :a String) (Parent :b Integer)
+                      => :a * :b -> :a))
+(define (independent x _) x)
+
+(define-class (Both :a :b))
+(define-instance ((Child :a) (Child :b) (Parent :a String) (Parent :b Integer)
+                  => Both :a :b))
+
+(define-class (Child :a => Tagged :a :tag (:tag -> :a)))
+(define-instance (Child :a => Tagged :a :a))
+
+================================================================================
+120 A hidden superclass variable cannot determine an unrelated class argument
+================================================================================
+
+(package coalton-unit-test/fundep-ambiguous-hidden)
+
+(define-class (Parent :x :y (:x -> :y) (:y -> :x)))
+(define-class (Parent :x :y => Child :x))
+
+(declare f ((Child :a) (Child :b) => :a -> :a))
+(define (f x) x)
+
+--------------------------------------------------------------------------------
+
+error: Invalid qualified type
+  --> test:6:11
+   |
+ 6 |  (declare f ((Child :a) (Child :b) => :a -> :a))
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The type variable :B is ambiguous in the type (Child :A) (Child :B) => :A -> :A

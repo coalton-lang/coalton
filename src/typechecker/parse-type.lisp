@@ -636,6 +636,24 @@ being assembled."
                 (type-object-string (tc:make-qualified-ty :predicates preds :type type)
                                    env))))))
 
+(defun declared-type-restrictions (declared subs)
+  "Return the substitutions on DECLARED's variables if SUBS makes it less general."
+  (declare (type tc:qualified-ty declared)
+           (type tc:substitution-list subs)
+           (values tc:substitution-list &optional))
+  (when subs
+    (let* ((improved (tc:apply-substitution subs declared))
+           (vars (tc:type-variables declared)))
+      ;; Solving may identify hidden superclass variables, or choose one
+      ;; as the representative of a declared variable. Neither restricts
+      ;; the declaration if its type is unchanged up to renaming.
+      (unless (or (eq declared improved)
+                  (tc:ty-scheme= (tc:quantify vars declared)
+                                 (tc:quantify (tc:type-variables improved) improved)))
+        (remove-if-not (lambda (sub)
+                         (find (tc:substitution-from sub) vars :test #'tc:ty=))
+                       subs)))))
+
 (defun check-for-reducible-by-fundeps (preds ty unparsed-ty env)
   "This check is used to ensure that PREDs cannot be reduced by instance
 definitions in ENV or by each other. 
@@ -645,7 +663,7 @@ For example, consider the following class definition.
 (define-class (C :a :b (:a -> :b)))
 
 Now, the following predicate list would fail this check, because the
-substitution :a +-> :b can be inferred.
+substitution :b +-> :c can be inferred.
 
 ((C :a :b) (C :a :c))
 
@@ -662,8 +680,10 @@ the substitution :b +-> T can be inferred.
            (type parser:qualified-ty unparsed-ty)
            (type tc:environment env))
   (handler-case
-      (let ((subs (nth-value 1 (tc:solve-fundeps env preds nil))))
-        (when (consp subs)
+      (let* ((declared (tc:qualify preds ty))
+             (subs (declared-type-restrictions
+                    declared (nth-value 1 (tc:solve-fundeps env preds nil)))))
+        (when subs
           (tc-error
            "Declared context is too general"
            (tc-note
@@ -676,8 +696,7 @@ the substitution :b +-> T can be inferred.
                             :collect (type-object-string (tc:substitution-from sub) env)
                             :collect (type-object-string (tc:substitution-to sub) env))
                       (length subs)
-                      (type-object-string (tc:make-qualified-ty :predicates preds :type ty)
-                                         env)))))))
+                      (type-object-string declared env)))))))
     (tc:context-fundep-conflict (e)
       (tc-error
        "Context conflicts with functional dependencies"
