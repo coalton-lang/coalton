@@ -33,6 +33,31 @@
   (loop :for var :in vars
         :collect (cons var (make-local-var var :package package))))
 
+(defun rename-keyword-params (keyword-params base-ctx)
+  (declare (type keyword-param-list keyword-params)
+           (type algo:immutable-map base-ctx)
+           (values keyword-param-list algo:immutable-map &optional))
+  (loop :with renamed := nil
+        :with cur-ctx := base-ctx
+        :for param :in keyword-params
+        :for binder := (keyword-param-binder param)
+        :for new-name := (make-local-var (node-variable-name binder))
+        :for renamed-binder := (make-node-variable
+                                :name new-name
+                                :location (source:location binder))
+        :for renamed-default := (rename-variables-generic% (keyword-param-default param)
+                                                           cur-ctx)
+        :do (push (make-keyword-param
+                   :keyword (keyword-param-keyword param)
+                   :binder renamed-binder
+                   :default renamed-default
+                   :location (source:location param))
+                  renamed)
+            (setf cur-ctx (algo:immutable-map-set cur-ctx
+                                                  (node-variable-name binder)
+                                                  new-name))
+        :finally (return (values (nreverse renamed) cur-ctx))))
+
 (defun rename-builder-binder (binder ctx)
   (declare (type node-variable binder)
            (type algo:immutable-map ctx)
@@ -145,42 +170,21 @@
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (labels ((rename-keyword-params (keyword-params base-ctx)
-               (loop :with renamed := nil
-                     :with cur-ctx := base-ctx
-                     :for param :in keyword-params
-                     :for binder := (keyword-param-binder param)
-                     :for new-name := (make-local-var (node-variable-name binder))
-                     :for renamed-binder := (make-node-variable
-                                             :name new-name
-                                             :location (source:location binder))
-                     :for renamed-default := (rename-variables-generic% (keyword-param-default param)
-                                                                        cur-ctx)
-                     :do (push (make-keyword-param
-                                :keyword (keyword-param-keyword param)
-                                :binder renamed-binder
-                                :default renamed-default
-                                :location (source:location param))
-                               renamed)
-                         (setf cur-ctx (algo:immutable-map-set cur-ctx
-                                                               (node-variable-name binder)
-                                                               new-name))
-                     :finally (return (values (nreverse renamed) cur-ctx)))))
-      (let* ((positional-bindings
-               (make-local-vars
-                (mapcar #'pattern-var-name
-                        (pattern-variables (node-abstraction-params node)))))
-             (positional-ctx (algo:immutable-map-set-multiple ctx positional-bindings)))
-        (multiple-value-bind (keyword-params body-ctx)
-            (rename-keyword-params (node-abstraction-keyword-params node) positional-ctx)
-          (values
-           (make-node-abstraction
-            :params (rename-variables-generic% (node-abstraction-params node) positional-ctx)
-            :keyword-params keyword-params
-            :body (rename-variables-generic% (node-abstraction-body node) body-ctx)
-            :introduces-return-scope-p (node-abstraction-introduces-return-scope-p node)
-            :location (source:location node))
-           ctx)))))
+    (let* ((positional-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (node-abstraction-params node)))))
+           (positional-ctx (algo:immutable-map-set-multiple ctx positional-bindings)))
+      (multiple-value-bind (keyword-params body-ctx)
+          (rename-keyword-params (node-abstraction-keyword-params node) positional-ctx)
+        (values
+         (make-node-abstraction
+          :params (rename-variables-generic% (node-abstraction-params node) positional-ctx)
+          :keyword-params keyword-params
+          :body (rename-variables-generic% (node-abstraction-body node) body-ctx)
+          :introduces-return-scope-p (node-abstraction-introduces-return-scope-p node)
+          :location (source:location node))
+         ctx))))
 
   (:method ((param keyword-param) ctx)
     (declare (type algo:immutable-map ctx)
@@ -892,94 +896,52 @@
     (declare (type algo:immutable-map ctx)
              (values toplevel-define algo:immutable-map))
 
-    (labels ((rename-keyword-params (keyword-params base-ctx)
-               (loop :with renamed := nil
-                     :with cur-ctx := base-ctx
-                     :for param :in keyword-params
-                     :for binder := (keyword-param-binder param)
-                     :for new-name := (make-local-var (node-variable-name binder))
-                     :for renamed-binder := (make-node-variable
-                                             :name new-name
-                                             :location (source:location binder))
-                     :for renamed-default := (rename-variables-generic% (keyword-param-default param)
-                                                                        cur-ctx)
-                     :do (push (make-keyword-param
-                                :keyword (keyword-param-keyword param)
-                                :binder renamed-binder
-                                :default renamed-default
-                                :location (source:location param))
-                               renamed)
-                         (setf cur-ctx (algo:immutable-map-set cur-ctx
-                                                               (node-variable-name binder)
-                                                               new-name))
-                     :finally (return (values (nreverse renamed) cur-ctx)))))
-      (let* ((positional-bindings
-               (make-local-vars
-                (mapcar #'pattern-var-name
-                        (pattern-variables (toplevel-define-params toplevel)))))
-             (positional-ctx
-               (algo:immutable-map-set-multiple ctx positional-bindings)))
-        (multiple-value-bind (keyword-params body-ctx)
-            (rename-keyword-params (toplevel-define-keyword-params toplevel) positional-ctx)
-          (values
-           (make-toplevel-define
-            :name (toplevel-define-name toplevel)
-            :params (rename-variables-generic% (toplevel-define-params toplevel) positional-ctx)
-            :keyword-params keyword-params
-            :function-syntax-p (toplevel-define-function-syntax-p toplevel)
-            :orig-params (toplevel-define-orig-params toplevel)
-            :orig-keyword-params (toplevel-define-orig-keyword-params toplevel)
-            :docstring (source:docstring toplevel)
-            :body (rename-variables-generic% (toplevel-define-body toplevel) body-ctx)
-            :location (source:location toplevel)
-            :monomorphize (toplevel-define-monomorphize toplevel)
-            :inline (toplevel-define-inline toplevel)
-            :calling-convention (toplevel-define-calling-convention toplevel))
-           ctx)))))
+    (let* ((positional-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (toplevel-define-params toplevel)))))
+           (positional-ctx
+             (algo:immutable-map-set-multiple ctx positional-bindings)))
+      (multiple-value-bind (keyword-params body-ctx)
+          (rename-keyword-params (toplevel-define-keyword-params toplevel) positional-ctx)
+        (values
+         (make-toplevel-define
+          :name (toplevel-define-name toplevel)
+          :params (rename-variables-generic% (toplevel-define-params toplevel) positional-ctx)
+          :keyword-params keyword-params
+          :function-syntax-p (toplevel-define-function-syntax-p toplevel)
+          :orig-params (toplevel-define-orig-params toplevel)
+          :orig-keyword-params (toplevel-define-orig-keyword-params toplevel)
+          :docstring (source:docstring toplevel)
+          :body (rename-variables-generic% (toplevel-define-body toplevel) body-ctx)
+          :location (source:location toplevel)
+          :monomorphize (toplevel-define-monomorphize toplevel)
+          :inline (toplevel-define-inline toplevel)
+          :calling-convention (toplevel-define-calling-convention toplevel))
+         ctx))))
 
   (:method ((method instance-method-definition) ctx)
     (declare (type algo:immutable-map ctx)
              (values instance-method-definition algo:immutable-map))
 
-    (labels ((rename-keyword-params (keyword-params base-ctx)
-               (loop :with renamed := nil
-                     :with cur-ctx := base-ctx
-                     :for param :in keyword-params
-                     :for binder := (keyword-param-binder param)
-                     :for new-name := (make-local-var (node-variable-name binder))
-                     :for renamed-binder := (make-node-variable
-                                             :name new-name
-                                             :location (source:location binder))
-                     :for renamed-default := (rename-variables-generic% (keyword-param-default param)
-                                                                        cur-ctx)
-                     :do (push (make-keyword-param
-                                :keyword (keyword-param-keyword param)
-                                :binder renamed-binder
-                                :default renamed-default
-                                :location (source:location param))
-                               renamed)
-                         (setf cur-ctx (algo:immutable-map-set cur-ctx
-                                                               (node-variable-name binder)
-                                                               new-name))
-                     :finally (return (values (nreverse renamed) cur-ctx)))))
-      (let* ((positional-bindings
-               (make-local-vars
-                (mapcar #'pattern-var-name
-                        (pattern-variables (instance-method-definition-params method)))))
-             (positional-ctx (algo:immutable-map-set-multiple ctx positional-bindings)))
-        (multiple-value-bind (keyword-params body-ctx)
-            (rename-keyword-params (instance-method-definition-keyword-params method) positional-ctx)
-          (values
-           (make-instance-method-definition
-            :name (instance-method-definition-name method)
-            :params (rename-variables-generic% (instance-method-definition-params method) positional-ctx)
-            :keyword-params keyword-params
-            :function-syntax-p (instance-method-definition-function-syntax-p method)
-            :body (rename-variables-generic% (instance-method-definition-body method) body-ctx)
-            :location (source:location method)
-            :inline (instance-method-definition-inline method)
-            :calling-convention (instance-method-definition-calling-convention method))
-           ctx)))))
+    (let* ((positional-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (instance-method-definition-params method)))))
+           (positional-ctx (algo:immutable-map-set-multiple ctx positional-bindings)))
+      (multiple-value-bind (keyword-params body-ctx)
+          (rename-keyword-params (instance-method-definition-keyword-params method) positional-ctx)
+        (values
+         (make-instance-method-definition
+          :name (instance-method-definition-name method)
+          :params (rename-variables-generic% (instance-method-definition-params method) positional-ctx)
+          :keyword-params keyword-params
+          :function-syntax-p (instance-method-definition-function-syntax-p method)
+          :body (rename-variables-generic% (instance-method-definition-body method) body-ctx)
+          :location (source:location method)
+          :inline (instance-method-definition-inline method)
+          :calling-convention (instance-method-definition-calling-convention method))
+         ctx))))
 
   (:method ((toplevel toplevel-define-instance) ctx)
     (declare (type algo:immutable-map ctx)

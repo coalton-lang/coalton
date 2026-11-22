@@ -68,6 +68,59 @@ help: message 5
     |                ----
 "))))
 
+(deftest local-binding-validation-error-priority ()
+  (dolist (context '("let" "let*" "rec go" "for" "for*"))
+    (flet ((diagnostic (bindings)
+             (collect-compiler-error
+              (format nil "(package coalton-test-binding-errors
+  (import coalton-prelude))
+(define (bad)
+  (~A (~A) x))"
+                      context bindings))))
+      (let ((message (diagnostic
+                      (if (member context '("for" "for*") :test #'string=)
+                          "(declare missing Integer) (x 1 x) (x 2 x)"
+                          "(declare missing Integer) (x 1) (x 2)"))))
+        (is (search (cond
+                      ((string= context "let") "Duplicate definition in let")
+                      ((string= context "let*") "Duplicate binding in let*")
+                      ((string= context "rec go") "Duplicate definition in rec")
+                      ((string= context "for*") "Duplicate binding in for*")
+                      (t "Duplicate binding in loop"))
+                    message))
+        (is (search (if (member context '("let*" "for*") :test #'string=)
+                        "first binding here"
+                        "first definition here")
+                    message))
+        (is (search (if (member context '("let*" "for*") :test #'string=)
+                        "second binding here"
+                        "second definition here")
+                    message)))
+      (let ((message (diagnostic
+                      (if (member context '("for" "for*") :test #'string=)
+                          "(declare missing Integer) (declare missing String) (x 1 x)"
+                          "(declare missing Integer) (declare missing String) (x 1)"))))
+        (is (search (cond
+                      ((member context '("let" "let*") :test #'string=)
+                       "Duplicate declaration in let")
+                      ((string= context "rec go") "Duplicate declaration in rec")
+                      (t "Duplicate declaration in loop"))
+                    message)))
+      (let ((message (diagnostic
+                      (if (member context '("for" "for*") :test #'string=)
+                          "(declare missing Integer) (x 1 x)"
+                          "(declare missing Integer) (x 1)"))))
+        (is (search (cond
+                      ((member context '("let" "let*") :test #'string=)
+                       "Orphan declare in let")
+                      ((string= context "rec go") "Orphan declare in rec")
+                      (t "Orphan declare in loop"))
+                    message))
+        (is (search (if (member context '("for" "for*") :test #'string=)
+                        "declaration does not have an associated loop binding"
+                        "declaration does not have an associated definition")
+                    message))))))
+
 (deftest repeated-type-constructors-report-the-correct-span ()
   (check-string=
    "issue 916"
