@@ -29,7 +29,9 @@
     (is (tc:lookup-type env 'coalton:Boolean))
     (is (tc:lookup-constructor env 'coalton:True))
     (signals util::coalton-bug
-      (env::make-environment))))
+      ;; Exercise the missing-slot error at run time, not during compilation.
+      (locally (declare (notinline env::make-environment))
+        (env::make-environment)))))
 
 (deftest test-environment-update-log ()
   (let ((env (tc:make-default-environment))
