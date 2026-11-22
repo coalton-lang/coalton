@@ -81,6 +81,35 @@ be executed as
 ```"
      ((String -> Void) * :a -> Void)))
 
+  (declare %show-separated
+           ((String -> Void) * ((String -> Void) * :a -> Void)
+            * (Void -> Optional :a) * Optional String -> Void))
+  (define (%show-separated f show-item next! empty-text)
+    "Stream items separated by spaces, with optional text for an empty input.
+Accept a next-item thunk so this helper can load before the iterator library."
+    (match (next!)
+      ((None)
+       (match empty-text
+         ((None) (values))
+         ((Some text) (f text))))
+      ((Some item)
+       (show-item f item)
+       (rec % ()
+         (match (next!)
+           ((None) (values))
+           ((Some item)
+            (f " ")
+            (show-item f item)
+            (%)))))))
+
+  (declare %show-association-to
+           ((Show :key) (Show :value)
+            => (String -> Void) * Tuple :key :value -> Void))
+  (define (%show-association-to f (Tuple key value))
+    (show-to f key)
+    (f " => ")
+    (show-to f value))
+
   (declare show-as-string (Show :a => :a -> String))
   (define (show-as-string x)
     "Display `x` as a string.

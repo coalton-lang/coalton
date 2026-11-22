@@ -286,6 +286,9 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
   (is (== (Some "3") (seq:get my-seq 1))))
 
 (define-test seq-show ()
+  (is (== "#<Seq []>"
+          (show-as-string (the (seq:Seq Integer) (seq:new)))))
+  (is (== "#<Seq [1]>" (show-as-string (seq:make 1))))
   (is (== "#<Seq [1 2 3]>"
           (show-as-string (the (seq:Seq Integer)
                                (seq:make 1 2 3))))))

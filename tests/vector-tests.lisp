@@ -1,5 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   ;; An element type whose EQ dictionary records every comparison.
   (define-struct Eq-Probe
@@ -187,5 +189,30 @@
   (is (== (vector:make 0) v)))
 
 (define-test test-vector-show ()
+  (is (== "#<Vector []>"
+          (show-as-string (the (vector:Vector Integer) (vector:new)))))
+  (is (== "#<Vector [1]>"
+          (show-as-string (vector:make 1))))
   (is (== "#<Vector [1 2 3]>"
-          (show-as-string (vector:make 1 2 3)))))
+          (show-as-string (vector:make 1 2 3))))
+  (is (== "#<Vector [#<Vector []> #<Vector [1 2]>]>"
+          (show-as-string (vector:make (vector:new) (vector:make 1 2))))))
+
+(define-test separated-show-streaming ()
+  "Emit each item before requesting the next, without buffering Show chunks."
+  (let events = (cell:new Nil))
+  (let remaining = (cell:new (the (List Integer) [1 2])))
+  (coalton/show::%show-separated
+   (fn (chunk)
+     (cell:push! events chunk)
+     (values))
+   (fn (f item)
+     (f "{")
+     (show-to f item)
+     (f "}"))
+   (fn ()
+     (cell:push! events "next")
+     (cell:pop! remaining))
+   None)
+  (is (== (list:reverse (cell:read events))
+          ["next" "{" "1" "}" "next" " " "{" "2" "}" "next"])))

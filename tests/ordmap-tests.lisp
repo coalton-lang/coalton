@@ -287,6 +287,9 @@
   )
 
 (define-test ordmap-show ()
+  (is (== "#<OrdMap [1 => 10]>"
+          (show-as-string (the (ordmap:OrdMap Integer Integer)
+                               (ordmap:insert ordmap:empty 1 10)))))
   (let m = (the (ordmap:OrdMap Integer Integer)
                 (list->ordmap
                  (make-list (Tuple 3 30)

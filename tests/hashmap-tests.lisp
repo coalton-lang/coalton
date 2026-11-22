@@ -468,6 +468,9 @@
           result)))
 
 (define-test hashmap-show ()
+  (is (== "#<HashMap [1 => 10]>"
+          (show-as-string (the (hashmap:HashMap Integer Integer)
+                               (hashmap:insert hashmap:empty 1 10)))))
   (let hm = (the (hashmap:HashMap Integer Integer)
                  (list->hashmap
                   (make-list (Tuple 0 0)
