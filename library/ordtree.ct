@@ -103,12 +103,19 @@ an error is thrown."
   (inline)
   (define (lookup haystack needle)
     "If HAYSTACK contains an element `==` to NEEDLE, return it."
+    (%lookup-by <=> haystack needle))
+
+  (declare %lookup-by ((:key * :elt -> Ordering) * OrdTree :elt * :key
+                      -> Optional :elt))
+  (inline)
+  (define (%lookup-by compare haystack needle)
+    "Search with a comparison from the search key to a stored element."
     (let ((lup (fn (t)
                  (match t
                    ((Empty) None)
                    ((N1 t) (lup t))
                    ((N2 left elt right)
-                    (match (<=> needle elt)
+                    (match (compare needle elt)
                       ((LT) (lup left))
                       ((EQ) (Some elt))
                       ((GT) (lup right))))
@@ -275,12 +282,17 @@ entry which is `==` to `a`.  The original entry is replaced with the given
     "Returns an ordtree that is the same as `t` except that the entry
 which is `==` to `a` is removed.  If `t` does not have such an entry,
 `t` is returned as is."
+    (%remove-by <=> t a))
+
+  (declare %remove-by ((:key * :elt -> Ordering) * OrdTree :elt * :key
+                      -> OrdTree :elt))
+  (define (%remove-by compare t a)
     (let ((del (fn (n)
                  (match n
                    ((Empty) Empty)
                    ((N1 t)  (N1 (del t)))
                    ((N2 l b r)
-                    (match (<=> a b)
+                    (match (compare a b)
                       ((LT) (make-n2 (del l) b r))
                       ((EQ) (match (split-min r)
                               ((None)               (N1 l))
@@ -323,6 +335,14 @@ otherwise the returned tree would be inconsistent.
 If you use an ordtree to keep a set of keys, you don't really need to alter
 the existing entry.  It is useful if you define your own element type that
 carries extra info, though; see OrdMap implementation."
+    (%update-by <=> t a f))
+
+  (declare %update-by ((:key * :elt -> Ordering) * OrdTree :elt * :key
+                      * (Optional :elt -> (Optional :elt) * :a)
+                      -> (OrdTree :elt) * :a))
+  (define (%update-by compare t a f)
+    "Use the update traversal and balancing with a separate search key.
+The replacement must preserve its position in the tree, as for `update`."
     (let ((unchanged? (fn (a b)
                         (lisp (-> Boolean) (a b)
                           (cl:eq a b))))
@@ -340,7 +360,7 @@ carries extra info, though; see OrdMap implementation."
                          (values n aux)
                          (values (make-n1 t2) aux)))
                     ((N2 l b r)
-                     (match (<=> a b)
+                     (match (compare a b)
                        ((LT) (let (values ll aux) = (walk l))
                              (if (unchanged? l ll)
                                  (values n aux)
@@ -435,10 +455,14 @@ This is same as (iter:into-iter tre)."
   (declare max-element (Ord :elt => OrdTree :elt -> Optional :elt))
   (define (max-element tre)
     "Returns the maximum element in the tree, or None if the tree is empty."
+    (%max-element tre))
+
+  (declare %max-element (OrdTree :elt -> Optional :elt))
+  (define (%max-element tre)
     (match tre
       ((Empty) None)
-      ((N1 t) (max-element t))
-      ((N2 _ elt r) (match (max-element r)
+      ((N1 t) (%max-element t))
+      ((N2 _ elt r) (match (%max-element r)
                       ((None) (Some elt))
                       (e e)))
       (_ (stray-node))))
@@ -447,10 +471,14 @@ This is same as (iter:into-iter tre)."
   (declare min-element (Ord :elt => OrdTree :elt -> Optional :elt))
   (define (min-element tre)
     "Returns the minimum element in the tree, or None if the tree is empty."
+    (%min-element tre))
+
+  (declare %min-element (OrdTree :elt -> Optional :elt))
+  (define (%min-element tre)
     (match tre
       ((Empty) None)
-      ((N1 t) (max-element t))
-      ((N2 l elt _) (match (min-element l)
+      ((N1 t) (%min-element t))
+      ((N2 l elt _) (match (%min-element l)
                       ((None) (Some elt))
                       (e e)))
       (_ (stray-node))))
@@ -466,6 +494,12 @@ element that is strictly less than `needle`, ON is the element
 that is `==` to `needle`, and HI is the closest element that is
 strictly greater than `needle`.  Any of these values can be None
 if there's no such element."
+    (%lookup-neighbors-by <=> haystack needle))
+
+  (declare %lookup-neighbors-by
+           ((:key * :elt -> Ordering) * OrdTree :elt * :key
+            -> Tuple3 (Optional :elt) (Optional :elt) (Optional :elt)))
+  (define (%lookup-neighbors-by compare haystack needle)
     (rec lup ((tree haystack)
               (lo None)
               (hi None))
@@ -473,12 +507,12 @@ if there's no such element."
         ((Empty) (Tuple3 lo None hi))
         ((N1 t) (lup t lo hi))
         ((N2 left elt right)
-         (match (<=> needle elt)
+         (match (compare needle elt)
            ((LT) (lup left lo (Some elt)))
-           ((EQ) (let ((lo1 (match (max-element left)
+           ((EQ) (let ((lo1 (match (%max-element left)
                               ((None) lo)
                               (e e)))
-                       (hi1 (match (min-element right)
+                       (hi1 (match (%min-element right)
                               ((None) hi)
                               (e e))))
                    (Tuple3 lo1 (Some elt) hi1)))
