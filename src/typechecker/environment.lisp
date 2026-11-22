@@ -1142,21 +1142,54 @@ associated with a top-level Coalton function."
 ;;; Environment
 ;;;
 
-(defstruct environment
-  (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
-  (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
-  (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
-  (type-alias-environment     (util:required 'type-alias-environment)     :type type-alias-environment     :read-only t)
-  (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
-  (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
-  (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
-  (instance-environment       (util:required 'instance-environment)       :type instance-environment       :read-only t)
-  (function-environment       (util:required 'function-environment)       :type function-environment       :read-only t)
-  (name-environment           (util:required 'name-environment)           :type name-environment           :read-only t)
-  (method-inline-environment  (util:required 'method-inline-environment)  :type method-inline-environment  :read-only t)
-  (code-environment           (util:required 'code-environment)           :type code-environment           :read-only t)
-  (specialization-environment (util:required 'specialization-environment) :type specialization-environment :read-only t)
-  (source-name-environment    (util:required 'source-name-environment)    :type source-name-environment    :read-only t))
+(defmacro define-environment (&rest sub-environments)
+  "Define the environment structure, default constructor, and copy-with updater.
+Each sub-environment names its slot and type, optionally followed by a default
+constructor instead of MAKE-<name>."
+  (let ((slots
+          (loop :for specification :in sub-environments
+                :for (name constructor) := (alexandria:ensure-list specification)
+                :collect (list name
+                               (alexandria:make-keyword name)
+                               (alexandria:format-symbol (symbol-package name) "ENVIRONMENT-~A" name)
+                               (or constructor
+                                   (alexandria:format-symbol (symbol-package name) "MAKE-~A" name))))))
+    `(progn
+       (defstruct environment
+         ,@(loop :for (name) :in slots
+                 :collect `(,name (util:required ',name) :type ,name :read-only t)))
+       (defun make-default-environment ()
+         (declare (values environment))
+         (make-environment
+          ,@(loop :for (name keyword accessor constructor) :in slots
+                  :append `(,keyword (,constructor)))))
+       (defun update-environment
+           (env &key
+                  ,@(loop :for (name keyword accessor) :in slots
+                          :collect `(,name (,accessor env))))
+         (declare (type environment env)
+                  ,@(loop :for (name) :in slots
+                          :collect `(type ,name ,name))
+                  (values environment))
+         (make-environment
+          ,@(loop :for (name keyword) :in slots
+                  :append `(,keyword ,name)))))))
+
+(define-environment
+  value-environment
+  (type-environment make-default-type-environment)
+  (constructor-environment make-default-constructor-environment)
+  type-alias-environment
+  struct-environment
+  class-environment
+  fundep-environment
+  instance-environment
+  function-environment
+  name-environment
+  method-inline-environment
+  code-environment
+  specialization-environment
+  source-name-environment)
 
 (defmethod print-object ((env environment) stream)
   (declare (type stream stream)
@@ -1169,72 +1202,6 @@ associated with a top-level Coalton function."
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type environment))
-
-(defun make-default-environment ()
-  (declare (values environment))
-  (make-environment
-   :value-environment (make-value-environment)
-   :type-environment (make-default-type-environment)
-   :type-alias-environment (make-type-alias-environment)
-   :struct-environment (make-struct-environment)
-   :constructor-environment (make-default-constructor-environment)
-   :class-environment (make-class-environment)
-   :fundep-environment (make-fundep-environment)
-   :instance-environment (make-instance-environment)
-   :function-environment (make-function-environment)
-   :name-environment (make-name-environment)
-   :method-inline-environment (make-method-inline-environment)
-   :code-environment (make-code-environment)
-   :specialization-environment (make-specialization-environment)
-   :source-name-environment (make-source-name-environment)))
-
-(defun update-environment (env
-                           &key
-                             (value-environment (environment-value-environment env))
-                             (type-environment (environment-type-environment env))
-                             (type-alias-environment (environment-type-alias-environment env))
-                             (constructor-environment (environment-constructor-environment env))
-                             (struct-environment (environment-struct-environment env))
-                             (class-environment (environment-class-environment env))
-                             (fundep-environment (environment-fundep-environment env))
-                             (instance-environment (environment-instance-environment env))
-                             (function-environment (environment-function-environment env))
-                             (name-environment (environment-name-environment env))
-                             (method-inline-environment (environment-method-inline-environment env))
-                             (code-environment (environment-code-environment env))
-                             (specialization-environment (environment-specialization-environment env))
-                             (source-name-environment (environment-source-name-environment env)))
-  (declare (type environment env)
-           (type value-environment value-environment)
-           (type type-environment type-environment)
-           (type constructor-environment constructor-environment)
-           (type type-alias-environment type-alias-environment)
-           (type struct-environment struct-environment)
-           (type class-environment class-environment)
-           (type fundep-environment fundep-environment)
-           (type instance-environment instance-environment)
-           (type function-environment function-environment)
-           (type name-environment name-environment)
-           (type method-inline-environment method-inline-environment)
-           (type code-environment code-environment)
-           (type specialization-environment specialization-environment)
-           (type source-name-environment source-name-environment)
-           (values environment))
-  (make-environment
-   :value-environment value-environment
-   :type-environment type-environment
-   :constructor-environment constructor-environment
-   :type-alias-environment type-alias-environment
-   :struct-environment struct-environment
-   :class-environment class-environment
-   :fundep-environment fundep-environment
-   :instance-environment instance-environment
-   :function-environment function-environment
-   :name-environment name-environment
-   :method-inline-environment method-inline-environment
-   :code-environment code-environment
-   :specialization-environment specialization-environment
-   :source-name-environment source-name-environment))
 
 ;;;
 ;;; Methods

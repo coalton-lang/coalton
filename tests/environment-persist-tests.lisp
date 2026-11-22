@@ -1,5 +1,48 @@
 (in-package #:coalton-tests)
 
+(deftest test-environment-copy-with ()
+  (let* ((env (tc:make-default-environment))
+         (replacement (tc:make-default-environment))
+         (package (find-package '#:coalton-impl/typechecker/environment))
+         (slots '(value-environment type-environment constructor-environment
+                  type-alias-environment struct-environment class-environment
+                  fundep-environment instance-environment function-environment
+                  name-environment method-inline-environment code-environment
+                  specialization-environment source-name-environment))
+         (accessors (mapcar (lambda (slot)
+                              (alexandria:format-symbol package "ENVIRONMENT-~A" slot))
+                            slots))
+         (copy (env::update-environment env)))
+    (is (not (eq copy env)))
+    (dolist (accessor accessors)
+      (is (eq (funcall accessor copy) (funcall accessor env))))
+    (loop :for slot :in slots
+          :for accessor :in accessors
+          :for value := (funcall accessor replacement)
+          :for updated := (apply #'env::update-environment env
+                                 (list (alexandria:make-keyword slot) value))
+          :do (dolist (other accessors)
+                (is (eq (funcall other updated)
+                        (if (eq accessor other)
+                            value
+                            (funcall other env))))))
+    (is (tc:lookup-type env 'coalton:Boolean))
+    (is (tc:lookup-constructor env 'coalton:True))
+    (signals util::coalton-bug
+      (env::make-environment))))
+
+(deftest test-environment-update-log ()
+  (let ((env (tc:make-default-environment))
+        (updates nil))
+    (let* ((tc:*update-hook* (lambda (name args)
+                              (push (cons name args) updates)))
+           (updated (tc:set-code env 'test-code '(test-code))))
+      (is (equal '((tc:set-code test-code (test-code))) updates))
+      (is (null (tc:lookup-code env 'test-code :no-error t)))
+      (is (equal '(test-code) (tc:lookup-code updated 'test-code)))
+      (env::update-environment updated)
+      (is (= 1 (length updates))))))
+
 (deftest test-persist-value ()
   "Test that the value environment persists across loads and fasl loads"
   (let ((test-expr

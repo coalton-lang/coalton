@@ -121,6 +121,12 @@ File: `src/typechecker/environment.lisp`
 
 Information about all of the discovered types and the like are defined in this file. The `environment` structure contains everything.
 
+The local `define-environment` declaration lists its typed, read-only
+sub-environments once, with explicit overrides for the early type and
+constructor defaults. It generates `make-default-environment` and
+`update-environment` alongside the structure; named, logged environment setters
+and their checks remain separate.
+
 ## Code generation phase
 
 Code generation is responsible for both optimization and code generation. The steps for optimization are contained in:
