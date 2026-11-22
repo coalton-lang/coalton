@@ -297,3 +297,49 @@
                                ordmap:empty))))
   (is (== "#<OrdMap [1 => 10 2 => 20 3 => 30]>"
           (show-as-string m))))
+
+(coalton-toplevel
+  (define-type OrdMapSearchKey
+    (OrdMapSearchKey Integer String))
+  (define (ordmap-search-key-number (OrdMapSearchKey k _)) k)
+  (define-instance (Eq OrdMapSearchKey)
+    (define (== a b)
+      (== (ordmap-search-key-number a) (ordmap-search-key-number b))))
+  (define-instance (Ord OrdMapSearchKey)
+    (define (<=> a b)
+      (<=> (ordmap-search-key-number a) (ordmap-search-key-number b)))))
+
+(define-test ordmap-search-key-ties ()
+  "Equal search keys need no value and retain the existing tie policies."
+  (let original = (OrdMapSearchKey 3 "stored"))
+  (let search = (OrdMapSearchKey 3 "search"))
+  (let src = (ordmap:insert ordmap:empty original "old"))
+  (is (== (ordmap:lookup src search) (Some "old")))
+  (match (ordmap:lookup-neighbors src search)
+    ((Tuple3 (None) (Some (Tuple (OrdMapSearchKey _ label) v)) (None))
+     (is (== label "stored"))
+     (is (== v "old")))
+    (_ (is False)))
+  (let calls = (cell:new 0))
+  (let (values updated previous) =
+    (ordmap:update src search
+                   (fn (old)
+                     (cell:increment! calls)
+                     (values (Some "new") old))))
+  (is (== (cell:read calls) 1))
+  (is (== previous (Some "old")))
+  (match (ordmap->list updated)
+    ((Cons (Tuple (OrdMapSearchKey _ label) v) (Nil))
+     (is (== label "search"))
+     (is (== v "new")))
+    (_ (is False)))
+  (is (== (ordmap:lookup src search) (Some "old")))
+  (is (ordmap:empty? (ordmap:remove updated original)))
+  (let (values missing aux) =
+    (ordmap:update src (OrdMapSearchKey 4 "absent")
+                   (fn (old)
+                     (cell:increment! calls)
+                     (values old "aux"))))
+  (is (== (cell:read calls) 2))
+  (is (== aux "aux"))
+  (is (lisp (-> Boolean) (src missing) (cl:eq src missing))))

@@ -1,5 +1,7 @@
 (in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (define-test ordtree-basic-test ()
   "OrdTree basic operations"
   (let a = (the (ordtree:OrdTree Integer) ordtree:empty))
@@ -233,3 +235,72 @@
   (is (== (ordtree:lookup-neighbors (list->ordtree (make-list 1)) 1)
           (Tuple3 None (Some 1) None)))
   )
+
+(define-test ordtree-key-search-test ()
+  "A separate key uses the same traversal, balancing and no-op sharing."
+  (let comparisons = (cell:new 0))
+  (let compare = (fn (k (Tuple key _))
+                  (cell:increment! comparisons)
+                  (<=> k key)))
+  (let tree = (fold ordtree:insert ordtree:empty
+                   (the (List (Tuple Integer String))
+                        [(Tuple 1 "one") (Tuple 3 "three") (Tuple 5 "five")])))
+  (is (== (ordtree::%lookup-by compare tree 3) (Some (Tuple 3 "three"))))
+  (is (== (ordtree::%lookup-by compare tree 2) None))
+  (is (== (ordtree::%lookup-neighbors-by compare tree 3)
+          (Tuple3 (Some (Tuple 1 "one"))
+                  (Some (Tuple 3 "three"))
+                  (Some (Tuple 5 "five")))))
+  (let removed = (ordtree::%remove-by compare tree 3))
+  (is (ordtree::consistent? removed))
+  (is (== (ordtree->list removed) [(Tuple 1 "one") (Tuple 5 "five")]))
+  (let calls = (cell:new 0))
+  (let (values unchanged aux) =
+    (ordtree::%update-by compare tree 2
+                        (fn (old)
+                          (cell:increment! calls)
+                          (values old "missing"))))
+  (is (== (cell:read calls) 1))
+  (is (== aux "missing"))
+  (is (lisp (-> Boolean) (tree unchanged) (cl:eq tree unchanged)))
+  (let (values unchanged aux) =
+    (ordtree::%update-by compare tree 3 (fn (old) (values old "present"))))
+  (is (== aux "present"))
+  (is (lisp (-> Boolean) (tree unchanged) (cl:eq tree unchanged)))
+  (cell:write! comparisons 0)
+  (ordtree::%lookup-by compare tree 1)
+  (let search-comparisons = (cell:read comparisons))
+  (cell:write! comparisons 0)
+  (ordtree::%lookup-neighbors-by compare tree 1)
+  (is (== (cell:read comparisons) search-comparisons))
+  (cell:write! comparisons 0)
+  (ordtree::%remove-by compare tree 1)
+  (is (== (cell:read comparisons) search-comparisons))
+  (cell:write! comparisons 0)
+  (let (values replaced _) =
+    (ordtree::%update-by compare tree 1
+                        (fn (_) (values (Some (Tuple 1 "ONE")) Unit))))
+  (is (== (cell:read comparisons) search-comparisons))
+  (match (Tuple tree replaced)
+    ((Tuple (ordtree::N2 _ _ original-right)
+            (ordtree::N2 _ _ replaced-right))
+     (is (lisp (-> Boolean) (original-right replaced-right)
+           (cl:eq original-right replaced-right))))
+    (_ (is False))))
+
+(define-test ordtree-unary-minimum-test ()
+  "A neighbor search must take the minimum, not maximum, below a unary node."
+  (let subtree = (ordtree::N1
+                 (ordtree::N2 (ordtree::N2 ordtree:Empty 3 ordtree:Empty)
+                              4
+                              (ordtree::N2 ordtree:Empty 5 ordtree:Empty))))
+  (is (== (ordtree:min-element subtree) (Some 3)))
+  (let tree = (ordtree::N2
+              subtree 6
+              (ordtree::N1
+               (ordtree::N2 (ordtree::N2 ordtree:Empty 7 ordtree:Empty)
+                            8
+                            (ordtree::N2 ordtree:Empty 9 ordtree:Empty)))))
+  (is (ordtree::consistent? tree))
+  (is (== (ordtree:lookup-neighbors tree 6)
+          (Tuple3 (Some 5) (Some 6) (Some 7)))))
