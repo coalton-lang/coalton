@@ -110,6 +110,34 @@
     (when (find-package package-name)
       (delete-package package-name))))
 
+(deftest toplevel-redefinition-dependencies ()
+  (with-codegen-test-environment
+    (let ((coalton-impl/redef-detection:*dependency-registry*
+            (coalton-impl/redef-detection:make-dependency-registry)))
+      (codegen-test-compile
+       "(define (helper x) x)
+        (define (take-key &key (key \"\")) key)
+        (define payload \"global\")")
+      ;; The standalone extractor also accepts expressions before renaming.
+      (is (equal (list (intern "TAKE-KEY"))
+                 (coalton-impl/redef-detection:extract-function-dependencies
+                  (parse-form "(fn (helper x) (helper (take-key :key x)))"
+                              #'parser:parse-expression)
+                  entry:*global-environment*)))
+      (codegen-test-compile
+       "(define (argument-user x) (take-key :key (helper x)))
+        (define (default-user x &key (k (helper x))) k)
+        (define lambda-user (fn (x &key (k (helper x))) k))
+        (define (shadow-user helper &key (k (helper))) k)
+        (define (lisp-user) (lisp (-> String) (payload) payload))
+        (define (lisp-shadow payload) (lisp (-> String) (payload) payload))")
+      (flet ((callers (name)
+               (coalton-impl/redef-detection:get-function-callers (intern name))))
+        (is (set-equalp (mapcar #'intern '("ARGUMENT-USER" "DEFAULT-USER" "LAMBDA-USER"))
+                        (callers "HELPER")))
+        (is (equal (list (intern "ARGUMENT-USER")) (callers "TAKE-KEY")))
+        (is (equal (list (intern "LISP-USER")) (callers "PAYLOAD")))))))
+
 (deftest exported-define-without-declare-signals-deprecation-warning ()
   "Exported definitions without declares are currently deprecated."
   (let* ((package-name (format nil "COALTON-EXPORTED-NO-DECLARE-~A" (gensym)))

@@ -17,6 +17,7 @@
    #:collect-referenced-types           ; FUNCTION
    #:collect-type-variables             ; FUNCTION
    #:collect-variables                  ; FUNCTION
+   #:collect-referenced-variable-names  ; FUNCTION
    #:collect-referenced-classes         ; FUNCTION
    ))
 
@@ -170,6 +171,20 @@ in expressions. May not include all bound variables."
 
   (delete-duplicates (collect-variables-generic% node) :test #'eq))
 
+(defun collect-referenced-variable-names (node)
+  "Return the distinct variable names referenced in an expression or binding.
+After renaming, lexical references have fresh names distinct from globals."
+  (declare (values identifier-list &optional))
+  (delete-duplicates (mapcar #'node-variable-name (collect-variables-generic% node))
+                     :test #'eq))
+
+(defun collect-function-variables% (keyword-params body)
+  (declare (type keyword-param-list keyword-params)
+           (type node-body body)
+           (values node-variable-list &optional))
+  (nconc (mapcan #'collect-variables-generic% keyword-params)
+         (collect-variables-generic% body)))
+
 (defgeneric collect-variables-generic% (node)
   (:method ((node node-variable))
     (declare (values node-variable-list))
@@ -203,9 +218,18 @@ in expressions. May not include all bound variables."
 
   (:method ((node node-abstraction))
     (declare (values node-variable-list &optional))
-    (nconc
-     (mapcan #'collect-variables-generic% (node-abstraction-keyword-params node))
-     (collect-variables-generic% (node-abstraction-body node))))
+    (collect-function-variables% (node-abstraction-keyword-params node)
+                                 (node-abstraction-body node)))
+
+  (:method ((node toplevel-define))
+    (declare (values node-variable-list &optional))
+    (collect-function-variables% (toplevel-define-keyword-params node)
+                                 (toplevel-define-body node)))
+
+  (:method ((node instance-method-definition))
+    (declare (values node-variable-list &optional))
+    (collect-function-variables% (instance-method-definition-keyword-params node)
+                                 (instance-method-definition-body node)))
 
   (:method ((param keyword-param))
     (declare (values node-variable-list &optional))

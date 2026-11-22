@@ -1130,8 +1130,7 @@ Returns four values:
       ;; Record dependencies
       (loop :for define :in defines
             :for name := (parser:node-variable-name (parser:binding-name define))
-            :for code := (parser:binding-value define)
-            :do (redef:record-dependencies name code env))
+            :do (redef:record-dependencies name define env :renamed t))
 
       (values
        (tc:apply-substitution subs binding-nodes)
@@ -1248,9 +1247,7 @@ other, so they can be inferred monomorphically before the recursive body."
              (null
               (intersection
                names
-               (mapcar #'parser:node-variable-name
-                       (parser:collect-variables
-                        (parser:node-let-binding-value binding)))
+               (parser:collect-referenced-variable-names binding)
                :test #'eq)))
            (parser:node-rec-bindings node))))
 
@@ -4687,14 +4684,8 @@ accepted when they are constructor-built.
          (binding-deps
            (loop :for name :in binding-names
                  :for binding := (gethash name binding-table)
-                 :for node := (parser:binding-value binding)
-                 :for deps := (remove-duplicates
-                               (intersection
-                                (mapcar #'parser:node-variable-name
-                                        (parser:collect-variables node))
-                                binding-names
-                                :test #'eq)
-                               :test #'eq)
+                 :for deps := (intersection (parser:collect-referenced-variable-names binding)
+                                            binding-names :test #'eq)
                  :collect (cons name deps))))
     (loop :for scc :in (algo:tarjan-scc binding-deps)
           :collect (loop :for name :in scc
@@ -4751,40 +4742,16 @@ as a recursive function rather than a recursive value."
                               :when (gethash name dec-table)
                                 :collect binding))
 
-         (impl-bindings (loop :with table := (make-hash-table :test #'eq)
-                              :for binding :in bindings
+         (impl-bindings (loop :for binding :in bindings
                               :for name := (parser:node-variable-name (parser:binding-name binding))
-
                               :unless (gethash name dec-table)
-                                :do (setf (gethash name table) binding)
-
-                              :finally (return table)))
-
-         (impl-bindings-names (alexandria:hash-table-keys impl-bindings))
-
-         (impl-bindings-deps (loop :for name :in impl-bindings-names
-                                   :for binding := (gethash name impl-bindings)
-                                   :for node := (parser:binding-value binding)
-
-                                   :for deps := (remove-duplicates
-                                                 (intersection
-                                                  (mapcar #'parser:node-variable-name
-                                                          (parser:collect-variables node))
-                                                  impl-bindings-names
-                                                  :test #'eq)
-                                                 :test #'eq)
-                                   :collect (cons name deps)))
-
-         (sccs (algo:tarjan-scc impl-bindings-deps))
+                                :collect binding))
 
          (preds nil)
 
          (impl-binding-nodes
-           ;; Infer the types of implicit bindings on scc at a time
-           (loop :for scc :in sccs
-                 :for bindings
-                   := (loop :for name :in scc
-                            :collect (gethash name impl-bindings))
+           ;; Infer only implicit bindings together; declared types are already in scope.
+           (loop :for bindings :in (binding-sccs impl-bindings)
                  :append (multiple-value-bind (preds_ nodes subs_)
                              (with-fundep-errors
                                  ((source:location (parser:binding-name (first bindings))) env)
@@ -5329,8 +5296,7 @@ as a recursive function rather than a recursive value."
     ;; If there is a single non-recursive binding then it is valid
     (when (and (= 1 (length bindings))
                (not (member (parser:node-variable-name (parser:binding-name (first bindings)))
-                            (parser:collect-variables (parser:binding-value (first bindings)))
-                            :key #'parser:node-variable-name
+                            (parser:collect-referenced-variable-names (first bindings))
                             :test #'eq)))
       (return-from check-for-invalid-recursive-scc))
 
@@ -5412,8 +5378,7 @@ as a recursive function rather than a recursive value."
                  (not
                   (intersection
                    binding-names
-                   (mapcar #'parser:node-variable-name
-                           (parser:collect-variables node))
+                   (parser:collect-referenced-variable-names node)
                    :test #'eq))))
 
         (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
