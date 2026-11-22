@@ -11,7 +11,7 @@ Matrices of the same shape add entrywise. Over a semiring, an $m \\times n$ matr
 $$a_{ij}^{(k)} = \\frac{a_{kk}^{(k-1)} a_{ij}^{(k-1)} - a_{ik}^{(k-1)} a_{kj}^{(k-1)}}{a_{k-1,k-1}^{(k-2)}},$$
 where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$. This computes determinants $\\det(A)$ in $O(n^3)$ ring operations without fractions, along with classical adjugates $\\operatorname{adj}(A)$ satisfying $A \\operatorname{adj}(A) = \\det(A) I$ and characteristic polynomials $\\chi_A(x) = \\det(xI - A) \\in D[x]$ (by running Bareiss over $D[x]$).
 
-**Linear systems and subspaces.** Over an exact `DivisionRing`, Gauss–Jordan elimination computes the reduced row echelon form (`rref`) and pivot columns of $A$, yielding $\\operatorname{rank}(A)$, a basis of the right kernel $\\ker(A) = \\{x : Ax = 0\\}$ (`nullspace`), solutions of linear systems $AX = B$ (`solve`, `solve-vector`), and matrix inverses $A^{-1}$ (`inv`). With scalar conjugation, modified Gram–Schmidt orthogonalizes left-scaled vectors for the Hermitian form $\\langle u,v\\rangle = \\sum_i v_i\\overline{u_i}$, unless it encounters a nonzero isotropic pivot.")
+**Linear systems and subspaces.** Over an exact `DivisionRing`, Gauss–Jordan elimination computes the reduced row echelon form (`rref`) and pivot columns of $A$, yielding $\\operatorname{rank}(A)$, a basis of the right kernel $\\ker(A) = \\{x : Ax = 0\\}$ (`nullspace`), solutions of linear systems $AX = B$ (`solve`, `solve-vector`), and matrix inverses $A^{-1}$ (`inv`). For a square `F64` system, `solve-pivoted` instead uses scaled partial pivoting and reports the absolute residual. With scalar conjugation, modified Gram–Schmidt orthogonalizes left-scaled vectors for the Hermitian form $\\langle u,v\\rangle = \\sum_i v_i\\overline{u_i}$, unless it encounters a nonzero isotropic pivot.")
   (:nicknames
    #:coalton/math/matrix
    #:coalton-library/math/matrix)
@@ -62,6 +62,13 @@ where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$
    #:nullspace
    #:solve
    #:solve-vector
+   #:PivotedSolveError
+   #:SolveShapeMismatch
+   #:InvalidPivotTolerance
+   #:SmallPivot
+   #:NonFiniteSolve
+   #:solve-pivoted
+   #:solve-pivoted-vector
    #:inv
    #:gram-schmidt
    #:try-gram-schmidt))
@@ -613,6 +620,108 @@ certificate. The first admissible row is used, not a stability-maximizing pivot.
     "The inverse $M^{-1}$ of a square matrix `m`, or `None` if `m` is singular."
     (let n = (%require-square "inv" m))
     (solve m (identity-matrix n)))
+
+  ;;
+  ;; Numerical linear systems
+  ;;
+
+  (derive Eq)
+  (define-type PivotedSolveError
+    "A shape mismatch, invalid tolerance, rejected pivot (with its zero-based column), or non-finite input or arithmetic result. A rejected pivot is not an exact singularity or rank certificate."
+    SolveShapeMismatch
+    InvalidPivotTolerance
+    (SmallPivot UFix)
+    NonFiniteSolve)
+
+  (declare %finite-max-abs (UFix * (UFix -> F64) -> Optional F64))
+  (define (%finite-max-abs n at)
+    (rec scan ((i 0) (peak 0.0d0))
+      (cond
+        ((== i n) (Some peak))
+        (True
+         (let v = (at i))
+         (if (finite? v)
+             (scan (1+ i) (max peak (abs v)))
+             None)))))
+
+  (declare %equilibrate! (vec:Vector F64 * UFix * vec:Vector F64 * UFix -> Boolean))
+  (define (%equilibrate! u n rhs m)
+    (for ((i 0 (1+ i))) :while (< i n)
+      (let divisor =
+        (match (%finite-max-abs n (fn (j) (%get u n i j)))
+          ((None) (return False))
+          ;; Leave a zero row intact; pivot selection will reject it.
+          ((Some s) (if (zero? s) 1.0d0 s))))
+      (for ((j 0 (1+ j))) :while (< j n)
+        (%put! u n i j (/ (%get u n i j) divisor)))
+      (for ((j 0 (1+ j))) :while (< j m)
+        (let y = (/ (%get rhs m i j) divisor))
+        (unless (finite? y) (return False))
+        (%put! rhs m i j y)))
+    True)
+
+  (declare %subtract-scaled-row! (vec:Vector F64 * UFix * UFix * UFix * UFix * F64 -> Boolean))
+  (define (%subtract-scaled-row! v width start dst src factor)
+    (for ((j start (1+ j))) :while (< j width)
+      (let y = (- (%get v width dst j) (* factor (%get v width src j))))
+      (unless (finite? y) (return False))
+      (%put! v width dst j y))
+    True)
+
+  (declare solve-pivoted (F64 * Matrix F64 * Matrix F64 -> Result PivotedSolveError (Tuple (Matrix F64) F64)))
+  (define (solve-pivoted tolerance a b)
+    "Solve $AX=B$ in `F64` for $n \\times n$ coefficients $A$ and $n \\times m$ right-hand sides $B$. The solution has shape $n \\times m$. Neither input is modified.
+
+Scale each equation by dividing by the largest absolute coefficient in its original row of $A$, leaving zero coefficient rows unchanged. In each column, pivot on the largest magnitude at or below the diagonal (first on ties). Reject a pivot whose magnitude after scaling and elimination is at most `tolerance`, which must be finite and in $[0,1)$. Zero tolerance rejects only computed zero pivots. Pivots are checked even when $m=0$.
+
+On success return the solution and $\\max_{ij}|(AX-B)_{ij}|$, evaluated in `F64` from the original inputs, with zero for an empty residual. This absolute diagnostic is not divided by the size of the right-hand side and does not bound the solution error. Fail with `NonFiniteSolve` for non-finite entries or arithmetic results."
+    (let n = (rows a))
+    (let m = (cols b))
+    (unless (and (== n (cols a)) (== n (rows b)))
+      (return (Err SolveShapeMismatch)))
+    (unless (and (finite? tolerance) (<= 0.0d0 tolerance) (< tolerance 1.0d0))
+      (return (Err InvalidPivotTolerance)))
+    (let u = (vec:copy (%data a)))
+    (let rhs = (vec:copy (%data b)))
+    (unless (%equilibrate! u n rhs m) (return (Err NonFiniteSolve)))
+    (for ((k 0 (1+ k))) :while (< k n)
+      (let p = (for ((i (1+ k) (1+ i))
+                     (best k (if (> (abs (%get u n i k)) (abs (%get u n best k))) i best)))
+                 :returns best :while (< i n)))
+      (let pivot = (%get u n p k))
+      (when (<= (abs pivot) tolerance) (return (Err (SmallPivot k))))
+      (%swap-rows! u n k p)
+      (%swap-rows! rhs m k p)
+      (for ((i (1+ k) (1+ i))) :while (< i n)
+        (let factor = (/ (%get u n i k) pivot))
+        ;; Later steps read only the trailing block and upper triangle.
+        (unless (zero? factor)
+          (unless (and (%subtract-scaled-row! u n (1+ k) i k factor)
+                       (%subtract-scaled-row! rhs m 0 i k factor))
+            (return (Err NonFiniteSolve))))))
+    (for ((end n (1- end))) :while (> end 0)
+      (let i = (1- end))
+      (for ((j 0 (1+ j))) :while (< j m)
+        (let y = (for ((k (1+ i) (1+ k))
+                       (s (%get rhs m i j) (- s (* (%get u n i k) (%get rhs m k j)))))
+                   :returns s :while (< k n)))
+        (let x = (/ y (%get u n i i)))
+        (unless (finite? x) (return (Err NonFiniteSolve)))
+        (%put! rhs m i j x)))
+    (let x = (%Matrix n m rhs))
+    (let ax = (%data (mat-mul a x)))
+    (let b0 = (%data b))
+    (match (%finite-max-abs (vec:length ax)
+             (fn (i) (- (vec:index-unsafe i ax) (vec:index-unsafe i b0))))
+      ((None) (Err NonFiniteSolve))
+      ((Some residual) (Ok (Tuple x residual)))))
+
+  (declare solve-pivoted-vector (F64 * Matrix F64 * List F64 -> Result PivotedSolveError (Tuple (List F64) F64)))
+  (define (solve-pivoted-vector tolerance a b)
+    "The one-column form of `solve-pivoted`. Return the solution vector and its absolute residual $\\|Ax-b\\|_\\infty$."
+    (match (solve-pivoted tolerance a (matrix (list:length b) 1 b))
+      ((Err e) (Err e))
+      ((Ok (Tuple x residual)) (Ok (Tuple (col x 0) residual)))))
 
   ;;
   ;; Orthogonalization

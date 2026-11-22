@@ -283,6 +283,71 @@
   (is (catch (progn (the (mat:Matrix Integer) (mat:matrix r 2 [])) False)
         ((the Panic _) True))))
 
+(define-test pivoted-solve-row-exchanges ()
+  ;; Pivot twice, starting with a nonzero coefficient too small to pivot on safely.
+  (let coefficients = [[1.0d-30 0 1] [1 1 0] [1 2 0]])
+  (let right-sides = [[1.0d0 3] [2 1] [3 3]])
+  (let a = (mat:from-rows coefficients))
+  (let b = (mat:from-rows right-sides))
+  (is (== (mat:solve-pivoted 0 a b)
+          (Ok (Tuple (mat:from-rows [[1 -1] [1 2] [1 3]]) 0))))
+  (is (== (mat:to-rows a) coefficients))
+  (is (== (mat:to-rows b) right-sides)))
+
+(define-test pivoted-solve-residual ()
+  ;; 49 * fl(1/49) rounds below 1. Measuring the equilibrated equations
+  ;; instead would give zero; measuring only the first RHS misses the maximum.
+  (let a = (mat:from-rows [[0 49] [2 0]]))
+  (let b = (mat:from-rows [[1 2] [10 0]]))
+  (let (Tuple x residual) = (unwrap (mat:solve-pivoted 1.0d-12 a b)))
+  (let column-residual =
+    (fn (j)
+      (let ax = (mat:mat-vec-mul a (mat:col x j)))
+      (fold max 0.0d0 (list:zipWith (fn (u v) (abs (- u v))) ax (mat:col b j)))))
+  (let r0 = (column-residual 0))
+  (let r1 = (column-residual 1))
+  (is (> r1 r0))
+  (is (== residual (max r0 r1)))
+  (is (== (mat:solve-pivoted-vector 0 a [0 0]) (Ok (Tuple [0 0] 0)))))
+
+(define-test pivoted-solve-scales-and-tolerance ()
+  (let tiny = (lisp (-> F64) () cl:least-positive-double-float))
+  ;; Row units differ by more than the dynamic range of F64.
+  (let scaled = (mat:from-rows [[tiny tiny] [-1.0d300 1.0d300]]))
+  (is (== (mat:solve-pivoted-vector 0.5d0 scaled [(+ tiny tiny) 0])
+          (Ok (Tuple [1 1] 0))))
+  ;; The first pivot is subnormal even *after* equilibration. Its reciprocal
+  ;; overflows, but both the multiplier and the solution are representable.
+  (let small = (mat:from-rows [[tiny 1] [tiny 0.5d0]]))
+  (is (== (mat:solve-pivoted-vector 0 small [tiny tiny])
+          (Ok (Tuple [1 0] 0))))
+  (let delta = (math:^^ 2.0d0 -40))
+  (let a = (mat:from-rows [[1 1] [1 (- 1 delta)]]))
+  (let b = [1 (- 1 delta)])
+  (is (== (mat:solve-pivoted-vector delta a b) (Err (mat:SmallPivot 1))))
+  (is (== (mat:solve-pivoted-vector (/ delta 2) a b) (Ok (Tuple [0 1] 0)))))
+
+(define-test pivoted-solve-shapes-and-failures ()
+  (let empty = (mat:zero-matrix 0 3))
+  (is (== (mat:solve-pivoted 0 (mat:identity-matrix 0) empty) (Ok (Tuple empty 0))))
+  (is (== (mat:solve-pivoted 0 empty empty) (Err mat:SolveShapeMismatch)))
+  (let a = (mat:identity-matrix 2))
+  (let no-columns = (mat:zero-matrix 2 0))
+  (is (== (mat:solve-pivoted 0 a no-columns) (Ok (Tuple no-columns 0))))
+  (is (== (mat:solve-pivoted-vector 0 a [1]) (Err mat:SolveShapeMismatch)))
+  (is (== (mat:solve-pivoted 0 (mat:from-rows [[1 2] [2 4]]) no-columns)
+          (Err (mat:SmallPivot 1))))
+  (is (list:all (fn (tol) (== (mat:solve-pivoted-vector tol a [0 1])
+                              (Err mat:InvalidPivotTolerance)))
+                [-1.0d0 1.0d0 math:nan math:infinity]))
+  (is (== (mat:solve-pivoted-vector 0 (mat:from-rows [[1 math:nan] [0 1]]) [1 0])
+          (Err mat:NonFiniteSolve)))
+  (is (== (mat:solve-pivoted-vector 0 a [0 math:infinity]) (Err mat:NonFiniteSolve)))
+  ;; Finite inputs and solution, but evaluating the original residual would
+  ;; subtract infinities. Do not let a max reduction hide the resulting NaN.
+  (is (== (mat:solve-pivoted-vector 0 (mat:from-rows [[1.0d308 1.0d308] [1 0]]) [0 2])
+          (Err mat:NonFiniteSolve))))
+
 (define-test test-matrix-algebra ()
   ;; Bareiss fraction-free determinant, characteristic polynomial, and adjugate over Integer
   (let a = (mat:from-rows [[(the Integer 2) 1 3]

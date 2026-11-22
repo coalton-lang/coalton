@@ -456,7 +456,9 @@ multiplication must also commute, and `CharacteristicZero` when nonzero
 integers must stay nonzero. `Fraction` satisfies all three; `Bit` is an
 exact field of characteristic two. Neither `F64` nor a polynomial with `F64`
 coefficients provides exact domain arithmetic. For numerical row reduction,
-`coalton/xmath/matrix:rref-with` accepts an explicit zero test instead.
+`coalton/xmath/matrix:rref-with` accepts an explicit zero test but still picks
+the first admissible row. To solve a square `F64` system, use
+[`solve-pivoted` or `solve-pivoted-vector`](#solving-a-square-floating-point-system).
 
 Integration only needs rational scalar factors: `RationalScalars` can represent
 them exactly or with rounding. Its exact refinement `RationalAlgebra` does
@@ -560,6 +562,35 @@ normal forms and `nfield` to algebraic number fields.
 (cl:in-package #:advanced-math-examples)
 (named-readtables:in-readtable coalton:coalton)
 ```
+
+### Solving a square floating-point system
+
+The first coefficient below is nonzero, but dividing by it would magnify
+roundoff. `solve-pivoted-vector` exchanges the rows before eliminating:
+
+```lisp
+(coalton
+  (let ((a (mat:from-rows [[1.0d-20 1] [1 1]])))
+    (mat:solve-pivoted-vector 1.0d-12 a [1 2])))
+;; => (Ok (Tuple (1.0d0 1.0d0) 0.0d0))
+```
+
+The first argument is a dimensionless tolerance you choose, finite and in
+$[0,1)$. For each nonzero row of $A$, the solver divides the entire equation
+by the largest absolute coefficient in that row. In each column it then chooses
+the largest remaining pivot magnitude. If that magnitude is at most the tolerance,
+it returns `(Err (mat:SmallPivot k))` for zero-based column $k$, not an exact rank.
+Zero tolerance rejects only a computed zero pivot.
+
+The second value in `Tuple` is the **absolute residual** $\|Ax-b\|_\infty$,
+computed in `F64` using the original inputs. It does not divide by $\|b\|$:
+a successful solve with $b=0$ gives the zero vector and residual zero. Even
+the zero residual above is rounded ($1+10^{-20}$ rounds to $1$); it does
+not certify the solution or bound its error. For multiple right-hand sides,
+`(mat:solve-pivoted tolerance a b)` takes their columns as a matrix and
+reports the largest of their residuals. Neither function changes its inputs.
+Both return an error for mismatched dimensions, an invalid tolerance, or
+non-finite entries or arithmetic (including overflow in the residual).
 
 ### Weighted graphs and automata
 
