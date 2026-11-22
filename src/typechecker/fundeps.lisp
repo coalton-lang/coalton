@@ -45,12 +45,7 @@
 (defmethod make-load-form ((self fundep) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun fundep-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'fundep-p x)))
-
-(deftype fundep-list ()
-  '(satisfies fundep-list-p))
+(util:define-list-type fundep-list fundep-p)
 
 ;; Implementation of closure taken from "The Theory of Relational Databases" pg. 64
 (defun closure (x f)

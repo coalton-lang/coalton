@@ -31,12 +31,7 @@
 (defmethod source:location ((self accessor))
   (accessor-location self))
 
-(defun accessor-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'accessor-p x)))
-
-(deftype accessor-list ()
-  '(satisfies accessor-list-p))
+(util:define-list-type accessor-list accessor-p)
 
 (defun base-type (ty)
   (declare (type tc:ty ty)

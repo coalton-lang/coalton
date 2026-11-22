@@ -60,13 +60,7 @@
   (function-syntax-p (util:required 'function-syntax-p) :type boolean       :read-only t)
   (body              (util:required 'body)              :type node-body     :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-p x))))
-
-(deftype toplevel-define-list ()
-  '(satisfies toplevel-define-list-p))
+(util:define-list-type toplevel-define-list toplevel-define-p :compile-toplevel t)
 
 (defmethod tc:apply-substitution (subs (node toplevel-define))
   (declare (type tc:substitution-list subs)
@@ -89,13 +83,7 @@
   (function-syntax-p (util:required 'function-syntax-p) :type boolean       :read-only t)
   (body              (util:required 'body)              :type node-body     :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun instance-method-definition-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'instance-method-definition-p x))))
-
-(deftype instance-method-definition-list ()
-  '(satisfies instance-method-definition-list-p))
+(util:define-list-type instance-method-definition-list instance-method-definition-p :compile-toplevel t)
 
 (defmethod tc:apply-substitution (subs (method instance-method-definition))
   (declare (type tc:substitution-list subs)
@@ -117,10 +105,4 @@
   (methods       (util:required 'methods)       :type hash-table           :read-only t)
   (head-location (util:required 'head-location) :type source:location      :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-instance-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-instance-p x))))
-
-(deftype toplevel-define-instance-list ()
-  '(satisfies toplevel-define-instance-list-p))
+(util:define-list-type toplevel-define-instance-list toplevel-define-instance-p :compile-toplevel t)

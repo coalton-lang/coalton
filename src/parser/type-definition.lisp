@@ -38,12 +38,7 @@
 (defun type-definition-p (x)
   (typep x 'type-definition))
 
-(defun type-definition-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'type-definition-p x)))
-
-(deftype type-definition-list ()
-  '(satisfies type-definition-list-p))
+(coalton-impl/util:define-list-type type-definition-list type-definition-p)
 
 (defgeneric type-definition-name (def)
   (:method ((def toplevel-define-type))

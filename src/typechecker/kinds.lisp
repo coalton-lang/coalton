@@ -53,12 +53,7 @@
   (defmethod make-load-form ((self kind) &optional env)
     (make-load-form-saving-slots self :environment env)))
 
-(defun kind-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'kind-p x)))
-
-(deftype kind-list ()
-  '(satisfies kind-list-p))
+(util:define-list-type kind-list kind-p)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defstruct (kstar (:include kind)
@@ -73,12 +68,7 @@
 (defstruct (kyvar (:include kind)) 
   (id (util:required 'id) :type fixnum :read-only t))
 
-(defun kyvar-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'kyvar-p x)))
-
-(deftype kyvar-list ()
-  '(satisfies kyvar-list-p))
+(util:define-list-type kyvar-list kyvar-p)
 
 
 ;;;
@@ -104,12 +94,7 @@
   (from (util:required 'from) :type kyvar :read-only t)
   (to   (util:required 'to)   :type kind  :read-only t))
 
-(defun ksubstitution-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ksubstitution-p x)))
-
-(deftype ksubstitution-list ()
-  '(satisfies ksubstitution-list-p))
+(util:define-list-type ksubstitution-list ksubstitution-p)
 
 (defgeneric apply-ksubstitution (subs kind)
   (:method (subs (kind kstar))

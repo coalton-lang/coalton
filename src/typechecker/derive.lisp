@@ -19,12 +19,7 @@
   (type-definition (util:required 'type-definition) :type parser:toplevel-define-type-or-struct :read-only t)
   (class           (util:required 'class)           :type symbol                                :read-only t))
 
-(defun toplevel-derivation-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'toplevel-derivation-p x)))
-
-(deftype toplevel-derivation-list ()
-  '(satisfies toplevel-derivation-list-p))
+(util:define-list-type toplevel-derivation-list toplevel-derivation-p)
 
 (defun parser-definition-type-constraints (def class)
   (declare (type parser:toplevel-define-type-or-struct def)

@@ -164,12 +164,7 @@
 (defmethod make-load-form ((self ty) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun ty-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-p x)))
-
-(deftype ty-list ()
-  '(satisfies ty-list-p))
+(util:define-list-type ty-list ty-p)
 
 (defstruct (tyvar (:include ty))
   (id             (util:required 'id)   :type fixnum             :read-only t)
@@ -184,12 +179,7 @@
   ;; from source rather than anonymous inference state.
   (source-name    nil                   :type (or null symbol)   :read-only t))
 
-(defun tyvar-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'tyvar-p x)))
-
-(deftype tyvar-list ()
-  '(satisfies tyvar-list-p))
+(util:define-list-type tyvar-list tyvar-p)
 
 (defstruct (tycon (:include ty))
   (name (util:required 'name) :type symbol :read-only t)
@@ -206,12 +196,7 @@
 (defmethod make-load-form ((self keyword-ty-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun keyword-ty-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'keyword-ty-entry-p x)))
-
-(deftype keyword-ty-entry-list ()
-  '(satisfies keyword-ty-entry-list-p))
+(util:define-list-type keyword-ty-entry-list keyword-ty-entry-p)
 
 (defstruct (function-ty (:include ty))
   (positional-input-types nil :type ty-list                  :read-only t)

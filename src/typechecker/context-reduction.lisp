@@ -134,12 +134,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
   (var   (util:required 'var)   :type tyvar             :read-only t)
   (preds (util:required 'preds) :type ty-predicate-list :read-only t))
 
-(defun ambiguity-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ambiguity-p x)))
-
-(deftype ambiguity-list ()
-  '(satisfies ambiguity-list-p))
+(util:define-list-type ambiguity-list ambiguity-p)
 
 (defun ambiguities (env tvars preds)
   (declare (type environment env)

@@ -245,12 +245,7 @@
 (defmethod make-load-form ((self node) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun node-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-p x)))
-
-(deftype node-list ()
-  '(satisfies node-list-p))
+(util:define-list-type node-list node-p)
 
 (defun binding-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -297,12 +292,7 @@ coalton symbols (`parser:identifier`)"
 (defmethod make-load-form ((self keyword-param) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun keyword-param-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'keyword-param-p x)))
-
-(deftype keyword-param-list ()
-  '(satisfies keyword-param-list-p))
+(util:define-list-type keyword-param-list keyword-param-p)
 
 (defstruct node-application-keyword-arg
   "A keyword argument in a compiled call."
@@ -313,12 +303,7 @@ coalton symbols (`parser:identifier`)"
 (defmethod make-load-form ((self node-application-keyword-arg) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun keyword-arg-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-application-keyword-arg-p x)))
-
-(deftype keyword-arg-list ()
-  '(satisfies keyword-arg-list-p))
+(util:define-list-type keyword-arg-list node-application-keyword-arg-p)
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
@@ -358,12 +343,7 @@ coalton symbols (`parser:identifier`)"
 (defmethod make-load-form ((self node-dynamic-binding) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun node-dynamic-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-dynamic-binding-p x)))
-
-(deftype node-dynamic-binding-list ()
-  '(satisfies node-dynamic-binding-list-p))
+(util:define-list-type node-dynamic-binding-list node-dynamic-binding-p)
 
 (defstruct (node-dynamic-let (:include node))
   "A dynamic scope wrapper implemented with Common Lisp special bindings."
@@ -389,12 +369,7 @@ coalton symbols (`parser:identifier`)"
 (defmethod make-load-form ((self match-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun branch-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'match-branch-p x)))
-
-(deftype branch-list ()
-  '(satisfies branch-list-p))
+(util:define-list-type branch-list match-branch-p)
 
 (defstruct (node-match (:include node))
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
@@ -412,12 +387,7 @@ coalton symbols (`parser:identifier`)"
 (defmethod make-load-form ((self catch-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun catch-branch-list-p (xs)
-  (and (alexandria:proper-list-p xs)
-       (every #'catch-branch-p xs)))
-
-(deftype catch-branch-list ()
-  '(satisfies catch-branch-list-p))
+(util:define-list-type catch-branch-list catch-branch-p)
 
 (defstruct (node-protect (:include node))
   "Evaluate EXPR, and then CLEANUP however control leaves EXPR."
@@ -441,12 +411,7 @@ thrown, before unwinding. Branches of `catch` run after unwinding."
 (defmethod make-load-form ((self resumable-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun resumable-branch-list-p (xs)
-  (and (alexandria:proper-list-p xs)
-       (every #'resumable-branch-p xs)))
-
-(deftype resumable-branch-list ()
-  '(satisfies resumable-branch-list-p))
+(util:define-list-type resumable-branch-list resumable-branch-p)
 
 (defstruct (node-resumable (:include node))
   "A construct for continuing from a non-stack-unwinding transfer of control. 
@@ -465,12 +430,7 @@ thrown, before unwinding. Branches of `catch` run after unwinding."
 (defmethod make-load-form ((self node-for-binding) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun node-for-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-for-binding-p x)))
-
-(deftype node-for-binding-list ()
-  '(satisfies node-for-binding-list-p))
+(util:define-list-type node-for-binding-list node-for-binding-p)
 
 (defstruct (node-for (:include node))
   "A labelled imperative `for` with explicit bindings and step expressions."

@@ -52,12 +52,7 @@
 (defmethod source:location ((self pattern))
   (pattern-location self))
 
-(defun pattern-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'pattern-p x)))
-
-(deftype pattern-list ()
-  '(satisfies pattern-list-p))
+(util:define-list-type pattern-list pattern-p)
 
 (defstruct (pattern-var
             (:include pattern)
@@ -71,12 +66,7 @@
   (var     (util:required 'var)     :type pattern-var :read-only t)
   (pattern (util:required 'pattern) :type pattern     :read-only t))
 
-(defun pattern-var-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'pattern-var-p x)))
-
-(deftype pattern-var-list ()
-  '(satisfies pattern-var-list-p))
+(util:define-list-type pattern-var-list pattern-var-p)
 
 (defstruct (pattern-literal
             (:include pattern)
