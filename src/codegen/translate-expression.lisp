@@ -458,6 +458,26 @@ needs to synthesize those trailing parameters explicitly."
         :rands eta-rands
         :keyword-rands eta-keyword-rands)))))
 
+(defun pattern-predicate-context (patterns inputs ctx env)
+  "View the enclosing dictionaries at the types justified by these patterns."
+  (when ctx
+    (labels ((indexed-p (pat)
+               (typecase pat
+                 (tc:pattern-binding (indexed-p (tc:pattern-binding-pattern pat)))
+                 (tc:pattern-constructor
+                  (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (tc:pattern-constructor-name pat)))
+                      (some #'indexed-p (tc:pattern-constructor-patterns pat)))))))
+      (let ((subs nil))
+        (loop :for pat :in patterns :for input :in inputs
+              :when (indexed-p pat)
+                :do (setf subs (tc:unify-pattern-result subs input
+                                                       (tc:qualified-ty-type (tc:pattern-type pat)) :all)))
+        (when subs
+          (setf ctx (append (loop :for (pred . name) :in ctx
+                                  :collect (cons (tc:apply-substitution subs pred) name))
+                            ctx))))))
+  ctx)
+
 (defun translate-toplevel (binding env name &key extra-context)
   (declare (type tc:binding-type binding)
            (type tc:environment env)
@@ -473,10 +493,14 @@ needs to synthesize those trailing parameters explicitly."
            (loop :for pred :in preds
                  :collect (cons pred (gensym "DICT"))))
 
-         (full-ctx (append ctx extra-context))
-
          (pattern-params nil)
          (last-node (tc:binding-last-node binding))
+         (full-ctx (pattern-predicate-context
+                    (or (tc:binding-parameters binding)
+                        (and (tc:binding-restricted-p binding) (typep last-node 'tc:node-abstraction)
+                             (tc:node-abstraction-params last-node)))
+                    (tc:function-type-arguments (tc:qualified-ty-type qual-ty))
+                    (append ctx extra-context) env))
          (eta-arg-types (binding-eta-argument-types binding qual-ty))
          (eta-vars (loop :repeat (length eta-arg-types)
                          :collect (gensym "ARG"))))
@@ -894,6 +918,8 @@ Returns a `node'.")
       (assert (not (some #'tc:static-predicate-p preds)))
 
       (let* ((visible-type (tc:qualified-ty-type qual-ty))
+             (ctx (pattern-predicate-context (tc:node-abstraction-params expr)
+                                             (tc:function-type-arguments visible-type) ctx env))
              (translated-keyword-params
                (mapcar (lambda (param)
                          (make-keyword-param
@@ -1054,9 +1080,13 @@ Returns a `node'.")
        :expr (translate-expression (tc:node-match-expr expr) ctx env)
        :branches (mapcar
                   (lambda (branch)
-                    (make-match-branch
-                     :pattern (translate-pattern (tc:node-match-branch-pattern branch) ctx env)
-                     :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
+                    (let* ((pat (tc:node-match-branch-pattern branch))
+                           (ctx (pattern-predicate-context
+                                 (list pat) (list (tc:qualified-ty-type (tc:node-type (tc:node-match-expr expr))))
+                                 ctx env)))
+                      (make-match-branch
+                       :pattern (translate-pattern pat ctx env)
+                       :body (translate-expression (tc:node-match-branch-body branch) ctx env))))
                   (tc:node-match-branches expr)))))
 
   (:method ((expr tc:node-protect) ctx env)

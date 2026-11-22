@@ -171,13 +171,12 @@ When true, returns two `ast:node' objects representing then/else branches."
   (then    (util:required 'then)    :type dtree                   :read-only t)
   (else    (util:required 'else)    :type dtree                   :read-only t))
 
-(defun peel-pattern (pat col-var col-type bindings env)
+(defun peel-pattern (pat col-var bindings env)
   "Strip outer variable, binding, and newtype wrappers from PAT on COL-VAR,
 accumulating variable bindings into BINDINGS.
 Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
   (declare (type pattern:pattern pat)
            (type symbol col-var)
-           (type tc:ty col-type)
            (type list bindings)
            (type tc:environment env)
            (values pattern:pattern list &optional))
@@ -188,17 +187,16 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
      (values (pattern:make-pattern-wildcard :type (pattern:pattern-type pat))
              (cons (make-match-binding :var (pattern:pattern-var-name pat)
                                        :source col-var
-                                       :lisp-type (tc:lisp-type col-type env))
+                                       :lisp-type (tc:lisp-type (pattern:pattern-type pat) env))
                    bindings)))
     (pattern:pattern-binding
      (let ((var-name (pattern:pattern-var-name (pattern:pattern-binding-var pat)))
            (inner (pattern:pattern-binding-pattern pat)))
        (peel-pattern inner
                      col-var
-                     col-type
                      (cons (make-match-binding :var var-name
                                                :source col-var
-                                               :lisp-type (tc:lisp-type col-type env))
+                                               :lisp-type (tc:lisp-type (pattern:pattern-type pat) env))
                            bindings)
                      env)))
     (pattern:pattern-constructor
@@ -207,7 +205,7 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
             (type-entry (tc:lookup-type env (tc:constructor-entry-constructs ctor-entry))))
        (if (tc:type-entry-newtype type-entry)
            (let ((inner (first (pattern:pattern-constructor-patterns pat))))
-             (peel-pattern inner col-var (pattern:pattern-type inner) bindings env))
+             (peel-pattern inner col-var bindings env))
            (values pat bindings))))
     (pattern:pattern-literal
      (values pat bindings))))
@@ -237,31 +235,22 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
            (type tc:ty col-type)
            (type tc:environment env)
            (values list list &optional))
-  (cond
-    ((zerop (tc:constructor-entry-arity ctor-entry))
-     (values nil nil))
-    ((eql ctor-name 'coalton:Cons)
-     (let ((elem-type (tc:tapp-to col-type)))
-       (values (list elem-type col-type)
-               (list `(car ,col-var) `(cdr ,col-var)))))
-    ((eql ctor-name 'coalton:Some)
-     (let ((elem-type (tc:tapp-to col-type)))
-       (values (list elem-type)
-               (list `(rt:unwrap-cl-some ,col-var)))))
-    (t
-     (let* ((generic-ctor-type (tc:qualified-ty-type
-                                (tc:fresh-inst
-                                 (tc:lookup-value-type env ctor-name))))
-            (ctor-type (tc:apply-substitution
-                        (tc:unify nil (tc:function-return-type generic-ctor-type) col-type)
-                        generic-ctor-type))
-            (field-types (tc:function-type-arguments ctor-type))
-            (classname (tc:constructor-entry-classname ctor-entry))
-            (package (symbol-package classname)))
-       (values field-types
-               (loop :for i :from 0 :below (length field-types)
-                     :for accessor := (alexandria:format-symbol package "~A-_~D" classname i)
-                     :collect `(,accessor ,col-var)))))))
+  (when (zerop (tc:constructor-entry-arity ctor-entry))
+    (return-from constructor-fields-info (values nil nil)))
+  (let* ((ctor-type (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type env ctor-name))))
+         (result (tc:function-return-type ctor-type))
+         ;; Rows share these projections. A peeled newtype or an abstract
+         ;; index need not expose the constructor head in the incoming column.
+         (subs (when (tc:ty= (tc:base-type result) (tc:base-type col-type))
+                 (tc:unify-pattern-result nil result col-type :all)))
+         (field-types (tc:apply-substitution subs (tc:function-type-arguments ctor-type))))
+    (values field-types
+            (cond ((eq ctor-name 'coalton:Cons) (list `(car ,col-var) `(cdr ,col-var)))
+                  ((eq ctor-name 'coalton:Some) (list `(rt:unwrap-cl-some ,col-var)))
+                  (t (loop :with classname := (tc:constructor-entry-classname ctor-entry)
+                           :for i :below (length field-types)
+                           :for accessor := (alexandria:format-symbol (symbol-package classname) "~A-_~D" classname i)
+                           :collect `(,accessor ,col-var)))))))
 
 (defun replace-nth-with-list (list index replacement)
   (declare (type list list replacement)
@@ -331,7 +320,6 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                              :do (multiple-value-bind (core-pat new-bindings)
                                      (peel-pattern subpat
                                                    (match-column-var fc)
-                                                   (match-column-type fc)
                                                    bindings
                                                    env)
                                    (push core-pat peeled-subpats)
@@ -407,6 +395,14 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                               :var (gensym "MATCH-FIELD-")
                               :type ft))))))
 
+(defun witness-column-index (patterns columns env)
+  (let ((first-witness nil))
+    (loop :for pat :in patterns :for col :in columns :for i :from 0
+          :when (coalton-impl/codegen/transformations:pattern-contains-gadt-p pat env)
+            :do (unless first-witness (setf first-witness i))
+                (when (tc:tycon-p (tc:base-type (match-column-type col))) (return i))
+          :finally (return first-witness))))
+
 (defun compile-pattern-matrix (columns rows env memo-table field-column-table)
   "Compile pattern matrix (COLUMNS, ROWS) into a decision DAG."
   (declare (type list columns rows)
@@ -428,8 +424,11 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
        (let ((memo-key (matrix-memo-key columns rows)))
          (alexandria:if-let ((cached (gethash memo-key memo-table)))
            cached
-           (let* ((col-idx (position-if-not #'pattern:pattern-wildcard-p
-                                            (match-row-patterns (first rows))))
+           (let* ((patterns (match-row-patterns (first rows)))
+                  ;; Establish tag evidence before running type-specific
+                  ;; literal tests on a correlated field.
+                  (col-idx (or (witness-column-index patterns columns env)
+                               (position-if-not #'pattern:pattern-wildcard-p patterns)))
                   (col (nth col-idx columns))
                   (head-pat (nth col-idx (match-row-patterns (first rows))))
                   (result
@@ -437,26 +436,23 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                       (pattern:pattern-constructor
                        (let* ((first-ctor (tc:lookup-constructor env (pattern:pattern-constructor-name head-pat)))
                               (type-entry (tc:lookup-type env (tc:constructor-entry-constructs first-ctor)))
-                              (ctor-patterns nil))
-                         ;; Keep one pattern per constructor: GADT cases can refine the column differently.
+                              (ctor-names nil))
                          (dolist (row rows)
                            (let ((pat (nth col-idx (match-row-patterns row))))
                              (when (pattern:pattern-constructor-p pat)
-                               (pushnew pat ctor-patterns :key #'pattern:pattern-constructor-name :test #'eq))))
-                         (setf ctor-patterns (nreverse ctor-patterns))
+                               (pushnew (pattern:pattern-constructor-name pat) ctor-names :test #'eq))))
+                         (setf ctor-names (nreverse ctor-names))
                          (let* ((all-ctors (tc:type-entry-constructors type-entry))
-                                (ctor-names (mapcar #'pattern:pattern-constructor-name ctor-patterns))
                                 (complete-p (null (set-difference all-ctors ctor-names :test #'eq)))
                                 (cases
-                                  (loop :for pat :in ctor-patterns
-                                        :for ctor-name :in ctor-names
+                                  (loop :for ctor-name :in ctor-names
                                         :for ctor-entry := (tc:lookup-constructor env ctor-name)
                                         :collect
                                         (multiple-value-bind (field-types field-accessors)
                                             (constructor-fields-info ctor-name
                                                                      ctor-entry
                                                                      (match-column-var col)
-                                                                     (pattern:pattern-type pat)
+                                                                     (match-column-type col)
                                                                      env)
                                           (let* ((field-columns
                                                    (canonical-field-columns
@@ -898,7 +894,7 @@ compiling self-calls in the other branches as tail calls."
                  :do (setf (aref branch-patterns idx) pat
                            (aref branch-codes idx) code)
                  :collect (multiple-value-bind (core-pat bindings)
-                              (peel-pattern pat match-var subexpr-type nil env)
+                              (peel-pattern pat match-var nil env)
                             (make-match-row
                              :patterns (list core-pat)
                              :bindings bindings

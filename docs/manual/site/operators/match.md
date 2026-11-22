@@ -35,6 +35,9 @@ weight: 150
 - All branch bodies must unify to the same result type, which may be a single value, `Void`, or multiple values.
 - The final expression of each branch body is in tail position when the `match` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).
 - **Exhaustiveness**: The compiler checks pattern exhaustiveness and emits a warning at compile time if cases are missing. If a non-exhaustive `match` falls through at runtime without matching any branch, it signals an error.
+- **GADT patterns**: Matching a constructor declared inside [`define-type`](/manual/operators/define-type/) can refine the scrutinee's type arguments inside that branch. Coverage starts from the incoming scrutinee type: a constructor returning `Tag String` is not required for a `Tag Integer`, but it cannot be omitted merely because another branch matches `Tag Integer`.
+- Function parameter patterns are checked together. For example, if one parameter matches a witness that `:a` is `Integer`, a second parameter of type `Tag :a` need only cover `Tag Integer`.
+- Within a branch, an equality witness also applies to scoped annotations and existing typeclass constraints. If `Refl` proves that `:a` and `:b` are equal, an `Eq :b` constraint suffices to compare a value of `:a` with one of `:b`. The equality does not hold outside that branch.
 
 ## Examples
 

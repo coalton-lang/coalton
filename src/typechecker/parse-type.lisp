@@ -472,6 +472,7 @@ that may have been introduced after expanding type aliases."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (setf ty (tc:apply-substitution (partial-type-env-refinements partial-env) ty))
       (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
@@ -508,6 +509,7 @@ Unbound variables still denote ordinary single-value types."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (setf ty (tc:apply-substitution (partial-type-env-refinements partial-env) ty))
       (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
@@ -544,10 +546,10 @@ being assembled."
         (setf ksubs (tc:kind-monomorphize-subs
                      (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
 
-        (let* ((qual-ty (apply-type-alias-substitutions
-                         (tc:apply-ksubstitution ksubs qual-ty)
-                         unparsed-ty
-                         partial-env))
+        (let* ((qual-ty (tc:apply-substitution
+                         (partial-type-env-refinements partial-env)
+                         (apply-type-alias-substitutions (tc:apply-ksubstitution ksubs qual-ty)
+                                                        unparsed-ty partial-env)))
                (explicit-tvars (mapcar (lambda (tvar)
                                          (tc:apply-ksubstitution ksubs tvar))
                                        explicit-tvars)))
@@ -595,11 +597,11 @@ being assembled."
 
   (let ((in-scope-tvars
           (if (typep env 'partial-type-env)
-              (remove-duplicates
-               (loop :for type :being :the :hash-values :of (partial-type-env-ty-table env)
-                     :when (tc:tyvar-p type)
-                       :collect type)
-               :test #'tc:ty=)
+              (tc:type-variables
+               (tc:apply-substitution
+                (partial-type-env-refinements env)
+                (loop :for type :being :the :hash-values :of (partial-type-env-ty-table env)
+                      :when (tc:tyvar-p type) :collect type)))
               nil)))
     (multiple-value-bind (qual-ty explicit-tvars explicit-p)
         (parse-qualified-type-internal ty env)

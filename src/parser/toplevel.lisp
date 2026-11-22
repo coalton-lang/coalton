@@ -204,6 +204,7 @@
 ;;;; constructor := identifier docstring?
 ;;;;              | "(" identifier ")" docstring?
 ;;;;              | "(" identifier ty+ ")" docstring?
+;;;;              | "(" "declare" identifier qualified-ty ")" docstring?
 ;;;;
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
@@ -1224,11 +1225,15 @@ consume all attributes")))
        :location (form-location source form)
        :inline nil))))
 
-(defun parse-declare (form source)
+(defun parse-declaration-signature (form source)
   (declare (type cst:cst form)
-           (values toplevel-declare))
+           (values identifier-src qualified-ty))
 
   (assert (cst:consp form))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed declaration"
+                 (note source form "unexpected dotted list")))
 
   ;; (declare)
   (unless (cst:consp (cst:rest form))
@@ -1236,23 +1241,32 @@ consume all attributes")))
                  (note source form "expected body")))
 
   ;; (declare x)
-  (unless (cst:consp (cst:rest (cst:rest form)))
+  (unless (cst:consp (cst:nthrest 2 form))
     (parse-error "Malformed declaration"
                  (note source form "expected declared type")))
 
   ;; (declare x y z)
-  (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
+  (when (cst:consp (cst:nthrest 3 form))
     (parse-error "Malformed declaration"
-                 (note source (cst:first (cst:rest (cst:rest (cst:rest form))))
-                       "unexpected trailing form")))
+                 (note source (cst:fourth form) "unexpected trailing form")))
 
   ;; (declare 0.5 x)
-  (unless (identifierp (cst:raw (cst:second form)))
-    (parse-error "Malformed declaration"
-                 (note source (cst:second form)
-                       "expected symbol")))
+  (let ((name (cst:second form)))
+    (unless (identifierp (cst:raw name))
+      (parse-error "Malformed declaration"
+                   (note source name "expected symbol")))
+    (values (make-identifier-src
+             :name (cst:raw name)
+             :source-name (source:extract-source-text source (cst:source name))
+             :location (form-location source name))
+            (parse-qualified-type (cst:third form) source))))
 
-  (let ((qualified-type (parse-qualified-type (cst:third form) source)))
+(defun parse-declare (form source)
+  (declare (type cst:cst form)
+           (values toplevel-declare))
+
+  (multiple-value-bind (name qualified-type)
+      (parse-declaration-signature form source)
     ;; A declaration must declare a single-value type or a function type.
     ;; Void and multi-value types are not valid as standalone declarations.
     (when (typep (qualified-ty-type qualified-type) 'result-ty)
@@ -1264,10 +1278,7 @@ consume all attributes")))
                              "Void"
                              "a multi-value type"))))
     (make-toplevel-declare
-     :name (make-identifier-src
-            :name (cst:raw (cst:second form))
-            :source-name (source:extract-source-text source (cst:source (cst:second form)))
-            :location (form-location source (cst:second form)))
+     :name name
      :type qualified-type
      :monomorphize nil
      :location (form-location source form)
@@ -1394,7 +1405,7 @@ consume all attributes")))
          :finally (progn
                     (when (and has-adt-ctor has-gadt-ctor)
                       (parse-error (format nil "Malformed ~a definition" definition-category)
-                                   (note source form " cannot define implicitly and explicitly typed constructors")))
+                                   (note source form "cannot mix constructor declarations with ordinary constructors")))
                     (return ctors))))
      :repr nil
      :derive nil
@@ -2020,83 +2031,48 @@ consume all attributes")))
    :source-name (cst:raw form)
    :location (form-location source form)))
 
+(defun parse-declared-constructor (form type-name docstring source)
+  (declare (type cst:cst form)
+           (type identifier-src type-name)
+           (values constructor))
+  (multiple-value-bind (name signature)
+      (parse-declaration-signature form source)
+    (let* ((signature-form (cst:third form))
+           (type (qualified-ty-type signature))
+           (result-head (if (typep type 'function-ty)
+                            (function-ty-return-tycon-head type)
+                            (ty-tycon-head type))))
+      (unless (and result-head (eq (tycon-name result-head) (identifier-src-name type-name)))
+        (parse-error "Malformed GADT constructor"
+                     (note source signature-form "GADT constructor must return ~S" (identifier-src-name type-name))
+                     (secondary-note source (cst:second form) "constructor declared here")))
+      (when (and (typep type 'function-ty)
+                 (or (function-ty-keyword-input-types type)
+                     (null (function-ty-positional-input-types type))))
+        (parse-error "Malformed GADT constructor"
+                     (note source signature-form
+                           "use positional fields, or the bare result type for a nullary constructor")))
+      (when (qualified-ty-predicates signature)
+        (parse-error "Malformed GADT constructor"
+                     (note source signature-form "typeclass constraints on constructor signatures are not supported")))
+      (make-constructor :name name
+                        :signature signature
+                        :fields nil
+                        :docstring docstring
+                        :location (form-location source form)))))
+
 (defun parse-constructor (form enclosing-form enclosing-type-name docstring source)
   (declare (type cst:cst form enclosing-form)
            (type identifier-src enclosing-type-name)
            (values constructor))
 
-  (let (unparsed-name
-        unparsed-fields
-        signature)
-
-    (cond
-      ((cst:atom form)
-       (setf unparsed-name form))
-      (t
-       (let ((remaining-forms (cst:rest form)))
-         (setf unparsed-name (cst:first form))
-         (if (and (cst:consp remaining-forms)
-                  (cst:consp (cst:first remaining-forms))
-                  (eq 'coalton:Type (cst:raw (cst:first (cst:first remaining-forms)))))
-             ;; GADT Constructor - (Constr (Type (:a -> Data :a)))
-             (cond
-               ;; (Constr Type)
-               ((cst:atom (cst:rest (cst:first remaining-forms)))
-                (parse-error "Malformed GADT constructor"
-                             (note source remaining-forms "expected type signature")
-                             (secondary-note source
-                                             (cst:first remaining-forms)
-                                             "in this constructor definition")))
-               ;; (Constr (Type (:a -> Data :a)) String)
-               ((not (cst:null (cst:rest remaining-forms)))
-                (parse-error "Malformed GADT constructor"
-                             (note source (cst:first (cst:rest remaining-forms))
-                                   "unexpected trailing form ~S"
-                                   (cst:raw (cst:rest remaining-forms)))
-                             (secondary-note source
-                                             (cst:first remaining-forms)
-                                             "in this constructor definition")))
-               ;; (Constr (Type (:a -> Data :a) String))
-               ((not (cst:null (cst:nthrest 2 (cst:first remaining-forms))))
-                (parse-error "Malformed GADT constructor"
-                             (note source
-                                   (cst:first (cst:nthrest 2 (cst:first remaining-forms)))
-                                   "unexpected trailing form ~S"
-                                   (cst:raw (cst:first (cst:nthrest 2 (cst:first remaining-forms)))))
-                             (secondary-note source
-                                             (cst:first remaining-forms)
-                                             "in this constructor definition")))
-               (t
-                (let* ((signature_ (parse-qualified-type
-                                    (cst:rest (cst:first remaining-forms))
-                                    source))
-                       (signature-type (qualified-ty-type signature_))
-                       (result-type-head (or
-                                          (and (typep signature-type 'function-ty)
-                                               (function-ty-return-tycon-head
-                                                signature-type))
-                                          (and (typep signature-type 'ty)
-                                               (ty-tycon-head signature-type)))))
-                  (unless (and result-type-head
-                               (eq (tycon-name result-type-head)
-                                   (identifier-src-name enclosing-type-name)))
-                    (parse-error "Malformed GADT constructor"
-                                 (note source
-                                       unparsed-name
-                                       "GADT constructor must return ~S"
-                                       (identifier-src-name enclosing-type-name))
-                                 (secondary-note source (cst:first remaining-forms)
-                                                 "in this type definition")))
-                  (setf signature signature_))))
-             ;; ADT  Constructor - (Constr :a)
-             (setf unparsed-fields (cst:listify remaining-forms))))))
-
-    (unless (cst:atom unparsed-name)
+  (when (and (cst:consp form) (eq (cst:raw (cst:first form)) 'coalton:declare))
+    (unless (eq (cst:raw (cst:first enclosing-form)) 'coalton:define-type)
       (parse-error "Malformed constructor"
-                   (note source unparsed-name "expected symbol")
-                   (secondary-note source (cst:second enclosing-form)
-                                   "in this type definition")))
+                   (note source form "constructor declarations are only allowed in define-type")))
+    (return-from parse-constructor (parse-declared-constructor form enclosing-type-name docstring source)))
 
+  (let ((unparsed-name (if (cst:consp form) (cst:first form) form)))
     (unless (identifierp (cst:raw unparsed-name))
       (parse-error "Malformed constructor"
                    (note source unparsed-name "expected symbol")
@@ -2108,9 +2084,10 @@ consume all attributes")))
             :name (cst:raw unparsed-name)
             :source-name (source:extract-source-text source (cst:source unparsed-name))
             :location (form-location source unparsed-name))
-     :signature signature
-     :fields (loop :for field :in unparsed-fields
-                   :collect (parse-type field source))
+     :signature nil
+     :fields (when (cst:consp form)
+               (loop :for field :in (cst:listify (cst:rest form))
+                     :collect (parse-type field source)))
      :location (form-location source form)
      :docstring docstring)))
 

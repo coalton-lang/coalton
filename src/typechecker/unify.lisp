@@ -8,6 +8,8 @@
    #:coalton-impl/typechecker/predicate)
   (:export
    #:unify                              ; FUNCTION
+   #:unify-given                        ; FUNCTION
+   #:unify-pattern-result               ; FUNCTION
    #:try-unify                          ; FUNCTION
    #:match                              ; FUNCTION
    #:predicate-mgu                      ; FUNCTION
@@ -30,7 +32,42 @@
                          (apply-substitution substs type2))))
     (compose-substitution-lists new-substs substs)))
 
-(defun try-unify (subs type1 type2)
+(defun unify-given (subs result input refinable)
+  "Accumulate a proven equality, allowing only REFINABLE skolems to change."
+  (let* ((input (apply-substitution subs input))
+         (result (apply-substitution subs result))
+         (vars (loop :for var :in (type-variables (list input result))
+                     :when (and (tyvar-rigid-p var)
+                                (or (eq refinable :all) (member var refinable :test #'ty=)))
+                       :collect var)))
+    (unless vars
+      (return-from unify-given (unify subs result input)))
+    (let* ((open (loop :for var :in vars
+                       :collect (make-substitution :from var :to (fresh-type-renamer var))))
+           (close (loop :for sub :in open
+                        :collect (make-substitution :from (substitution-to sub) :to (substitution-from sub))))
+           (given (unify nil (apply-substitution open result) (apply-substitution open input))))
+      (compose-substitution-lists
+       (loop :for sub :in given
+             :collect (make-substitution :from (apply-substitution close (substitution-from sub))
+                                         :to (apply-substitution close (substitution-to sub))))
+       subs))))
+
+(defun unify-pattern-result (subs result input refinable)
+  "A pattern may provide evidence about the indices of a known datatype,
+never about its head. Ordinary unification still checks that head."
+  (unless refinable
+    (return-from unify-pattern-result (unify subs result input)))
+  (let ((input (apply-substitution subs input))
+        (result (apply-substitution subs result)))
+    (compose-substitution-lists
+     (if (and (tapp-p input)
+              (ty= (first (flatten-type input)) (first (flatten-type result))))
+         (unify-given nil result input refinable)
+         (unify nil result input))
+     subs)))
+
+(defun try-unify (subs type1 type2 &optional refinable)
   "Try to unify TYPE1 and TYPE2 under SUBS.
 
 Returns two values:
@@ -40,7 +77,7 @@ Returns two values:
            (type ty type1 type2)
            (values substitution-list boolean))
   (handler-case
-      (values (unify subs type1 type2) t)
+      (values (unify-pattern-result subs type1 type2 refinable) t)
     (coalton-internal-type-error ()
       (values subs nil))))
 

@@ -322,6 +322,81 @@
         (dolist (type '("Integer" "(List Integer)" "(Tuple Integer String)" "(:f Integer)"))
           (signals tc:tc-error (check-instance type)))))))
 
+(deftest gadt-matches-cannot-invent-equalities ()
+  (dolist (definition
+           '("(declare get-token (Token :a -> :a))
+              (define (get-token w) (match w ((MkToken) \"not every type\")))"
+             "(declare get-field (Payload -> :b))
+              (define (get-field (MkPayload x)) x)"
+             "(declare get-field (:a -> String))
+              (define (get-field w) (match w ((MkPayload x) x)))"
+             "(declare get-field ((Tuple :a Boolean) -> String))
+              (define (get-field w) (match w ((Tuple (MkPayload x) _) x)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define-type (Token :a) (declare MkToken (Token :a)))
+                    (define-type Payload (declare MkPayload (String -> Payload)))
+                    ~A" definition)))))
+
+(deftest gadt-existentials-are-distinct-and-scoped ()
+  (dolist (definition
+           '("(declare apply-packed (Packed -> String))
+              (define (apply-packed p) (match p ((MkPacked x f) (f x))))"
+             "(declare inspect-packed (Packed -> Boolean))
+              (define (inspect-packed (MkPacked (Tuple _ _) _)) True)"
+             "(declare use-outside (Packed * (:a -> String) -> String))
+              (define (use-outside p f) (match p ((MkPacked x _) (f x))))"
+             "(declare get-hidden (Packed -> :a))
+              (define (get-hidden p) (match p ((MkPacked x _) (return x))))"
+             "(declare get-hidden (Packed -> :a))
+              (define (get-hidden p) (let (MkPacked x _) = p) (return x))"
+             "(define-exception Trouble (GotPacked Packed))
+              (declare recover ((Void -> :a) -> :a))
+              (define (recover thunk) (catch (thunk) ((GotPacked (MkPacked x _)) x)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define-type Packed (declare MkPacked (:a * (:b -> String) -> Packed)))
+                    ~A" definition)))))
+
+(deftest gadt-parameter-must-cover-the-incoming-type ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare TagInt (Tag Integer)) (declare TagStr (Tag String)))
+      (declare int-only (Tag :a -> Boolean))
+      (define (int-only (TagInt)) True)")))
+
+(deftest gadt-constructor-must-have-a-representable-signature ()
+  (dolist (signature '("(Void -> Wrap)" "(Integer -> Void)" "(Integer &key (:tag String) -> Wrap)"))
+    (signals parser:parse-error
+      (check-coalton-types (format nil "(define-type Wrap (declare MkWrap ~A))" signature)))))
+
+(deftest gadt-givens-do-not-justify-unrelated-types ()
+  (dolist (definition
+           '("(declare eq-extra (Eq :c => Same :a :b * :a * :c -> Boolean))
+              (define (eq-extra w x _) (match w ((Refl) (== x x))))"
+             "(declare get-extra (Same :a :b * :a -> :c))
+              (define (get-extra w x) (let z = (match w ((Refl) x))) z)"
+             "(declare forged (Same :a :b * :a -> String))
+              (define (forged w x) (let z = (match w ((Refl) x))) z)"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define-type (Same :a :b) (declare Refl (Same :x :x))) ~A" definition)))))
+
+(deftest gadt-unsupported-constructor-constraint-diagnostic ()
+  (let ((diagnostic (collect-compiler-error
+                     "(package gadt-constraint-test (import coalton-prelude))
+                      (define-type (Box :a) (declare Pack (Eq :a => :a -> Box :a)))")))
+    (is (and diagnostic (search "typeclass constraints on constructor signatures are not supported" diagnostic)))))
+
+(deftest gadt-coverage-still-finds-holes-in-seen-constructors ()
+  (let ((diagnostic
+          (collect-compiler-error
+           "(package correlated-tag-test (import coalton-prelude))
+            (define-type (Tag :a) (declare I (Boolean -> Tag Integer)) (declare S (Tag String)))
+            (declare classify ((Tuple (Tag :a) (Tag :a)) -> Boolean))
+            (define (classify p)
+              (match p ((Tuple (I (True)) _) True) ((Tuple _ (S)) False)))")))
+    (is (and diagnostic (search "missing case (TUPLE (I (FALSE)) (I \"_\"))" diagnostic)))))
+
 (deftest test-deep-constructor-pattern-analysis ()
   (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)
          (original (symbol-function specializer))

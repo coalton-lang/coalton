@@ -20,6 +20,7 @@ weight: 50
 ;;                     | (⟨type-name⟩ ⟨type-var⟩+)
 ;; ⟨constructor-spec⟩ := ⟨ctor-name⟩ ⟨docstring⟩?
 ;;                     | (⟨ctor-name⟩ ⟨field-type⟩*) ⟨docstring⟩?
+;;                     | (declare ⟨ctor-name⟩ ⟨constructor-signature⟩) ⟨docstring⟩?
 ;; ⟨repr-directive⟩   := (repr :enum | :transparent | :lisp | :native ⟨lisp-type⟩)
 ;; ⟨derive-directive⟩ := (derive ⟨class-name⟩+)
 ```
@@ -28,9 +29,11 @@ weight: 50
 
 - `define-type` is a top-level form valid inside [`coalton-toplevel`](/manual/operators/coalton-toplevel/). Both `⟨type-name⟩` and all `⟨ctor-name⟩` symbols must belong to the current package.
 - A non-parametric type is written as a bare symbol `⟨type-name⟩`; a parametric type is written `(⟨type-name⟩ :a :b ...)` with one or more distinct keyword type variables.
-- Every free type variable appearing in a constructor field type must be declared in `⟨type-head⟩` (unless bound locally by an explicit `forall` in that field type).
+- In ordinary field syntax, every free type variable appearing in a constructor field must be declared in `⟨type-head⟩` (unless bound locally by an explicit `forall` in that field type).
+- A generalized algebraic data type (GADT) uses [`declare`](/manual/operators/declare/) for **every** constructor. `(declare C signature)` introduces `C` and gives its whole type; do not add a separate constructor entry or `define`. In contrast, `(C (Integer -> String))` is an ordinary constructor that stores a function. A single `define-type` cannot mix the two styles.
+- A constructor signature must return the datatype being defined, but its type arguments can be specialized or repeated. Use a bare result type for a nullary constructor and positional inputs for a constructor with fields. Each signature binds its own variables, implicitly or with [`forall`](/manual/operators/forall/); for example, `(declare Wrap (forall (:x) (:x -> Box :x)))`. A variable occurring only in the fields is existential: the caller chooses its type when constructing the value, and a pattern may use the field but cannot choose its type anew or return it at an arbitrary type. Type aliases have their ordinary meaning in signatures; typeclass constraints are not supported.
 - Kinds of type parameters are inferred from their uses in constructor fields (including higher-kinded parameters such as `:f` used as `(:f :a)`). The resulting type constructor produces a type of kind `Type`.
-- Variance of each type parameter is inferred automatically across mutually recursive type definitions. Unused (phantom) type parameters default to covariant; opaque types with zero constructors default to invariant.
+- Variance of each type parameter is inferred automatically across mutually recursive type definitions. Unused (phantom) type parameters default to covariant; opaque types with zero constructors default to invariant. GADT indices are treated as invariant because constructor results can constrain them even when no field mentions them.
 - Each `⟨constructor-spec⟩` defines a constructor in the current package:
   - A nullary constructor written `C` or `(C)` is a value of the defined type.
   - A constructor `(C t1 ... tn)` with $n \ge 1$ fields is a function of type `(t1 * ... * tn -> ⟨type⟩)` that can be called or passed as a first-class function value.
@@ -64,6 +67,17 @@ weight: 50
     (match t
       ((Leaf x) x)
       ((Branch l r) (+ (tree-sum l) (tree-sum r))))))
+```
+
+`Refl` constructs evidence that two types are the same. The result of `cast-with` can have type `:b` because matching `Refl` proves that `:a` and `:b` are equal **in that branch**:
+
+```lisp
+(coalton-toplevel
+  (define-type (Same :a :b)
+    (declare Refl (Same :x :x)))
+  (declare cast-with (Same :a :b * :a -> :b))
+  (define (cast-with witness x)
+    (match witness ((Refl) x))))
 ```
 
 ## Other notes

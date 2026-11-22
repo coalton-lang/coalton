@@ -175,7 +175,6 @@ multiple return values or a non-tycon-headed return."
   (declare (type function-ty ty)
            (values (or null tycon)))
   (let ((outputs (function-ty-output-types ty)))
-    (declare (type cons outputs))
     (when (alexandria:length= 1 outputs)
       (let ((head (first (flatten-type (first outputs)))))
         (when (tycon-p head)

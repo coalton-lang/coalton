@@ -51,6 +51,12 @@
   (first-return nil            :type (or null cons)    :read-only nil))
 
 (defparameter *return-blocks* nil)
+(defvar *gadt-return-targets* nil
+  "Enclosing blocks whose return types must be checked under the current pattern evidence.")
+(defvar *enclosing-predicates* nil
+  "Dictionaries supplied by enclosing declarations, in the current branch's types.")
+(defvar *branch-result-checks* :outside
+  "Checks on ambiguous match results, discharged before leaving the enclosing body.")
 
 (declaim (type (or null hash-table) *pre-inferred-builder-items*))
 (defvar *pre-inferred-builder-items* nil
@@ -1955,7 +1961,8 @@ produces runtime dictionary applications."
                            (tc-env-env env) (tc:qualified-ty-predicates skolem-qual-ty)))
              (body-env (tc-env-extend-type-variable-scope env skolems)))
         (multiple-value-bind (inferred-ty wanted-preds accessors typed-node subs)
-            (infer-expression-type node skolem-body-ty subs body-env)
+            (let ((*enclosing-predicates* (append given-preds *enclosing-predicates*)))
+              (infer-expression-type node skolem-body-ty subs body-env))
           (declare (ignore inferred-ty))
           (tc:apply-substitution subs body-env)
           (setf given-preds (tc:apply-substitution subs given-preds))
@@ -2107,155 +2114,127 @@ produces runtime dictionary applications."
                       subs))))))))
 
 
-(defun delta-subs (after before)
-  "After checking this branch pattern/body, which subs were learned after BEFORE."
-  (declare (type tc:substitution-list after before)
-           (values tc:substitution-list))
-  (remove-if
-   (lambda (sub)
-     (find sub
-           before
-           :test #'tc:same-substitution-p))
-   after))
+(defun check-pattern-scope (hidden watermark result preds accessors subs location &optional inputs)
+  "Skolems may occur inside the elaborated branch, not in its outward interface."
+  (when hidden
+    (flet ((check (ty &optional (via "result type"))
+             (let* ((ty (tc:apply-substitution subs ty))
+                    (var (find-if (lambda (v) (member v hidden :test #'tc:ty=))
+                                  (tc:type-variables ty))))
+               (when var
+                 (tc-error "Untouchable existential type escapes GADT pattern scope"
+                           (tc-note location "Existential type '~A' escapes through ~A '~A'"
+                                    (type-object-string var) via (type-object-string ty)))))))
+      (check result)
+      (dolist (input inputs)
+        (check input "parameter type"))
+      (dolist (sub subs)
+        (when (< (tc:tyvar-id (tc:substitution-from sub)) watermark)
+          (check (tc:substitution-to sub) "an enclosing binding of type")))
+      (dolist (pred preds)
+        (mapc #'check (tc:ty-predicate-types pred)))
+      (dolist (accessor accessors)
+        (check (accessor-from accessor))
+        (check (accessor-to accessor))))))
 
-(defun check-no-untouchable-refinement (subs untouchable-vars location)
-  "Ensure that no UNTOUCHABLE-VARS were refined by SUBS. Allows untouchable
-vars to be unified with another non-concrete var, but that var is added to
-the untouchable list.
-
-Returns an updated untouchable list, or errors.
-
-For example:
-  (declare hdn (Hidden -> Void))
-  (define (hdn (Hidden a)) ;; <--- :a from GADT arguments and not type, becomes untouchable
-    (id                    ;; <--- id type (:b -> :b)
-      a)                   ;; <--- :a unified with :b, :b added to the untouchable list
-    (values))
-
-  (declare hdn-fail (Hidden -> Void))
-  (define (hdn-fail (Hidden a))   ;; <--- :a from GADT arguments and not type, becomes untouchable
-    (let _ = (the Integer a))     ;; <--- :a unified with concrete Integer, errors.
-    (values))
-"
-  (declare (type tc:substitution-list subs)
-           (type tc:tyvar-list untouchable-vars)
-           (type source:location location)
-           (values tc:tyvar-list))
-  (let ((refined-vars (tc:refined-vars subs untouchable-vars))
-        (new-untouchable-vars untouchable-vars))
-    (loop :for refined-var :in refined-vars
-          :for refinement := (tc:apply-substitution subs refined-var)
-          :do (cond
-                ;; Refined to another type variable. Make it untouchable.
-                ((tc:tyvar-p refinement)
-                 (pushnew refinement new-untouchable-vars :test #'tc:ty=))
-
-                ;; Refined to a concrete type. Error.
-                (t
-                 (tc-error "Cannot refine existential type from GADT constructor arguments"
-                           (tc-note location
-                                    "Untouchable existential type '~A' was refined to '~A'"
-                                    (type-object-string refined-var)
-                                    (type-object-string refinement))))))
-    new-untouchable-vars))
-
-(defun check-no-untouchable-escape (type subs untouchable-vars location)
-  "Ensure that no UNTOUCHABLE-VARS appear in TYPE after applying SUBS.
-
-This catches values extracted from an existential GADT constructor argument
-escaping their pattern scope without being refined to a concrete type.
-
-For example:
-  (declare hdn-escape (Hidden -> Void))
-  (define (hdn-escape h)
-    (let improperly-escaped =
-      (match h ((Hidden a) a)))
-    (let _ = (the String improperly-escaped))
-    (values))
-"
-  (declare (type tc:ty type)
-           (type tc:substitution-list subs)
-           (type tc:tyvar-list untouchable-vars)
-           (type source:location location))
-  (let* ((type_ (tc:apply-substitution subs type))
-         (escaping-vars (intersection (tc:type-variables type_)
-                                      untouchable-vars
-                                      :test #'tc:ty=)))
-    (when escaping-vars
-      (tc-error "Untouchable existential type escapes GADT pattern scope"
-                (tc-note location
-                         "Existential type '~A' escapes through result type '~A'"
-                         (type-object-string (first escaping-vars))
-                         (type-object-string type_))))))
-
-(defun copy-branch-env (env &optional (ty-table (alexandria:copy-hash-table
-                                                 (tc-env-ty-table env))))
-  "Copy a branch environment from ENV and TY-TABLE."
+(defun copy-branch-env (env)
   (make-tc-env :env (tc-env-env env)
-               :ty-table ty-table
+               :ty-table (alexandria:copy-hash-table (tc-env-ty-table env))
                :typevar-table (alexandria:copy-hash-table
                                (tc-env-typevar-table env))))
 
-(defun type-mentions-any-var-p (type vars)
-  (declare (type tc:ty type)
-           (type tc:tyvar-list vars)
-           (values boolean))
-  (not (null (intersection (tc:type-variables type)
-                           vars
-                           :test #'tc:ty=))))
+(defvar *refinable-pattern-skolems* nil
+  "Skolems refinable by constructor result evidence in the current pattern.
+:ALL is used only when the caller discharges pattern equations at scope exit.")
 
-(defun remove-protected-subs (subs protected-vars base-subs)
-  "Remove SUBS whose from side is one of the protected scrutinee vars, whose to
-side still mentions one, or whose from side refines to one BASE-SUBS (the subs
-known before the branch-local block began)."
-  (declare (type tc:substitution-list subs base-subs)
-           (type tc:ty-list protected-vars)
-           (values tc:substitution-list))
-  (remove-if
-   (lambda (sub)
-     (let ((from (tc:substitution-from sub))
-           (to (tc:substitution-to sub)))
-       (or
-        ;; Directly refines protected variable
-        (find from protected-vars :test #'tc:ty=)
+(defun outward-pattern-predicates (wanted given refined body-subs env)
+  ;; A supplied dictionary is still the same dictionary after matching Refl.
+  ;; Do not demand its branch-local spelling from the caller as a second one.
+  (if (or (null given) (eq given refined))
+      wanted
+      (let ((available (tc:apply-substitution body-subs refined)))
+        (remove-if (lambda (pred) (tc:entail env available pred)) wanted))))
 
-        ;; TO side depends on protected variable
-        (type-mentions-any-var-p (tc:apply-substitution base-subs to)
-                                 protected-vars)
+(defun skolem-renamings (vars)
+  (loop :for var :in vars
+        :collect (tc:make-substitution
+                  :from var
+                  :to (tc:make-skolem :kind (tc:kind-of var)
+                                      :source-name (tc:tyvar-source-name var)
+                                      :allow-result-p (tc:tyvar-allow-result-p var)))))
 
-        ;; FROM side refines to a type containing a protected variable
-        (type-mentions-any-var-p (tc:apply-substitution base-subs from)
-                                 protected-vars))))
+(defun freeze-pattern-indices (input-types subs)
+  (tc:compose-substitution-lists
+   (skolem-renamings (remove-if #'tc:tyvar-rigid-p
+                                (tc:type-variables (tc:apply-substitution subs input-types))))
    subs))
 
-(defun branch-normalization-subs (local-delta protected-vars)
-  "In a GADT branch, Calculate substitutions to unify branch-specialized PROTECTED-VARS back
-to their outer tyvars."
-  (declare (type tc:substitution-list local-delta)
-           (type tc:ty-list protected-vars)
-           (values tc:substitution-list))
-  (loop :for var :in protected-vars
-        :nconc
-        (loop :for new-unification := (tc:apply-substitution local-delta var)
-                                   :then (tc:apply-substitution local-delta new-unification)
-              :and old-unification := var
-                                   :then new-unification
-              :for finished := (tc:ty= new-unification old-unification)
-              ;; If the protected var unifies to a concrete type, i.e. α -> Integer, discard
-              :when (not (tc:tyvar-p new-unification))
-                :return nil
-              :while (not finished)
-              :collect (tc:make-substitution :from new-unification :to var))))
+(defun branch-index-renamings (input-types base-subs pattern-subs)
+  "Name residual index variables in the vocabulary of the enclosing scope."
+  (let ((outer (tc:type-variables (tc:apply-substitution base-subs input-types)))
+        (renamings nil))
+    (dolist (var outer renamings)
+      (let ((rep (tc:apply-substitution pattern-subs var)))
+        (when (and (tc:tyvar-p rep)
+                   (not (find rep outer :test #'tc:ty=))
+                   (not (find rep renamings :key #'tc:substitution-from :test #'tc:ty=)))
+          (push (tc:make-substitution :from rep :to var) renamings))))))
 
-(defun normalize-branch-preds (local-delta protected-vars preds)
-  "In a GADT branch, normalize branch-specific PREDS to the corresponding out-of-branch tvar."
-  ;; Second, unify the branch-specific tvar to the protected tvar, to make a pred that is
-  ;; recognizeable to the outside.
-  (tc:apply-substitution
-   (branch-normalization-subs local-delta protected-vars)
-   ;; First, unify the fresh pred tyvar to the branch-specific tvar for the type variable
-   (tc:apply-substitution local-delta
-                          preds)))
+(defun branch-body-equations (pattern-subs body-subs watermark)
+  "Return the equations required by the body, not the equalities given by the pattern.
+Composition also rewrites the ranges of older substitutions. Re-exporting
+those older domains would turn a branch-local equality into an outer one."
+  (loop :for sub :in body-subs
+        :for var := (tc:substitution-from sub)
+        :when (and (< (tc:tyvar-id var) watermark)
+                   (not (find var pattern-subs :key #'tc:substitution-from :test #'tc:ty=)))
+          :collect sub))
+
+(defun discharge-pattern-renamings (renamings subs)
+  (remove-if (lambda (sub) (tc:ty= (tc:substitution-from sub) (tc:substitution-to sub)))
+             (tc:compose-substitution-lists renamings subs)))
+
+(defun equated-input-indices (inputs base pattern-subs)
+  (let ((vars (tc:type-variables (tc:apply-substitution base inputs))))
+    (loop :for var :in vars
+          :for rep := (tc:apply-substitution pattern-subs var)
+          :when (and (not (tc:ty= var rep)) (find rep vars :test #'tc:ty=))
+            :collect (tc:make-substitution :from var :to rep))))
+
+(defun check-branch-result (expected actual evidence subs node)
+  ;; Compare at the use site's type, modulo this branch's equations. For
+  ;; example, `let z = match w ((Refl) y)` need not choose between two
+  ;; otherwise distinct outer indices before seeing how z is used.
+  (handler-case
+      (let ((givens nil))
+        (dolist (eqn evidence)
+          (setf givens (tc:unify-given
+                        givens (tc:apply-substitution subs (tc:substitution-from eqn))
+                        (tc:apply-substitution subs (tc:substitution-to eqn)) :all)))
+        (let ((wanted (tc:unify nil
+                                (tc:apply-substitution givens (tc:apply-substitution subs expected))
+                                (tc:apply-substitution givens (tc:apply-substitution subs actual)))))
+          (merge-branch-equations subs wanted node)))
+    (tc:coalton-internal-type-error ()
+      (standard-expression-type-mismatch-error node subs expected actual))))
+
+(defun pattern-literal-type (pat)
+  (etypecase (parser:pattern-literal-value pat)
+    (integer (tc:make-variable))
+    (ratio tc:*fraction-type*)
+    (single-float tc:*single-float-type*)
+    (double-float tc:*double-float-type*)
+    (string tc:*string-type*)
+    (character tc:*char-type*)))
+
+(defun merge-branch-equations (subs equations node)
+  (dolist (eqn equations subs)
+    (let ((left (tc:substitution-from eqn))
+          (right (tc:substitution-to eqn)))
+      (handler-case
+          (setf subs (tc:unify subs left right))
+        (tc:coalton-internal-type-error ()
+          (standard-expression-type-mismatch-error node subs left right))))))
 
 (defun pattern-contains-gadt-p (pattern env)
   "Determine if the pattern contains a GADT constructor. Needs to recursively walk
@@ -2280,33 +2259,88 @@ all constructors in the pattern."
                 nil))))
     (walk pattern)))
 
-(defun calculate-protected-vars (scrutinee-types expected-type base-subs)
-  (declare (type tc:ty-list scrutinee-types)
-           (type tc:ty expected-type)
-           (type tc:substitution-list base-subs)
-           (values tc:ty-list))
-  "A GADT branch needs to conduct branch-local refinements of pattern variables.
-These variables are 'protected' from branch-local refinement, and will not leak
-into other branches or out of the match."
-  (tc:union-tys
-   ;; Variables from the pattern's constructor, for example:
-   ;; constructor (Integer -> Box Integer) for (Box :a) protects :a
-   (mapcan (lambda (scrutinee-type)
-             (tc:union-tys
-              (tc:type-variables scrutinee-type)
-              (tc:type-variables
-               (tc:apply-substitution base-subs scrutinee-type))))
-           scrutinee-types)
+(defun next-evidence-pattern (items subs env)
+  ;; A constructor whose input head is already known can reveal the type
+  ;; of another column. Do not demand that other column's head first.
+  (let ((first-witness nil))
+    (dolist (item items (or first-witness (first items)))
+      (when (pattern-contains-gadt-p (car item) env)
+        (unless first-witness (setf first-witness item))
+        (let ((head (first (tc:flatten-type (tc:apply-substitution subs (cdr item))))))
+          (when (tc:tycon-p head)
+            (return item)))))))
 
-   ;; Also protect variables from the expected type.
-   ;; For example, in a function (Box :a -> Box :a),
-   ;; a top level match needs to be able to calculate a branch type:
-   ;; (match b
-   ;;   ((BInt x) x) <--- Branch has type (Box Integer -> Box Integer)
-   ;;   ((BStr s) s) <--- Branch has type (Box String -> Box String)
-   (tc:type-variables expected-type)
-   (tc:type-variables
-    (tc:apply-substitution base-subs expected-type))))
+(defun constrain-pattern-inputs (patterns inputs subs env)
+  "Infer the common input shapes, not the result-index equations of a particular row."
+  (let ((local subs)
+        (pending (mapcar #'cons patterns inputs))
+        (global (tc-env-env env)))
+    (labels ((require-shape (type input pat)
+               (let ((type (tc:apply-substitution local type))
+                     (input (tc:apply-substitution local input)))
+                 (handler-case
+                     (let ((wanted (tc:unify nil type input)))
+                       (setf subs (tc:compose-substitution-lists wanted subs)
+                             local (tc:compose-substitution-lists wanted local)))
+                   (tc:coalton-internal-type-error ()
+                     (tc-error "Type mismatch"
+                               (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                        (type-object-string input) (type-object-string type)))))))
+             (visit-pattern (pat input)
+               (typecase pat
+                 (parser:pattern-binding
+                  (visit-pattern (parser:pattern-binding-pattern pat) input))
+                 (parser:pattern-literal
+                  (require-shape (pattern-literal-type pat) input pat))
+                 (parser:pattern-constructor
+                  (let* ((name (parser:pattern-constructor-name pat))
+                         (ctor (tc:lookup-constructor global name :no-error t)))
+                    (when ctor
+                      (let* ((ty (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type global name))))
+                             (result (tc:function-return-type ty)))
+                        (cond
+                          ((tc:constructor-entry-gadt-p ctor)
+                           (let ((entry (tc:lookup-type global (tc:constructor-entry-constructs ctor))))
+                             (require-shape (tc:apply-type-argument-list
+                                             (tc:type-entry-type entry)
+                                             (mapcar #'tc:fresh-type-renamer (tc:type-entry-tyvars entry)))
+                                            input pat))
+                           (handler-case (setf local (tc:unify-pattern-result local result input :all))
+                             (tc:coalton-internal-type-error ()
+                               (tc-error "Type mismatch"
+                                         (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                                  (type-object-string (tc:apply-substitution local input))
+                                                  (type-object-string result))))))
+                          (t (require-shape result input pat)))
+                        (setf pending (append (mapcar #'cons (parser:pattern-constructor-patterns pat)
+                                                      (tc:function-type-arguments ty))
+                                              pending)))))))))
+      ;; Establish witness equations before asking what its sibling fields need.
+      (loop :while pending
+            :for item := (next-evidence-pattern pending local env)
+            :do (setf pending (delete item pending :count 1))
+                (visit-pattern (car item) (cdr item))))
+    subs))
+
+(defun infer-pattern-row (patterns types subs env)
+  ;; Inference may consult a witness to the right; keep the elaborated
+  ;; patterns in source order for code generation and diagnostics.
+  (let* ((items (mapcar #'cons patterns types))
+         (order (copy-list items))
+         (has-witness (and (rest items) (some (lambda (pat) (pattern-contains-gadt-p pat env)) patterns)))
+         (preds nil)
+         (hidden nil))
+    (loop :while order
+          :for item := (if has-witness (next-evidence-pattern order subs env) (first order))
+          :do (if (eq item (first order)) (pop order) (setf order (delete item order :count 1)))
+              (multiple-value-bind (_ constraints typed new-subs skolems)
+                  (infer-pattern-type (car item) (cdr item) subs env)
+                (declare (ignore _))
+                (setf (cdr item) typed
+                      subs new-subs
+                      preds (nconc preds constraints)
+                      hidden (nconc hidden skolems))))
+    (values (mapcar #'cdr items) subs preds hidden)))
 
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
@@ -2778,57 +2812,34 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     (let* ((preds nil)
            (accessors nil)
-           ;; Any let binding on a GADT constructor can introduce untouchable existentials for
-           ;; the rest of the body form. Check them after each body node for more precise error
-           ;; reporting, then check again at the end to catch node-body-last-node.
-           ;; Example: (progn (let (Hidden a) = h) (let _ = (the Integer a)))
-           (untouchable-existentials nil)
-
-           ;; Infer the type of each node
+           (*branch-result-checks* nil)
+           (watermark tc:*next-variable-id*)
+           (hidden nil)
            (body-nodes
              (loop :for node_ :in (parser:node-body-nodes node)
                    :collect
-                   (let ((subs-before-node subs))
                    (multiple-value-bind (node_ty_ preds_ accessors_ node_ subs_ existentials_)
-                       (infer-expression-type node_
-                                              (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
-                                              subs
-                                              env)
+                       (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+                         (infer-expression-type node_
+                                                (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                                                subs env))
                      (declare (ignore node_ty_))
 
-                     ;; Only check untouchable existential refinement for GADTs.
-                     (when (or existentials_ untouchable-existentials)
-                       (setf untouchable-existentials
-                             (check-no-untouchable-refinement
-                              (delta-subs subs_ subs-before-node)
-                              (append untouchable-existentials existentials_)
-                              (source:location node_)))
-                       (setf untouchable-existentials
-                             (tc:union-tys existentials_ untouchable-existentials)))
-
+                     (setf hidden (append existentials_ hidden))
                      (setf subs subs_)
                      (setf preds (append preds preds_))
                      (setf accessors (append accessors accessors_))
                      node_))))
 
-           (subs-before-last-node subs))
-
       (multiple-value-bind (ty preds_ accessors_ last-node subs)
-          (infer-expression-type (parser:node-body-last-node node) expected-type subs env)
+          (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+            (infer-expression-type (parser:node-body-last-node node) expected-type subs env))
         (setf preds (append preds preds_))
         (setf accessors (append accessors accessors_))
 
-        ;; Only check untouchable existential refinement for GADTs.
-        (when untouchable-existentials
-          (setf untouchable-existentials
-                (check-no-untouchable-refinement
-                 (delta-subs subs subs-before-last-node)
-                 untouchable-existentials
-                 (source:location last-node)))
-          (check-no-untouchable-escape ty
-                                       subs
-                                       untouchable-existentials
-                                       (source:location last-node)))
+        (dolist (check (nreverse *branch-result-checks*))
+          (setf subs (funcall check subs)))
+        (check-pattern-scope hidden watermark ty preds accessors subs (source:location last-node))
 
         (values
          ty
@@ -2861,9 +2872,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            (type-object-string effective-expected-type)
                            (tc:function-input-arity effective-expected-type))))
 
-      (let* ((abstraction-base-subs subs)
-             (local-subs subs)
-             (expected-function-type (and (tc:function-type-p effective-expected-type)
+      (let* ((expected-function-type (and (tc:function-type-p effective-expected-type)
                                           effective-expected-type))
              (expected-return-type
                (and expected-function-type
@@ -2901,31 +2910,40 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :test #'tc:ty=))
 
              (abstraction-gadt-p (not (null gadt-positional-param-tys)))
+             (*gadt-return-targets* (if abstraction-gadt-p *return-blocks* *gadt-return-targets*))
+             (abstraction-base-subs
+               (if abstraction-gadt-p
+                   (constrain-pattern-inputs positional-params positional-arg-tys subs env)
+                   subs))
+             (watermark tc:*next-variable-id*)
+             (env (if abstraction-gadt-p (copy-branch-env env) env))
+             (local-subs (if abstraction-gadt-p
+                             (freeze-pattern-indices gadt-positional-param-tys abstraction-base-subs)
+                             abstraction-base-subs))
 
-             ;; Collect untouchables from all patterns to check for invalid GADT existential refinement
              (untouchable-existentials nil)
              (typed-positional-params nil))
 
-        (loop :for pattern :in positional-params
-              :for ty :in positional-arg-tys
-              :do (multiple-value-bind (ty_ preds_ pattern_ subs_ existentials_)
-                      (infer-pattern-type pattern ty local-subs env)
-                    (declare (ignore ty_ preds_))
-                    (setf local-subs subs_)
-                    (setf untouchable-existentials
-                          (tc:union-tys existentials_ untouchable-existentials))
-                    (push pattern_ typed-positional-params)))
-        (setf typed-positional-params (nreverse typed-positional-params))
+        (multiple-value-bind (params new-subs preds hidden)
+            (let ((*refinable-pattern-skolems* :all))
+              (infer-pattern-row positional-params positional-arg-tys local-subs env))
+          (declare (ignore preds))
+          (setf local-subs new-subs typed-positional-params params untouchable-existentials hidden))
 
-        (let* ((protected-vars
+        (let* ((renamings
                  (and abstraction-gadt-p
-                      (calculate-protected-vars gadt-positional-param-tys
-                                                body-result-ty
-                                                abstraction-base-subs)))
+                      (branch-index-renamings positional-arg-tys abstraction-base-subs local-subs)))
 
-               ;; Keyword defaults can refine parameter existentials. Save pre-keyword subs for checking.
-               ;; Example: (define (foo (Hidden a) &key (x (the Integer a))) ...)
-               (subs-after-positional-patterns local-subs))
+               (subs-after-positional-patterns
+                 (if renamings (discharge-pattern-renamings renamings local-subs) local-subs))
+               (outer-givens *enclosing-predicates*)
+               (*enclosing-predicates* (if abstraction-gadt-p
+                                           (tc:apply-substitution subs-after-positional-patterns outer-givens)
+                                           outer-givens)))
+
+          (setf local-subs subs-after-positional-patterns)
+          (when abstraction-gadt-p
+            (tc:apply-substitution local-subs env))
 
           (when expected-function-type
             (dolist (entry (tc:function-ty-keyword-input-types expected-function-type))
@@ -2934,101 +2952,55 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (multiple-value-bind (typed-keyword-params keyword-entry-types keyword-prefix-nodes
                                 default-preds default-accessors local-subs)
               (infer-keyword-params keyword-params expected-keyword-table local-subs env)
-
-            (when abstraction-gadt-p
-              (setf untouchable-existentials
-                    (check-no-untouchable-refinement
-                     (delta-subs local-subs subs-after-positional-patterns)
-                     untouchable-existentials
-                     (source:location node))))
-
-            (let ((subs-before-body local-subs))
-
-              (multiple-value-bind (body-ty preds accessors body-node local-subs)
-                  (infer-expression-type (parser:node-abstraction-body node)
-                                         body-result-ty
-                                         local-subs
-                                         env)
-                (setf preds (append (pattern-predicates typed-positional-params) default-preds preds))
-                (setf accessors (append default-accessors accessors))
+            (multiple-value-bind (body-ty preds accessors body-node local-subs)
+                (infer-expression-type (parser:node-abstraction-body node) body-result-ty local-subs env)
+              (flet ((in-body (object)
+                       (if abstraction-gadt-p (tc:apply-substitution local-subs object) object)))
                 (let* ((body-ty (tc:apply-substitution local-subs body-ty))
-
-                       (typed-body
-                         (merge-keyword-prefix-nodes-into-body
-                          (nreverse keyword-prefix-nodes)
-                          body-node))
-
-                       ;; What the body actually produced under local refinement
-                       (body-output-types (inferred-node-output-types body-ty typed-body))
-
-                       ;; What the abstraction is allowed to expose outward
-                       (visible-output-types (if abstraction-gadt-p
-                                                 (copy-list (tc:function-ty-output-types expected-function-type))
-                                                 body-output-types))
-
+                       (typed-body (merge-keyword-prefix-nodes-into-body (nreverse keyword-prefix-nodes)
+                                                                        body-node))
+                       (preds (outward-pattern-predicates
+                               (in-body (append (pattern-predicates typed-positional-params) default-preds preds))
+                               outer-givens *enclosing-predicates* local-subs (tc-env-env env)))
+                       (accessors (in-body (append default-accessors accessors)))
+                       (keywords
+                         (loop :for entry :in (nreverse keyword-entry-types)
+                               :collect (or (and abstraction-gadt-p
+                                                 (gethash (tc:keyword-ty-entry-keyword entry) expected-keyword-table))
+                                            (in-body entry))))
                        (ty (tc:make-function-ty
                             :positional-input-types positional-arg-tys
-                            :keyword-input-types (normalize-keyword-entries (nreverse keyword-entry-types))
+                            :keyword-input-types (normalize-keyword-entries keywords)
                             :keyword-open-p nil
-                            :output-types visible-output-types))
-
-                       ;; GADT: Subs calculated during this branch
-                       (local-delta (and abstraction-gadt-p
-                                         (delta-subs local-subs abstraction-base-subs)))
-
-                       ;; GADT: Transform branch-specific preds back to outward preds
-                       (normalized-preds
-                         (if abstraction-gadt-p
-                             (normalize-branch-preds local-delta protected-vars preds)
-                             preds))
-
+                            :output-types (if (and abstraction-gadt-p expected-function-type)
+                                              (tc:function-ty-output-types expected-function-type)
+                                              (inferred-node-output-types body-ty typed-body))))
                        (outward-subs
                          (if abstraction-gadt-p
-                             (let* ((outward-delta (remove-protected-subs local-delta
-                                                                          protected-vars
-                                                                          abstraction-base-subs)))
-                               (tc:compose-substitution-lists outward-delta
-                                                              abstraction-base-subs))
-                             local-subs)))
-
+                             (merge-branch-equations
+                              abstraction-base-subs
+                              (branch-body-equations subs-after-positional-patterns local-subs watermark)
+                              node)
+                             local-subs))
+                       (expected (tc:apply-substitution outward-subs expected-type)))
                   (handler-case
-                      (progn
-                        (let ((effective-expected-type (tc:apply-substitution outward-subs expected-type)))
-                          (let ((type nil))
-                            (cond
-                              ((and (typep ty 'tc:function-ty)
-                                    (typep effective-expected-type 'tc:function-ty))
-                               (multiple-value-bind (subs_ visible-type _effective-type _wrapper-needed-p)
-                                   (coerce-function-value-type ty effective-expected-type outward-subs)
-                                 (declare (ignore _effective-type _wrapper-needed-p))
-                                 (setf outward-subs subs_)
-                                (setf type visible-type)))
-                              (t
-                               (setf outward-subs (tc:unify outward-subs ty effective-expected-type))
-                               (setf type (tc:apply-substitution outward-subs ty))))
-                            (when abstraction-gadt-p
-                              (setf untouchable-existentials
-                                    (check-no-untouchable-refinement
-                                     (delta-subs local-subs subs-before-body)
-                                     untouchable-existentials
-                                     (source:location node)))
-                              (check-no-untouchable-escape (tc:output-types-result-type body-output-types)
-                                                           local-subs
-                                                           untouchable-existentials
-                                                           (source:location node)))
-                            (values
-                             type
-                             normalized-preds
-                             accessors
-                             (make-node-abstraction
-                              :type (tc:qualify nil type)
-                              :location (source:location node)
-                              :params typed-positional-params
-                              :keyword-params (nreverse typed-keyword-params)
-                              :body typed-body)
-                             outward-subs))))
+                      (multiple-value-bind (subs type)
+                          (if (and (typep ty 'tc:function-ty) (typep expected 'tc:function-ty))
+                              (coerce-function-value-type ty expected outward-subs)
+                              (let ((subs (tc:unify outward-subs ty expected)))
+                                (values subs (tc:apply-substitution subs ty))))
+                        (check-pattern-scope untouchable-existentials watermark (tc:function-return-type type)
+                                             preds accessors subs (source:location node)
+                                             (mapcar #'tc:keyword-ty-entry-type keywords))
+                        (values type preds accessors
+                                (make-node-abstraction :type (tc:qualify nil type)
+                                                       :location (source:location node)
+                                                       :params (in-body typed-positional-params)
+                                                       :keyword-params (in-body (nreverse typed-keyword-params))
+                                                       :body (in-body typed-body))
+                                subs))
                     (tc:coalton-internal-type-error ()
-                      (standard-expression-type-mismatch-error node outward-subs effective-expected-type ty)))))))))))
+                      (standard-expression-type-mismatch-error node outward-subs expected ty)))))))))))
 
   (:method ((node parser:node-rec) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3239,210 +3211,67 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (tc:coalton-internal-type-error ()
                   (standard-expression-type-mismatch-error node subs expected-type ret-ty))))
 
-            ;; GADT matches: check each branch independently from match-base-subs.
-            ;; Do not commit one branch's substitutions before checking the next branch.
-            (labels ((merge-gadt-branch-delta (subs delta branch-node)
-                       (dolist (sub delta subs)
-                         (let* ((from (tc:substitution-from sub))
-                                (to (tc:substitution-to sub))
-                                (existing (find from subs
-                                                :key #'tc:substitution-from
-                                                :test #'tc:ty=)))
-                           (if existing
-                               (handler-case
-                                   (setf subs
-                                         (tc:unify subs
-                                                   (tc:substitution-to existing)
-                                                   to))
-                                 (tc:coalton-internal-type-error ()
-                                   (standard-expression-type-mismatch-error
-                                    (node-body-last-node branch-node)
-                                    subs
-                                    (tc:substitution-to existing)
-                                    to)))
-                               (push sub subs))))))
-
-              (let* (;; Infer the type of each pattern, unifying against expr-ty,
-                     ;; specialized for any branch-specific refinements from a
-                     ;; GADT constructor.
-                     (match-base-subs subs)
-
-                     (branch-data
-                       (loop :for branch :in (parser:node-match-branches node)
-                             :for pattern := (parser:node-match-branch-pattern branch)
-                             :for branch-env := (copy-branch-env env)
-                             :collect
-                             (multiple-value-bind (pat-ty pat-preds pat-node pat-subs untouchable-existentials)
-                                 (infer-pattern-type pattern expr-ty subs branch-env)
-                               (declare (ignore pat-ty))
-                               (let ((branch-subs (delta-subs pat-subs match-base-subs)))
-                                 (setf untouchable-existentials
-                                       (check-no-untouchable-refinement
-                                        branch-subs
-                                        untouchable-existentials
-                                        (source:location branch)))
-                                 (list :pat-node pat-node
-                                       :branch-subs branch-subs
-                                       :branch-env branch-env
-                                       :pat-preds (append pat-preds (pattern-predicates pat-node))
-                                       :pat-env-ty-table (tc-env-ty-table branch-env)
-                                       :untouchable-existentials untouchable-existentials)))))
-
-                     ;; A GADT branch needs to conduct branch-local refinements of
-                     ;; pattern variables. These variables are protected from
-                     ;; branch-local refinement and will not leak into other branches
-                     ;; or out of the match.
-                     (protected-vars
-                       (tc:union-tys
-                        (tc:type-variables expr-ty)
-                        (tc:type-variables
-                         (tc:apply-substitution match-base-subs expr-ty))))
-
-                     (branch-body-data
-                       (loop :for branch :in (parser:node-match-branches node)
-                             :for branch-dat :in branch-data
-                             :for branch-subs := (getf branch-dat :branch-subs)
-                             :for subs-for-branch-body := (tc:compose-substitution-lists
-                                                           branch-subs
-                                                           match-base-subs)
-                             :for pat-preds := (getf branch-dat :pat-preds)
-                             :for branch-env := (getf branch-dat :branch-env)
-                             :for branch-ret-ty := (tc:apply-substitution
-                                                    subs-for-branch-body
-                                                    expected-type)
-                             :for branch-table := (getf branch-dat :pat-env-ty-table)
-                             :for body := (parser:node-match-branch-body branch)
-
-                             ;; Update pattern-bound tvars and other branch-local names
-                             ;; with this branch's refinements before checking the body.
-                             :do (maphash (lambda (name scheme)
-                                            (setf (gethash name branch-table)
-                                                  (tc:apply-substitution
-                                                   subs-for-branch-body
-                                                   scheme)))
-                                          branch-table)
-
-                             :collect
-                               (multiple-value-bind (body-ty body-preds body-accessors body-node body-subs)
-                                   (infer-expression-type body
-                                                          branch-ret-ty
-                                                          subs-for-branch-body
-                                                          branch-env)
-
-                                 (let* (;; Subs learned while checking the branch body,
-                                        ;; after the pattern refinements were installed.
-                                        (subs-from-branch
-                                          (delta-subs body-subs subs-for-branch-body))
-
-                                        ;; Subs learned across the whole branch:
-                                        ;; pattern refinements plus body refinements.
-                                        ;;
-                                        ;; Used for predicate normalization, because
-                                        ;; predicates may need to unify:
-                                        ;;
-                                        ;; fresh pred var -> branch-specific var -> protected outer var
-                                        (branch-local-delta
-                                          (delta-subs body-subs match-base-subs))
-
-                                        (untouchable-existentials
-                                          (getf branch-dat :untouchable-existentials))
-
-                                        ;; Calculate subs that do not unify protected vars.
-                                        ;; Those are clean to send up to the calling block.
-                                        (branch-delta
-                                          (remove-protected-subs
-                                           subs-from-branch
-                                           protected-vars
-                                           match-base-subs))
-
-                                        ;; Rewrite branch representatives back to protected
-                                        ;; outer vars.
-                                        (normalization-subs
-                                          (branch-normalization-subs
-                                           branch-local-delta
-                                           protected-vars))
-
-                                        ;; Pattern predicates were produced in this branch
-                                        ;; by pattern checking, so they may need the full
-                                        ;; branch-local path.
-                                        (normalized-pattern-preds
-                                          (normalize-branch-preds
-                                           branch-local-delta
-                                           protected-vars
-                                           pat-preds))
-
-                                        ;; Body preds should only be fully applied by subs
-                                        ;; learned while checking the body, then normalized
-                                        ;; back through the GADT branch representatives.
-                                        (normalized-body-preds
-                                          (tc:apply-substitution
-                                           normalization-subs
-                                           (tc:apply-substitution
-                                            subs-from-branch
-                                            body-preds)))
-
-                                        (normalized-preds
-                                          (append normalized-body-preds
-                                                  normalized-pattern-preds)))
-
-                                   (setf untouchable-existentials
-                                         (check-no-untouchable-refinement
-                                          subs-from-branch
-                                          untouchable-existentials
-                                          (source:location branch)))
-                                   (check-no-untouchable-escape body-ty
-                                                                body-subs
-                                                                untouchable-existentials
-                                                                (source:location branch))
-                                   (setf preds (append preds normalized-preds))
-                                   (setf accessors (append accessors body-accessors))
-                                   (list :body-node body-node
-                                         :branch-delta branch-delta)))))
-
-                     ;; GADT branches were checked independently. Merge only the
-                     ;; non-protected subs learned by each branch. If ordinary
-                     ;; outer variables disagree across branges, the merge will fail.
-                     (_merge-branch-deltas
-                       (dolist (branch-body-dat branch-body-data subs)
-                         (setf subs
-                               (merge-gadt-branch-delta
-                                subs
-                                (getf branch-body-dat :branch-delta)
-                                (getf branch-body-dat :body-node)))))
-
-                     (branch-body-nodes (mapcar (lambda (branch-body-dat)
-                                                  (getf branch-body-dat :body-node))
-                                                branch-body-data))
-
-                     (branch-nodes
-                       (loop :for branch :in (parser:node-match-branches node)
-                             :for branch-dat :in branch-data
-                             :for pat-node := (getf branch-dat :pat-node)
-                             :for branch-body-node :in branch-body-nodes
-                             :collect (make-node-match-branch
-                                       :pattern pat-node
-                                       :body branch-body-node
-                                       :location (source:location branch)))))
-
-                (declare (ignore _merge-branch-deltas))
-                (handler-case
-                    (let ((type (tc:apply-substitution subs expected-type)))
-                      (values
-                       type
-                       preds
-                       accessors
-                       (make-node-match
-                        :type (tc:qualify nil type)
-                        :location (source:location node)
-                        :expr expr-node
-                        :branches branch-nodes)
-                       subs))
-                  (tc:coalton-internal-type-error ()
-                    (standard-expression-type-mismatch-error
-                     node
-                     subs
-                     expected-type
-                     expected-type)))))))))
+            (let ((branches (parser:node-match-branches node))
+                  (input-types (list expr-ty))
+                  (typed-branches nil))
+              (dolist (branch branches)
+                (setf subs (constrain-pattern-inputs (list (parser:node-match-branch-pattern branch))
+                                                     input-types subs env)))
+              (let ((base-subs subs))
+                (dolist (branch branches)
+                  (let ((branch-env (copy-branch-env env))
+                        (watermark tc:*next-variable-id*)
+                        (pattern (parser:node-match-branch-pattern branch))
+                        (body (parser:node-match-branch-body branch)))
+                    (multiple-value-bind (_ pat-preds pat pat-subs hidden)
+                        (let ((*refinable-pattern-skolems* :all))
+                          (infer-pattern-type pattern expr-ty (freeze-pattern-indices input-types base-subs)
+                                              branch-env))
+                      (declare (ignore _))
+                      (setf pat-subs (discharge-pattern-renamings
+                                      (branch-index-renamings input-types base-subs pat-subs) pat-subs))
+                      (tc:apply-substitution pat-subs branch-env)
+                      (let* ((outer-givens *enclosing-predicates*)
+                             (*enclosing-predicates* (tc:apply-substitution pat-subs outer-givens))
+                             (expected (tc:apply-substitution base-subs expected-type))
+                             (alternatives
+                               (and (listp *branch-result-checks*) (tc:tyvar-p expected)
+                                    (not (member expected (tc:type-variables
+                                                           (tc:apply-substitution base-subs input-types))
+                                                 :test #'tc:ty=))
+                                    (equated-input-indices input-types base-subs pat-subs))))
+                        (multiple-value-bind (body-ty body-preds body-accessors typed-body body-subs)
+                            (let ((*gadt-return-targets* *return-blocks*))
+                              (infer-expression-type body (if alternatives
+                                                              (tc:fresh-type-renamer expected)
+                                                              (tc:apply-substitution pat-subs expected-type))
+                                                     pat-subs branch-env))
+                          (flet ((local-type (object) (tc:apply-substitution body-subs object)))
+                            (setf preds (append preds (outward-pattern-predicates
+                                                       (local-type (append body-preds pat-preds (pattern-predicates pat)))
+                                                       outer-givens *enclosing-predicates* body-subs (tc-env-env env)))
+                                  accessors (append accessors (local-type body-accessors)))
+                            (push (make-node-match-branch :pattern (local-type pat)
+                                                          :body (local-type typed-body)
+                                                          :location (source:location branch))
+                                  typed-branches))
+                          (let ((last (node-body-last-node typed-body)))
+                            (setf subs (merge-branch-equations
+                                        subs (branch-body-equations pat-subs body-subs watermark) last))
+                            (when alternatives
+                              (let ((actual (tc:apply-substitution body-subs body-ty)))
+                                (check-pattern-scope hidden watermark actual nil nil subs (source:location branch))
+                                (push (lambda (subs) (check-branch-result expected actual alternatives subs last))
+                                      *branch-result-checks*))))
+                          (check-pattern-scope hidden watermark expected-type preds accessors subs
+                                               (source:location branch))))))))
+              (let ((type (tc:apply-substitution subs expected-type)))
+                (values type preds accessors
+                        (make-node-match :type (tc:qualify nil type)
+                                         :location (source:location node)
+                                         :expr expr-node
+                                         :branches (nreverse typed-branches))
+                        subs)))))))
 
   (:method ((node parser:node-catch) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3450,6 +3279,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-catch tc:substitution-list &optional))
     (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+          (watermark tc:*next-variable-id*)
+          (hidden nil)
           (name (parser:node-catch-operator-name node)))
       ;; On the non-throwing path, CATCH and HANDLE return their guarded
       ;; expression directly, so the guarded expression and each branch
@@ -3475,7 +3306,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    :for pattern := (parser:node-catch-branch-pattern branch)
                    :for wildcard-p := (typep (parser:unwrap-pattern-binding pattern)
                                              'parser:pattern-wildcard)
-                   :for (pat-ty nil pat-node subs_)
+                   :for (pat-ty nil pat-node subs_ skolems)
                      := (multiple-value-list
                          (infer-pattern-type pattern
                                              (or exception-type
@@ -3494,6 +3325,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            name))
                    :else
                      :do (setf subs subs_)
+                         (setf hidden (append skolems hidden))
                          (setf preds (append preds (pattern-predicates pat-node)))
                      :and :collect pat-node))
                ;; Infer type of each branch body, unifying against RET-TY so
@@ -3504,7 +3336,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    :for branch :in (parser:node-catch-branches node)
                    :for body := (parser:node-catch-branch-body branch)
                    :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
-                                (infer-expression-type body ret-ty subs env)
+                                (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+                                  (infer-expression-type body ret-ty subs env))
                               (declare (ignore body-ty))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
@@ -3526,6 +3359,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (progn
                 (setf subs (tc:unify subs ret-ty expected-type))
                 (let ((type (tc:apply-substitution subs ret-ty)))
+                  (check-pattern-scope hidden watermark type preds accessors subs (source:location node))
                   (values
                    type
                    preds
@@ -3552,21 +3386,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
-      ;; NOTE: Currently, resumables cannot be GADTs, so they don't need branch-local
-      ;; environments and untouchable tracking. If/when that gets implemented, then
-      ;; this should follow the patterns from the parser:node-match method.
-      (let* (;; infer type of each pattern, ensuring it is a resumption type
+      (let* ((watermark tc:*next-variable-id*)
+             (hidden nil)
+             ;; Infer each pattern, ensuring it is a resumption type.
              (branch-pat-nodes
                (loop
                  :for branch :in (parser:node-resumable-branches node)
                  :for pattern := (parser:node-resumable-branch-pattern branch)
-                 :for (pat-ty preds_ pat-node subs_)
+                 :for (pat-ty nil pat-node subs_ skolems)
                    := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
                  :unless (resumption-type-p pat-ty env)
                    :do (tc-error "Invalid resumable case"
                                  (tc-note pat-node "case pattern must construct a resumption type."))
                  :else 
                    :do (setf subs subs_)
+                       (setf hidden (append skolems hidden))
                        (setf preds (append preds (pattern-predicates pat-node)))
                    :and :collect pat-node))
              ;; Infer type of each branch body, it should unify with the expr/expected type
@@ -3575,7 +3409,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :for branch :in (parser:node-resumable-branches node)
                  :for body := (parser:node-resumable-branch-body branch)
                  :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
-                              (infer-expression-type body expr-ty subs env)
+                              (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+                                (infer-expression-type body expr-ty subs env))
                             (declare (ignore body-ty))
                             (setf subs subs_)
                             (setf preds (append preds preds_))
@@ -3594,6 +3429,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (progn
               (setf subs (tc:unify subs expr-ty expected-type))
               (let ((type (tc:apply-substitution subs expr-ty)))
+                (check-pattern-scope hidden watermark type preds accessors subs (source:location node))
                 (values
                  type
                  preds
@@ -3943,29 +3779,32 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-return-from tc:substitution-list))
 
-    (let ((block-info (return-block-info (parser:node-return-from-name node))))
+    (let* ((block-info (return-block-info (parser:node-return-from-name node)))
+           (local-evidence-p (rassoc block-info *gadt-return-targets*)))
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-return-from-expr node)
-                                 (if (typep (return-block-info-type block-info) 'tc:forall-ty)
+                                 (if (or local-evidence-p
+                                         (typep (return-block-info-type block-info) 'tc:forall-ty))
                                      (return-block-info-type block-info)
                                      (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
                                  subs
                                  env)
-        (let ((first-return (return-block-info-first-return block-info)))
-          (if first-return
-              (handler-case
-                  (setf subs (tc:unify subs expr-ty (cdr first-return)))
-                (tc:coalton-internal-type-error ()
-                  (tc-error "Return type mismatch"
-                            (tc-note (car first-return)
-                                     "First return is of type '~A'"
-                                     (type-object-string (tc:apply-substitution subs (cdr first-return))))
-                            (tc-note node
-                                     "Second return is of type '~A'"
-                                     (type-object-string (tc:apply-substitution subs expr-ty))))))
-              (setf (return-block-info-first-return block-info)
-                    (cons (source:location node)
-                          (tc:apply-substitution subs expr-ty)))))
+        (unless local-evidence-p
+          (let ((first-return (return-block-info-first-return block-info)))
+            (if first-return
+                (handler-case
+                    (setf subs (tc:unify subs expr-ty (cdr first-return)))
+                  (tc:coalton-internal-type-error ()
+                    (tc-error "Return type mismatch"
+                              (tc-note (car first-return)
+                                       "First return is of type '~A'"
+                                       (type-object-string (tc:apply-substitution subs (cdr first-return))))
+                              (tc-note node
+                                       "Second return is of type '~A'"
+                                       (type-object-string (tc:apply-substitution subs expr-ty))))))
+                (setf (return-block-info-first-return block-info)
+                      (cons (source:location node)
+                            (tc:apply-substitution subs expr-ty))))))
         (let ((type (tc:apply-substitution subs expected-type)))
           (values
            type
@@ -4602,15 +4441,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            (preds nil)
            (accessors nil)
 
-           ;; Any binding on a GADT constructor can introduce untouchable existentials for the
-           ;; rest of the do form. Check them after each node for more precise error reporting,
-           ;; then check again at the end to catch node-do-last-node.
-           ;; Example: (do ((Hidden a) <- m) ...) or (do (let (Hidden a) = h) ...)
+           (watermark tc:*next-variable-id*)
            (untouchable-existentials nil)
 
            (nodes
              (loop :for elem :in (parser:node-do-nodes node)
-                   :for subs-before-node := subs
                    :for untouchables := nil
                    :collect (etypecase elem 
                               ;; Expressions are typechecked normally
@@ -4676,12 +4511,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  node_)))
                    :do
                      (setf untouchable-existentials
-                           (check-no-untouchable-refinement
-                            (delta-subs subs subs-before-node)
-                            (append untouchable-existentials untouchables)
-                            (source:location elem))))))
-
-      (let ((subs-before-last-node subs))
+                           (append untouchables untouchable-existentials)))))
 
         (multiple-value-bind (ty preds_ accessors_ last-node subs)
             (infer-expression-type (parser:node-do-last-node node)
@@ -4696,15 +4526,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (handler-case
               (progn
                 (setf subs (tc:unify subs ty expected-type))
-                (setf untouchable-existentials
-                      (check-no-untouchable-refinement
-                       (delta-subs subs subs-before-last-node)
-                       untouchable-existentials
-                       (source:location last-node)))
-                (check-no-untouchable-escape ty
-                                             subs
-                                             untouchable-existentials
-                                             (source:location last-node))
+                (check-pattern-scope untouchable-existentials watermark ty preds accessors subs
+                                     (source:location last-node))
                 (values
                  ty
                  (cons
@@ -4724,7 +4547,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (tc-error "Type mismatch"
                         (tc-note node "Expected type '~A' but do expression has type '~A'"
                                  (type-object-string (tc:apply-substitution subs expected-type))
-                                 (type-object-string (tc:apply-substitution subs ty)))))))))))
+                                 (type-object-string (tc:apply-substitution subs ty))))))))))
 
 ;;;
 ;;; Pattern Type Inference
@@ -4827,13 +4650,7 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list pattern-literal tc:substitution-list tc:tyvar-list))
 
-    (let ((ty (etypecase (parser:pattern-literal-value pat)
-                (integer (tc:make-variable))
-                (ratio tc:*fraction-type*)
-                (single-float tc:*single-float-type*)
-                (double-float tc:*double-float-type*)
-                (string tc:*string-type*)
-                (character tc:*char-type*))))
+    (let ((ty (pattern-literal-type pat)))
 
       (handler-case
           (progn
@@ -4904,11 +4721,12 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
                                         (parser:pattern-constructor-name pat)
                                         (source:location pat))
           (let* ((pat-ty (tc:function-return-type ctor-ty))
-
-                 (child-preds nil))
+                 (gadt-p (tc:constructor-entry-gadt-p ctor))
+                 (outer-vars (when gadt-p (tc:type-variables (tc:apply-substitution subs expected-type)))))
             (handler-case
                 (progn
-                  (setf subs (tc:unify subs pat-ty expected-type))
+                  (setf subs (tc:unify-pattern-result subs pat-ty expected-type
+                                                      (and gadt-p *refinable-pattern-skolems*)))
                   (setf ctor-ty (tc:apply-substitution subs ctor-ty))
                   (setf pat-ty (tc:function-return-type ctor-ty)))
               (tc:coalton-internal-type-error ()
@@ -4918,39 +4736,29 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
                                    (type-object-string (tc:apply-substitution subs pat-ty))))))
 
             (let* ((ctor-preds (tc:apply-substitution subs ctor-preds))
-                   (ctor-vars (tc:type-variables (list ctor-ty ctor-preds)))
-                   (result-vars (tc:type-variables pat-ty))
-                   ;; For a GADT constructor like: (Type (:a -> Hidden)), collect :a
-                   ;; to prevent it from being refined by the branch.
-                   ;; For a GADT constructor like: (Type (:a -> Hidden :a)), drop :a
-                   ;; because the branch is allowed to refine it.
-                   (existentials (if (tc:constructor-entry-gadt-p ctor)
-                                         (set-difference ctor-vars result-vars
-                                                         :test #'tc:ty=)
-                                         nil))
-                   (pattern-nodes
-                     (loop :for arg :in (parser:pattern-constructor-patterns pat)
-                           :for arg-ty :in (tc:function-type-arguments ctor-ty)
-                           :collect (multiple-value-bind (ty_ child-preds_ node_ subs_ child-existentials_)
-                                        (infer-pattern-type arg arg-ty subs env)
-                                      (declare (ignore ty_))
-                                      (setf subs subs_)
-                                      (setf child-preds (nconc child-preds child-preds_))
-                                      (setf existentials
-                                            (nconc existentials child-existentials_))
-                                      node_))))
-              (let ((type (tc:apply-substitution subs pat-ty))
-                    (final-preds (tc:apply-substitution subs (nconc ctor-preds child-preds))))
-                (values
-                 type
-                 final-preds
-                 (make-pattern-constructor
-                  :type (tc:qualify nil pat-ty)
-                  :location (source:location pat)
-                  :name (parser:pattern-constructor-name pat)
-                  :patterns pattern-nodes)
-                 subs
-                 existentials)))))))))
+                   ;; A variable not named by the incoming indices is local. This
+                   ;; includes a component exposed by matching an index like List :x.
+                   (seal (when gadt-p
+                           (skolem-renamings
+                            (set-difference
+                             (remove-if #'tc:tyvar-rigid-p (tc:type-variables (list ctor-ty ctor-preds)))
+                             (tc:apply-substitution subs outer-vars) :test #'tc:ty=))))
+                   (existentials (mapcar #'tc:substitution-to seal))
+                   (subs (tc:compose-substitution-lists seal subs))
+                   (*refinable-pattern-skolems*
+                     (if (eq *refinable-pattern-skolems* :all) :all
+                         (append existentials *refinable-pattern-skolems*))))
+              (multiple-value-bind (pattern-nodes subs child-preds hidden)
+                  (infer-pattern-row (parser:pattern-constructor-patterns pat)
+                                     (tc:function-type-arguments ctor-ty) subs env)
+                (let ((type (tc:apply-substitution subs pat-ty))
+                      (final-preds (tc:apply-substitution subs (nconc ctor-preds child-preds))))
+                  (values type final-preds
+                          (make-pattern-constructor :type (tc:qualify nil type)
+                                                    :location (source:location pat)
+                                                    :name (parser:pattern-constructor-name pat)
+                                                    :patterns pattern-nodes)
+                          subs (nconc existentials hidden)))))))))))
 
 ;;;
 ;;; Binding Group Type Inference
@@ -5453,11 +5261,8 @@ as a recursive function rather than a recursive value."
              (tc:to-scheme fresh-qual-type))))
 
     (multiple-value-bind (preds accessors binding-node subs)
-        (infer-binding-type
-         binding
-         fresh-type                     ; unify against declared type
-         subs
-         body-env)
+        (let ((*enclosing-predicates* (append fresh-preds *enclosing-predicates*)))
+          (infer-binding-type binding fresh-type subs body-env))
 
       (tc:apply-substitution subs body-env)
 
@@ -6252,7 +6057,8 @@ as a recursive function rather than a recursive value."
            (type tc:substitution-list subs)
            (values tc:ty-predicate-list accessor-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
-  (let ((params (parser:binding-parameters binding))
+  (let ((*branch-result-checks* :outside) ; never delay a check across generalization
+        (params (parser:binding-parameters binding))
         (keyword-params (parser:binding-keyword-parameters binding)))
     (ensure-no-duplicate-function-parameters params keyword-params)
     (labels ((initform-abstraction-node (node)

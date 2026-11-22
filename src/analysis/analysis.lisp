@@ -21,21 +21,29 @@
 
 (in-package #:coalton-impl/analysis/analysis)
 
-(defun check-pattern-exhaustiveness (pattern env)
+(defun check-pattern-exhaustiveness (pattern input-type env)
   (declare (type tc:pattern pattern)
+           (type tc:ty input-type)
            (type tc:environment env))
   (let* ((pattern (collapse-binding-patterns pattern))
-         (pattern-type (tc:qualified-ty-type (tc:pattern-type pattern)))
-         (missing
-           (find-non-matching-value
-            ;; binding patterns can be collapsed in exhaustiveness check
-            (list (list (collapse-binding-patterns pattern)))
-            (list pattern-type)
-            env)))
+         (missing (find-non-matching-value (list (list pattern)) (list input-type) env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
                 (source:secondary-note pattern "missing case ~w"
                                        (print-pattern (first missing)))))))
+
+(defun check-parameter-exhaustiveness (patterns function-type env)
+  (when patterns
+    (let ((inputs (tc:function-type-arguments (tc:qualified-ty-type function-type))))
+      (cond ((null (rest patterns))
+             (check-pattern-exhaustiveness (first patterns) (first inputs) env))
+            (t
+             (let ((missing (find-non-matching-value (list (mapcar #'collapse-binding-patterns patterns))
+                                                     inputs env)))
+               (unless (eq t missing)
+                 (tc-error "Non-exhaustive match"
+                           (source:secondary-note (first patterns) "missing arguments ~w"
+                                                  (mapcar #'print-pattern missing))))))))))
 
 (defun analyze-translation-unit (translation-unit env)
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
@@ -75,11 +83,12 @@
 
          (analysis-abstraction-traversal (node)
            (declare (type tc:node-abstraction node))
-           (loop :for pattern :in (tc:node-abstraction-params node)
-                 :do (check-pattern-exhaustiveness pattern env)))
+           (check-parameter-exhaustiveness (tc:node-abstraction-params node) (tc:node-type node) env))
          (analysis-bind-traversal (node)
            (declare (type tc:node-bind node))
-           (check-pattern-exhaustiveness (tc:node-bind-pattern node) env)))
+           (check-pattern-exhaustiveness (tc:node-bind-pattern node)
+                                         (tc:qualified-ty-type (tc:node-type (tc:node-bind-expr node)))
+                                         env)))
 
     (let ((analysis-traverse-block
             (tc:make-traverse-block
@@ -93,8 +102,7 @@
             :do (find-unused-variables define)
             :do (find-underapplied-values define)
             :do (find-discarded-results define)
-            :do (loop :for pattern :in (tc:binding-parameters define)
-                      :do (check-pattern-exhaustiveness pattern env)))
+            :do (check-parameter-exhaustiveness (tc:binding-parameters define) (tc:binding-type define) env))
 
       ;; Run analysis on instance definitions
       (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
@@ -102,8 +110,7 @@
               :do (tc:visit (tc:instance-method-definition-body method) analysis-traverse-block)
               :do (find-underapplied-values method)
               :do (find-discarded-results method)
-              :do (loop :for pattern :in (tc:binding-parameters method)
-                        :do (check-pattern-exhaustiveness pattern env)))))))
+              :do (check-parameter-exhaustiveness (tc:binding-parameters method) (tc:binding-type method) env))))))
 
 (defgeneric print-pattern (pat)
   (:method ((pat tc:pattern-constructor))

@@ -7,7 +7,7 @@
 (coalton-toplevel
 
   (define-type Gadt1
-    (Gadt1-1 (Type Gadt1)))
+    (declare Gadt1-1 Gadt1))
 
   (declare gadt1-test-func (Gadt1 -> Boolean))
   (define (gadt1-test-func (Gadt1-1))
@@ -42,7 +42,7 @@
 (coalton-toplevel
 
   (define-type Gadt2
-    (Gadt2-1 (Type (String -> Gadt2))))
+    (declare Gadt2-1 (String -> Gadt2)))
 
   (declare gadt2-equals-str (Gadt2 * String -> Boolean))
   (define (gadt2-equals-str (Gadt2-1 a) b)
@@ -78,7 +78,7 @@
 (coalton-toplevel
 
   (define-type Gadt3
-    (Gadt3-1 (Type (:a -> Gadt3))))
+    (declare Gadt3-1 (:a -> Gadt3)))
 
   (declare gadt3-test-func (Gadt3 -> Boolean))
   (define (gadt3-test-func (Gadt3-1 a))
@@ -119,7 +119,7 @@
 (coalton-toplevel
 
   (define-type (Gadt4 :a)
-    (Gadt4-1 (Type (Integer -> Gadt4 Integer))))
+    (declare Gadt4-1 (Integer -> Gadt4 Integer)))
 
   (declare gadt4-add1->int-match (Gadt4 :a -> Integer))
   (define (gadt4-add1->int-match g)
@@ -192,9 +192,9 @@
 
 (coalton-toplevel
   (define-type Gadt5
-    (Gadt5-Int (Type (Integer -> Gadt5)))
-    (Gadt5-Str (Type (String -> Gadt5)))
-    (Gadt5-Any (Type (:a -> Gadt5))))
+    (declare Gadt5-Int (Integer -> Gadt5))
+    (declare Gadt5-Str (String -> Gadt5))
+    (declare Gadt5-Any (:a -> Gadt5)))
 
   (declare gadt5->int (Gadt5 -> Integer))
   (define (gadt5->int g)
@@ -214,8 +214,8 @@
 
 (coalton-toplevel
   (define-type (Gadt6 :a)
-    (Gadt6-Int (Type (Integer -> Gadt6 Integer)))
-    (Gadt6-Str (Type (String -> Gadt6 String))))
+    (declare Gadt6-Int (Integer -> Gadt6 Integer))
+    (declare Gadt6-Str (String -> Gadt6 String)))
 
   (declare gadt6-unwrap-int-abstr (Gadt6 Integer -> Integer))
   (define (gadt6-unwrap-int-abstr (Gadt6-Int x))
@@ -252,7 +252,7 @@
 
 (coalton-toplevel
   (define-type (Gadt7 :a)
-    (Gadt7 (Type (:a -> Gadt7 :a))))
+    (declare Gadt7 (:a -> Gadt7 :a)))
 
   (declare gadt7-unwrap-int-match (Gadt7 Integer -> Integer))
   (define (gadt7-unwrap-int-match g)
@@ -275,9 +275,9 @@
 
 (coalton-toplevel
   (define-type (Gadt8 :a)
-    (Gadt8-Int (Type (Integer -> Gadt8 Integer)))
-    (Gadt8-Str (Type (String -> Gadt8 String)))
-    (Gadt8-Any (Type (:a -> Gadt8 :a))))
+    (declare Gadt8-Int (Integer -> Gadt8 Integer))
+    (declare Gadt8-Str (String -> Gadt8 String))
+    (declare Gadt8-Any (:a -> Gadt8 :a)))
 
   (declare gadt8->int (Gadt8 :a -> Integer))
   (define (gadt8->int g)
@@ -307,8 +307,8 @@
 
 (coalton-toplevel
   (define-type (Gadt9 :a)
-    (Gadt9-Int (Type (Integer -> Gadt9 Integer)))
-    (Gadt9-Str (Type (String -> Gadt9 String))))
+    (declare Gadt9-Int (Integer -> Gadt9 Integer))
+    (declare Gadt9-Str (String -> Gadt9 String)))
 
   (declare gadt9-unbox (Gadt9 :a -> :a))
   (define (gadt9-unbox g)
@@ -326,9 +326,9 @@
 
 (coalton-toplevel
   (define-type (Gadt10 :a)
-    (Gadt10-Int (Type (Integer -> Gadt10 Integer)))
-    (Gadt10-Str (Type (String -> Gadt10 String)))
-    (Gadt10-Any (Type (:a -> Gadt10 :a))))
+    (declare Gadt10-Int (Integer -> Gadt10 Integer))
+    (declare Gadt10-Str (String -> Gadt10 String))
+    (declare Gadt10-Any (:a -> Gadt10 :a)))
 
   (declare gadt10-unwrap-int-tagged (Gadt10 Integer -> (Tuple Integer Integer)))
   (define (gadt10-unwrap-int-tagged g)
@@ -350,7 +350,7 @@
 
 (coalton-toplevel
   (define-type (Gadt11 :a)
-    (Gadt11-Multi (Type (Integer * String * Boolean -> Gadt11 Integer))))
+    (declare Gadt11-Multi (Integer * String * Boolean -> Gadt11 Integer)))
 
   (declare gadt11-fields (Gadt11 Integer -> (Tuple3 Integer String Boolean)))
   (define (gadt11-fields g)
@@ -369,8 +369,8 @@
 
 (coalton-toplevel
   (define-type (Gadt12 :a)
-    (Gadt12-Int (Type (Integer -> Gadt12 Integer)))
-    (Gadt12-Str (Type (String -> Gadt12 String))))
+    (declare Gadt12-Int (Integer -> Gadt12 Integer))
+    (declare Gadt12-Str (String -> Gadt12 String)))
 
   (declare gadt12-nested-tuple ((Tuple (Gadt12 Integer) (Gadt12 String)) -> (Tuple Integer Integer)))
   (define (gadt12-nested-tuple pair)
@@ -389,10 +389,10 @@
 
 (coalton-toplevel
   (define-type (Gadt13-Expr :a)
-    (Gadt13-Int (Type (Integer -> Gadt13-Expr Integer)))
-    (Gadt13-Bool (Type (Boolean -> Gadt13-Expr Boolean)))
-    (Gadt13-Str (Type (String -> Gadt13-Expr String)))
-    (Gadt13-If (Type (Gadt13-Expr Boolean * Gadt13-Expr :a * Gadt13-Expr :a -> Gadt13-Expr :a))))
+    (declare Gadt13-Int (Integer -> Gadt13-Expr Integer))
+    (declare Gadt13-Bool (Boolean -> Gadt13-Expr Boolean))
+    (declare Gadt13-Str (String -> Gadt13-Expr String))
+    (declare Gadt13-If (Gadt13-Expr Boolean * Gadt13-Expr :a * Gadt13-Expr :a -> Gadt13-Expr :a)))
 
   (declare gadt13-eval (Gadt13-Expr :a -> :a))
   (define (gadt13-eval expr)
@@ -416,3 +416,179 @@
            (Gadt13-If (Gadt13-Bool False)
                       (Gadt13-Str "left")
                       (Gadt13-Str "right"))))))
+
+(coalton-toplevel
+  (define-type (SameIndex :a :b)
+    (declare SameRefl (SameIndex :x :x)))
+
+  (declare cast-with-witness (SameIndex :a :b * :a -> :b))
+  (define (cast-with-witness witness x)
+    (match witness ((SameRefl) x)))
+
+  (define-type (ValueTag :a)
+    (declare IntegerTag (ValueTag Integer))
+    (declare StringTag (ValueTag String)))
+  (define-type TaggedValue
+    (declare PackTagged (ValueTag :a * :a -> TaggedValue)))
+
+  (declare tagged-string (TaggedValue -> String))
+  (define (tagged-string packed)
+    (match packed
+      ((PackTagged (StringTag) value) value)
+      ((PackTagged (IntegerTag) _) "integer")))
+
+  (declare nested-tagged-string (TaggedValue -> String))
+  (define (nested-tagged-string (PackTagged tag value))
+    (match tag
+      ((StringTag) (return value))
+      ((IntegerTag) "integer")))
+
+  (declare value-for-tag (ValueTag :a -> :a))
+  (define (value-for-tag tag)
+    (match tag ((IntegerTag) (return 42)) ((StringTag) "string")))
+
+  (declare correlated-tags ((Tuple (ValueTag :a) (ValueTag :a)) -> Boolean))
+  (define (correlated-tags pair)
+    (match pair
+      ((Tuple (IntegerTag) _) True)
+      ((Tuple _ (StringTag)) False)))
+
+  (repr :transparent)
+  (define-type (TaggedBox :a) (declare MkTaggedBox (:a -> TaggedBox :a)))
+  (define (tagged-box-value (MkTaggedBox x)) x)
+
+  (define-type LinkLeft (declare LeftLink (LinkRight -> LinkLeft)))
+  (define-type LinkRight LinkEnd (RightLink LinkLeft)))
+
+(define-test gadt-evidence-and-representation ()
+  (is (== "same" (cast-with-witness SameRefl "same")))
+  (is (== "inside" (tagged-string (PackTagged StringTag "inside"))))
+  (is (== "integer" (tagged-string (PackTagged IntegerTag 42))))
+  (is (== "returned" (nested-tagged-string (PackTagged StringTag "returned"))))
+  (is (== 42 (value-for-tag IntegerTag)))
+  (is (== "string" (value-for-tag StringTag)))
+  (is (correlated-tags (Tuple IntegerTag IntegerTag)))
+  (is (not (correlated-tags (Tuple StringTag StringTag))))
+  (is (== "field" (tagged-box-value (MkTaggedBox "field"))))
+  (is (match (LeftLink LinkEnd)
+        ((LeftLink (LinkEnd)) True)
+        ((LeftLink (RightLink _)) False))))
+
+(coalton-toplevel
+  (define-type-alias CountIndex Integer)
+  (define-type (SignatureBox :a)
+    (declare CountBox (CountIndex -> SignatureBox CountIndex))
+    (declare AnyBox (forall ((:a Type)) (:a -> SignatureBox :a))))
+  (define-type PackedApplication
+    (declare PackApplication ((:f :a) -> PackedApplication)))
+
+  (declare signature-count (SignatureBox Integer -> Integer))
+  (define (signature-count box)
+    (match box ((CountBox n) n) ((AnyBox n) n))))
+
+(define-test gadt-constructor-signature-scope ()
+  (is (== 11 (signature-count (CountBox 11))))
+  (is (== 12 (signature-count (AnyBox 12))))
+  (is (match (PackApplication (Some "value")) ((PackApplication _) True))))
+
+(coalton-toplevel
+  (define-type (DispatchTag :a)
+    (declare DispatchInt (DispatchTag Integer))
+    (declare DispatchBool (DispatchTag Boolean)))
+  (define-type (DispatchPair :a)
+    (declare DispatchPair (DispatchTag :a * :a -> DispatchPair :a)))
+
+  (declare dispatch-bool (DispatchPair :a -> Boolean))
+  (define (dispatch-bool pair)
+    (match pair
+      ((DispatchPair (DispatchInt) _) True)
+      ((DispatchPair (DispatchBool) b) (if b True False))))
+
+  (declare measure-tagged ((Tuple (ValueTag :a) :a) -> Integer))
+  (define (measure-tagged pair)
+    (match pair
+      ((Tuple (IntegerTag) n) (+ n 1))
+      ((Tuple (StringTag) text) (as Integer (coalton/string:length text)))))
+
+  (declare unbox-with-dictionary (Eq :a => Gadt9 :a -> :a))
+  (define (unbox-with-dictionary box)
+    (match box ((Gadt9-Int n) n) ((Gadt9-Str text) text)))
+  (monomorphize)
+  (declare unbox-string (Gadt9 String -> String))
+  (define (unbox-string box) (unbox-with-dictionary box)))
+
+(define-test gadt-shared-projection-types ()
+  (is (not (noinline (dispatch-bool (DispatchPair DispatchBool False)))))
+  (is (noinline (dispatch-bool (DispatchPair DispatchBool True))))
+  (is (== 3 (noinline (measure-tagged (Tuple StringTag "abc")))))
+  (is (== 12 (noinline (measure-tagged (Tuple IntegerTag 11))))))
+
+(define-test gadt-monomorphized-branch-result ()
+  (is (== "abc" (unbox-string (Gadt9-Str "abc")))))
+
+(coalton-toplevel
+  (declare integer-tag-only (SameIndex :a Integer * ValueTag :a -> Boolean))
+  (define (integer-tag-only (SameRefl) (IntegerTag)) True)
+  (declare integer-tag-last (ValueTag :a * SameIndex :a Integer -> Boolean))
+  (define (integer-tag-last (IntegerTag) (SameRefl)) True))
+
+(define-test gadt-joint-parameter-coverage ()
+  (is (integer-tag-only SameRefl IntegerTag))
+  (is (integer-tag-last IntegerTag SameRefl)))
+
+(coalton-toplevel
+  (declare equal-via-right (Eq :b => SameIndex :a :b * :a * :b -> Boolean))
+  (define (equal-via-right witness x y)
+    (match witness ((SameRefl) (== x y))))
+
+  (declare compare-successor ((Eq :a) (Num :b) => SameIndex :a :b * :a * :b -> Boolean))
+  (define (compare-successor (SameRefl) x y)
+    (== x (+ y 1)))
+
+  (declare keep-right (SameIndex :a :b * :b -> :b))
+  (define (keep-right witness y)
+    (let z = (match witness ((SameRefl) y)))
+    z)
+
+  (declare use-rank-witness ((forall (:a :b) SameIndex :a :b * :b -> :b) -> String))
+  (define (use-rank-witness f) (f SameRefl "rank"))
+
+  (declare scoped-tag-value (forall (:a) (ValueTag :a * :a -> :a)))
+  (define (scoped-tag-value tag value)
+    (match tag
+      ((IntegerTag) (the :a value))
+      ((StringTag) (let ((declare keep (:a -> :a))
+                         (keep (fn (x) (the :a x))))
+                     (keep value)))))
+
+  (define (optional-box-value box)
+    (match box ((MkTaggedBox (Some x)) x) ((MkTaggedBox (None)) 0)))
+
+  (declare boxed-firsts (List (TaggedBox (Tuple Integer String)) -> List Integer))
+  (define (boxed-firsts boxes)
+    (map (fn ((MkTaggedBox (Tuple x _))) x) boxes))
+
+  (declare describe-payload (ValueTag :a * :a -> String))
+  (define (describe-payload tag value)
+    (match (Tuple value tag)
+      ((Tuple "hello" (StringTag)) "greeting")
+      ((Tuple _ (StringTag)) "string")
+      ((Tuple _ (IntegerTag)) "int"))))
+
+(define-test gadt-equality-preserves-enclosing-dictionaries-and-results ()
+  (is (equal-via-right SameRefl "same" "same"))
+  (is (not (equal-via-right SameRefl "left" "right")))
+  (is (compare-successor SameRefl 3 2))
+  (is (not (compare-successor SameRefl 3 3)))
+  (is (== "right" (keep-right SameRefl "right")))
+  (is (== "rank" (use-rank-witness (fn (w y) (let z = (match w ((SameRefl) y))) z)))))
+
+(define-test gadt-nested-patterns-and-scoped-annotations ()
+  (is (== 7 (scoped-tag-value IntegerTag 7)))
+  (is (== "word" (scoped-tag-value StringTag "word")))
+  (is (== 3 (optional-box-value (MkTaggedBox (Some 3)))))
+  (is (== 0 (optional-box-value (MkTaggedBox None))))
+  (is (== (the (List Integer) [4]) (boxed-firsts [(MkTaggedBox (Tuple 4 "x"))])))
+  (is (== "greeting" (describe-payload StringTag "hello")))
+  (is (== "string" (describe-payload StringTag "other")))
+  (is (== "int" (describe-payload IntegerTag 2))))

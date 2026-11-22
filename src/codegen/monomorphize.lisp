@@ -44,6 +44,7 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:action
+   #:prune-impossible-match-branches
    #:traverse-with-binding-list
    #:node-free-p)
   (:import-from
@@ -298,6 +299,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
               (t
                (util:unreachable)))))
 
+      (setf new-node (prune-impossible-match-branches new-node env))
       (typecheck-node new-node env)
       new-node)))
 

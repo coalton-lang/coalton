@@ -126,7 +126,8 @@ This is conservative and intentionally aligns with mutable native wrappers."
   (let ((variance-table (make-hash-table :test #'eq))
         (env-resolver (tc:make-env-variance-resolver env)))
     ;; Initialize each type parameter as absent (not yet observed), except
-    ;; opaque types, which are conservatively invariant.
+    ;; opaque types and GADTs, which are conservatively invariant. A GADT
+    ;; result can constrain an index without ever using it in a field.
     ;;
     ;; Current stdlib audit (2026-02) for parametric opaque types:
     ;;   Cell, Vector, Queue, Slice, Hashtable, LispArray, FileStream
@@ -136,9 +137,9 @@ This is conservative and intentionally aligns with mutable native wrappers."
           :for name := (type-definition-name type)
           :for tyvars := (gethash name type-tyvar-table)
           :for initial := (make-list (length tyvars)
-                                     :initial-element (if (type-definition-opaque-p type)
-                                                          ':invariant
-                                                          ':absent))
+                                     :initial-element (if (or (type-definition-opaque-p type)
+                                                              (type-definition-gadt-p type))
+                                                          ':invariant ':absent))
           :do (setf (gethash name variance-table) initial))
 
     (labels ((erase-absent-arguments (ty)
@@ -198,7 +199,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
                 :for name := (type-definition-name type)
                 :for tyvars := (gethash name type-tyvar-table)
                 :for current-variances := (gethash name variance-table)
-                :unless (type-definition-opaque-p type)
+                :unless (or (type-definition-opaque-p type) (type-definition-gadt-p type))
                   :do (let ((observed-variances (make-hash-table :test #'eql)))
                         (flet ((observe (ty)
                                  (declare (type tc:ty ty))
@@ -652,52 +653,38 @@ signaled with the expectation that they may be ignored."
                       (tc-note repr "~A is not a known Lisp condition type at compile time; a condition defined in the same file must be wrapped in (EVAL-WHEN (:COMPILE-TOPLEVEL :LOAD-TOPLEVEL :EXECUTE) ...)"
                                printed-type)))))))
 
+(defun constructor-signature-env (env)
+  ;; The nominal types in a recursive group are in scope, but each constructor
+  ;; quantifies its own variables, independently of the datatype head.
+  (let ((local (make-partial-type-env :env (partial-type-env-env env))))
+    (maphash (lambda (name ty)
+               (when (tc:tycon-p ty)
+                 (partial-type-env-add-type local name ty)))
+             (partial-type-env-ty-table env))
+    local))
+
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
            (values type-definition-list parser:toplevel-define-instance-list))
 
   (let ((ksubs nil)
-
-        (ctor-table (make-hash-table :test #'eq))
-
-        (alias-table (make-hash-table :test #'eq))
-
-        (ctor-scheme-table (make-hash-table :test #'eq)))
+        (alias-table (make-hash-table :test #'eq)))
 
     ;; Infer the kinds of each type
     (loop :for type :in types
-          :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :do (loop
                 :for ctor :in (parser:type-definition-ctors type)
-                :for ctor-name
-                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                :for ctor-signature
-                  := (parser:type-definition-ctor-signature ctor)
-                :do
-                   (cond
-                     ;; GADTs are typed by their function signature
-                     (ctor-signature
-                      (let ((branch-env (make-partial-type-env
-                                         :env (partial-type-env-env env)
-                                         :ty-table (alexandria:copy-hash-table (partial-type-env-ty-table env)))))
-                        (pt:seed-qualified-type-variables ctor-signature branch-env)
-                        (multiple-value-bind (qual-ty ksubs_)
-                            (pt:infer-top-qualified-type-kinds ctor-signature tc:+kstar+ ksubs branch-env)
-                          (setf ksubs ksubs_)
-                          (setf (gethash ctor-name ctor-scheme-table) qual-ty)
-                          (setf (gethash ctor-name ctor-table)
-                                (tc:function-type-arguments qual-ty)))))
-
-                     ;; ADTs are typed by their constructor fields
-                     (t
-                      (let ((fields (loop
-                                      :for field :in (parser:type-definition-ctor-field-types ctor)
-                                      :collect (multiple-value-bind (type ksubs_)
-                                                   (parse-type field env ksubs)
-                                                 (setf ksubs ksubs_)
-                                                 type))))
-                        (setf (gethash ctor-name ctor-table) fields))))))
+                :for signature := (parser:type-definition-ctor-signature ctor)
+                :do (cond
+                      (signature
+                       (let ((local (constructor-signature-env env)))
+                         (pt:seed-qualified-type-variables signature local)
+                         (setf ksubs (nth-value 1 (pt:infer-top-qualified-type-kinds
+                                                   signature tc:+kstar+ ksubs local)))))
+                      (t
+                       (dolist (field (parser:type-definition-ctor-field-types ctor))
+                         (setf ksubs (nth-value 1 (parse-type field env ksubs))))))))
 
     ;; Infer the kinds of each type alias.
     (loop :for type :in types
@@ -805,19 +792,18 @@ signaled with the expectation that they may be ignored."
          :for repr-arg
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
+         :for signatures
+           := (loop :for ctor :in (parser:type-definition-ctors type)
+                    :for signature := (parser:type-definition-ctor-signature ctor)
+                    :collect (and signature (parse-ty-scheme signature (constructor-signature-env alias-partial-env))))
+
          :for constructor-args
            := (loop
                 :for ctor :in (parser:type-definition-ctors type)
-                :for ctor-name := (parser:identifier-src-name
-                                   (parser:type-definition-ctor-name ctor))
-                :for stored-scheme := (gethash ctor-name ctor-scheme-table)
+                :for scheme :in signatures
                 :collect
-                (if stored-scheme
-                    ;; GADT constructor: arguments come from the expilict signature
-                    (tc:function-type-arguments
-                     (tc:apply-ksubstitution ksubs stored-scheme))
-
-                    ;; ADT constructor: arguments come from fiedl syntax
+                (if scheme
+                    (tc:function-type-arguments scheme)
                     (loop :for parser-field-type
                             :in (parser:type-definition-ctor-field-types ctor)
                           :collect (multiple-value-bind (field-type ignored-ksubs)
@@ -827,23 +813,10 @@ signaled with the expectation that they may be ignored."
 
          :for constructor-types
            := (loop
-                :for ctor :in (parser:type-definition-ctors type)
+                :for scheme :in signatures
                 :for ctor-args :in constructor-args
-                :for ctor-name := (parser:identifier-src-name
-                                   (parser:type-definition-ctor-name ctor))
-                :for stored-scheme := (gethash ctor-name ctor-scheme-table)
                 :collect
-                (if stored-scheme
-                    ;; GADT constructor: use the explicit constructor type
-                    (let* ((qual-ty (tc:apply-ksubstitution ksubs stored-scheme))
-                           (vars-in-qual (tc:type-variables qual-ty))
-                           (ordered-vars (append tvars
-                                                 (set-difference vars-in-qual
-                                                                 tvars
-                                                                 :test #'tc:ty=))))
-                      (tc:quantify-using-tvar-order ordered-vars qual-ty))
-
-                    ;; ADT constructor
+                (or scheme
                     (let ((ty (tc:prepend-function-input-types
                                ctor-args
                                (tc:apply-type-argument-list
@@ -855,9 +828,8 @@ signaled with the expectation that they may be ignored."
          :when (eq repr-type :enum)
            :do (loop
                  :for ctor :in (parser:toplevel-define-type-ctors type)
-                 :for ctor-name
-                   := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                 :unless (endp (gethash ctor-name ctor-table))
+                 :for fields :in constructor-args
+                 :when fields
                    :do (tc-error "Invalid repr :enum attribute"
                                  (tc-note ctor "Enum constructors cannot have arguments.")))
 
@@ -870,7 +842,7 @@ signaled with the expectation that they may be ignored."
 
          ;; Check that the single constructor of a repr :transparent type has a single field
          :when (eq repr-type :transparent)
-           :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
+           :do (unless (= 1 (length (first constructor-args)))
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
@@ -884,6 +856,8 @@ signaled with the expectation that they may be ignored."
              ((ctors
                 (loop
                   :for ctor :in (parser:type-definition-ctors type)
+                  :for fields :in constructor-args
+                  :for scheme :in signatures
                   :for ctor-name
                     := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                   :for classname
@@ -893,14 +867,14 @@ signaled with the expectation that they may be ignored."
                   :collect (tc:make-constructor-entry
                             :name ctor-name
                             :source-name (parser:identifier-src-source-name (parser:type-definition-ctor-name ctor))
-                            :arity (length (gethash ctor-name ctor-table))
+                            :arity (length fields)
                             :constructs name
                             :classname classname
                             :docstring ctor-docstring
                             :compressed-repr (if (eq repr-type :enum)
                                                  classname
                                                  nil)
-                            :gadt-p (not (null (gethash ctor-name ctor-scheme-table))))))
+                            :gadt-p (not (null scheme)))))
 
               (type-definition
                 (make-type-definition

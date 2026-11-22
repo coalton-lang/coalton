@@ -10,6 +10,8 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:rename-type-variables
+   #:prune-impossible-match-branches
+   #:pattern-contains-gadt-p
    #:inlined-some-operand
    #:inlined-cons-operands
    #:node-variables
@@ -23,6 +25,55 @@
    #:non-escaping-let-function-names))
 
 (in-package #:coalton-impl/codegen/transformations)
+
+(defun pattern-contains-gadt-p (pat env)
+  (typecase pat
+    (pattern-binding (pattern-contains-gadt-p (pattern-binding-pattern pat) env))
+    (pattern-constructor
+     (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (pattern-constructor-name pat)))
+         (some (lambda (child) (pattern-contains-gadt-p child env))
+               (pattern-constructor-patterns pat))))))
+
+(defun possible-specialized-pattern-p (pattern scrutinee env)
+  ;; This is a feasibility test on copied, already well-typed code. A variable
+  ;; in the scrutinee can still take any index; only inconsistent constructors
+  ;; justify dropping a branch. Thread their equations through sibling fields.
+  (let ((subs nil)
+        (scrutinee (tc:apply-substitution
+                    (loop :for var :in (tc:type-variables scrutinee)
+                          :when (tc:tyvar-rigid-p var)
+                            :collect (tc:make-substitution :from var :to (tc:fresh-type-renamer var)))
+                    scrutinee)))
+    (labels ((walk (pat expected)
+               (typecase pat
+                 (pattern-binding (walk (pattern-binding-pattern pat) expected))
+                 (pattern-constructor
+                  (let ((ctor (tc:qualified-ty-type
+                               (tc:fresh-inst (tc:lookup-value-type env (pattern-constructor-name pat))))))
+                    (multiple-value-bind (new-subs possible-p)
+                        (tc:try-unify subs (tc:function-return-type ctor) expected)
+                      (when possible-p
+                        (setf subs new-subs)
+                        (every #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))
+                 (t t))))
+      (walk pattern scrutinee))))
+
+(defun prune-impossible-match-branches (node env)
+  "Remove GADT branches ruled out by specializing a copy of NODE."
+  (traverse node
+            (list (action (:after node-match match)
+                    (let ((branches (node-match-branches match)))
+                      (if (some (lambda (branch) (pattern-contains-gadt-p (match-branch-pattern branch) env))
+                                branches)
+                          (make-node-match
+                           :type (node-type match)
+                           :expr (node-match-expr match)
+                           :branches (remove-if-not
+                                      (lambda (branch)
+                                        (possible-specialized-pattern-p (match-branch-pattern branch)
+                                                                        (node-type (node-match-expr match)) env))
+                                      branches))
+                          match))))))
 
 (defmethod tc:apply-substitution (subs (node node))
   "Substitute type variables in the tree of `node` with other types

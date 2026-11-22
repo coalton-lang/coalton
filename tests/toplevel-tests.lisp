@@ -13,6 +13,16 @@
                 (coalton-impl/parser/toplevel::parse-package
                  (coalton-impl/parser/cursor:make-cursor form source "Unit Test")))))
 
+(deftest declared-constructors-and-function-valued-fields ()
+  (check-coalton-types
+   "(define-type Callback (MkCallback (Integer -> String)))
+    (define-type (Term :a)
+      (declare IntLit (Integer -> Term Integer)) \"An integer literal.\"
+      (declare Truth (Term Boolean)))"
+   '("MkCallback" . "((Integer -> String) -> Callback)")
+   '("IntLit" . "(Integer -> Term Integer)")
+   '("Truth" . "(Term Boolean)")))
+
 (deftest test-lisp-package ()
   "Lisp packages can be constructed from parsed Coalton package forms."
   (flet ((del-pkg (package-designator)
