@@ -541,7 +541,7 @@ Signals an error if `b` is the zero operator."
 Requires an ordinary point at $x = 0$, i.e., $p_m(0) \\neq 0$, and exactly $m = \\operatorname{ord} L$ initial values. The coefficients are computed lazily by the recurrence obtained from $[x^r] L(y) = 0$, which determines $y_{r+m}$ from $y_0, \\ldots, y_{r+m-1}$:
 $$y_{r+m} = -\\frac{1}{p_m(0) \\, (r+1) \\cdots (r+m)} \\sum_{\\substack{0 \\le k \\le m,\\ 0 \\le j \\le r \\\\ j + k < r + m}} [x^{r-j}] p_k \\cdot (j+1) \\cdots (j+k) \\cdot y_{j+k}.$$
 
-For example, Airy's equation $y'' - x y = 0$ with $y(0) = 1$, $y'(0) = 0$ gives $1 + \\frac{1}{6}x^3 + \\frac{1}{180}x^6 + \\cdots$, and `(apply-poly-diff-op-series op (solve-ode-series op inits))` is `zero`."
+For example, Airy's equation $y'' - x y = 0$ with $y(0) = 1$, $y'(0) = 0$ gives $1 + \\frac{1}{6}x^3 + \\frac{1}{180}x^6 + \\cdots$. To check the residual modulo $x^N$, use `(series:series-approx-equal? n (apply-diff-op (map into op) y) zero)`."
     (let m = (diff-op-order op))
     (let ps = (%list->vector (diff-op-coeffs op)))
     (let pm0 = (poly:coeff (diff-op-leading op) 0))

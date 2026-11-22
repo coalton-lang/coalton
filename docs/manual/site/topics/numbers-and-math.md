@@ -515,7 +515,7 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
 - **`coalton/xmath/ratio`**: Reduced fractions over any GCD domain (such as
   rational functions $p(x)/q(x)$ and Gaussian rationals), along with partial
   fraction decomposition and Hermite reduction for symbolic rational integration.
-- **`coalton/xmath/power-series`**: Lazy formal power series
+- **`coalton/xmath/power-series`**: [Lazy formal power series](#formal-and-analytic-power-series)
   $\sum_{n=0}^{\infty} a_n x^n$ with algebraic, transcendental, and calculus
   operations, composition, and Lagrange series reversion.
 - **`coalton/xmath/matrix`**: Dense matrices over semirings, rings, GCD domains,
@@ -580,6 +580,7 @@ normal forms and `nfield` to algebraic number fields.
                     (#:vec #:coalton/vector)
                     (#:ifact #:coalton/xmath/integer-factorization)
                     (#:poly #:coalton/xmath/polynomial)
+                    (#:ps #:coalton/xmath/power-series)
                     (#:factor #:coalton/xmath/polynomial-factor)
                     (#:nfield #:coalton/xmath/number-field)
                     (#:nf #:coalton/xmath/normal-form)
@@ -655,6 +656,69 @@ derivative at each position of the result. The result constructor can be any
 `Hyperdual` in `coalton/xmath/hyperdual` uses nested `AD` values so that
 second and mixed partials follow the same primal branches. For algebraic
 equality on all four coefficients, use `Dual (Dual :a)` instead.
+
+### Formal and analytic power series
+
+A `PowerSeries` supplies a coefficient for every degree. There is no `Eq`
+instance: $x^{16}$ and $0$ agree in their first 16 coefficients, but their
+derivatives do not. `(ps:series-approx-equal? n f g)` asks whether
+$f\equiv g\pmod{x^n}$, using **coefficient equality**, not a floating-point
+tolerance. For coefficientwise arithmetic, the Cauchy product, and integer
+literals no series equality is needed.
+
+In $R[[x]]$, a denominator $g$ is invertible exactly when $g(0)$ is a
+unit of $R$. Ordinary division computes $f g^{-1}$, with the inverse on
+the **right** even if coefficients do not commute. Thus $x/x$ is not an
+ordinary division. To cancel $x^v$, use `(ps:series-divide-through m f g)`.
+It searches degrees $0$ through $m$ **inclusive**, requires the first
+nonzero denominator coefficient to be a unit, and rejects a numerator of
+smaller valuation. If both prefixes vanish, the valuation is still unknown;
+the operation signals an error rather than declaring $g=0$. Here the
+coefficient zero test must recognize algebraic zero; a tolerance or an
+equality that compares only part of a coefficient is not a valuation test.
+
+For example, the Catalan generating function
+$C=(1-\sqrt{1-4x})/(2x)$ needs exactly one degree of cancellation.
+Its square root has constant term one and needs no scalar root operation:
+
+```lisp
+(coalton
+  (let ((x (the (ps:PowerSeries Fraction) ps:series-var)))
+    (let ((r (ps:series-sqrt (- 1 (* 4 x)))))
+      (ps:series-prefix 7 (ps:series-divide-through 1 (- 1 r) (* 2 x))))))
+;; => (1 1 2 5 14 42 132)
+```
+
+The ordinary elementary functions instead start at the **scalar center**
+$c=f(0)$. For example, $\exp(1+x)=e+ex+ex^2/2+\cdots$ and
+$\ln(2+x)=\ln 2+x/2-x^2/8+\cdots$:
+
+```lisp
+(coalton
+  (let ((x (the (ps:PowerSeries F64) ps:series-var)))
+    (values (ps:series-prefix 3 (exp (+ 1 x)))
+            (ps:series-prefix 3 (ln (+ 2 x))))))
+;; => approximately (2.71828 2.71828 1.35914), (0.69315 0.5 -0.125)
+```
+
+Higher coefficients follow from differential equations. For $E=\exp(f)$,
+$E_0=\exp(c)$ and $n E_n=\sum_{k=1}^n k f_k E_{n-k}$. For a root $r^m=f$,
+the scalar root picks the branch and $m f r'=f'r$ determines the rest.
+These are local expansions: $\ln(f)$ and nontrivial roots require a unit
+center, $\arcsin$ is singular at $\pm1$, and $\log_b(f)$ needs $\ln(b(0))$
+invertible. A singular center such as $\sqrt{x^2}$ is not a request to
+search the input for a special cancellation. Out-of-domain scalar values
+and rounding have the meaning of the coefficient type.
+
+Over $\mathbb Q$, or even $\mathbb Q[t]$, no scalar transcendental
+functions are needed for **normalized** expansions. For $u(0)=0$ use
+`ps:series-exp`, `series-sin`, `series-cos`, `series-tan`, `series-asin`,
+`series-atan`, or the hyperbolic functions `series-sinh`, `series-cosh`,
+`series-tanh`, `series-asinh`, and `series-atanh`. For $a(0)=1$ use
+`ps:series-ln`, `series-sqrt`, `series-nth-root`, or `series-pow`. For
+example, the logarithm integrates $a'/a$ starting at zero; the inverse
+of $a$ needs no division of coefficients because $a(0)=1$. An $\arccos$
+at zero, in contrast, would require $\pi/2$ in the coefficient ring.
 
 ### Weighted graphs and automata
 
