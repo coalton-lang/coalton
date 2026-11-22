@@ -28,13 +28,11 @@ This symbol may be bound to a string source in the case of direct evaluation in 
 (defconstant +deferred-coalton-expansion+ '%deferred-coalton-expansion
   "Property key used to memoize deferred Coalton macroexpansions.")
 
-;; Modes handled by deferred Coalton readtable expansion:
-;; - `coalton-toplevel` compiles toplevel definitions
-;; - `coalton-codegen` returns generated Lisp without type annotations
-;; - `coalton-codegen-types` returns generated Lisp with type annotations
-;; - `coalton-codegen-ast` prints AST output and expands to NIL
-;; - `coalton` compiles an expression form
-(deftype deferred-coalton-mode ()
+(deftype coalton-mode ()
+  "COALTON-TOPLEVEL compiles definitions; COALTON compiles expressions.
+COALTON-CODEGEN and COALTON-CODEGEN-TYPES return generated Lisp without
+and with type annotations, respectively. COALTON-CODEGEN-AST prints the
+AST and expands to NIL."
   '(member coalton:coalton-toplevel
            coalton:coalton-codegen
            coalton:coalton-codegen-types
@@ -95,51 +93,47 @@ START is the FILE-POSITION on STREAM of the open parenthesis that began the list
           (setf dotted-context t)
           (eclector.reader:recover c))))))
 
+(defun compile-coalton-body (mode stream source)
+  "Run MODE on STREAM, positioned at the body of the form in the caller's reader context."
+  (declare (type coalton-mode mode))
+  (ecase mode
+    (coalton:coalton-toplevel
+     (entry:compile-coalton-toplevel (parser:read-program stream source ':macro)))
+
+    ((coalton:coalton-codegen coalton:coalton-codegen-types)
+     (let ((settings:*emit-type-annotations* (eq mode 'coalton:coalton-codegen-types)))
+       `',(entry:entry-point (parser:read-program stream source ':macro))))
+
+    (coalton:coalton-codegen-ast
+     (let* ((settings:*emit-type-annotations* nil)
+            (ast nil)
+            (codegen:*codegen-hook* (lambda (op &rest args)
+                                      (when (eql op ':AST)
+                                        (push args ast)))))
+       (entry:entry-point (parser:read-program stream source ':macro))
+       (loop :for (name type value) :in (nreverse ast)
+             :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
+     nil)
+
+    (coalton:coalton
+     (entry:expression-entry-point (parser:read-expressions stream source)))))
+
 (defun maybe-read-coalton (stream source start)
   "If the first form on STREAM indicates that Coalton code is present, read a program, and perform the indicated operation (compile, codegen, etc.).
 SOURCE provides metadata for the stream argument, for error messages, and START
 is the offset of the opening parenthesis that began the current form."
   (parser:with-coalton-reader-context stream
-    (let ((first-form
-            (multiple-value-bind (form presentp)
-                (parser:maybe-read-form stream source)
-              (unless presentp
-                (return-from maybe-read-coalton nil))
-              form)))
-
-      (case (cst:raw first-form)
-        (coalton:coalton-toplevel
-          (entry:compile-coalton-toplevel (parser:read-program stream source ':macro)))
-
-        (coalton:coalton-codegen
-          (let ((settings:*emit-type-annotations* nil))
-            `',(entry:entry-point (parser:read-program stream source ':macro))))
-
-        (coalton:coalton-codegen-types
-          (let ((settings:*emit-type-annotations* t))
-            `',(entry:entry-point (parser:read-program stream source ':macro))))
-
-        (coalton:coalton-codegen-ast
-          (let* ((settings:*emit-type-annotations* nil)
-                 (ast nil)
-                 (codegen:*codegen-hook* (lambda (op &rest args)
-                                           (when (eql op ':AST)
-                                             (push args ast)))))
-            (entry:entry-point (parser:read-program stream source ':macro))
-            (loop :for (name type value) :in (nreverse ast)
-                  :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
-          nil)
-
-        (coalton:coalton
-         (entry:expression-entry-point (parser:read-expressions stream source)))
-
-        ;; Fall back to reading the list manually.
-        (t
-         (read-lisp stream source first-form start))))))
+    (multiple-value-bind (first-form presentp) (parser:maybe-read-form stream source)
+      (unless presentp
+        (return-from maybe-read-coalton nil))
+      (let ((mode (cst:raw first-form)))
+        (if (typep mode 'coalton-mode)
+            (compile-coalton-body mode stream source)
+            (read-lisp stream source first-form start))))))
 
 (defun source-span-matches-mode-p (source mode span)
   "Return true when SPAN in SOURCE starts with MODE."
-  (declare (type deferred-coalton-mode mode))
+  (declare (type coalton-mode mode))
   (with-open-stream (stream (source:source-stream source))
     (file-position stream (1+ (source:span-start span)))
     (parser:with-reader-context stream
@@ -163,7 +157,7 @@ source read straight from its input stream, already count characters.
 The converted span is checked against MODE before it is returned, because a
 span that no longer lands on its own form would be silently reused later by
 EXPAND-SOURCE-COALTON-FORM-1."
-  (declare (type deferred-coalton-mode mode))
+  (declare (type coalton-mode mode))
   (let ((span (source:stream-span-to-char-span stream source (cons start end))))
     (unless (source-span-matches-mode-p source mode span)
       (util:coalton-bug "Unable to recover source span for ~S in ~A"
@@ -173,7 +167,7 @@ EXPAND-SOURCE-COALTON-FORM-1."
 
 (defun make-deferred-coalton-form (mode source span)
   "Return a macro form that will compile the Coalton form at SPAN in SOURCE once."
-  (declare (type deferred-coalton-mode mode))
+  (declare (type coalton-mode mode))
   (list 'coalton-impl/reader::expand-source-coalton-form
         (gensym "COALTON-FORM-")
         mode
@@ -185,19 +179,12 @@ EXPAND-SOURCE-COALTON-FORM-1."
 SOURCE provides metadata for the stream argument, and START is the offset of
 the opening parenthesis that began the current form."
   (parser:with-coalton-reader-context stream
-    (let ((first-form
-            (multiple-value-bind (form presentp)
-                (parser:maybe-read-form stream source)
-              (unless presentp
-                (return-from maybe-read-coalton-deferred nil))
-              form)))
+    (multiple-value-bind (first-form presentp) (parser:maybe-read-form stream source)
+      (unless presentp
+        (return-from maybe-read-coalton-deferred nil))
       (let ((mode (cst:raw first-form)))
-        (case mode
-          ((coalton:coalton-toplevel
-            coalton:coalton-codegen
-            coalton:coalton-codegen-types
-            coalton:coalton-codegen-ast
-            coalton:coalton)
+        (cond
+          ((typep mode 'coalton-mode)
            ;; Consume the original source form now, but compile it later from
            ;; the exact source span so repeated compiler passes do not
            ;; monomorphize or inline the same form more than once.
@@ -215,9 +202,9 @@ the opening parenthesis that began the current form."
 (defun expand-source-coalton-form-1 (mode source span)
   "Compile the Coalton form identified by MODE from SOURCE at SPAN.
 
-See the documentation of the type `deferred-coalton-mode` for the meaning of
+See the documentation of the type `coalton-mode` for the meaning of
 each MODE."
-  (declare (type deferred-coalton-mode mode))
+  (declare (type coalton-mode mode))
   (with-open-stream (stream (source:source-stream source))
     (file-position stream (1+ (source:span-start span)))
     (parser:with-reader-context stream
@@ -232,31 +219,7 @@ each MODE."
                             mode
                             (source:make-location source span)
                             (cst:raw form)))
-        (ecase mode
-          (coalton:coalton-toplevel
-           (entry:compile-coalton-toplevel
-            (parser:read-program stream source ':macro)))
-          (coalton:coalton-codegen
-           (let ((settings:*emit-type-annotations* nil))
-             `',(entry:entry-point
-                 (parser:read-program stream source ':macro))))
-          (coalton:coalton-codegen-types
-           (let ((settings:*emit-type-annotations* t))
-             `',(entry:entry-point
-                 (parser:read-program stream source ':macro))))
-          (coalton:coalton-codegen-ast
-           (let* ((settings:*emit-type-annotations* nil)
-                  (ast nil)
-                  (codegen:*codegen-hook* (lambda (op &rest args)
-                                            (when (eql op ':AST)
-                                              (push args ast)))))
-             (entry:entry-point (parser:read-program stream source ':macro))
-             (loop :for (name type value) :in (nreverse ast)
-                   :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
-           nil)
-          (coalton:coalton
-           (entry:expression-entry-point
-            (parser:read-expressions stream source))))))))
+        (compile-coalton-body mode stream source)))))
 
 (defmacro expand-source-coalton-form (form-id mode source span)
   "Expand the Coalton form from SOURCE at SPAN, memoized by FORM-ID."
@@ -392,36 +355,12 @@ Eclector bracket reader in parser/reader.lisp."
 
 (defun compile-cst-forms (mode form source)
   "Compile Coalton MODE by re-reading the original parser CST FORM from SOURCE."
-  (declare (type deferred-coalton-mode mode)
+  (declare (type coalton-mode mode)
            (type cst:cst form))
   (with-open-stream (stream (source:source-stream source))
     (file-position stream (macro-body-start form))
     (parser:with-reader-context stream
-      (ecase mode
-        (coalton:coalton-toplevel
-         (entry:compile-coalton-toplevel
-          (parser:read-program stream source ':macro)))
-        (coalton:coalton-codegen
-         (let ((settings:*emit-type-annotations* nil))
-           `',(entry:entry-point
-               (parser:read-program stream source ':macro))))
-        (coalton:coalton-codegen-types
-         (let ((settings:*emit-type-annotations* t))
-           `',(entry:entry-point
-               (parser:read-program stream source ':macro))))
-        (coalton:coalton-codegen-ast
-         (let* ((settings:*emit-type-annotations* nil)
-                (ast nil)
-                (codegen:*codegen-hook* (lambda (op &rest args)
-                                          (when (eql op ':AST)
-                                            (push args ast)))))
-           (entry:entry-point (parser:read-program stream source ':macro))
-           (loop :for (name type value) :in (nreverse ast)
-                 :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
-         nil)
-        (coalton:coalton
-         (entry:expression-entry-point
-          (parser:read-expressions stream source)))))))
+      (compile-coalton-body mode stream source))))
 
 (defun compile-forms (mode forms)
   "Compile FORMS as Coalton using the indicated MODE.

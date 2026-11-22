@@ -6,9 +6,12 @@
    #:coalton-impl/codegen/traverse)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:rename-type-variables
+   #:inlined-some-operand
+   #:inlined-cons-operands
    #:node-variables
    #:node-dynamic-variables
    #:node-mutated-variables
@@ -90,6 +93,56 @@ function `renamer`, returning the new node tree."
              old-type-variables)
      node)
     node))
+
+(defun inlined-some-operand (node)
+  "If NODE is an inlined `coalton:Some` wrapper, return its argument variable node."
+  (declare (type node node)
+           (values (or null node-local-variable) &optional))
+  (when (and (node-lisp-p node)
+             (= 1 (length (node-lisp-vars node)))
+             (= 1 (length (node-lisp-form node)))
+             (tc:tapp-p (node-type node))
+             (tc:tycon-p (tc:tapp-from (node-type node)))
+             (eq 'coalton:Optional (tc:tycon-name (tc:tapp-from (node-type node)))))
+    (let ((binding (first (node-lisp-vars node)))
+          (form (first (node-lisp-form node))))
+      (when (and (consp form)
+                 (eq 'rt:cl-some (first form))
+                 (consp (cdr form))
+                 (null (cddr form))
+                 (eq (car binding) (second form)))
+        (make-node-local-variable
+         :type (tc:tapp-to (node-type node))
+         :value (cdr binding))))))
+
+(defun inlined-cons-operands (node)
+  "If NODE is an inlined `coalton:Cons` wrapper, return its two argument variable nodes."
+  (declare (type node node)
+           (values list boolean &optional))
+  (when (and (node-lisp-p node)
+             (= 2 (length (node-lisp-vars node)))
+             (= 1 (length (node-lisp-form node)))
+             (tc:tapp-p (node-type node))
+             (tc:tycon-p (tc:tapp-from (node-type node)))
+             (eq 'coalton:List (tc:tycon-name (tc:tapp-from (node-type node)))))
+    (let ((car-binding (first (node-lisp-vars node)))
+          (cdr-binding (second (node-lisp-vars node)))
+          (form (first (node-lisp-form node))))
+      (when (and (consp form)
+                 (eq 'cl:cons (first form))
+                 (consp (cdr form))
+                 (consp (cddr form))
+                 (null (cdddr form))
+                 (eq (car car-binding) (second form))
+                 (eq (car cdr-binding) (third form)))
+        (values
+         (list (make-node-local-variable
+                :type (tc:tapp-to (node-type node))
+                :value (cdr car-binding))
+               (make-node-local-variable
+                :type (node-type node)
+                :value (cdr cdr-binding)))
+         t)))))
 
 (defun node-variables (node &key (variable-namespace-only nil))
   "Return a deduplicated list of identifiers representing variables in
