@@ -1062,90 +1062,80 @@ Returns four values:
       (assert (null preds))
       (assert (null accessors))
 
-      (let (;; Attach explicit types to any explicit bindings
+      (check-exported-defines-have-declares binding-nodes dec-table)
 
-            (binding-nodes
-              (loop :for node :in binding-nodes
-                    :for explicit-type := (gethash (toplevel-define-name node) dec-table)
-                    :if explicit-type
-                      :collect (attach-explicit-binding-type node explicit-type)
-                    :else
-                      :collect node)))
+      ;; Check types and update environment
+      (when (catch 'redef:abort-redef
+              (handler-bind
+                  ((redef:incompatible-redefinition
+                     (lambda (c)
+                       (declare (ignore c))
+                       (when settings:*auto-continue-redefinition*
+                         (let ((restart (find-restart 'redef:continue-anyway)))
+                           (when restart
+                             (invoke-restart restart)))))))
+                (loop :for define :in defines
+                      :for name := (parser:node-variable-name (parser:binding-name define))
+                      :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
 
-        (check-exported-defines-have-declares binding-nodes dec-table)
+                      :when (tc:type-variables scheme)
+                        :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
 
-        ;; Check types and update environment
-        (when (catch 'redef:abort-redef
-                (handler-bind
-                    ((redef:incompatible-redefinition
-                       (lambda (c)
-                         (declare (ignore c))
-                         (when settings:*auto-continue-redefinition*
-                           (let ((restart (find-restart 'redef:continue-anyway)))
-                             (when restart
-                               (invoke-restart restart)))))))
-                  (loop :for define :in defines
-                        :for name := (parser:node-variable-name (parser:binding-name define))
-                        :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
+                      ;; Check for incompatible redefinition before updating environment
+                      :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
+                            (when old-type
+                              (unless (redef:types-compatible-p old-type scheme)
+                                (let ((affected (redef:find-affected-functions name)))
+                                  (when affected
+                                    (redef:raise-redefinition-error
+                                     :function-name name
+                                     :old-type old-type
+                                     :new-type scheme
+                                     :affected-functions affected
+                                     :environment env))))))
 
-                        :when (tc:type-variables scheme)
-                          :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
+                          (setf env (tc:set-value-type env name scheme))
 
-                        ;; Check for incompatible redefinition before updating environment
-                        :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
-                              (when old-type
-                                (unless (redef:types-compatible-p old-type scheme)
-                                  (let ((affected (redef:find-affected-functions name)))
-                                    (when affected
-                                      (redef:raise-redefinition-error
-                                       :function-name name
-                                       :old-type old-type
-                                       :new-type scheme
-                                       :affected-functions affected
-                                       :environment env))))))
+                          (setf env (tc:set-name env name (tc:make-name-entry
+                                                           :name name
+                                                           :type :value
+                                                           :docstring (source:docstring define)
+                                                           :location (source:location define))))
 
-                            (setf env (tc:set-value-type env name scheme))
+                      :if (parser:toplevel-define-orig-params define)
+                        :do (setf env (tc:set-function-source-parameter-names
+                                       env
+                                       name
+                                       (parser:toplevel-define-orig-params define)))
+                      :else
+                        :if (tc:lookup-function-source-parameter-names env name)
+                          :do (setf env (tc:unset-function-source-parameter-names env name))))
+              nil)
+        (return-from toplevel-define (values nil env)))
 
-                            (setf env (tc:set-name env name (tc:make-name-entry
-                                                             :name name
-                                                             :type :value
-                                                             :docstring (source:docstring define)
-                                                             :location (source:location define))))
+      (let ((binding-function-table
+              (loop :with table := (make-hash-table :test #'eq)
+                    :for binding :in binding-nodes
+                    :for name := (node-variable-name (toplevel-define-name binding))
+                    :do (setf (gethash name table) (typed-binding-function-p binding))
+                    :finally (return table))))
+        (check-bindings-for-invalid-recursion
+         defines
+         (tc-env-env tc-env)
+         :binding-function-p
+         (lambda (binding)
+           (gethash (parser:node-variable-name (parser:binding-name binding))
+                    binding-function-table))))
 
-                        :if (parser:toplevel-define-orig-params define)
-                          :do (setf env (tc:set-function-source-parameter-names
-                                         env
-                                         name
-                                         (parser:toplevel-define-orig-params define)))
-                        :else
-                          :if (tc:lookup-function-source-parameter-names env name)
-                            :do (setf env (tc:unset-function-source-parameter-names env name))))
-                nil)
-          (return-from toplevel-define (values nil env)))
+      ;; Record dependencies
+      (loop :for define :in defines
+            :for name := (parser:node-variable-name (parser:binding-name define))
+            :for code := (parser:binding-value define)
+            :do (redef:record-dependencies name code env))
 
-        (let ((binding-function-table
-                (loop :with table := (make-hash-table :test #'eq)
-                      :for binding :in binding-nodes
-                      :for name := (node-variable-name (toplevel-define-name binding))
-                      :do (setf (gethash name table) (typed-binding-function-p binding))
-                      :finally (return table))))
-          (check-bindings-for-invalid-recursion
-           defines
-           (tc-env-env tc-env)
-           :binding-function-p
-           (lambda (binding)
-             (gethash (parser:node-variable-name (parser:binding-name binding))
-                      binding-function-table))))
-
-        ;; Record dependencies
-        (loop :for define :in defines
-              :for name := (parser:node-variable-name (parser:binding-name define))
-              :for code := (parser:binding-value define)
-              :do (redef:record-dependencies name code env))
-
-        (values
-         (tc:apply-substitution subs binding-nodes)
-         env)))))
+      (values
+       (tc:apply-substitution subs binding-nodes)
+       env))))
 
 ;;;
 ;;; Expression Type Inference
@@ -1277,28 +1267,44 @@ other, so they can be inferred monomorphically before the recursive body."
            :location (source:location node))
    :location (source:location node)))
 
-(defun rec-node-declare-table (node)
-  "Validate REC's init bindings and declarations, then return a declare table."
-  (declare (type parser:node-rec node)
+(defun validate-local-bindings (bindings declares context)
+  "Validate a LET, REC, or LOOP binding group and return its declaration types."
+  (declare (type (or parser:node-let-binding-list parser:node-for-binding-list) bindings)
+           (type parser:node-let-declare-list declares)
+           (type (member :let :rec :loop) context)
            (values hash-table &optional))
   (let ((def-table (make-hash-table :test #'eq))
-        (dec-table (make-hash-table :test #'eq)))
-    (loop :for binding :in (parser:node-rec-bindings node)
-          :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
-          :if (gethash name def-table)
-            :do (tc-error "Duplicate binding in rec"
-                          (tc-note (parser:node-let-binding-name binding)
-                                   "second definition here")
-                          (tc-note (parser:node-let-binding-name
-                                    (gethash name def-table))
-                                   "first definition here"))
-          :else
-            :do (setf (gethash name def-table) binding))
+        (dec-table (make-hash-table :test #'eq))
+        (binding-name (ecase context
+                        ((:let :rec) #'parser:node-let-binding-name)
+                        (:loop #'parser:node-for-binding-name))))
+    (loop :for binding :in bindings
+          :for binder := (funcall binding-name binding)
+          :for name := (parser:node-variable-name binder)
+          :for previous := (gethash name def-table)
+          :do (when previous
+                (cond
+                  ((eq context :let)
+                   ;; LET historically reports whole bindings in source order.
+                   (let ((first previous)
+                         (second binding))
+                     (unless (source:location< (source:location first)
+                                               (source:location second))
+                       (psetf first second second first))
+                     (tc-error "Duplicate definition in let"
+                               (tc-note first "first definition here")
+                               (tc-note second "second definition here"))))
+                  (t
+                   (tc-error (format nil "Duplicate binding in ~(~A~)" context)
+                             (tc-note binder "second definition here")
+                             (tc-note (funcall binding-name previous)
+                                      "first definition here")))))
+              (setf (gethash name def-table) binding))
 
-    (loop :for declare :in (parser:node-rec-declares node)
+    (loop :for declare :in declares
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
           :if (gethash name dec-table)
-            :do (tc-error "Duplicate declaration in rec"
+            :do (tc-error (format nil "Duplicate declaration in ~(~A~)" context)
                           (tc-note (parser:node-let-declare-name declare)
                                    "second declaration here")
                           (tc-note (parser:node-let-declare-name
@@ -1307,18 +1313,16 @@ other, so they can be inferred monomorphically before the recursive body."
           :else
             :do (setf (gethash name dec-table) declare))
 
-    (loop :for declare :in (parser:node-rec-declares node)
+    (loop :for declare :in declares
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
           :unless (gethash name def-table)
-            :do (tc-error "Orphan declare in rec"
+            :do (tc-error (format nil "Orphan declare in ~(~A~)" context)
                           (tc-note (parser:node-let-declare-name declare)
-                                   "declaration does not have an associated definition")))
-
-    (loop :with table := (make-hash-table :test #'eq)
-          :for declare :in (parser:node-rec-declares node)
-          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-          :do (setf (gethash name table) (parser:node-let-declare-type declare))
-          :finally (return table))))
+                                   (if (eq context :loop)
+                                       "declaration does not have an associated loop binding"
+                                       "declaration does not have an associated definition")))
+          :do (setf (gethash name dec-table) (parser:node-let-declare-type declare)))
+    dec-table))
 
 (defun rec-node-tail-violation (node)
   "Return the first non-tail use of REC's recursive operator, or NIL."
@@ -1724,7 +1728,9 @@ lowered back to the ordinary nested-let representation and inferred there."
         (accessors nil)
         (init-binding-info nil)
         (call-env env)
-        (declare-table (rec-node-declare-table node)))
+        (declare-table (validate-local-bindings (parser:node-rec-bindings node)
+                                               (parser:node-rec-declares node)
+                                               :rec)))
     ;; `rec` init bindings are only used to seed the immediate recursive call,
     ;; so keep them monomorphic here instead of routing through ordinary `let`
     ;; generalization/defaulting.
@@ -2728,54 +2734,38 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-let tc:substitution-list))
 
-    ;; Ensure that there are no duplicate let bindings
-    (check-duplicates
-     (parser:node-let-bindings node)
-     (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
-     (lambda (first second)
-       (tc-error "Duplicate definition in let"
-                 (tc-note first "first definition here")
-                 (tc-note second "second definition here"))))
+    (let* ((bindings (parser:node-let-bindings node))
+           (declare-table (validate-local-bindings bindings (parser:node-let-declares node) :let)))
+      (multiple-value-bind (preds accessors binding-nodes subs)
+          (with-type-string-environment (env)
+            (if (parser:node-let-sequential-p node)
+                (infer-sequential-let-bindings bindings declare-table subs env)
+                (infer-bindings-type bindings declare-table subs env)))
 
-    (multiple-value-bind (preds accessors binding-nodes subs)
-        (cond
-          ((parser:node-let-sequential-p node)
-           (infer-sequential-let-bindings
-            (parser:node-let-bindings node)
-            (parser:node-let-declares node)
-            subs
-            env))
-          (t
-           (infer-let-bindings
-            (parser:node-let-bindings node)
-            (parser:node-let-declares node)
-            subs
-            env)))
+        (multiple-value-bind (ty preds_ accessors_ body-node subs)
+            (infer-expression-type (parser:node-let-body node)
+                                   expected-type ; pass through expected type
+                                   subs
+                                   env)
+          (setf preds (append preds preds_))
+          (setf accessors (append accessors accessors_))
 
-      (multiple-value-bind (ty preds_ accessors_ body-node subs)
-          (infer-expression-type (parser:node-let-body node)
-                                 expected-type ; pass through expected type
-                                 subs
-                                 env)
-        (setf preds (append preds preds_))
-        (setf accessors (append accessors accessors_))
-
-        (values
-         ty
-         preds
-         accessors
-         (if (parser:node-let-sequential-p node)
-             (nest-sequential-let-bindings
-              binding-nodes
-              body-node
-              ty
-              (source:location node))
-             (make-node-let
-              :type (tc:qualify nil ty)
-              :location (source:location node)
-              :bindings binding-nodes
-              :body body-node))
-         subs))))
+          (values
+           ty
+           preds
+           accessors
+           (if (parser:node-let-sequential-p node)
+               (nest-sequential-let-bindings
+                binding-nodes
+                body-node
+                ty
+                (source:location node))
+               (make-node-let
+                :type (tc:qualify nil ty)
+                :location (source:location node)
+                :bindings binding-nodes
+                :body body-node))
+           subs)))))
 
   (:method ((node parser:node-dynamic-let) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3766,51 +3756,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-for tc:substitution-list &optional))
 
-    (let ((def-table (make-hash-table :test #'eq))
-          (dec-table (make-hash-table :test #'eq))
-          (preds nil)
+    (let ((preds nil)
           (accessors nil))
-
-      ;; Ensure that there are no duplicate loop bindings.
-      (loop :for binding :in (parser:node-for-bindings node)
-            :for name := (parser:node-variable-name (parser:node-for-binding-name binding))
-            :if (gethash name def-table)
-              :do (tc-error "Duplicate binding in loop"
-                            (tc-note (parser:node-for-binding-name binding)
-                                     "second definition here")
-                            (tc-note (parser:node-for-binding-name
-                                      (gethash name def-table))
-                                     "first definition here"))
-            :else
-              :do (setf (gethash name def-table) binding))
-
-      ;; Ensure that there are no duplicate declarations.
-      (loop :for declare :in (parser:node-for-declares node)
-            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-            :if (gethash name dec-table)
-              :do (tc-error "Duplicate declaration in loop"
-                            (tc-note (parser:node-let-declare-name declare)
-                                     "second declaration here")
-                            (tc-note (parser:node-let-declare-name
-                                      (gethash name dec-table))
-                                     "first declaration here"))
-            :else
-              :do (setf (gethash name dec-table) declare))
-
-      ;; Ensure that each declaration has an associated loop binding.
-      (loop :for declare :in (parser:node-for-declares node)
-            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-            :unless (gethash name def-table)
-              :do (tc-error "Orphan declare in loop"
-                            (tc-note (parser:node-let-declare-name declare)
-                                     "declaration does not have an associated loop binding")))
-
       (let* ((declare-table
-               (loop :with table := (make-hash-table :test #'eq)
-                     :for declare :in (parser:node-for-declares node)
-                     :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-                     :do (setf (gethash name table) (parser:node-let-declare-type declare))
-                     :finally (return table)))
+               (validate-local-bindings (parser:node-for-bindings node)
+                                        (parser:node-for-declares node)
+                                        :loop))
              (init-bindings
                (loop :for binding :in (parser:node-for-bindings node)
                      :collect (parser:make-node-let-binding
@@ -4598,130 +4549,30 @@ printing an implicit weak variable notation."
             (tc-note (parser:binding-name binding)
                      "Hint: move this allocation into a function body (eta-expand) for fresh state per call, or add an explicit type declaration if this binding should be monomorphic.")))
 
-(defun infer-let-bindings (bindings declares subs env)
+(defun infer-sequential-let-bindings (bindings declare-table subs env)
+  "Infer a validated sequential LET group using DECLARE-TABLE."
   (declare (type parser:node-let-binding-list bindings)
-           (type parser:node-let-declare-list declares)
-           (type tc:substitution-list subs)
-           (type tc-env env)
-           (values tc:ty-predicate-list accessor-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
-
-  (with-type-string-environment (env)
-    (let ((def-table
-            (make-hash-table :test #'eq))
-          (dec-table
-            (make-hash-table :test #'eq)))
-    ;; Ensure that there are no duplicate definitions
-    (loop :for binding :in bindings
-          :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
-
-          :if (gethash name def-table)
-            :do (tc-error "Duplicate binding in let"
-                          (tc-note (parser:node-let-binding-name binding)
-                                   "second definition here")
-                          (tc-note (parser:node-let-binding-name
-                                    (gethash name def-table))
-                                   "first definition here"))
-          :else
-            :do (setf (gethash name def-table) binding))
-
-    ;; Ensure that there are no duplicate declarations
-    (loop :for declare :in declares
-          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-
-          :if (gethash name dec-table)
-            :do (tc-error "Duplicate declaration in let"
-                          (tc-note (parser:node-let-declare-name declare)
-                                   "second declaration here")
-                          (tc-note (parser:node-let-declare-name
-                                    (gethash name dec-table))
-                                   "first declaration here"))
-          :else
-            :do (setf (gethash name dec-table) declare))
-
-    ;; Ensure that each declaration has an associated definition
-    (loop :for declare :in declares
-          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-
-          :unless (gethash name def-table)
-            :do (tc-error "Orphan declare in let"
-                          (tc-note (parser:node-let-declare-name declare)
-                                   "declaration does not have an associated definition")))
-
-    (let ((dec-table
-            (loop :with table := (make-hash-table :test #'eq)
-                  :for declare :in declares
-                  :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-                  :do (setf (gethash name table) (parser:node-let-declare-type declare))
-                  :finally (return table))))
-
-      (infer-bindings-type bindings dec-table subs env)))))
-
-(defun infer-sequential-let-bindings (bindings declares subs env)
-  (declare (type parser:node-let-binding-list bindings)
-           (type parser:node-let-declare-list declares)
+           (type hash-table declare-table)
            (type tc:substitution-list subs)
            (type tc-env env)
            (values tc:ty-predicate-list accessor-list node-let-binding-list tc:substitution-list &optional))
 
-  (with-type-string-environment (env)
-    (let ((def-table (make-hash-table :test #'eq))
-          (dec-table (make-hash-table :test #'eq)))
-      ;; Ensure that there are no duplicate definitions
-      (loop :for binding :in bindings
-            :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
-            :if (gethash name def-table)
-              :do (tc-error "Duplicate binding in let"
-                            (tc-note (parser:node-let-binding-name binding)
-                                     "second definition here")
-                            (tc-note (parser:node-let-binding-name
-                                      (gethash name def-table))
-                                     "first definition here"))
-            :else
-              :do (setf (gethash name def-table) binding))
-
-      ;; Ensure that there are no duplicate declarations
-      (loop :for declare :in declares
-            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-            :if (gethash name dec-table)
-              :do (tc-error "Duplicate declaration in let"
-                            (tc-note (parser:node-let-declare-name declare)
-                                     "second declaration here")
-                            (tc-note (parser:node-let-declare-name
-                                      (gethash name dec-table))
-                                     "first declaration here"))
-            :else
-              :do (setf (gethash name dec-table) declare))
-
-      ;; Ensure that each declaration has an associated definition
-      (loop :for declare :in declares
-            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-            :unless (gethash name def-table)
-              :do (tc-error "Orphan declare in let"
-                            (tc-note (parser:node-let-declare-name declare)
-                                     "declaration does not have an associated definition")))
-
-      (let ((declare-table
-              (loop :with table := (make-hash-table :test #'eq)
-                    :for declare :in declares
-                    :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
-                    :do (setf (gethash name table) (parser:node-let-declare-type declare))
-                    :finally (return table)))
-            (preds nil)
-            (accessors nil)
-            (binding-nodes nil))
-        (dolist (binding bindings)
-          (let* ((name (parser:node-variable-name (parser:node-let-binding-name binding)))
-                 (binding-declare-table (make-hash-table :test #'eq)))
-            (when (gethash name declare-table)
-              (setf (gethash name binding-declare-table)
-                    (gethash name declare-table)))
-            (multiple-value-bind (preds_ accessors_ nodes subs_)
-                (infer-bindings-type (list binding) binding-declare-table subs env)
-              (setf subs subs_)
-              (setf preds (append preds preds_))
-              (setf accessors (append accessors accessors_))
-              (setf binding-nodes (append binding-nodes nodes)))))
-        (values preds accessors binding-nodes subs)))))
+  (let ((preds nil)
+        (accessors nil)
+        (binding-nodes nil))
+    (dolist (binding bindings)
+      (let* ((name (parser:node-variable-name (parser:node-let-binding-name binding)))
+             (binding-declare-table (make-hash-table :test #'eq)))
+        (when (gethash name declare-table)
+          (setf (gethash name binding-declare-table)
+                (gethash name declare-table)))
+        (multiple-value-bind (preds_ accessors_ nodes subs_)
+            (infer-bindings-type (list binding) binding-declare-table subs env)
+          (setf subs subs_)
+          (setf preds (append preds preds_))
+          (setf accessors (append accessors accessors_))
+          (setf binding-nodes (append binding-nodes nodes)))))
+    (values preds accessors binding-nodes subs)))
 
 (defun nest-sequential-let-bindings (bindings body ty location)
   (declare (type node-let-binding-list bindings)

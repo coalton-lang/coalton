@@ -232,6 +232,28 @@
       (codegen-test-eval "(first-arg (fail-argument) (observe 2) (observe 3))"))
     (is (null *codegen-events*))))
 
+(deftest codegen-keyword-default-binding-scopes ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define x (the Integer 7))
+      (declare named (&key (:x Integer) (:y Integer) (:z Integer) -> Integer))
+      (define (named &key (x x) (y x) (z y)) (+ x (+ y z)))
+      (define-class (KeywordDefaults :a)
+        (method-defaults (:a &key (:x Integer) (:y Integer) (:z Integer) -> Integer)))
+      (define-instance (KeywordDefaults Integer)
+        (define (method-defaults n &key (x x) (y (+ x n)) (z y))
+          (+ x (+ y z))))
+      (declare closure (Void -> (&key (:x Integer) (:y Integer) (:z Integer) -> Integer)))
+      (define (closure)
+        (let ((x (the Integer 11)))
+          (fn (&key (x x) (y x) (z y)) (+ x (+ y z)))))")
+    (is (= 21 (codegen-test-eval "(named)")))
+    (is (= 6 (codegen-test-eval "(named :x 2)")))
+    (is (= 33 (codegen-test-eval "((closure))")))
+    (is (= 6 (codegen-test-eval "((closure) :x 2)")))
+    (is (= 27 (codegen-test-eval "(method-defaults (the Integer 3))")))
+    (is (= 12 (codegen-test-eval "(method-defaults (the Integer 3) :x 2)")))))
+
 (deftest codegen-loop-snapshots-survive-updates ()
   (with-codegen-test-environment
     (dolist (loop-name '("for" "for*"))
