@@ -658,6 +658,25 @@
    '("empty-keyword" . "(:a -> :a)")
    '("optional-default" . "(&key (:tag (Optional :a)) -> Optional :a)")))
 
+(deftest test-keyword-default-binding-dependencies ()
+  (let ((helper "(define (helper x) x)")
+        (caller "(define (use-helper x &key (k (helper x))) k)"))
+    (dolist (forms (list (list helper caller) (list caller helper)))
+      (check-coalton-types (format nil "~{~A~%~}" forms)
+                           '("use-helper" . "(:a &key (:k :a) -> :a)"))))
+  ;; The declaration seeds inference, but does not break a recursive value cycle.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare f (&key (:k Integer) -> Integer))
+      (define (f &key (k v)) k)
+      (define v (f))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a) (f (&key (:k :a) -> :a)) (v :a))
+      (define-instance (C Integer)
+        (define (f &key (k v)) k)
+        (define v (f)))")))
+
 (deftest test-keyword-parser-rejections ()
   (signals coalton-impl/parser:parse-error
     (check-coalton-types

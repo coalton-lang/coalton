@@ -80,6 +80,12 @@ File: `src/parser/renamer.lisp`
 
 There are two functions, `rename-variables` and `rename-type-variables`, which are used by the compilation entry point.
 
+After `rename-variables`, lexical references have fresh names. To find a
+binding's dependencies, call `parser:collect-referenced-variable-names` on the
+whole binding: keyword parameter defaults are stored separately from the body.
+Type inference filters those references to the bindings being grouped;
+redefinition tracking filters them to values in the global environment.
+
 ## Type checking phase
 ### Intermediate representation for expressions
 
