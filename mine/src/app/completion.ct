@@ -14,6 +14,7 @@
    (#:cellw #:mine/text/width))
   (:export
    #:complete-file-path
+   #:complete-directory-path
    #:complete-project-path
    #:Candidate
    #:cand-name #:cand-kind #:cand-type-sig
@@ -204,19 +205,25 @@ Comments, literals, and escaped symbols use the shared source context."
       (lisp (-> Void) (items sel anchor-col anchor-row scr screen-w screen-h)
         (%render-popup items sel anchor-col anchor-row scr screen-w screen-h))))
 
-;;; File path completion (preserved)
+;;; Path completion
 
   (declare complete-file-path (String -> (Tuple String (List String))))
   (define (complete-file-path text)
     "Tab-complete a file path. Returns (completed-text, candidates)."
     (lisp (-> (Tuple String (List String))) (text)
-      (%complete-file-path-impl text)))
+      (%complete-path-impl text #'%allow-any-path-entry-p)))
+
+  (declare complete-directory-path (String -> (Tuple String (List String))))
+  (define (complete-directory-path text)
+    "Tab-complete a path using only directories as candidates."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%complete-path-impl text #'%directory-entry-p)))
 
   (declare complete-project-path (String -> (Tuple String (List String))))
   (define (complete-project-path text)
     "Tab-complete a project path. Only directories and .asd files are candidates."
     (lisp (-> (Tuple String (List String))) (text)
-      (%complete-project-path-impl text)))
+      (%complete-path-impl text #'%allow-project-path-entry-p)))
 
 ) ;; coalton-toplevel
 
@@ -342,7 +349,7 @@ Comments, literals, and escaped symbols use the shared source context."
            :when (cl:= i n) :return (cl:car cell)
            :finally (cl:return cl:nil)))
 
-;;; File path completion (preserved from original)
+;;; Path completion
 
 (cl:defun %expand-user-path (text)
   "Expand a leading ~ in TEXT to the user's home directory."
@@ -415,29 +422,16 @@ Comments, literals, and escaped symbols use the shared source context."
                                     (cl:funcall entry-allowed-p name)))
                           entries))
                 ;; Sort matches
-                (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
+                (sorted (cl:sort matches #'cl:string<)))
         ;; Compute common prefix of all matches
         (cl:if (cl:null sorted)
                (Tuple text coalton:Nil)
                (cl:let* ((common (%file-common-prefix sorted))
-                         (completed (cl:concatenate 'cl:string dir-part common))
-                         (display-completed (%restore-user-path text completed))
-                         ;; Build Coalton list of display names
-                         (cands (%strings-to-coalton-list sorted)))
-                 (Tuple display-completed
-                        (cl:if (cl:= (cl:length sorted) 1)
-                               coalton:Nil
-                               cands)))))
+                         (completed (cl:concatenate 'cl:string dir-part common)))
+                 (Tuple (%restore-user-path text completed)
+                        (cl:if (cl:rest sorted) sorted coalton:Nil)))))
     (cl:error ()
       (Tuple text coalton:Nil))))
-
-(cl:defun %complete-file-path-impl (text)
-  "Complete a file path. Returns (Tuple completed-text candidates-list)."
-  (%complete-path-impl text #'%allow-any-path-entry-p))
-
-(cl:defun %complete-project-path-impl (text)
-  "Complete a project path. Only directories and .asd files are candidates."
-  (%complete-path-impl text #'%allow-project-path-entry-p))
 
 (cl:defun %list-directory (dir-path)
   "List file/directory names in DIR-PATH. Returns a list of name strings.
@@ -477,9 +471,3 @@ Directories get a trailing /."
                                                  (cl:char s i))))
                             strings)
                     :finally (cl:return (cl:subseq first 0 i))))))
-
-(cl:defun %strings-to-coalton-list (strings)
-  "Convert a CL list of strings to a Coalton (List String)."
-  (cl:if (cl:null strings)
-         coalton:Nil
-         (Cons (cl:first strings) (%strings-to-coalton-list (cl:rest strings)))))

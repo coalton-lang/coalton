@@ -9,7 +9,40 @@
 (defun candidates (&rest names)
   (mapcar (lambda (name) (completion:Candidate name "function" "")) names))
 
+(defun check-path-completion (complete text expected &rest candidates)
+  (let ((result (funcall complete text)))
+    (assert (equal expected (coalton-prelude:fst result)))
+    (assert (equal candidates (coalton-prelude:snd result)))))
+
+(defun test-path-completion ()
+  (mine-tests::with-test-directory (directory)
+    (let ((*default-pathname-defaults* directory))
+      (ensure-directories-exist "sample/src-two/")
+      (ensure-directories-exist "sample/src-one/")
+      (dolist (name '("sample/stuff.txt" "sample/src.ASD"))
+        (with-open-file (stream name :direction :output :if-exists :error)))
+      (check-path-completion #'completion:complete-directory-path "sample/s" "sample/src-"
+                             "src-one/" "src-two/")
+      (check-path-completion #'completion:complete-project-path "sample/s" "sample/src"
+                             "src-one/" "src-two/" "src.ASD")
+      (check-path-completion #'completion:complete-file-path "sample/s" "sample/s"
+                             "src-one/" "src-two/" "src.ASD" "stuff.txt")
+      (check-path-completion #'completion:complete-directory-path "sample/st" "sample/st")
+      (check-path-completion #'completion:complete-file-path "sample/S" "sample/S")
+      (check-path-completion #'completion:complete-directory-path "sam" "sample/")
+      (check-path-completion #'completion:complete-project-path "sample/src." "sample/src.ASD")
+      ;; Reach the fixture through ~/ without creating anything in the user's home.
+      (let ((home (user-homedir-pathname)))
+        (when (equal (uiop:pathname-root home) (uiop:pathname-root directory))
+          (let ((prefix (format nil "~~/~{../~*~}~A"
+                                (rest (pathname-directory home))
+                                (uiop:unix-namestring (uiop:relativize-pathname-directory directory)))))
+            (check-path-completion #'completion:complete-directory-path
+                                   (concatenate 'string prefix "sam")
+                                   (concatenate 'string prefix "sample/"))))))))
+
 (defun run-completion-context-tests ()
+  (test-path-completion)
   (dolist (entry mine-tests/source-context:*completion-cases*)
     (destructuring-bind (text pos expected) entry
       (assert (equal expected (completion:extract-symbol-prefix-input text pos)))

@@ -152,12 +152,12 @@
    ;; Application entry point
    (:module "app"
     :serial t
-    :components ((:ct-file "setup")
+    :components ((:ct-file "completion")
+                 (:ct-file "setup")
                  (:ct-file "help")
                  (:ct-file "tutorial")
                  (:file "find-clipboard")
                  (:ct-file "clipboard")
-                 (:ct-file "completion")
                  (:ct-file "requests")
                  (:ct-file "quick-result")
                  (:ct-file "state")
