@@ -96,7 +96,7 @@ The function `lisp-type` provides the Lisp type representation of a Coalton type
 
 File: `src/typechecker/traverse.lisp`
 
-The type checker has its own AST traversal logic, which is different than the codegen one. The traversal logic is based on a `traverse-block` struct which contains a giant table of functions that say how every AST node should be transformed.
+The type checker's `traverse` and `visit` take the same `traverse-block` of callbacks and walk children before their parents, left to right. Use `traverse` to rewrite a tree: each callback receives a node with rewritten children and returns its replacement. Use `visit` for analysis: callbacks see the original nodes, and their results are ignored. Both use the same child readers; binding names, patterns, and embedded Lisp forms are not expression children.
 
 ### Type checking
 

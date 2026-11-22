@@ -10,7 +10,7 @@
 (in-package #:coalton-impl/analysis/underapplied-values)
 
 (defun find-underapplied-values (binding)
-  (tc:traverse
+  (tc:visit
    (tc:binding-value binding)
    (tc:make-traverse-block
     :body (lambda (node)
@@ -21,5 +21,4 @@
                              (tc:function-type-p (tc:qualified-ty-type (tc:node-type elem))))
                     :do (source:warn "Value may be underapplied"
                                      (source:note elem
-                                                  "discard explicitly with (let _ = ...) to ignore this warning")))
-            node))))
+                                                  "discard explicitly with (let _ = ...) to ignore this warning")))))))

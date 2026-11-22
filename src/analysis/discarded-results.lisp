@@ -29,21 +29,17 @@
 (defun find-discarded-results (binding)
   "Warn about `Result` values that are discarded in the body of BINDING,
 which silently ignores the errors they may contain."
-  (tc:traverse
+  (tc:visit
    (tc:binding-value binding)
    (tc:make-traverse-block
     :body (lambda (node)
             (declare (type tc:node-body node))
-            (mapc #'warn-if-discarded-result (tc:node-body-nodes node))
-            node)
+            (mapc #'warn-if-discarded-result (tc:node-body-nodes node)))
     ;; WHEN and UNLESS also discard the value of their last body form.
     :when (lambda (node)
-            (warn-if-discarded-result (tc:node-body-last-node (tc:node-when-body node)))
-            node)
+            (warn-if-discarded-result (tc:node-body-last-node (tc:node-when-body node))))
     :unless (lambda (node)
-              (warn-if-discarded-result (tc:node-body-last-node (tc:node-unless-body node)))
-              node)
+              (warn-if-discarded-result (tc:node-body-last-node (tc:node-unless-body node))))
     ;; So does the cleanup of PROTECT.
     :protect (lambda (node)
-               (warn-if-discarded-result (tc:node-body-last-node (tc:node-protect-cleanup node)))
-               node))))
+               (warn-if-discarded-result (tc:node-body-last-node (tc:node-protect-cleanup node)))))))
