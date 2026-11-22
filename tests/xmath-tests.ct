@@ -34,6 +34,18 @@
        (format nil "(define (no-shape) (the (coalton/xmath/matrix:Matrix Integer) ~A))"
                constant)))))
 
+(deftest clifford-products-need-a-common-signature ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare square-coordinates (coalton/xmath/clifford-algebra:Multivector Integer
+                                   -> coalton/xmath/clifford-algebra:Multivector Integer))
+      (define (square-coordinates x) (* x x))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (mixed-product)
+        (* (the (coalton/xmath/clifford-algebra:Clifford coalton/xmath/clifford-algebra:Euclidean Integer) one)
+           (the (coalton/xmath/clifford-algebra:Clifford coalton-native-tests::NegativeNull Integer) one)))")))
+
 (in-package #:coalton-native-tests)
 
 (coalton-toplevel
@@ -59,6 +71,11 @@
   (is (== (math:inner-product y x) (math:conjugate k)))
   (let blade = (the (cliff:Multivector (quat:Quaternion Fraction)) (cliff:basis-vector 0)))
   (is (== (math:inner-product (math:scale i blade) (math:scale j blade)) k))
+  ;; Reversing blades alone would leave ij = k unchanged, instead of -k.
+  (let ie = (the (cliff:Clifford cliff:Euclidean (quat:Quaternion Fraction))
+                 (cliff:Clifford (math:scale i blade))))
+  (let je = (cliff:Clifford (math:scale j blade)))
+  (is (== (math:conjugate (* ie je)) (* (math:conjugate je) (math:conjugate ie))))
   (let imag = (the (Complex Fraction) math:ii))
   (let split = (quat:quaternion one imag zero zero))
   (is (nonzero? split))
@@ -551,12 +568,43 @@
   (let width = (lisp (-> UFix) () (cl:integer-length cl:most-positive-fixnum)))
   (let e = (the (cliff:Multivector Integer) (cliff:basis-vector (- width 1))))
   (let sig = (the (UFix -> Integer) (fn (i) (if (== i (- width 1)) -1 1))))
-  (is (== (cliff:geometric-product-with sig e e) -1))
-  (is (== (cliff:with-clifford-signature sig (fn () (* e e))) -1))
+  (is (== (cliff:geometric-product-with sig e e) (into (the Integer -1))))
   (is (catch (progn (the (cliff:Multivector Integer) (cliff:basis-vector width)) False)
         ((the Panic _) True))))
 
-(define-test test-quaternion-and-clifford ()
+(coalton-toplevel
+  (define-type NegativeNull NegativeNull)
+  (define-instance (cliff:CliffordSignature (types:Proxy NegativeNull))
+    (define (cliff:signature-function _) (cliff:pqr-signature 0 1 1)))
+
+  (declare square-later (HasMul :a => :a -> (Void -> :a)))
+  (define (square-later x) (fn () (* x x))))
+
+(define-test test-clifford-metrics ()
+  (let e = (the (cliff:Multivector Integer) (cliff:basis-vector 0)))
+  (let f = (the (cliff:Multivector Integer) (cliff:basis-vector 1)))
+  (let positive = (the (cliff:Clifford cliff:Euclidean Integer) (cliff:Clifford e)))
+  (let negative = (the (cliff:Clifford NegativeNull Integer) (cliff:Clifford e)))
+  (let null-vector = (the (cliff:Clifford NegativeNull Integer) (cliff:Clifford f)))
+  (let square-positive = (square-later positive))
+  (let square-negative = (square-later negative))
+  (is (== (square-negative) -1))
+  (is (== (square-positive) 1))
+  (is (== (* null-vector null-vector) zero))
+
+  (let signs = (the (List Integer) [-1 0]))
+  (is (== (cliff:geometric-product-with signs e e) (cliff:coordinates (square-negative))))
+  (is (== (cliff:geometric-product-with (Tuple3 0 0 1) e e) zero))
+  (is (== (cliff:left-contract-with signs e e) (into (the Integer -1))))
+  (is (== (cliff:left-contract negative negative) -1))
+  (is (== (cliff:sandwich-with signs e f) f))
+  (is (== (cliff:sandwich positive (cliff:Clifford f)) (cliff:Clifford (neg f))))
+  ;; The coordinate Hermitian form is not the signed Clifford quadratic form.
+  (is (== (the Integer (math:inner-product f f)) 1))
+  (is (== (cliff:norm-squared-with signs f) 0))
+  (is (== (cliff:norm-squared negative) -1)))
+
+(define-test test-quaternion ()
   ;; Non-commutative division ring and ConjugateRing anti-automorphism on Quaternion Fraction
   (let q1 = (quat:quaternion (the Fraction 1) 2 3 4))
   (let q2 = (quat:quaternion (the Fraction 2) -1 1 -3))
@@ -568,15 +616,17 @@
   ;; 90-degree rotation around z-axis via q = 1 + k sends (1, 0, 0) to (0, 1, 0)
   (let rot-z = (quat:quaternion (the Fraction 1) 0 0 1))
   (is (== (quat:rotate-vector rot-z (Tuple3 1 0 0))
-          (Tuple3 0 1 0)))
+          (Tuple3 0 1 0))))
 
-  ;; Clifford algebra Cl(3, 0, 0): e0^2 = 1, e0 * e1 = e0 ^ e1 = - e1 * e0
-  (let e0 = (the (cliff:Multivector Fraction) (cliff:basis-vector 0)))
-  (let e1 = (the (cliff:Multivector Fraction) (cliff:basis-vector 1)))
+(define-test test-euclidean-clifford ()
+  (let e0 = (the (cliff:Clifford cliff:Euclidean Fraction) (cliff:Clifford (cliff:basis-vector 0))))
+  (let e1 = (the (cliff:Clifford cliff:Euclidean Fraction) (cliff:Clifford (cliff:basis-vector 1))))
+  (let a = (cliff:coordinates e0))
+  (let b = (cliff:coordinates e1))
   (is (== (* e0 e0) one))
-  (is (== (* e0 e1) (cliff:wedge e0 e1)))
-  (is (== (* e1 e0) (neg (cliff:wedge e0 e1))))
-  (is (== (cliff:wedge e0 e0) zero))
+  (is (== (cliff:coordinates (* e0 e1)) (cliff:wedge a b)))
+  (is (== (* e1 e0) (neg (* e0 e1))))
+  (is (== (cliff:wedge a a) zero))
   ;; ConjugateRing (reversion): ~(A B) == ~B ~A
   (let mv1 = (+ (+ 1 e0) (* e0 e1)))
   (let mv2 = (+ (- 2 e1) (* 3 (* e0 e1))))

@@ -9,14 +9,14 @@ Given an orthogonal basis $e_0, e_1, \\ldots$ with quadratic form $Q(e_i) = e_i^
 $$e_i^2 = s_i, \\qquad e_i e_j = -e_j e_i \\quad (i \\neq j).$$
 Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{Cl}_{n,0,0}$ ($e_i^2 = +1$, `euclidean-signature`), Lorentz / Minkowski signatures $\\mathrm{Cl}_{p,q,0}$, projective geometric algebra $\\mathrm{Cl}_{p,q,1}$, and the exterior (Grassmann) algebra $\\bigwedge V = \\mathrm{Cl}_{0,0,n}$ ($e_i^2 = 0$, `exterior-signature`).
 
-**Graded blade representation.** A $k$-blade $e_{i_1} \\wedge \\cdots \\wedge e_{i_k}$ ($i_1 < \\cdots < i_k$) of grade $k$ is indexed by the bitmask $B = \\sum_{m=1}^k 2^{i_m}$ with grade $k = \\operatorname{popcount}(B)$ (`blade-grade`). A multivector $A = \\sum_B c_B e_B = \\sum_{k \\ge 0} \\langle A \\rangle_k$ decomposes into homogeneous grade-$k$ components $\\langle A \\rangle_k$ (`grade-project`).
+**Graded blade representation.** A $k$-blade $e_{i_1} \\wedge \\cdots \\wedge e_{i_k}$ ($i_1 < \\cdots < i_k$) of grade $k$ is indexed by the bitmask $B = \\sum_{m=1}^k 2^{i_m}$ with grade $k = \\operatorname{popcount}(B)$ (`blade-grade`). A `Multivector` holds the coordinates $A = \\sum_B c_B e_B$ independently of the metric. Addition, grade projection, and the exterior product need only these coordinates. The `Clifford` wrapper names a metric in its type, so multiplication of two elements uses that same metric wherever the product is evaluated.
 
 **Products and involutions.**
-- **Geometric product (`*`, `geometric-product`):** The associative algebra product $AB$, computed on basis blades from the swap parity between bitmasks $B_1, B_2$ and the metric factors $\\prod_{i \\in B_1 \\cap B_2} s_i$;
+- **Geometric product:** On coordinates, `geometric-product-with` takes a signature explicitly. On a fixed `Clifford` algebra, `*` is the same associative product $AB$, computed from the swap parity between blades $B_1,B_2$ and the metric factor $\\prod_{i \\in B_1 \\cap B_2} s_i$;
 - **Exterior (wedge) product (`wedge`):** The metric-independent outer product $A \\wedge B = \\sum_{j,k} \\langle \\langle A \\rangle_j \\langle B \\rangle_k \\rangle_{j+k}$, keeping only disjoint blades ($B_1 \\cap B_2 = \\emptyset$);
-- **Left interior contraction (`left-contract`):** $A \\rfloor B = \\sum_{j \\le k} \\langle \\langle A \\rangle_j \\langle B \\rangle_k \\rangle_{k-j}$, keeping blade pairs with $B_1 \\subseteq B_2$;
-- **Canonical involutions:** Grade involution $\\hat{A}_k = (-1)^k A_k$ (`grade-involution`), reversion $\\tilde{A}_k = (-1)^{k(k-1)/2} A_k$ (`reversion`, which implements `ConjugateRing`), and Clifford conjugation $\\bar{A}_k = (-1)^{k(k+1)/2} A_k = \\hat{\\tilde{A}}$ (`clifford-conjugate`);
-- **Versor sandwich product (`sandwich`):** Orthogonal transformations and rotations $X \\mapsto R X \\tilde{R}$.")
+- **Left interior contraction:** $A \\rfloor B = \\sum_{j \\le k} \\langle \\langle A \\rangle_j \\langle B \\rangle_k \\rangle_{k-j}$, keeping blade pairs with $B_1 \\subseteq B_2$;
+- **Canonical involutions:** Grade involution $\\hat{A}_k = (-1)^k A_k$ (`grade-involution`), reversion $\\tilde{A}_k = (-1)^{k(k-1)/2} A_k$ (`reversion`), and Clifford conjugation $\\bar{A}_k = (-1)^{k(k+1)/2} A_k = \\hat{\\tilde{A}}$ (`clifford-conjugate`). These leave the coefficients unchanged apart from the grade sign. On `Clifford`, the `ConjugateRing` involution reverses blades and conjugates coefficients;
+- **Sandwich product:** For a unit rotor $R$ with $R\\tilde{R}=1$, $X \\mapsto R X \\tilde{R}$ rotates vectors.")
   (:nicknames
    #:coalton/math/clifford-algebra
    #:coalton-library/math/clifford-algebra)
@@ -31,15 +31,19 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
   (:local-nicknames
    (#:bits #:coalton/bits)
    (#:list #:coalton/list)
-   (#:show #:coalton/show))
+   (#:show #:coalton/show)
+   (#:types #:coalton/types))
   (:export
    #:Multivector
+   #:Clifford
+   #:coordinates
    #:CliffordSignature
+   #:signature-function
+   #:Euclidean
    #:euclidean-signature
    #:exterior-signature
    #:pqr-signature
    #:signature-from-list
-   #:with-clifford-signature
    #:multivector
    #:terms
    #:scalar-part
@@ -57,7 +61,8 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
    #:clifford-conjugate
    #:sandwich
    #:sandwich-with
-   #:norm-squared))
+   #:norm-squared
+   #:norm-squared-with))
 
 (in-package #:coalton/xmath/clifford-algebra)
 
@@ -65,14 +70,6 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (declare %euclidean-sig (UFix -> Integer))
-  (define (%euclidean-sig _)
-    1)
-
-  (declare %exterior-sig (UFix -> Integer))
-  (define (%exterior-sig _)
-    0)
-
   (declare euclidean-signature (Integral :a => :a -> Integer))
   (define (euclidean-signature _)
     "The Euclidean metric signature $e_i^2 = +1$ for all $i$."
@@ -112,8 +109,15 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
                    (lookup (- idx 1) more))))))))
 
   (define-class (CliffordSignature :s)
-    "Types that specify a Clifford algebra metric signature $i \\mapsto e_i^2 \\in \\mathbb{Z}$."
+    "An orthogonal metric $i \\mapsto e_i^2 \\in \\mathbb{Z}$. For a given input, the diagonal entries must be fixed. An instance for `Proxy` of a tag names one metric for the corresponding `Clifford` type; it must not depend on ambient state."
     (signature-function (:s -> (UFix -> Integer))))
+
+  (define-type Euclidean
+    "Signature tag for $e_i^2=+1$ on every representable basis vector."
+    Euclidean)
+
+  (define-instance (CliffordSignature (types:Proxy Euclidean))
+    (define (signature-function _) euclidean-signature))
 
   (define-instance ((Integral :a) (Integral :b) => CliffordSignature (:a -> :b))
     (define (signature-function f)
@@ -128,32 +132,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     (define (signature-function (Tuple3 p q r))
       (pqr-signature (integral->num p)
                      (integral->num q)
-                     (integral->num r)))))
-
-(cl:defvar *clifford-signature* %euclidean-sig
-  "Current dynamic metric signature for `Multivector` multiplication and contraction (defaults to Euclidean $e_i^2 = +1$).")
-
-(coalton-toplevel
-  (declare %list-sig (List Integer -> (UFix -> Integer)))
-  (define (%list-sig signs)
-    (signature-function signs))
-
-  (declare %current-signature (Void -> (UFix -> Integer)))
-  (define (%current-signature)
-    (lisp (-> (UFix -> Integer)) ()
-      (cl:if (cl:listp *clifford-signature*)
-             (call-coalton-function %list-sig *clifford-signature*)
-             *clifford-signature*)))
-
-  (declare with-clifford-signature
-    (forall ((:s Type) (:r Values))
-      (CliffordSignature :s => :s * (Void -> :r) -> :r)))
-  (define (with-clifford-signature sig thunk)
-    "Call `thunk` with `*clifford-signature*` dynamically bound to `sig` (a function `UFix -> Integer`, a `List Integer` of signs, or a `Tuple3 UFix UFix UFix` for $\\text{Cl}(p, q, r)$)."
-    (let sig-fn = (signature-function sig))
-    (lisp (-> :r) (sig-fn thunk)
-      (cl:let ((*clifford-signature* sig-fn))
-        (call-coalton-function thunk))))
+                     (integral->num r))))
 
   ;;
   ;; Multivector representation: sparse terms (Tuple coeff blade-mask) in strictly ascending mask order
@@ -161,7 +140,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
 
   (repr :transparent)
   (define-type (Multivector :a)
-    "A sparse graded multivector $\\sum_B c_B e_B$ in a Clifford / Geometric Algebra, with basis blades indexed by `UFix` bitmasks in ascending order."
+    "Metric-independent coordinates $\\sum_B c_B e_B$, with basis blades indexed by `UFix` bitmasks in ascending order."
     (%Multivector (List (Tuple :a UFix))))
 
   (declare %add-terms
@@ -351,17 +330,18 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
                            c))
          (loop more (Cons (Tuple next-c b) acc))))))
 
+  (declare %reverse-with (AdditiveGroup :a => (:a -> :a) * Multivector :a -> Multivector :a))
+  (define (%reverse-with on-coeff (%Multivector xs))
+    (%Multivector
+     (map (fn ((Tuple c b))
+            (let c* = (on-coeff c))
+            (Tuple (if (/= (bits:and (blade-grade b) 2) 0) (neg c*) c*) b))
+          xs)))
+
   (declare reversion (AdditiveGroup :a => Multivector :a -> Multivector :a))
-  (define (reversion (%Multivector xs))
-    "Compute the reversion anti-automorphism $\\tilde{A}_k = (-1)^{k(k-1)/2} A_k$, reversing the order of basis vectors in each blade."
-    (rec loop ((rest xs) (acc Nil))
-      (match rest
-        ((Nil) (%Multivector (list:reverse acc)))
-        ((Cons (Tuple c b) more)
-         (let next-c = (if (/= (bits:and (blade-grade b) 2) 0)
-                           (neg c)
-                           c))
-         (loop more (Cons (Tuple next-c b) acc))))))
+  (define (reversion mv)
+    "Reverse the order of basis vectors in each blade, $\\tilde{A}_k = (-1)^{k(k-1)/2} A_k$. This reverses products when the coefficients commute."
+    (%reverse-with id mv))
 
   (declare clifford-conjugate (AdditiveGroup :a => Multivector :a -> Multivector :a))
   (define (clifford-conjugate (%Multivector xs))
@@ -385,17 +365,7 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     (%Multivector
      (%strip-zeros
       (%product-raw (fn (bx by) (== (bits:and bx by) 0))
-                    %exterior-sig
-                    a
-                    b))))
-
-  (declare %left-contract-fn
-    ((Eq :a) (Ring :a) => (UFix -> Integer) * Multivector :a * Multivector :a -> Multivector :a))
-  (define (%left-contract-fn sig-fn a b)
-    (%Multivector
-     (%strip-zeros
-      (%product-raw (fn (bx by) (== (bits:and bx by) bx))
-                    sig-fn
+                    exterior-signature
                     a
                     b))))
 
@@ -403,33 +373,28 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     ((CliffordSignature :s) (Eq :a) (Ring :a) => :s * Multivector :a * Multivector :a -> Multivector :a))
   (define (left-contract-with sig a b)
     "Compute the left interior contraction $A \\rfloor B$ with explicit metric signature `sig`."
-    (%left-contract-fn (signature-function sig) a b))
+    (%Multivector
+     (%strip-zeros
+      (%product-raw (fn (bx by) (== (bits:and bx by) bx))
+                    (signature-function sig)
+                    a
+                    b))))
 
-  (declare left-contract ((Eq :a) (Ring :a) => Multivector :a * Multivector :a -> Multivector :a))
-  (define (left-contract a b)
-    "Compute the left interior contraction $A \\rfloor B$ under `*clifford-signature*`."
-    (%left-contract-fn (%current-signature) a b))
+  (declare %geometric-terms
+    (Ring :a => (UFix -> Integer) * Multivector :a * Multivector :a -> List (Tuple :a UFix)))
+  (define (%geometric-terms sig a b)
+    (%product-raw (fn (_ _) True) sig a b))
 
   (declare %geometric-product-fn
     ((Eq :a) (Ring :a) => (UFix -> Integer) * Multivector :a * Multivector :a -> Multivector :a))
   (define (%geometric-product-fn sig-fn a b)
-    (%Multivector
-     (%strip-zeros
-      (%product-raw (fn (_bx _by) True)
-                    sig-fn
-                    a
-                    b))))
+    (%Multivector (%strip-zeros (%geometric-terms sig-fn a b))))
 
   (declare geometric-product-with
     ((CliffordSignature :s) (Eq :a) (Ring :a) => :s * Multivector :a * Multivector :a -> Multivector :a))
   (define (geometric-product-with sig a b)
     "Compute the geometric product $AB$ with explicit metric signature `sig`."
     (%geometric-product-fn (signature-function sig) a b))
-
-  (declare geometric-product ((Eq :a) (Ring :a) => Multivector :a * Multivector :a -> Multivector :a))
-  (define (geometric-product a b)
-    "Compute the geometric product $AB$ under `*clifford-signature*`."
-    (%geometric-product-fn (%current-signature) a b))
 
   (declare sandwich-with
     ((CliffordSignature :s) (Eq :a) (Ring :a) => :s * Multivector :a * Multivector :a -> Multivector :a))
@@ -440,18 +405,11 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
                            (%geometric-product-fn sig-fn r x)
                            (reversion r)))
 
-  (declare sandwich ((Eq :a) (Ring :a) => Multivector :a * Multivector :a -> Multivector :a))
-  (define (sandwich r x)
-    "Compute the versor sandwich product $R X \\tilde{R}$ under `*clifford-signature*`."
-    (let sig-fn = (%current-signature))
-    (%geometric-product-fn sig-fn
-                           (%geometric-product-fn sig-fn r x)
-                           (reversion r)))
-
-  (declare norm-squared (Ring :a => Multivector :a -> :a))
-  (define (norm-squared mv)
-    "Return the scalar part $\\langle \\tilde{A} A \\rangle_0$ of $\\tilde{A} A$ under `*clifford-signature*`."
-    (scalar-part (* (reversion mv) mv)))
+  (declare norm-squared-with ((CliffordSignature :s) (Ring :a) => :s * Multivector :a -> :a))
+  (define (norm-squared-with sig mv)
+    "Return $\\langle \\tilde{A} A \\rangle_0$ for the given signature. This can be negative or zero even for nonzero vectors."
+    ;; Only equal masks can contribute to the scalar part.
+    (scalar-part (%Multivector (%product-raw == (signature-function sig) (reversion mv) mv))))
 
   ;;
   ;; Type class instances
@@ -493,44 +451,10 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
     (define (- a b)
       (+ a (neg b))))
 
-  (define-instance (Ring :a => HasMul (Multivector :a))
-    (define (* a b)
-      (%Multivector
-       (%product-raw (fn (_bx _by) True)
-                     (%current-signature)
-                     a
-                     b))))
-
-  (define-instance (Ring :a => Multiplicative (Multivector :a))
-    (define one
-      (%Multivector (Cons (Tuple one 0) Nil))))
-
-  (define-instance (Ring :a => Semiring (Multivector :a)))
-
-  (define-instance (Ring :a => Ring (Multivector :a))
-    (define (from-int n)
-      (if (== n 0)
-          zero
-          (%Multivector (Cons (Tuple (from-int n) 0) Nil)))))
-
-  (define-instance (Num :a => Num (Multivector :a)))
-
   (define-instance (Into :a (Multivector :a))
     (inline)
     (define (into c)
       (%Multivector (Cons (Tuple c 0) Nil))))
-
-  (define-instance (ConjugateRing :a => ConjugateRing (Multivector :a))
-    (define (conjugate (%Multivector xs))
-      (rec loop ((rest xs) (acc Nil))
-        (match rest
-          ((Nil) (%Multivector (list:reverse acc)))
-          ((Cons (Tuple c b) more)
-           (let conj-c = (conjugate c))
-           (let signed-c = (if (/= (bits:and (blade-grade b) 2) 0)
-                               (neg conj-c)
-                               conj-c))
-           (loop more (Cons (Tuple signed-c b) acc)))))))
 
   (define-instance (Multiplicative :a => Scale :a (Multivector :a))
     (define (scale k (%Multivector xs))
@@ -560,6 +484,75 @@ Standard metric signatures (`pqr-signature`) include Euclidean space $\\mathrm{C
       ;; The masks are already sorted and unique. Do not elide a component
       ;; by testing approximate equality of the newly converted coefficient.
       (%Multivector (map (fn ((Tuple c b)) (Tuple (approx bits c) b)) xs)))))
+
+(coalton-toplevel
+  (repr :transparent)
+  (derive Eq show:Show)
+  (define-type (Clifford :sig :a)
+    "A multivector in the algebra whose metric is fixed by the signature tag. Only its coordinates are stored."
+    (Clifford (Multivector :a)))
+
+  (inline)
+  (declare coordinates (Clifford :sig :a -> Multivector :a))
+  (define (coordinates (Clifford mv)) mv)
+
+  (define-instance (HasAdd :a => HasAdd (Clifford :sig :a))
+    (define (+ (Clifford a) (Clifford b)) (Clifford (+ a b))))
+
+  (define-instance (Additive :a => Additive (Clifford :sig :a))
+    (define zero (Clifford zero)))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (Clifford :sig :a))
+    (define (neg (Clifford a)) (Clifford (neg a)))
+    (define (- (Clifford a) (Clifford b)) (Clifford (- a b))))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (Ring :a) => HasMul (Clifford :sig :a))
+    (define (* (Clifford a) (Clifford b))
+      (let sig = (signature-function (the (types:Proxy :sig) types:Proxy)))
+      (Clifford (%Multivector (%geometric-terms sig a b)))))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (Ring :a) => Multiplicative (Clifford :sig :a))
+    (define one (Clifford (basis-blade 0))))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (Ring :a) => Semiring (Clifford :sig :a)))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (Ring :a) => Ring (Clifford :sig :a))
+    (define (from-int n)
+      (if (== n 0) zero (Clifford (into (the :a (from-int n)))))))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (Num :a) => Num (Clifford :sig :a)))
+
+  (define-instance ((CliffordSignature (types:Proxy :sig)) (ConjugateRing :a) => ConjugateRing (Clifford :sig :a))
+    (define (conjugate (Clifford a))
+      (Clifford (%reverse-with conjugate a))))
+
+  (define-instance (Multiplicative :a => Scale :a (Clifford :sig :a))
+    (define (scale k (Clifford a)) (Clifford (scale k a))))
+
+  (define-instance (Ring :a => Module :a (Clifford :sig :a)))
+
+  (declare left-contract
+    (forall (:sig :a)
+      ((CliffordSignature (types:Proxy :sig)) (Eq :a) (Ring :a) =>
+       Clifford :sig :a * Clifford :sig :a -> Clifford :sig :a)))
+  (define (left-contract (Clifford a) (Clifford b))
+    "Compute $A \\rfloor B$ in the fixed algebra."
+    (Clifford (left-contract-with (the (types:Proxy :sig) types:Proxy) a b)))
+
+  (declare sandwich
+    (forall (:sig :a)
+      ((CliffordSignature (types:Proxy :sig)) (Eq :a) (Ring :a) =>
+       Clifford :sig :a * Clifford :sig :a -> Clifford :sig :a)))
+  (define (sandwich (Clifford r) (Clifford x))
+    "Compute $R X \\tilde{R}$ in the fixed algebra."
+    (Clifford (sandwich-with (the (types:Proxy :sig) types:Proxy) r x)))
+
+  (declare norm-squared
+    (forall (:sig :a)
+      ((CliffordSignature (types:Proxy :sig)) (Ring :a) => Clifford :sig :a -> :a)))
+  (define (norm-squared (Clifford mv))
+    "Return $\\langle \\tilde{A} A \\rangle_0$ in the fixed algebra, not necessarily a positive norm."
+    (norm-squared-with (the (types:Proxy :sig) types:Proxy) mv)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/CLIFFORD-ALGEBRA")

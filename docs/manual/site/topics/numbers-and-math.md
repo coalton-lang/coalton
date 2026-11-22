@@ -523,9 +523,9 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   and Gosper's algorithm for indefinite hypergeometric summation.
 - **`coalton/xmath/quaternion`**: Hamilton's quaternions
   $w + x\mathbf{i} + y\mathbf{j} + z\mathbf{k}$ and 3D spatial rotations.
-- **`coalton/xmath/clifford-algebra`**: Graded Clifford (geometric) algebras
-  $\text{Cl}(p, q, r)$ with exterior, contraction, geometric, and sandwich
-  products.
+- **`coalton/xmath/clifford-algebra`**: [Clifford products and their metrics](#clifford-products-and-their-metrics).
+  Compute with multivector coordinates and a runtime metric, or use ordinary
+  multiplication in a fixed geometric algebra.
 - **`coalton/xmath/real-algebraic`**: Exact real algebraic numbers represented by
   defining polynomials and certified isolating intervals.
 - **`coalton/xmath/dual`** and **`coalton/xmath/hyperdual`**: First- and
@@ -549,6 +549,7 @@ normal forms and `nfield` to algebraic number fields.
                     (#:sg #:coalton/xmath/semiring-graph)
                     (#:qr #:coalton/xmath/quotient)
                     (#:ff #:coalton/xmath/finite-field)
+                    (#:cliff #:coalton/xmath/clifford-algebra)
                     (#:vec #:coalton/vector)
                     (#:ifact #:coalton/xmath/integer-factorization)
                     (#:poly #:coalton/xmath/polynomial)
@@ -663,6 +664,52 @@ $\mathbb{F}_4$.
            (== (ff:inverse-ntt spectrum) (Some samples)))))
 ;; => (Tuple True True)
 ```
+
+### Clifford products and their metrics
+
+In an orthogonal basis the exterior product always has $e_i\wedge e_i=0$.
+The geometric product, in contrast, has $e_i^2=s_i$ and
+$e_ie_j=-e_je_i$ for $i\ne j$. A `Multivector` stores the coefficients of
+the ordered basis blades, not the diagonal entries $s_i$. You can add these
+coordinates, project onto a grade, or take their `wedge` without choosing a
+metric. For their geometric product, supply a function, a list of diagonal
+entries, or a `Tuple3` of positive, negative, and null counts.
+
+Use `Clifford` when the metric is known in the type. `Euclidean` names the
+all-positive metric. To name another one, define a tag and an instance that
+always supplies the same diagonal entries. For example, on the first four
+basis vectors the spacetime signature below is $(+1,-1,-1,-1)$:
+
+```lisp
+(coalton-toplevel
+  (define-type Spacetime Spacetime)
+  (define-instance (cliff:CliffordSignature (coalton/types:Proxy Spacetime))
+    (define (cliff:signature-function _) (cliff:pqr-signature 1 3 0))))
+
+(coalton
+  (let ((e (the (cliff:Multivector Integer) (cliff:basis-vector 1)))
+        (x (the (cliff:Clifford cliff:Euclidean Integer) (cliff:Clifford e)))
+        (y (the (cliff:Clifford Spacetime Integer) (cliff:Clifford e))))
+    (values (cliff:scalar-part (cliff:coordinates (* x x)))
+            (cliff:scalar-part (cliff:coordinates (* y y)))
+            (cliff:scalar-part (cliff:geometric-product-with (the (List Integer) [1 0]) e e)))))
+;; => 1, -1, 0
+```
+
+The coordinates are identical in all three squares. `(* x y)` is a type
+error, and saving either multiplication in a closure cannot change its
+metric. There is no default `*` on bare coordinates: replace dynamically
+scoped products with `geometric-product-with`, or wrap the operands in the
+same named algebra. To embed a scalar in bare coordinates use `into`; the
+tagged algebra also supports numeric literals.
+
+Contraction, the sandwich $RX\widetilde R$, and the scalar
+$\langle\widetilde A A\rangle_0$ likewise take an explicit metric on
+coordinates (`left-contract-with`, `sandwich-with`, `norm-squared-with`).
+On tagged elements use `left-contract`, `sandwich`, and `norm-squared`.
+This last quantity uses the Clifford metric: it can be negative or vanish
+on a nonzero vector. It is not the coordinate `inner-product`, which pairs
+matching blade coefficients independently of the metric.
 
 ### Integer factorization and primality
 
