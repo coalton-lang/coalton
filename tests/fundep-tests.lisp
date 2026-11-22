@@ -715,6 +715,17 @@ must be distinguished even though the predicate-only variables are ambiguous."
     (define-class (HasA :t :a => WrapsHasA :w :t :a (:w -> :t))
       (get-two-as (:w -> Tuple :a :a)))"))
 
+(deftest fundep-shared-hidden-dependent-restricts-declared-variables ()
+  ;; Both :p and :q can be renamed to the hidden variable, but they
+  ;; cannot both be chosen independently as the declaration promises.
+  (is (search "Declared context is too general"
+              (collect-compiler-error
+               "(package coalton-unit-test/shared-hidden-dependent)
+                (define-class (Parent :x :y (:x -> :y)))
+                (define-class ((Parent :x :hidden) (Parent :z :hidden) => SameOutput :x :z))
+                (declare f ((SameOutput :x :z) (Parent :x :p) (Parent :z :q) => :x * :z -> :x))
+                (define (f x _) x)"))))
+
 (deftest fundep-catch-inferred-dict-regression ()
   ;; See https://github.com/coalton-lang/coalton/issues/1719
   (is (null

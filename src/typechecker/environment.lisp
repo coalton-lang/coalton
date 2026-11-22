@@ -2130,9 +2130,28 @@ predicate containing inference variables through such an instance."
        entry)
       #'make-fundep-environment))))
 
-(defun collect-fundeps (env preds)
+(defun instantiate-superclasses (class pred)
+  "Instantiate CLASS's superclass context for one occurrence of PRED.
+Variables absent from the class head are shared within this context,
+but not with any other occurrence of the class."
+  (declare (type ty-class class)
+           (type ty-predicate pred)
+           (values ty-predicate-list &optional))
+  (when (ty-class-superclasses class)
+    (destructuring-bind (head . supers)
+        (fresh-preds (cons (ty-class-predicate class) (ty-class-superclasses class)))
+      (let ((subs (predicate-match head pred)))
+        (loop :for super :in supers
+              :collect (make-ty-predicate
+                        :class (ty-predicate-class super)
+                        :types (apply-substitution subs (ty-predicate-types super))
+                        :location (source:location pred)))))))
+
+(defun collect-fundeps (env preds &optional (scope (make-hash-table :test #'eq)))
   "Collect the functional dependencies associated with PREDS as CONSes of
 LISTs of TYs, recursively expanding to the superclass predicates.
+SCOPE keeps the hidden variables of equal predicates identical when
+comparing collections of dependencies in the same context.
 
 For example, with the definitions
 
@@ -2147,15 +2166,19 @@ This function will return the single functional dependency
 
   (List #T1 . #T2)"
   (declare (type environment env)
-           (type ty-predicate-list preds))
+           (type ty-predicate-list preds)
+           (type hash-table scope))
   (loop :for pred :in preds
         :for pred-tys := (ty-predicate-types pred)
         :for class := (lookup-class env (ty-predicate-class pred))
         :for class-vars := (ty-class-class-variables class)
-        :for subs := (predicate-match (ty-class-predicate class) pred)
-        :for supers := (mapcar (alexandria:curry #'apply-substitution subs)
-                               (ty-class-superclasses class))
-        :nconc (collect-fundeps env supers)
+        :for supers := (or (cdr (assoc pred (gethash (ty-class-name class) scope)
+                                       :test #'type-predicate=))
+                           (let ((supers (instantiate-superclasses class pred)))
+                             (when supers
+                               (push (cons pred supers) (gethash (ty-class-name class) scope)))
+                             supers))
+        :nconc (collect-fundeps env supers scope)
         :nconc (loop :for fundep :in (ty-class-fundeps class)
                      :collect (cons (project-elements
                                      (fundep-from fundep)
@@ -2166,7 +2189,7 @@ This function will return the single functional dependency
                                      class-vars
                                      pred-tys)))))
 
-(defun collect-fundep-vars (env preds)
+(defun collect-fundep-vars (env preds &optional (scope (make-hash-table :test #'eq)))
   "Collect the type variable functional dependencies associated with
 PREDs as CONSes of LISTs of TYVARs, recursively expanding to the
 superclass predicates.
@@ -2184,8 +2207,9 @@ This function will return the single functional dependency
 
   (#T1 . #T2)"
   (declare (type environment env)
-           (type ty-predicate-list preds))
-  (loop :for (from . to) :in (collect-fundeps env preds)
+           (type ty-predicate-list preds)
+           (type hash-table scope))
+  (loop :for (from . to) :in (collect-fundeps env preds scope)
         :collect (cons (type-variables from) (type-variables to))))
 
 (define-env-updater update-instance-fundeps (env pred context)
@@ -2204,8 +2228,11 @@ This function will return the single functional dependency
   ;; are not present in the corresponding determinant types,
   ;; unless they are otherwise determined by the context.
   ;; See "Type Class with Functional Dependencies" §6.1 (Jones)
-  (loop :with superfundeps := (collect-fundep-vars env context)
-        :for (from-vars . to-vars) :in (collect-fundep-vars env (list pred))
+  ;; Compare the head with its context in the same scope: if both reach
+  ;; the same superclass predicate, its hidden variables are the same.
+  (loop :with scope := (make-hash-table :test #'eq)
+        :with superfundeps := (collect-fundep-vars env context scope)
+        :for (from-vars . to-vars) :in (collect-fundep-vars env (list pred) scope)
         :for known-to-vars
           := (generic-closure from-vars superfundeps :test #'ty=)
         :for unknown-to-vars
@@ -2289,11 +2316,9 @@ C :a :y."
            (type ty-predicate-list context)
            (values null &optional))
   (labels ((expand (pred)
-             (let* ((class (lookup-class env (ty-predicate-class pred)))
-                    (subs (predicate-match (ty-class-predicate class) pred)))
+             (let ((class (lookup-class env (ty-predicate-class pred))))
                (cons pred
-                     (loop :for superclass :in (ty-class-superclasses class)
-                           :append (expand (apply-substitution subs superclass)))))))
+                     (mapcan #'expand (instantiate-superclasses class pred))))))
     ;; Improvement only unifies existing variables, so this reaches a
     ;; fixed point.
     (loop :with preds := (mapcan #'expand (cons pred context))
@@ -2742,17 +2767,7 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                   :for pred := (first remaining-preds)
                   :for class := (class-for (ty-predicate-class pred))
                   :for applied-pred := (apply-substitution subs pred)
-                  :for _subs := (predicate-match (ty-class-predicate class) applied-pred)
-                  :do (alexandria:nconcf
-                       remaining-preds
-                       ;; Superclass predicates have no source location of
-                       ;; their own, so report them where PRED arises.
-                       (mapcar (lambda (superclass)
-                                 (make-ty-predicate
-                                  :class (ty-predicate-class superclass)
-                                  :types (apply-substitution _subs (ty-predicate-types superclass))
-                                  :location (source:location pred)))
-                               (ty-class-superclasses class)))
+                  :do (alexandria:nconcf remaining-preds (instantiate-superclasses class applied-pred))
                   :collect pred))
 
       ;; This block is meant to simplify PREDS if instances exist in the
