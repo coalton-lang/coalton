@@ -26,12 +26,7 @@
   (from (util:required 'from) :type parser:identifier :read-only t)
   (to   (util:required 'to)   :type node              :read-only t))
 
-(defun ast-substitution-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ast-substitution-p x)))
-
-(deftype ast-substitution-list ()
-  '(satisfies ast-substitution-list-p))
+(util:define-list-type ast-substitution-list ast-substitution-p)
 
 (defun apply-ast-substitution (subs node &optional (rename-bound-variables nil))
   "Substitute variables in the tree of `node` with other nodes specified

@@ -282,12 +282,7 @@
 (defmethod source:docstring ((self constructor))
   (constructor-docstring self))
 
-(defun constructor-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'constructor-p x)))
-
-(deftype constructor-list ()
-  '(satisfies constructor-list-p))
+(util:define-list-type constructor-list constructor-p)
 
 (defstruct (toplevel-definition
             (:constructor nil))
@@ -312,13 +307,7 @@
   (exception-p   (util:required 'exception-p)   :type boolean                    :read-only t)
   (resumption-p  (util:required 'resumption-p)  :type boolean                    :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-type-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-type-p x))))
-
-(deftype toplevel-define-type-list ()
-  '(satisfies toplevel-define-type-list-p))
+(util:define-list-type toplevel-define-type-list toplevel-define-type-p :compile-toplevel t)
 
 (defstruct (toplevel-define-type-alias
             (:include toplevel-definition)
@@ -328,13 +317,7 @@
   (type          (util:required 'type)          :type ty                       :read-only t)
   (head-location (util:required 'head-location) :type source:location          :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-type-alias-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-type-alias-p x))))
-
-(deftype toplevel-define-type-alias-list ()
-  '(satisfies toplevel-define-type-alias-list-p))
+(util:define-list-type toplevel-define-type-alias-list toplevel-define-type-alias-p :compile-toplevel t)
 
 (defstruct (struct-field
             (:include toplevel-definition)
@@ -342,13 +325,7 @@
   (name (util:required 'name) :type string :read-only t)
   (type (util:required 'type) :type ty     :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun struct-field-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'struct-field-p x))))
-
-(deftype struct-field-list ()
-  '(satisfies struct-field-list-p))
+(util:define-list-type struct-field-list struct-field-p :compile-toplevel t)
 
 (defstruct (toplevel-define-struct
             (:include toplevel-definition)
@@ -360,13 +337,7 @@
   (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
   (head-location (util:required 'head-location) :type source:location            :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-struct-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-struct-p x))))
-
-(deftype toplevel-define-struct-list ()
-  '(satisfies toplevel-define-struct-list-p))
+(util:define-list-type toplevel-define-struct-list toplevel-define-struct-p :compile-toplevel t)
 
 (deftype toplevel-define-type-or-struct ()
   '(or toplevel-define-type toplevel-define-struct))
@@ -383,13 +354,7 @@
 (defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-declare-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-declare-p x))))
-
-(deftype toplevel-declare-list ()
-  '(satisfies toplevel-declare-list-p))
+(util:define-list-type toplevel-declare-list toplevel-declare-p :compile-toplevel t)
 
 (defstruct (toplevel-define
             (:include toplevel-definition)
@@ -405,13 +370,7 @@
   (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil)
   (calling-convention nil                     :type (or null attribute-calling-convention) :read-only nil))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-p x))))
-
-(deftype toplevel-define-list ()
-  '(satisfies toplevel-define-list-p))
+(util:define-list-type toplevel-define-list toplevel-define-p :compile-toplevel t)
 
 (defstruct (fundep
             (:copier nil))
@@ -422,12 +381,7 @@
 (defmethod source:location ((self fundep))
   (fundep-location self))
 
-(defun fundep-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'fundep-p x)))
-
-(deftype fundep-list ()
-  '(satisfies fundep-list-p))
+(util:define-list-type fundep-list fundep-p)
 
 (defstruct (method-definition
             (:include toplevel-definition)
@@ -438,12 +392,7 @@
 (defmethod make-load-form ((self method-definition) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun method-definition-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'method-definition-p x)))
-
-(deftype method-definition-list ()
-  '(satisfies method-definition-list-p))
+(util:define-list-type method-definition-list method-definition-p)
 
 (defstruct (toplevel-define-class
             (:include toplevel-definition)
@@ -456,13 +405,7 @@
   ;; Source information for context, name, and vars
   (head-location (util:required 'head-location) :type source:location :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-class-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-class-p x))))
-
-(deftype toplevel-define-class-list ()
-  '(satisfies toplevel-define-class-list-p))
+(util:define-list-type toplevel-define-class-list toplevel-define-class-p :compile-toplevel t)
 
 (defstruct (instance-method-definition
             (:copier nil))
@@ -478,13 +421,7 @@
 (defmethod source:location ((self instance-method-definition))
   (instance-method-definition-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun instance-method-definition-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'instance-method-definition-p x))))
-
-(deftype instance-method-definition-list ()
-  '(satisfies instance-method-definition-list-p))
+(util:define-list-type instance-method-definition-list instance-method-definition-p :compile-toplevel t)
 
 (defstruct (toplevel-define-instance
             (:include toplevel-definition)
@@ -497,13 +434,7 @@
   (head-location      (util:required 'head-location)      :type source:location                 :read-only t)
   (compiler-generated (util:required 'compiler-generated) :type boolean                         :read-only t))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-instance-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-instance-p x))))
-
-(deftype toplevel-define-instance-list ()
-  '(satisfies toplevel-define-instance-list-p))
+(util:define-list-type toplevel-define-instance-list toplevel-define-instance-p :compile-toplevel t)
 
 (defstruct (toplevel-lisp-form
             (:copier nil))
@@ -513,13 +444,7 @@
 (defmethod source:location ((self toplevel-lisp-form))
   (toplevel-lisp-form-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-lisp-form-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-lisp-form-p x))))
-
-(deftype toplevel-lisp-form-list ()
-  '(satisfies toplevel-lisp-form-list-p))
+(util:define-list-type toplevel-lisp-form-list toplevel-lisp-form-p :compile-toplevel t)
 
 (defstruct (toplevel-specialize
             (:copier nil))
@@ -531,13 +456,7 @@
 (defmethod source:location ((self toplevel-specialize))
   (toplevel-specialize-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-specialize-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-specialize-p x))))
-
-(deftype toplevel-specialize-list ()
-  '(satisfies toplevel-specialize-list-p))
+(util:define-list-type toplevel-specialize-list toplevel-specialize-p :compile-toplevel t)
 
 (defstruct (toplevel-package
             (:include toplevel-definition)

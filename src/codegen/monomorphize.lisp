@@ -77,12 +77,7 @@
 (defun argument-p (x)
   (typep x 'argument))
 
-(defun argument-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'argument-p x)))
-
-(deftype argument-list ()
-  '(satisfies argument-list-p))
+(util:define-list-type argument-list argument-p)
 
 (defstruct compile-candidate
   "A COMPILE-CANDIDATE is a compilation of a NAME and a list of
@@ -90,12 +85,7 @@ ARGUMENTS some of which are statically known dictionaries."
   (name      (util:required 'name) :type symbol        :read-only t)
   (args      (util:required 'args) :type argument-list :read-only t))
 
-(defun compile-candidate-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'compile-candidate-p x)))
-
-(deftype compile-candidate-list ()
-  '(satisfies compile-candidate-list-p))
+(util:define-list-type compile-candidate-list compile-candidate-p)
 
 (defun propagatable-p (x)
   (not (eq x '@@unpropagated)))

@@ -15,6 +15,7 @@
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
    #:runtime-quote                      ; FUNCTION
+   #:define-list-type                   ; MACRO
    #:symbol-list                        ; TYPE
    #:string-list                        ; TYPE
    #:cst-list                           ; TYPE
@@ -49,19 +50,27 @@
          (char= (char string (1- length)) #\*)
          (not (null (find #\* string :test-not #'char= :start 1 :end (1- length)))))))
 
-(defun symbol-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'symbolp x)))
+(defmacro define-list-type (name element-predicate &key compile-toplevel)
+  "Define NAME as a proper list satisfying ELEMENT-PREDICATE, with predicate NAME-P.
+COMPILE-TOPLEVEL also makes NAME-P available while compiling the containing file."
+  (let* ((predicate (alexandria:format-symbol (symbol-package name) "~A-P" name))
+         (definition
+           `(defun ,predicate (x)
+              (and (alexandria:proper-list-p x)
+                   ;; Resolve the element predicate only for nonempty lists:
+                   ;; DEFSTRUCT predicates need not be loaded at compile time.
+                   (every (lambda (item) (,element-predicate item)) x)))))
+    `(progn
+       ,(if compile-toplevel
+            `(eval-when (:compile-toplevel :load-toplevel :execute)
+               ,definition)
+            definition)
+       (deftype ,name ()
+         '(satisfies ,predicate)))))
 
-(deftype symbol-list ()
-  '(satisfies symbol-list-p))
+(define-list-type symbol-list symbolp)
 
-(defun string-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'stringp x)))
-
-(deftype string-list ()
-  '(satisfies string-list-p))
+(define-list-type string-list stringp)
 
 (defun cst-list-p (x)
   (and (alexandria:proper-list-p x)

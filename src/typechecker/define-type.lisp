@@ -78,12 +78,7 @@
 (defmethod source:location ((self field-definition))
   (field-definition-location self))
 
-(defun type-definition-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'type-definition-p x)))
-
-(deftype type-definition-list ()
-  '(satisfies type-definition-list-p))
+(util:define-list-type type-definition-list type-definition-p)
 
 (defun %ensure-arity-variances (variances arity)
   (declare (type tc:variance-list variances)

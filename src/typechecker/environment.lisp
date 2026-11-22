@@ -577,12 +577,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-entry))
 
-(defun constructor-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'constructor-entry-p x)))
-
-(deftype constructor-entry-list ()
-  '(satisfies constructor-entry-list-p))
+(util:define-list-type constructor-entry-list constructor-entry-p)
 
 (defstruct (constructor-environment (:include immutable-map)))
 
@@ -684,12 +679,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-alias-entry))
 
-(defun type-alias-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'type-alias-entry-p x)))
-
-(deftype type-alias-entry-list ()
-  '(satisfies type-alias-entry-list-p))
+(util:define-list-type type-alias-entry-list type-alias-entry-p)
 
 (defstruct (type-alias-environment (:include immutable-map)))
 
@@ -712,12 +702,7 @@
 (defmethod make-load-form ((self struct-field) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun struct-field-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'struct-field-p x)))
-
-(deftype struct-field-list ()
-  '(satisfies struct-field-list-p))
+(util:define-list-type struct-field-list struct-field-p)
 
 (defun struct-field-accessor-name (name index)
   "Return the generated reader name for field INDEX of struct NAME."
@@ -738,12 +723,7 @@
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun struct-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'struct-entry-p x)))
-
-(deftype struct-entry-list ()
-  '(satisfies struct-entry-list-p))
+(util:define-list-type struct-entry-list struct-entry-p)
 
 (defun get-field (struct-entry name &key no-error)
   (or (some (lambda (field)
@@ -776,12 +756,7 @@
 (defmethod make-load-form ((self ty-class-method) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun ty-class-method-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-class-method-p x)))
-
-(deftype ty-class-method-list ()
-  '(satisfies ty-class-method-list-p))
+(util:define-list-type ty-class-method-list ty-class-method-p)
 
 (defstruct ty-class
   (name                (util:required 'name)                :type symbol              :read-only t)
@@ -812,12 +787,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class))
 
-(defun ty-class-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-class-p x)))
-
-(deftype ty-class-list ()
-  '(satisfies ty-class-list-p))
+(util:define-list-type ty-class-list ty-class-p)
 
 (defmethod apply-substitution (subst-list (class ty-class))
   (declare (type substitution-list subst-list)
@@ -919,12 +889,7 @@ of constraint predicates."
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-instance))
 
-(defun ty-class-instance-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-class-instance-p x)))
-
-(deftype ty-class-instance-list ()
-  `(satisfies ty-class-instance-list-p))
+(util:define-list-type ty-class-instance-list ty-class-instance-p)
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-instance-list))
@@ -1097,12 +1062,7 @@ associated with a top-level Coalton function."
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type function-env-entry))
 
-(defun function-env-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'function-env-entry-p x)))
-
-(deftype function-env-entry-list ()
-  `(satisfies function-env-entry-list-p))
+(util:define-list-type function-env-entry-list function-env-entry-p)
 
 (defstruct (function-environment (:include immutable-map)))
 
@@ -1166,12 +1126,7 @@ associated with a top-level Coalton function."
 (defmethod make-load-form ((self specialization-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun specialization-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'specialization-entry-p x)))
-
-(deftype specialization-entry-list ()
-  '(satisfies specialization-entry-list-p))
+(util:define-list-type specialization-entry-list specialization-entry-p)
 
 (defstruct (specialization-environment (:include immutable-listmap)))
 

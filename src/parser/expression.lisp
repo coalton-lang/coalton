@@ -428,24 +428,14 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node))
   (node-location self))
 
-(defun node-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-p x)))
-
-(deftype node-list ()
-  '(satisfies node-list-p))
+(util:define-list-type node-list node-p)
 
 (defstruct (node-variable
             (:include node)
             (:copier nil))
   (name (util:required 'name) :type identifier :read-only t))
 
-(defun node-variable-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-variable-p x)))
-
-(deftype node-variable-list ()
-  '(satisfies node-variable-list-p))
+(util:define-list-type node-variable-list node-variable-p)
 
 (defstruct (node-accessor
             (:include node)
@@ -489,12 +479,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defun node-body-element-p (x)
   (typep x 'node-body-element))
 
-(defun node-body-element-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-body-element-p x)))
-
-(deftype node-body-element-list ()
-  '(satisfies node-body-element-list-p))
+(util:define-list-type node-body-element-list node-body-element-p)
 
 ;;
 ;; Does not subclass node, can only appear directly within some nodes
@@ -532,13 +517,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self keyword-param))
   (keyword-param-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun keyword-param-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'keyword-param-p x))))
-
-(deftype keyword-param-list ()
-  '(satisfies keyword-param-list-p))
+(util:define-list-type keyword-param-list keyword-param-p :compile-toplevel t)
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -549,12 +528,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-let-binding))
   (node-let-binding-location self))
 
-(defun node-let-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-let-binding-p x)))
-
-(deftype node-let-binding-list ()
-  '(satisfies node-let-binding-list-p))
+(util:define-list-type node-let-binding-list node-let-binding-p)
 
 (defstruct (node-dynamic-binding
             (:copier nil))
@@ -565,12 +539,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-dynamic-binding))
   (node-dynamic-binding-location self))
 
-(defun node-dynamic-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-dynamic-binding-p x)))
-
-(deftype node-dynamic-binding-list ()
-  '(satisfies node-dynamic-binding-list-p))
+(util:define-list-type node-dynamic-binding-list node-dynamic-binding-p)
 
 (defstruct (node-for-binding
             (:copier nil))
@@ -582,12 +551,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-for-binding))
   (node-for-binding-location self))
 
-(defun node-for-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-for-binding-p x)))
-
-(deftype node-for-binding-list ()
-  '(satisfies node-for-binding-list-p))
+(util:define-list-type node-for-binding-list node-for-binding-p)
 
 (defstruct (node-let-declare
             (:copier nil))
@@ -598,12 +562,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-let-declare))
   (node-let-declare-location self))
 
-(defun node-let-declare-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-let-declare-p x)))
-
-(deftype node-let-declare-list ()
-  '(satisfies node-let-declare-list-p))
+(util:define-list-type node-let-declare-list node-let-declare-p)
 
 (defstruct (node-let
             (:include node)
@@ -653,12 +612,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-match-branch))
   (node-match-branch-location self))
 
-(defun node-match-branch-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-match-branch-p x)))
-
-(deftype node-match-branch-list ()
-  '(satisfies node-match-branch-list-p))
+(util:define-list-type node-match-branch-list node-match-branch-p)
 
 (defstruct (node-match
             (:include node)
@@ -701,12 +655,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self association-entry))
   (association-entry-location self))
 
-(defun association-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'association-entry-p x)))
-
-(deftype association-entry-list ()
-  '(satisfies association-entry-list-p))
+(util:define-list-type association-entry-list association-entry-p)
 
 (defstruct (node-association-builder
             (:include node)
@@ -750,12 +699,7 @@ Rebound to NIL parsing an anonymous FN.")
   "AST node for a `:when` filter clause inside builder comprehension syntax."
   (expr (util:required 'expr) :type node :read-only t))
 
-(defun builder-clause-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'builder-clause-p x)))
-
-(deftype builder-clause-list ()
-  '(satisfies builder-clause-list-p))
+(util:define-list-type builder-clause-list builder-clause-p)
 
 (defstruct (node-collection-comprehension
             (:include node)
@@ -816,13 +760,7 @@ after variable renaming and before type inference."
 (defmethod source:location ((self node-application-keyword-arg))
   (node-application-keyword-arg-location self))
 
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun node-application-keyword-arg-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'node-application-keyword-arg-p x))))
-
-(deftype node-application-keyword-arg-list ()
-  '(satisfies node-application-keyword-arg-list-p))
+(util:define-list-type node-application-keyword-arg-list node-application-keyword-arg-p :compile-toplevel t)
 
 (defstruct (node-or
             (:include node)
@@ -862,12 +800,7 @@ after variable renaming and before type inference."
 (defmethod source:location ((self node-cond-clause))
   (node-cond-clause-location self))
 
-(defun node-cond-clause-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-cond-clause-p x)))
-
-(deftype node-cond-clause-list ()
-  '(satisfies node-cond-clause-list-p))
+(util:define-list-type node-cond-clause-list node-cond-clause-p)
 
 (defstruct (node-cond
             (:include node)
@@ -889,12 +822,7 @@ after variable renaming and before type inference."
 (defun node-do-body-element-p (x)
   (typep x 'node-do-body-element))
 
-(defun node-do-body-element-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-do-body-element-p x)))
-
-(deftype node-do-body-element-list ()
-  '(satisfies node-do-body-element-list-p))
+(util:define-list-type node-do-body-element-list node-do-body-element-p)
 
 (defstruct (node-do
             (:include node)
@@ -965,12 +893,7 @@ after variable renaming and before type inference."
 (defmethod source:location ((self node-resumable-branch))
   (node-resumable-branch-location self))
 
-(defun node-resumable-branch-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-resumable-branch-p x)))
-
-(deftype node-resumable-branch-list ()
-  '(satisfies node-resumable-branch-list-p))
+(util:define-list-type node-resumable-branch-list node-resumable-branch-p)
 
 (defstruct (node-resumable
             (:include node)
@@ -991,12 +914,7 @@ after variable renaming and before type inference."
 (defmethod source:location ((self node-catch-branch))
   (node-catch-branch-location self))
 
-(defun node-catch-branch-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-catch-branch-p x)))
-
-(deftype node-catch-branch-list ()
-  '(satisfies node-catch-branch-list-p))
+(util:define-list-type node-catch-branch-list node-catch-branch-p)
 
 (defstruct (node-catch
             (:include node)

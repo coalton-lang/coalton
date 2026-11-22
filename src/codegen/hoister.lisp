@@ -47,13 +47,7 @@
                :value (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun hoist-point-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'hoist-point-p x))))
-
-(deftype hoist-point-list ()
-  `(satisfies hoist-point-list-p))
+(util:define-list-type hoist-point-list hoist-point-p :compile-toplevel t)
 
 (defstruct hoister
   (hoist-points    nil                                     :type hoist-point-list :read-only nil)

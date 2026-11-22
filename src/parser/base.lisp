@@ -41,12 +41,7 @@
 (defun identifierp (x)
   (typep x 'identifier))
 
-(defun identifier-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'identifierp x)))
-
-(deftype identifier-list ()
-  '(satisfies identifier-list-p))
+(util:define-list-type identifier-list identifierp)
 
 (defstruct (keyword-src
             (:copier nil))
@@ -59,12 +54,7 @@
 (defmethod source:location ((self keyword-src))
   (keyword-src-location self))
 
-(defun keyword-src-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'keyword-src-p x)))
-
-(deftype keyword-src-list ()
-  '(satisfies keyword-src-list-p))
+(util:define-list-type keyword-src-list keyword-src-p)
 
 (defstruct (identifier-src
             (:copier nil))
@@ -75,12 +65,7 @@
 (defmethod source:location ((self identifier-src))
   (identifier-src-location self))
 
-(defun identifier-src-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'identifier-src-p x)))
-
-(deftype identifier-src-list ()
-  '(satisfies identifier-src-list-p))
+(util:define-list-type identifier-src-list identifier-src-p)
 
 (defun parse-list (f list_ file)
   (declare (type function f)

@@ -52,6 +52,13 @@ The compiler is structured into three large phases:
 
 Each of these has its own distinct AST representations. In fact, a lot of the code in the respective modules are "re-definitions" of previous data structures for expressing ASTs.
 
+`util:define-list-type` defines a proper-list type from a named element
+predicate, retaining a `satisfies` predicate named `<type>-p` in the type's
+package. Use `:compile-toplevel t` only when that list predicate must also be
+available during compilation, such as for checking an empty slot default.
+Element predicates are called inside the traversal, so compiling these defaults
+does not require the corresponding `defstruct` predicates to have been loaded.
+
 ## Parsing phase
 ### Intermediate representation for expressions
 

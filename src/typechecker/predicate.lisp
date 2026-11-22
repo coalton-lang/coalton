@@ -97,12 +97,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type qualified-ty))
 
-(defun qualified-ty-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'qualified-ty-p x)))
-
-(deftype qualified-ty-list ()
-  '(satisfies qualified-ty-list-p))
+(util:define-list-type qualified-ty-list qualified-ty-p)
 
 (defun qualify (predicates type)
   "Qualify TYPE with PREDICATES"

@@ -234,12 +234,7 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun scheme-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-scheme-p x)))
-
-(deftype scheme-list ()
-  '(satisfies scheme-list-p))
+(util:define-list-type scheme-list ty-scheme-p)
 
 (defun scheme-binding-list-p (x)
   (and (alexandria:proper-list-p x)

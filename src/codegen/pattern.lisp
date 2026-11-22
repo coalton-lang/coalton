@@ -47,12 +47,7 @@
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun pattern-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'pattern-p x)))
-
-(deftype pattern-list ()
-  '(satisfies pattern-list-p))
+(util:define-list-type pattern-list pattern-p)
 
 (defstruct (pattern-var
             (:include pattern)

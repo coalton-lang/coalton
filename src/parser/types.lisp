@@ -118,12 +118,7 @@
 (defmethod source:location ((self ty))
   (ty-location self))
 
-(defun ty-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-p x)))
-
-(deftype ty-list ()
-  '(satisfies ty-list-p))
+(util:define-list-type ty-list ty-p)
 
 (defstruct (tyvar (:include ty)
                   (:copier nil))
@@ -132,23 +127,13 @@
   ;; later printing of programmer-written type variables.
   (source-name nil                        :type (or null keyword) :read-only t))
 
-(defun tyvar-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'tyvar-p x)))
-
-(deftype tyvar-list ()
-  '(satisfies tyvar-list-p))
+(util:define-list-type tyvar-list tyvar-p)
 
 (defstruct (tycon (:include ty)
                   (:copier nil))
   (name (util:required 'name) :type identifier :read-only t))
 
-(defun tycon-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'tycon-p x)))
-
-(deftype tycon-list ()
-  '(satisfies tycon-list-p))
+(util:define-list-type tycon-list tycon-p)
 
 (defstruct (tapp (:include ty)
                  (:copier nil))
@@ -166,12 +151,7 @@
 (defmethod source:location ((self keyword-ty-entry))
   (keyword-ty-entry-location self))
 
-(defun keyword-ty-entry-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'keyword-ty-entry-p x)))
-
-(deftype keyword-ty-entry-list ()
-  '(satisfies keyword-ty-entry-list-p))
+(util:define-list-type keyword-ty-entry-list keyword-ty-entry-p)
 
 (defstruct (function-ty (:include ty)
                         (:copier nil))
@@ -192,12 +172,7 @@
 (defmethod source:location ((self ty-predicate))
   (ty-predicate-location self))
 
-(defun ty-predicate-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'ty-predicate-p x)))
-
-(deftype ty-predicate-list ()
-  '(satisfies ty-predicate-list-p))
+(util:define-list-type ty-predicate-list ty-predicate-p)
 
 (defstruct (kind (:constructor nil) (:copier nil))
   (location (util:required 'location) :type source:location :read-only t))
