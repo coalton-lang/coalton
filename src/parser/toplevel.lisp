@@ -563,7 +563,7 @@
   (specializations nil :type toplevel-specialize-list        :read-only nil))
 
 (defun read-program (stream source &optional mode)
-  "Read a PROGRAM from SOURCE (an instance of source-error:source).
+  "Read a PROGRAM from STREAM, using SOURCE for source locations.
 MODE may be one of :file or :macro.
 
 If MODE is :file, a package form is required.

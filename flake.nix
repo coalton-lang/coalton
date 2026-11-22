@@ -56,16 +56,9 @@
           availableLispImpls = builtins.filter isAvailable lispImpls;
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeLibs;
           bundledPackage = { lisp }: rec {
-            sourceErrorLib = lisp.buildASDFSystem {
-              inherit version;
-              pname = "source-error";
-              src = "${src}/source-error";
-              systems = [ "source-error" ];
-              lispLibs = with lisp.pkgs; [ alexandria ];
-            };
             mainLib = lisp.buildASDFSystem {
               inherit pname version src systems nativeLibs;
-              lispLibs = (lispLibs lisp) ++ [ sourceErrorLib ];
+              lispLibs = lispLibs lisp;
             };
             lisp' = lisp.withPackages (ps: [ mainLib ]) // {
               inherit (lisp) meta;
