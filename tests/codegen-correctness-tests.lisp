@@ -1046,6 +1046,27 @@
           (is (= 7 (ast:node-literal-value binding-val)))))
       (is (= 17 (codegen-test-eval "(lisp-rel-const 10)"))))))
 
+(deftest codegen-constant-propagation-preserves-assigned-let-bindings ()
+  (let ((ty tc:*integer-type*)
+        (x (gensym "X")))
+    (flet ((var (name) (ast:make-node-local-variable :type ty :value name))
+           (int (value) (ast:make-node-literal :type ty :value value)))
+      ;; X's initializer is constant either immediately or after propagating
+      ;; SEED. The assignment is in a sibling initializer, not the LET body.
+      (dolist (init (list (int 0) (var 'seed)))
+        (let* ((node (ast:make-node-let
+                      :type ty
+                      :bindings (list (cons 'seed (int 0))
+                                      (cons x init)
+                                      (cons 'write-result
+                                            (ast:make-node-setq :type ty :name x :expr (int 42))))
+                      :subexpr (var x)))
+               (optimized (coalton-impl/codegen/constant-propagation:propagate-constants
+                           node entry:*global-environment*)))
+          (is (not (assoc 'seed (ast:node-let-bindings optimized))))
+          (is (= 42 (eval (coalton-impl/codegen/codegen-expression:codegen-expression
+                           optimized entry:*global-environment*)))))))))
+
 (defun count-tree-occurrences (target form)
   (cond
     ((equal target form) 1)

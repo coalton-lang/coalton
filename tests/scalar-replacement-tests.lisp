@@ -381,6 +381,26 @@
               (is (= 50015000 c))
               (is (= 0 (- after before))))))))))
 
+(deftest scalar-replacement-preserves-inlined-cell-writes ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(inline)
+      (define (write-only)
+        (coalton/cell:write! (coalton/cell:new False) True))
+      (inline)
+      (define (read-back initial)
+        (let c = (coalton/cell:new initial))
+        (coalton/cell:write! c True)
+        (coalton/cell:read c))")
+    ;; Compile a new caller so the inliner sees the already optimized body.
+    ;; Evaluating just the write could return True even with an unbound SETQ.
+    (multiple-value-bind (fn warnings-p failure-p)
+        (compile nil `(lambda () (coalton:coalton (,(intern "WRITE-ONLY")))))
+      (declare (ignore warnings-p))
+      (is (not failure-p))
+      (is (eq t (funcall fn))))
+    (is (eq t (codegen-test-eval "(read-back False)")))))
+
 (deftest scalar-replacement-preserves-cell-evaluation-order ()
   (with-codegen-test-environment
     (codegen-test-event-recorder)
