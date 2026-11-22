@@ -82,4 +82,8 @@
           (show-as-string (the (Hashtable String Integer) (hashtable:new)))))
   (hashtable:set! ht "alpha" 1)
   (is (== "#<HashTable [\"alpha\" => 1]>"
-          (show-as-string ht))))
+          (show-as-string ht)))
+  (hashtable:set! ht "beta" 2)
+  (let shown = (show-as-string ht))
+  (is (or (== shown "#<HashTable [\"alpha\" => 1 \"beta\" => 2]>")
+          (== shown "#<HashTable [\"beta\" => 2 \"alpha\" => 1]>"))))
