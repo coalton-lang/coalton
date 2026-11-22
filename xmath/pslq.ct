@@ -36,17 +36,14 @@
     (define (exact-dot-zero? cs xs) (Some (zero? (%dot cs xs)))))
   (define-instance (RelationInput cr:CReal)
     (define (exact-dot-zero? cs xs)
-      ;; CReal stores known rationals exactly. Never invoke its threshold-based
-      ;; Eq instance to decide a relation involving an arbitrary computable real.
       (rec dot ((cs cs) (xs xs) (sum (the Fraction 0)))
         (match (Tuple cs xs)
           ((Tuple (Cons c cs) (Cons x xs))
-           (cond
-             ((zero? c) (dot cs xs sum))
-             ((lisp (-> Boolean) (x) (cl:rationalp x))
-              (let q = (lisp (-> Fraction) (x) (cl:the cl:rational x)))
-              (dot cs xs (+ sum (* (from-int c) q))))
-             (True None)))
+           (if (zero? c)
+               (dot cs xs sum)
+               (match (cr:known-fraction x)
+                 ((Some q) (dot cs xs (+ sum (* (from-int c) q))))
+                 ((None) None))))
           (_ (Some (zero? sum)))))))
 
   (define-type PSLQResult

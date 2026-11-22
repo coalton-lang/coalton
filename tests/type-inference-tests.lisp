@@ -210,6 +210,23 @@
      "(declare one? (String -> Boolean))
       (define (one? x) (match x (1 True) (_ False)))")))
 
+(deftest computable-real-comparison-constraints ()
+  (let ((setup "(declare needs-num (Num :a => :a -> :a))
+                (define (needs-num n) n)
+                (define x (the coalton/computable-reals:CReal (+ 2 (into 1/3))))"))
+    (check-coalton-types
+     (concatenate 'string setup
+                  "(define decision (coalton/computable-reals:compare-at 8 x (* x x)))
+                   (define z (* (complex x x) (complex x x)))")
+     '("decision" . "(Optional Ordering)")
+     '("z" . "(Complex coalton/computable-reals:CReal)"))
+    (dolist (expression '("(== x x)" "(<=> x x)" "(match x (1 True) (_ False))"
+                          "(needs-num x)" "(hash x)" "(floor x)"
+                          "(== (complex x x) (complex x x))"
+                          "(coalton/math:phase (complex x x))"))
+      (signals tc:tc-error
+        (check-coalton-types (format nil "~A (define invalid ~A)" setup expression))))))
+
 (deftest test-numeric-defaulting-preserves-predicate-structure ()
   (check-coalton-types
    "(define-class (C :a) (consume-c (:a -> Unit)))

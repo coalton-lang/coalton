@@ -5,7 +5,7 @@
 (defpackage #:coalton/xmath/computable-reals
   (:documentation "Constructive (computable) real numbers (`CReal`) backed by `computable-reals`.
 
-A computable real number $x \\in \\mathbb{R}$ is represented lazily as a function $k \\mapsto a_k \\in \\mathbb{Z}$ producing dyadic approximations $|a_k 2^{-k} - x| \\le 2^{-k}$ on demand to any requested bit precision $k$, supporting exact field and transcendental arithmetic (`Reciprocable`, `Elementary`, `Approximable`). Because exact equality and ordering of computable reals are undecidable in general, `Eq` and `Ord` compare approximations at a configurable bit threshold (`comparison-threshold`, `with-comparison-threshold`).")
+A computable real is a stored rational or an oracle for dyadic approximations. At precision $k$ the oracle returns an integer $a_k$ with $|a_k 2^{-k} - x| \\le 2^{-k}$. Equality and order are undecidable in general: use `compare-at` for a bounded comparison, not `Eq` or `Ord`.")
   (:nicknames #:coalton/computable-reals
               #:coalton-library/computable-reals)
   (:use #:coalton
@@ -15,36 +15,48 @@ A computable real number $x \\in \\mathbb{R}$ is represented lazily as a functio
                     (#:complex #:coalton/math/complex)
                     (#:math #:coalton/math)
                     (#:dyadic #:coalton/xmath/dyadic)
-                    (#:bf #:coalton/xmath/big-float)
-                    (#:cell #:coalton/cell))
+                    (#:bf #:coalton/xmath/big-float))
   (:export
    #:CReal
-   #:set-comparison-threshold!
-   #:comparison-threshold
-   #:with-comparison-threshold
+   #:known-fraction
+   #:compare-at
+   #:floor-at
+   #:ceiling-at
+   #:truncate-at
+   #:round-at
    #:rationalize
    #:cr-print))
 
 (in-package #:coalton/xmath/computable-reals)
 
-;; Setting a default comparison threshold for Eq and Ord
-(cl:defvar *creal-comparison-threshold* 106)
-
-;; The backend's sqrt/log first determine the sign, which need not terminate
-;; at an oracle representing zero. Separate from zero only to the precision
-;; needed for this output digit; never ask an oracle to decide equality.
+;; Separate from zero only to the precision needed for this output digit.
 (cl:defun %positive-index-root (n x)
-  (cl:labels ((root-away-from-zero (a)
+  (cl:labels ((root-away-from-zero (a p)
                 (cl:cond
                   ((cl:minusp a)
                    (cl:when (cl:evenp n) (cl:error "Even root of a negative real."))
-                   (cr:-r (root-away-from-zero-positive (cr:-r x))))
-                  (cl:t (root-away-from-zero-positive x))))
-              (root-away-from-zero-positive (v)
-                (cl:if (cl:= n 2) (cr:sqrt-r v) (cr:expt-r v (cl:/ n)))))
+                   (cr:-r (root-positive (cr:-r x) p)))
+                  (cl:t (root-positive x p))))
+              (root-positive (v p)
+                ;; The backend probes the sign again in sqrt/log, and can reject
+                ;; a tiny positive radicand. Shift the proven magnitude away
+                ;; from zero first; an even shift preserves exact square roots.
+                (cl:let* ((bits (cl:if (cl:= n 2) (cl:* 2 (cl:ceiling p 2)) p))
+                          (scaled (cr:ash-r v bits))
+                          (r (cl:if (cl:= n 2)
+                                    (cr:sqrt-r scaled)
+                                    (cr:expt-r scaled (cl:/ n))))
+                          (shift (cl:/ bits n)))
+                  (cl:if (cl:integerp shift)
+                         (cr:ash-r r (cl:- shift))
+                         (cr:*r r (cr:expt-r 2 (cl:- shift)))))))
     (cl:cond
       ((cl:= n 1) x)
-      ((cl:rationalp x) (cl:if (cl:zerop x) 0 (root-away-from-zero x)))
+      ((cl:eql x 0) 0)
+      ((cl:rationalp x)
+       (cl:let ((p (cl:- (cl:integer-length (cl:denominator x))
+                         (cl:integer-length (cl:abs (cl:numerator x))))))
+         (root-away-from-zero x (cl:max 0 p))))
       (cl:t
        (cl:let ((root cl:nil))
          (cr:make-real
@@ -54,63 +66,25 @@ A computable real number $x \\in \\mathbb{R}$ is represented lazily as a functio
                        :for p = 0 :then (cl:min limit (cl:max 1 (cl:* 2 p)))
                        :for a = (cr:approx-r x p)
                        :when (cl:> (cl:abs a) 1)
-                         :do (cl:setf root (root-away-from-zero a)) (cl:return)
+                         :do (cl:setf root (root-away-from-zero a p)) (cl:return)
                        :until (cl:= p limit)))
             ;; At the limit |x| <= 2 * 2^(-n*(k+1)), so zero is a
             ;; valid k-bit approximation to its nth root.
             (cl:if root (cr:approx-r root k) 0))))))))
 
-;;;
-;;; Defining the CReal type as a wrapper around computable-reals
-;;;
-
-
 (coalton-toplevel
-  
- (repr :native (cl:or cr:creal cl:rational))
- (define-type CReal)
+  (repr :native (cl:or cr:creal cl:rational))
+  (define-type CReal)
 
- (declare set-comparison-threshold! (UFix -> Void))
- (define (set-comparison-threshold! k)
-   "Sets the global `CReal` comparison threshold to k bits after the 'decimal' point.
-
-See `comparison-threshold` for more details."
-   (lisp (-> Void) (k)
-     (cl:progn
-       (cl:setq *creal-comparison-threshold* k)
-       (cl:values))))
-
- (declare comparison-threshold (Void -> UFix))
- (define (comparison-threshold)
-   "Returns the current `CReal` comparison threshold measured as a number
-of bits after the 'decimal' point.
-
-This threshold is used to ensure `Eq` and `Ord` instances
-terminate. (In general, computable real arithmetic is undecidable.)
-Note that if the production of a `CReal` depends on comparison, *there
-is no guarantee that the `CReal` will be accurate to any precision*."
-   (lisp (-> UFix) ()
-     *creal-comparison-threshold*))
-
- (declare with-comparison-threshold
-   (forall ((:a Values)) ((Void -> :a) &key (:bits UFix) -> :a)))
- (define (with-comparison-threshold f &key (bits (comparison-threshold)))
-   "Call F with a temporary `CReal` comparison threshold of BITS."
-   (lisp (-> :a) (f bits)
-     (cl:let ((*creal-comparison-threshold* bits))
-       (call-coalton-function f)))))
+  (declare known-fraction (CReal -> Optional Fraction))
+  (define (known-fraction x)
+    "Return the stored exact fraction, if any, without querying an oracle. `None` does not imply irrationality."
+    (lisp (-> (Optional Fraction)) (x)
+      (cl:if (cl:rationalp x) (Some x) None))))
 
 ;;;
 ;;; Instances
 ;;;
-
-(coalton-toplevel
-  
-  (define-instance (Eq CReal)
-    (define (== a b)
-      (lisp (-> Boolean) (a b)
-        (cl:zerop (cr:approx-r (cr:-r a b)
-                               *creal-comparison-threshold*))))))
 
 (coalton-toplevel
   
@@ -152,24 +126,7 @@ is no guarantee that the `CReal` will be accurate to any precision*."
     (inline)
     (define (from-int x)
       (lisp (-> CReal) (x)
-        x)))
-
-  (define-instance (Num CReal)))
-
-(coalton-toplevel
-  
-  (define-instance (Ord CReal)
-    (define (<=> a b)
-      (let diff-approxd = (lisp (-> Integer) (a b)
-                            (cr:approx-r (cr:-r a b)
-                                         *creal-comparison-threshold*)))
-      (cond
-        ((math:zero? diff-approxd)
-         EQ)
-        ((math:positive? diff-approxd)
-         GT)
-        ((math:negative? diff-approxd)
-         LT)))))
+        x))))
 
 (coalton-toplevel
   
@@ -323,16 +280,6 @@ is no guarantee that the `CReal` will be accurate to any precision*."
         cr:+pi-r+))
     (define ee (exp 1))))
 
-(coalton-toplevel
-
-  (define-instance (math:Polar CReal)
-    (inline)
-    (define (phase z)
-      (math:atan2 (imag-part z) (real-part z)))
-    (inline)
-    (define (polar z)
-      (values (magnitude z) (phase z)))))
-
 ;;;
 ;;; Into's
 ;;;
@@ -463,12 +410,6 @@ $$"
     (let half-eps = (math:make-fraction 1 (math:lsh 2 (to-integer k))))
     (math:simplest-fraction-between (- q half-eps) (+ q half-eps)))
 
-  ;; this is just for testing purposes. Intentionally not exported.
-  (define (raw-approx x)
-    "Returns an approximation for `CReal`s."
-    (lisp (-> Integer) (x)
-      (cr:raw-approx-r x)))
-
   (declare cr-print (CReal * UFix -> Boolean))
   (define (cr-print x k)
     "Prints a real `x` up to `k` bits of precision."
@@ -477,19 +418,54 @@ $$"
 
 (coalton-toplevel
 
-  (define-instance (math:Quantizable CReal)
-    (inline)
-    (define (floor x)
-      (lisp (-> Integer) (x)
-        (cr:floor-r x)))
-    (inline)
-    (define (ceiling x)
-      (lisp (-> Integer) (x)
-        (cr:ceiling-r x)))
-    (inline)
-    (define (proper x)
-      (lisp (-> Integer * CReal) (x)
-        (cr:truncate-r x))))
+  (declare enclosure (UFix * CReal -> Fraction * Fraction))
+  (define (enclosure bits x)
+    (match (known-fraction x)
+      ((Some q) (values q q))
+      ((None)
+       (let a = (approx-mantissa x bits))
+       (let d = (math:lsh 1 bits))
+       (values (math:make-fraction (1- a) d)
+               (math:make-fraction (1+ a) d)))))
+
+  (declare compare-at (UFix * CReal * CReal -> Optional Ordering))
+  (define (compare-at bits x y)
+    "Compare stored rationals exactly. Otherwise request one enclosure per operand at `bits` binary places. Return `Some LT` or `Some GT` for strictly separated closed enclosures, `Some EQ` only for equal stored rationals, and `None` otherwise."
+    (let (values xl xh) = (enclosure bits x))
+    (let (values yl yh) = (enclosure bits y))
+    (cond
+      ((< xh yl) (Some LT))
+      ((> xl yh) (Some GT))
+      ((and (== xl xh) (== yl yh)) (Some EQ))
+      (True None)))
+
+  ;; Integer rounding is monotone: agreement at both closed endpoints
+  ;; certifies the result everywhere between them, including at a tie.
+  (declare integer-image-at ((Fraction -> Integer) * UFix * CReal -> Optional Integer))
+  (define (integer-image-at f bits x)
+    (let (values lo hi) = (enclosure bits x))
+    (let n = (f lo))
+    (if (== n (f hi)) (Some n) None))
+
+  (declare floor-at (UFix * CReal -> Optional Integer))
+  (define (floor-at bits x)
+    "Return the floor if certified at `bits` binary places; otherwise `None`."
+    (integer-image-at floor bits x))
+
+  (declare ceiling-at (UFix * CReal -> Optional Integer))
+  (define (ceiling-at bits x)
+    "Return the ceiling if certified at `bits` binary places; otherwise `None`."
+    (integer-image-at ceiling bits x))
+
+  (declare truncate-at (UFix * CReal -> Optional Integer))
+  (define (truncate-at bits x)
+    "Truncate toward zero if certified at `bits` binary places; otherwise return `None`."
+    (integer-image-at truncate bits x))
+
+  (declare round-at (UFix * CReal -> Optional Integer))
+  (define (round-at bits x)
+    "Round to nearest, ties to even, if certified at `bits` binary places; otherwise return `None`."
+    (integer-image-at round bits x))
 
   (define-instance (math:Approximable CReal Fraction)
     (inline)
@@ -508,8 +484,7 @@ $$"
   (declare native-approx ((math:Approximable Fraction :f) (math:Approximable :f Fraction)
                           (math:Dividable Integer :f) => UFix * CReal * :f -> :f))
   (define (native-approx bits x largest)
-    (match (lisp (-> (Optional Fraction)) (x)
-             (cl:if (cl:rationalp x) (Some x) None))
+    (match (known-fraction x)
       ((Some q) (approx bits q))
       ((None)
        (let q = (lisp (-> Fraction) (x bits) (cr:rational-approx-r x (cl:+ bits 4))))

@@ -30,8 +30,8 @@
   (is (== (the (seq:Seq Integer) (into (Some (the Integer 1)))) (seq:make 1)))
   (is (seq:empty? (the (seq:Seq Integer) (into (the (Optional Integer) None)))))
   (let z = (the (math:Complex creal:CReal) (into (math:Complex (the Integer 1) 2))))
-  (is (== (math:real-part z) 1))
-  (is (== (math:imag-part z) 2)))
+  (is (== (creal:known-fraction (math:real-part z)) (Some 1)))
+  (is (== (creal:known-fraction (math:imag-part z)) (Some 2))))
 
 (define-test explicit-cell-contents-conversion ()
   (let c = (cell:new (the Integer 42)))
@@ -95,8 +95,8 @@
   (is (== (the String (into (ConversionScalar 3))) "3"))
   (let z = (the (math:Complex creal:CReal)
                (into (math:complex (ConversionScalar 3) (ConversionScalar 7)))))
-  (is (== (math:real-part z) 3))
-  (is (== (math:imag-part z) 7)))
+  (is (== (creal:known-fraction (math:real-part z)) (Some 3)))
+  (is (== (creal:known-fraction (math:imag-part z)) (Some 7))))
 
 (define-test library-conversion-intersections ()
   ;; Identity conversions must not rebuild containers or complex numbers.

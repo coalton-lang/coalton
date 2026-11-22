@@ -260,8 +260,7 @@
                            (coalton/classes:unwrap-or-else
                             (coalton:fn (_x) (,producer)) ,producer (coalton:Some coalton:Unit))
                            (coalton/xmath/big-float:with-precision ,producer)
-                           (coalton/xmath/big-float:with-rounding ,producer)
-                           (coalton/xmath/computable-reals:with-comparison-threshold ,producer)))
+                           (coalton/xmath/big-float:with-rounding ,producer)))
               (is (equal expected
                          (multiple-value-list (eval `(coalton:coalton ,call))))
                   "Result forwarding through ~S" call))))

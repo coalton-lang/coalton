@@ -402,15 +402,6 @@
   (is (== (math:asin ultra-tiny) ultra-tiny))
   (is (== (math:acos ultra-tiny) (/ (big-float:bf-pi) 2))))
 
-(define-test creal-comparison-threshold-scoping ()
-  (let baseline = (creal:comparison-threshold))
-  (let scoped = (creal:with-comparison-threshold
-                  (fn ()
-                    (creal:comparison-threshold))
-                  :bits (+ baseline 1)))
-  (is (== scoped (+ baseline 1)))
-  (is (== (creal:comparison-threshold) baseline)))
-
 (coalton-toplevel
   (declare each-case (List :a * (:a -> Void) -> Void))
   (define (each-case xs f)
@@ -437,6 +428,48 @@
   (define (order-operations a b)
     (and (< a b) (<= a b) (not (> a b)) (not (>= a b))
          (== (<=> a b) LT) (== (<=> b a) GT) (== (max a b) b))))
+
+(define-test creal-bounded-comparison ()
+  (let x = (opaque-real 1))
+  (let y = (opaque-real (+ 1 (math:^^ 2 -160))))
+  (is (== (creal:compare-at 32 x y) None))
+  (is (== (creal:compare-at 164 x y) (Some LT)))
+  (is (== (creal:compare-at 164 y x) (Some GT)))
+  (is (== (creal:compare-at 164 x (opaque-real 1)) None))
+
+  ;; These oracles both represent zero at opposite ends of their closed
+  ;; enclosures. Touching at that endpoint is not strict separation.
+  (let edge-zero = (fn (upper?)
+                     (lisp (-> creal:CReal) (upper?)
+                       (computable-reals:make-real
+                        (cl:lambda (k)
+                          (cl:assert (cl:<= k 5))
+                          (cl:if upper? 1 -1))))))
+  (is (== (creal:compare-at 5 (edge-zero False) (edge-zero True)) None))
+  (is (== (creal:compare-at 5 0 (edge-zero True)) None))
+
+  ;; Stored rationals give singleton enclosures, even with a zero bit budget.
+  (is (== (creal:compare-at 0 (into 1/3) (/ 2 6)) (Some EQ)))
+  (is (== (creal:compare-at 0 (/ 1 1001) (into 1/1000)) (Some LT)))
+  (is (== (creal:compare-at 0 (into 5/4) (opaque-real 0)) (Some GT))))
+
+(define-test creal-bounded-rounding ()
+  (let x = (opaque-real -7/4))
+  (is (== (creal:floor-at 5 x) (Some -2)))
+  (is (== (creal:ceiling-at 5 x) (Some -1)))
+  (is (== (creal:truncate-at 5 x) (Some -1)))
+  (is (== (creal:floor-at 32 (opaque-real -2)) None))
+  (is (== (creal:floor-at 0 -2) (Some -2)))
+  (is (== (creal:round-at 32 (opaque-real -5/2)) None))
+  (is (== (creal:round-at 0 (into -5/2)) (Some -2))))
+
+(define-test creal-complex-arithmetic ()
+  (let z = (complex (opaque-real 3) (opaque-real 4)))
+  (let squared = (the (Complex Fraction) (approx 32 (* z z))))
+  (let eps = (the Fraction (math:^^ 2 -32)))
+  (is (<= (abs (+ (real-part squared) 7)) eps))
+  (is (<= (abs (- (imag-part squared) 24)) eps))
+  (is (<= (abs (- (math:rational-approx 32 (math:magnitude z)) 5)) eps)))
 
 (define-test certified-absolute-approximation ()
   (is (== (the F32 (approx 0 (the Integer 16777217))) 16777216f0))
@@ -516,20 +549,24 @@
   (is (not (== (the F64 math:nan) math:nan))))
 
 (define-test creal-inverse-trig-closed-domain ()
-  (creal:with-comparison-threshold
-    (fn ()
-      (each-case [(Tuple -1 -1/2) (Tuple -1/2 -1/6) (Tuple 0 0)
-                  (Tuple 1/2 1/6) (Tuple 1 1/2)]
-       (fn (pair)
-        (let (Tuple q angle) = pair)
-        (let x = (opaque-real q))
-        (let p = (math:rational-approx 84 (the creal:CReal math:pi)))
-        (is (<= (abs (- (math:rational-approx 80 (math:asin x)) (* angle p))) (math:^^ 2 -79)))
-        (is (<= (abs (- (math:rational-approx 80 (math:acos x)) (* (- 1/2 angle) p))) (math:^^ 2 -79)))))
-      (is (<= (abs (+ 2 (math:rational-approx 80 (math:nth-root 3 (opaque-real -8)))))
-              (math:^^ 2 -80)))
-      (is (== (math:rational-approx 80 (math:nth-root 3 (opaque-real 0))) 0)))
-    :bits 0))
+  (each-case [(Tuple -1 -1/2) (Tuple -1/2 -1/6) (Tuple 0 0)
+              (Tuple 1/2 1/6) (Tuple 1 1/2)]
+    (fn (pair)
+      (let (Tuple q angle) = pair)
+      (let x = (opaque-real q))
+      (let p = (math:rational-approx 84 (the creal:CReal math:pi)))
+      (is (<= (abs (- (math:rational-approx 80 (math:asin x)) (* angle p))) (math:^^ 2 -79)))
+      (is (<= (abs (- (math:rational-approx 80 (math:acos x)) (* (- 1/2 angle) p))) (math:^^ 2 -79)))))
+  (is (<= (abs (+ 2 (math:rational-approx 80 (math:nth-root 3 (opaque-real -8)))))
+          (math:^^ 2 -80)))
+  ;; Just inside the endpoint, the small positive radicand must not be
+  ;; mistaken for zero or rejected by the backend's sign probe.
+  (let near-one = (opaque-real (- 1 (math:^^ 2 -220))))
+  (is (== (creal:compare-at 150 (math:acos near-one) 0) (Some GT)))
+  (is (<= (abs (- (math:rational-approx 90 (math:nth-root 3 (opaque-real (math:^^ 2 -180))))
+                  (math:^^ 2 -60)))
+          (math:^^ 2 -90)))
+  (is (== (math:rational-approx 80 (math:nth-root 3 (opaque-real 0))) 0)))
 
 (define-test big-float-algebraic-power-boundaries ()
   (let power-at = (fn (mode bits q y)

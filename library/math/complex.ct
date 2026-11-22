@@ -78,9 +78,8 @@ component types."
 ;; as a Lisp type in codegen. SBCL and CCL tolerate it fine.
 
 (coalton-toplevel
-  (define-class (Num :a => ComplexComponent :a)
-    "A type class for describing complex component types. This type class
-also encodes the construction and projection of `Complex` data types."
+  (define-class (Ring :a => ComplexComponent :a)
+    "A ring whose values can be assembled into and projected from `Complex` numbers. Comparing complex numbers additionally requires `Eq` on their components."
     (complex (:a * :a -> Complex :a))
     (real-part (Complex :a -> :a))
     (imag-part (Complex :a -> :a)))
@@ -105,7 +104,7 @@ $$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$"
 blackboard-bold 𝕚.)"
     (complex 0 1))
 
-  (define-instance (ComplexComponent :a => Eq (Complex :a))
+  (define-instance ((ComplexComponent :a) (Eq :a) => Eq (Complex :a))
     (inline)
     (define (== a b) (complex-equal a b)))
 
@@ -135,7 +134,7 @@ blackboard-bold 𝕚.)"
     (inline)
     (define (from-int n) (complex-from-int n)))
 
-  (define-instance (ComplexComponent :a => Num (Complex :a)))
+  (define-instance ((ComplexComponent :a) (Eq :a) => Num (Complex :a)))
 
   (define-instance ((ComplexComponent :a) (CommutativeRing :a) => CommutativeRing (Complex :a)))
   (define-instance ((ComplexComponent :a) (CharacteristicZero :a) => CharacteristicZero (Complex :a)))
@@ -204,7 +203,7 @@ blackboard-bold 𝕚.)"
   (define (complex-conjugate z)
     (complex (real-part z) (neg (imag-part z))))
 
-  (declare complex-equal (ComplexComponent :a => Complex :a * Complex :a -> Boolean))
+  (declare complex-equal ((ComplexComponent :a) (Eq :a) => Complex :a * Complex :a -> Boolean))
   (define (complex-equal a b)
     (and (== (real-part a) (real-part b))
          (== (imag-part a) (imag-part b))))

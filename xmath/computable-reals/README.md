@@ -1,24 +1,47 @@
 # Computable reals
 
-This library is built on [computable-reals](https://github.com/stylewarning/computable-reals).
+`CReal` represents a real number as a stored rational or an approximation
+oracle, using [computable-reals](https://github.com/stylewarning/computable-reals).
+Asked for $k$ binary places, the oracle returns an integer $a$ such that
+$|2^k x-a|\leq 1$. Integer literals and conversions from `Fraction` are
+exact. `(known-fraction x)` returns `Some` for a stored rational without
+consulting an oracle. `None` does *not* mean the value is irrational.
 
-### Creal 
+### Comparing without guessing
 
-The primary type is a `Creal`, a wrapper on the computable-reals type of the same name.
+`(compare-at bits x y)` returns an `Optional Ordering`. Stored rationals are
+compared exactly even at zero bits. For an oracle, the comparison requests
+one approximation at `bits` and uses its closed enclosure
+$[(a-1)2^{-k},(a+1)2^{-k}]$, with $k$ equal to `bits`.
+`Some LT` and `Some GT` certify strict separation; `Some EQ` certifies equal
+stored rationals. If an oracle is involved, touching or overlapping enclosures
+give `None`, **not** equality. A larger budget may separate distinct values;
+it cannot decide whether two arbitrary oracles represent the same number.
 
-As stated in the computable-reals README:
+For example, with `cr` as a nickname for `coalton/xmath/computable-reals`:
 
-"Computable real numbers `x` are interpreted as (potentially) infinite fractions in base 2 that are specified through a rule for computation of an integer `a` with `|(2^k)*x - a| <= 1` for any `k>=0`."
+```lisp
+(coalton (cr:compare-at 0 (into 1/3) (/ 2 6))) ; => (Some EQ)
+(coalton (cr:compare-at 8 (sqrt 2) (sqrt 3)))  ; => (Some LT)
+(coalton (let ((x (sqrt 2))) (cr:compare-at 8 x x))) ; => None
+```
 
-### Instances:
+There is no `Eq`, `Ord`, `Num`, or `Hash` instance. Replace `==` and `<=>`
+with an explicit `compare-at` and handle `None`; do not treat it as a tie for
+sorting or use it to choose a branch of an exact calculation. The old
+`comparison-threshold`, `set-comparison-threshold!`, and
+`with-comparison-threshold` controls have been removed. Code that only
+needs arithmetic and integer literals can require `Ring` rather than `Num`.
 
-`Eq` and `Ord` have been implemented in order to fulfill the needs of the `Num` typeclass, though they are not exact. Their definitions are shaky because they can only be verified up to an arbitrary, specified precision. The precision threshold for `Creal` can be accessed using the library function `comparison-threshold`, changed globally using `set-comparison-threshold!`, or scoped dynamically with `with-comparison-threshold`. The default precision is `106`.
+### Rounding and approximation
 
-Threshold equality need not be transitive and is not a certificate for a
-branch in an exact computation. Integer rounding of an opaque oracle may
-not terminate at an integer. In contrast, `asin` and `acos` work throughout
-the closed interval $[-1,1]$ without deciding whether an oracle equals an
-endpoint.
+Use `floor-at`, `ceiling-at`, `truncate-at`, or `round-at` in place of
+`Quantizable`. Each takes `bits` and a `CReal` and returns `Optional Integer`.
+It succeeds when both enclosure endpoints round to the same integer; for
+example, `floor-at` may remain undetermined at an opaque integer. Stored
+rationals always give an exact rounding decision, including ties to even for
+`round-at`. For `proper`'s remainder, subtract `(from-int n)` from the input
+after `truncate-at` returns `(Some n)`.
 
 `rationalize` chooses a simple fraction in a certified **inner** interval.
 The result is within the requested absolute tolerance, but need not have
@@ -28,17 +51,11 @@ exactly on its boundary is not computable for arbitrary oracles. A fixed-float
 at a boundary. For ordinary conversion, round a `rational-approx` using
 `fromfrac`.
 
-Other instances defined:
-
-- `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`
-- `Reciprocable`
-- `Quantizable`
-- `Approximable` (to `Fraction`, `Dyadic`, `BigFloat`, `F32`, `F64`)
-- `Exponentiable`
-- `Radical`
-- `Trigonometric`
-- `ComplexComponent`
-- `Polar`
-- `Elementary`
-- Typical `Into` instances
+`Approximable` supports `Fraction`, `Dyadic`, `BigFloat`, `F32`, and `F64`.
+Arithmetic, reciprocals on nonzero inputs, and the `Elementary` operations
+do not require a comparison. In particular `asin` and `acos` work throughout
+$[-1,1]$ without testing whether an oracle equals an endpoint.
+`Complex CReal` still supports arithmetic, `cis`, `magnitude`, and componentwise
+approximation. It has no equality, and there is no `Polar CReal` instance:
+the principal phase cannot be chosen continuously across its branch cut.
 

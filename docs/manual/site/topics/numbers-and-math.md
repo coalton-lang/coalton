@@ -154,7 +154,7 @@ graph TD
     Radical --> Elementary
     Exponentiable --> Elementary
     Trigonometric --> Elementary
-    Num --> ComplexComponent
+    Ring --> ComplexComponent
 ```
 
 #### Bounds and Infinities (`coalton/math/bounded`, `coalton/math/arith`)
@@ -177,7 +177,18 @@ number of binary digits in another numeric representation:
 
 - **`Quantizable :a`**: rounding finite real values (or an instance's real projection) to `Integer`, e.g. `floor`, `ceiling`, `truncate`, `round`. The mathematical bounds on the result do not require neighboring integers to fit back into `:a`.
 - **`Approximable :a :b`**: `(approx bits x)` guarantees *absolute* error at most $2^{-\mathtt{bits}}$, component by component. It signals an error when it cannot certify that bound. For example, no `F32` lies within $1/2$ of the integer $16777217$. Use `from-int`, `fromfrac`, or `big-float:round-to-f32` / `round-to-f64` for ordinary rounded conversion without this guarantee.
-- **`Rationalizable :a`**: `(simplest-fraction bits x)` returns a fraction of least positive denominator in the **closed** tolerance interval, breaking ties by least absolute numerator. `simplest-fraction-between` takes two exact rational endpoints. `CReal` supplies an approximation oracle, not decidable endpoint comparisons: use `rational-approx` or `creal:rationalize` for a guaranteed approximation without global minimality.
+- **`Rationalizable :a`**: `(simplest-fraction bits x)` returns a fraction of least positive denominator in the **closed** tolerance interval, breaking ties by least absolute numerator. `simplest-fraction-between` takes two exact rational endpoints. `CReal` supplies an approximation oracle, not decidable endpoint comparisons: use `rational-approx` or `cr:rationalize` for a guaranteed approximation without global minimality.
+
+Computable reals (`cr` below is `coalton/xmath/computable-reals`) have `Ring`
+but not `Eq`, `Ord`, `Num`, or `Hash`. Instead of setting a comparison
+threshold, pass a bit budget to `(cr:compare-at bits x y)`. It returns
+`Some LT` or `Some GT` only for strictly separated enclosures, `Some EQ` for
+equal stored rationals, and `None` if the budget does not settle the order.
+For example, `(cr:compare-at 0 (into 1/3) (/ 2 6))` certifies equality;
+comparing an opaque value such as `(sqrt 2)` with itself does not.
+`cr:floor-at`, `cr:ceiling-at`, `cr:truncate-at`, and `cr:round-at` likewise
+take `bits` and a `CReal` and return an `Optional Integer` rather than guessing
+at a rounding boundary.
 
 #### Roots, Exponentials, and Trigonometry (`coalton/math/elementary`)
 
@@ -188,7 +199,7 @@ implement the subset they support:
 - **`Radical :a`**: square roots, $n$th roots and hypotenuses (`sqrt`, `nth-root`, `hypot`).
 - **`Exponentiable :a`**: exponentials, logarithms, and hyperbolic functions (e.g., `exp`, `ln`, `pow`, `sinh`, `cosh`).
 - **`Trigonometric :a`**: trigonometric and inverse trigonometric functions (e.g., `sin`, `cos`, `tan`, `atan`).
-- **`Polar :a`**: polar coordinate conversions (`magnitude`, `phase`, `polar`, `cis`).
+- **`Polar :a`**: principal angle (`phase`) and decomposition (`polar`). `magnitude` and `cis` need only `ComplexComponent` with `Radical` and `Trigonometric`, respectively.
 - **`Elementary :a`**: mathematical constants `pi` ($\pi$) and `ee` ($e$) on types supporting all elementary operations.
 
 `magnitude` uses the scalar `hypot` method, so it avoids unnecessary overflow
@@ -210,6 +221,10 @@ imaginary parts of `(Complex :a)` (using specialized native Common Lisp complex
 representations where available):
 
 - **`ComplexComponent :a`**: types that can form `Complex :a` numbers (constructed with `complex`, destructured with `real-part` and `imag-part`, with imaginary unit `ii`).
+
+`ComplexComponent` requires `Ring`, not `Num`. For equality on `Complex :a`,
+require `Eq :a` as well. In particular `Complex CReal` supports arithmetic
+and magnitude, but not equality or principal phase.
 
 ---
 
@@ -948,7 +963,8 @@ The second search checks the candidate against fresh, higher-precision
 approximations. `bound` is an absolute upper bound on the residual in the
 original units; a small bound does **not** prove that the residual is zero.
 For `Integer`, `Fraction`, or `RealAlgebraic` inputs PSLQ checks the dot
-product exactly instead. `:bits` specifies binary working precision relative
-to the input scale; it cannot recover digits lost in an earlier conversion to
-`F64`. `PrecisionExhausted`, `CoefficientLimit`, and `IterationLimit` mean
+product exactly instead. It can also do so for `CReal` inputs when every
+nonzero coefficient multiplies a stored rational. `:bits` specifies binary
+working precision relative to the input scale; it cannot recover digits lost
+in an earlier conversion to `F64`. `PrecisionExhausted`, `CoefficientLimit`, and `IterationLimit` mean
 the search stopped, not that no relation exists.
