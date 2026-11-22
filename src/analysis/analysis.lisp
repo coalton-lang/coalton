@@ -43,7 +43,7 @@
            (let ((patterns
                    ;; for exhaustiveness checking, we can collapse
                    ;; binding patterns, (@ VAR PAT) is part of an
-                   ;; exhaustive match expression iff PAT is. 
+                   ;; exhaustive match expression iff PAT is.
                    (loop :for branch :in (tc:node-match-branches node)
                          :for pat := (tc:node-match-branch-pattern branch)
                          :collect (collapse-binding-patterns pat))))
@@ -65,32 +65,25 @@
                      :unless (useful-pattern-p patterns pattern env) :do
                        (source:warn "Useless match case"
                                     (source:note pattern "useless match case")
-                                    (source:note node "in this match")))))
-           node)
-         
+                                    (source:note node "in this match"))))))
+
          (analysis-abstraction-traversal (node)
            (declare (type tc:node-abstraction node))
            (loop :for pattern :in (tc:node-abstraction-params node)
-                 :do (check-pattern-exhaustiveness pattern env))
-           node)
+                 :do (check-pattern-exhaustiveness pattern env)))
          (analysis-bind-traversal (node)
            (declare (type tc:node-bind node))
-           (check-pattern-exhaustiveness (tc:node-bind-pattern node) env)
-           node)
-         (analysis-values-bind-traversal (node)
-           (declare (type tc:node-values-bind node))
-           node))
+           (check-pattern-exhaustiveness (tc:node-bind-pattern node) env)))
 
     (let ((analysis-traverse-block
             (tc:make-traverse-block
-             :match #'analysis-match-traversal 
+             :match #'analysis-match-traversal
              :abstraction #'analysis-abstraction-traversal
-             :values-bind #'analysis-values-bind-traversal
              :bind #'analysis-bind-traversal)))
 
       ;; Run analysis on definitions
       (loop :for define :in (tc:translation-unit-definitions translation-unit)
-            :do (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block)
+            :do (tc:visit (tc:toplevel-define-body define) analysis-traverse-block)
             :do (find-unused-variables define)
             :do (find-underapplied-values define)
             :do (find-discarded-results define)
@@ -100,7 +93,7 @@
       ;; Run analysis on instance definitions
       (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
         (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance)
-              :do (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)
+              :do (tc:visit (tc:instance-method-definition-body method) analysis-traverse-block)
               :do (find-underapplied-values method)
               :do (find-discarded-results method)
               :do (loop :for pattern :in (tc:binding-parameters method)

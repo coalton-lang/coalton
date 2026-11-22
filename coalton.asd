@@ -352,6 +352,7 @@
                (:module "typechecker"
                 :serial t
                 :components ((:file "lisp-type-tests")
+                             (:file "traverse-tests")
                              (:file "dictionary-resolution-tests")))
                (:file "environment-persist-tests")
                (:file "overlap-tests")

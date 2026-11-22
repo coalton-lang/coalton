@@ -15,53 +15,45 @@
   (let ((used-variables (make-hash-table :test #'eq)))
 
     ;; Mark used variables
-    (tc:traverse
+    (tc:visit
      (tc:binding-value binding)
      (tc:make-traverse-block
       :variable (lambda (node)
                   (declare (type tc:node-variable node))
-                  (unless (gethash (tc:node-variable-name node) used-variables)
-                    (setf (gethash (tc:node-variable-name node) used-variables) node))
-                  node)))
+                  (setf (gethash (tc:node-variable-name node) used-variables) t))))
 
     ;; Check for unused parameters in the binding
     (loop :for var :in (tc:pattern-variables (tc:binding-parameters binding))
           :do (variable-binding var used-variables))
 
     ;; Check for unused variables in the body
-    (tc:traverse
+    (tc:visit
      (tc:binding-value binding)
      (tc:make-traverse-block
       :bind (lambda (node)
-              (declare (type tc:node-bind))
+              (declare (type tc:node-bind node))
               (loop :for var :in (tc:pattern-variables (tc:node-bind-pattern node))
-                    :do (variable-binding var used-variables))
-              node)
+                    :do (variable-binding var used-variables)))
       :values-bind (lambda (node)
                      (declare (type tc:node-values-bind node))
                      (loop :for var :in (tc:pattern-variables (tc:node-values-bind-patterns node))
-                           :do (variable-binding var used-variables))
-                     node)
+                           :do (variable-binding var used-variables)))
       :do-bind (lambda (node)
-                 (declare (type tc:node-do-bind))
+                 (declare (type tc:node-do-bind node))
                  (loop :for var :in (tc:pattern-variables (tc:node-do-bind-pattern node))
-                       :do (variable-binding var used-variables))
-                 node)
+                       :do (variable-binding var used-variables)))
       :match-branch (lambda (node)
-                      (declare (type tc:node-match-branch))
+                      (declare (type tc:node-match-branch node))
                       (loop :for var :in (tc:pattern-variables (tc:node-match-branch-pattern node))
-                            :do (variable-binding var used-variables))
-                      node)
+                            :do (variable-binding var used-variables)))
       :let (lambda (node)
              (declare (type tc:node-let node))
              (loop :for binding :in (tc:node-let-bindings node)
-                   :do (variable-binding (tc:node-let-binding-name binding) used-variables))
-             node)
+                   :do (variable-binding (tc:node-let-binding-name binding) used-variables)))
       :abstraction (lambda (node)
                      (declare (type tc:node-abstraction node))
                      (loop :for var :in (tc:pattern-variables (tc:node-abstraction-params node))
-                           :do (variable-binding var used-variables))
-                     node)))))
+                           :do (variable-binding var used-variables)))))))
 
 (defun variable-binding (var used-variables)
   (declare (type (or tc:node-variable tc:pattern-var) var)
