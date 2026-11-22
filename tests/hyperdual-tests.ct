@@ -171,6 +171,12 @@
    (fn (x y)
      (is (== (dxxg x y) (hyperdual:d-xx (fn (%x) (g %x (into y))) x))))))
 
+(define-test hyperdual-branches-on-the-scalar ()
+  (is (== (hyperdual:partial-xy (fn (x y)
+                                  (if (== x y) (* x y) zero))
+                                (the Integer 2) 2)
+          1)))
+
 (define-test hyperdual-partial-x-test ()
   (for-each-point
    (fn (x y)

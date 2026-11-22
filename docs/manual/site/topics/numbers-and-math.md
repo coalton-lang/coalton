@@ -528,8 +528,8 @@ differentiation, and exact geometry, load the `"coalton/xmath"` ASDF system:
   multiplication in a fixed geometric algebra.
 - **`coalton/xmath/real-algebraic`**: Exact real algebraic numbers represented by
   defining polynomials and certified isolating intervals.
-- **`coalton/xmath/dual`** and **`coalton/xmath/hyperdual`**: First- and
-  second-order forward-mode automatic differentiation.
+- **`coalton/xmath/dual`** and **`coalton/xmath/hyperdual`**: Algebraic dual
+  numbers and [forward-mode automatic differentiation](#forward-mode-differentiation).
 - **`coalton/xmath/big-float`**, **`coalton/xmath/dyadic`**, and
   **`coalton/xmath/computable-reals`**: Arbitrary-precision floating-point,
   dyadic rationals $m \cdot 2^k$, and constructive real arithmetic.
@@ -546,6 +546,7 @@ normal forms and `nfield` to algebraic number fields.
 (cl:defpackage #:advanced-math-examples
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames (#:mat #:coalton/xmath/matrix)
+                    (#:dual #:coalton/xmath/dual)
                     (#:sg #:coalton/xmath/semiring-graph)
                     (#:qr #:coalton/xmath/quotient)
                     (#:ff #:coalton/xmath/finite-field)
@@ -592,6 +593,42 @@ not certify the solution or bound its error. For multiple right-hand sides,
 reports the largest of their residuals. Neither function changes its inputs.
 Both return an error for mismatched dimensions, an invalid tolerance, or
 non-finite entries or arithmetic (including overflow in the residual).
+
+### Forward-mode differentiation
+
+Use `Dual` for algebra. Equality and hashing include both coefficients, so
+`(dual:Dual 0 1)` is nonzero: a polynomial with this leading coefficient
+retains its degree. There is no default ordering on dual numbers.
+
+Use `AD` to differentiate an ordinary scalar calculation. It wraps `Dual`
+without changing its runtime representation, but comparisons and hashing
+inspect only the primal value. `d-x` differentiates the branch that runs;
+it does not check that the function is differentiable at a branch boundary.
+If a callback was explicitly typed `Dual :a -> Dual :a`, change its
+signature to `AD :a -> AD :a`, or seed the algebraic calculation directly
+with `(dual:dual-part (f (dual:Dual x one)))`.
+
+```lisp
+(coalton (dual:d-x (fn (x) (if (< x 0) (neg (* x x)) (* x x))) -3))
+;; => 6
+```
+
+`d-x-map` calls the function once with a unit tangent and extracts the
+derivative at each position of the result. The result constructor can be any
+`Functor`, not just `List`:
+
+```lisp
+(coalton (the (List Integer)
+           (dual:d-x-map (fn (x) [(* x x) (* x (* x x))]) 3)))
+;; => (6 27)
+
+(coalton (dual:d-x-map (fn (x) (if (> x 0) (Some (* x x)) None)) 3))
+;; => (Some 6)
+```
+
+`Hyperdual` in `coalton/xmath/hyperdual` uses nested `AD` values so that
+second and mixed partials follow the same primal branches. For algebraic
+equality on all four coefficients, use `Dual (Dual :a)` instead.
 
 ### Weighted graphs and automata
 

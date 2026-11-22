@@ -822,25 +822,15 @@
 (deftest codegen-rank-n-polymorphism ()
   (with-codegen-test-environment
     (codegen-test-compile
-     "(derive Eq)
-      (define-type (Dual :a) (Dual :a :a))
-      (define (primal-part (Dual x _)) x)
-      (define (dual-part (Dual _ dx)) dx)
-      (define-num (Num :a => Dual :a)
-        (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
-        (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
-        (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-        (define (from-int n) (Dual (from-int n) (from-int 0))))
-
-      (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+     "(declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
       (define (differentiate f)
         (fn (x)
-          (dual-part (f (Dual x 1)))))
+          (coalton/xmath/dual:d-x f x)))
 
       (declare val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32)))
       (define (val-and-deriv f)
         (fn (x)
-          (Tuple (f x) (dual-part (f (Dual x 1))))))
+          (Tuple (f x) (coalton/xmath/dual:d-x f x))))
 
       (declare square (Num :a => (:a -> :a)))
       (define (square x) (* x x))
@@ -881,7 +871,7 @@
       (monomorphize)
       (declare diff-at (Num :b => (forall (:a) (Num :a => (:a -> :a))) * :b -> :b))
       (define (diff-at f x)
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (monomorphize)
       (declare call-diff-at-f32 (F32 -> F32))
@@ -891,11 +881,11 @@
       ;; Specialize on a Rank-2 function
       (declare diff-spec-generic (Num :b => (forall (:a) (Num :a => (:a -> :a))) * :b -> :b))
       (define (diff-spec-generic f x)
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (declare diff-spec-f32 ((forall (:a) (Num :a => (:a -> :a))) * F32 -> F32))
       (define (diff-spec-f32 f x)
-        (+ 100.0f0 (dual-part (f (Dual x 1)))))
+        (+ 100.0f0 (coalton/xmath/dual:d-x f x)))
 
       (specialize diff-spec-generic diff-spec-f32 ((forall (:a) (Num :a => (:a -> :a))) * F32 -> F32))
 
@@ -907,7 +897,7 @@
       (inline)
       (declare inline-val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) * F32 -> Tuple F32 F32))
       (define (inline-val-and-deriv f x)
-        (Tuple (f x) (dual-part (f (Dual x 1)))))
+        (Tuple (f x) (coalton/xmath/dual:d-x f x)))
 
       (declare poly-fn (Num :a => (:a -> :a)))
       (define (poly-fn x) (+ x x))
@@ -928,7 +918,7 @@
       (abi :unpacked)
       (declare eval-num-fn-pair (NumFnPair -> F32))
       (define (eval-num-fn-pair (NumFnPair f x))
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (declare call-eval-pair (F32 -> F32))
       (define (call-eval-pair x)

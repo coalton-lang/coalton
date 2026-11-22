@@ -1,7 +1,6 @@
-;;;; dual.lisp
+;;;; dual.ct
 ;;;;
-;;;; An implementation of Dual numbers for the computing derivatives
-;;;; of compositions of built-in Coalton functions.
+;;;; Dual number arithmetic and forward-mode automatic differentiation.
 
 (coalton/utils:defstdlib-package #:coalton/xmath/dual
   (:nicknames
@@ -25,7 +24,12 @@
    #:Dual
    #:primal-part
    #:dual-part
-   #:d-x)
+   #:AD
+   #:make-ad
+   #:primal
+   #:tangent
+   #:d-x
+   #:d-x-map)
   (:documentation "
 Dual numbers are a hypercomplex number system [1]. A dual number has
 the form $a + b\\varepsilon$ where $a$ and $b$ are real numbers and
@@ -57,26 +61,18 @@ f(4 + \\varepsilon)
 \\end{aligned}
 $$
 
-In this result, the primal $14$ is the value of $f(4)$ and the dual is
-the value of of $f^{\\prime}(4)$.
+Here $14$ is the value of $f(4)$ and $3$ is its derivative there.
 
-Haskell has an automatic differentiation library and you can find it
-here [3].
-
-Limitations:
-
-We have decided to implement Ord, Eq, and Hash to look at only the
-primal part of numbers. This is so the Dual type can be used primarily
-for the purpose of automatic differentiation of existing code, and not
-for general abstract mathematics. If you need these type classes
-acting in the usual way (i.e., on both primal and dual parts), then we
-recommend making your own data type which wraps a dual number.
+Use `Dual` for algebra: equality and hashing use both coefficients, and
+there is no default ordering. Use `AD` to differentiate code that branches
+on scalar values: its comparisons and hash use only the primal part.
+`d-x` seeds a scalar input; `d-x-map` does the same for a function whose
+output is a functor of scalars.
 
 References:
 
 - [1] https://en.wikipedia.org/wiki/Dual_number
-- [2] https://blog.demofox.org/2014/12/30/dual-numbers-automatic-differentiation/
-- [3] https://hackage.haskell.org/package/ad"))
+- [2] https://blog.demofox.org/2014/12/30/dual-numbers-automatic-differentiation/"))
 
 (in-package #:coalton/xmath/dual)
 
@@ -85,13 +81,12 @@ References:
 
 (coalton-toplevel
 
+  (derive Eq Hash)
   (define-struct (Dual :t)
-    "Representation of a dual number in the form $a + b\\varepsilon$ where
-$a$ and $b$ are real numbers and $\\varepsilon$ satisfies
-$\\varepsilon^2 = 0$ and $\\varepsilon \\neq 0$.
-
-Note: `Eq`, and `Ord` and `Hash` only make use of the primal
-component."
+    "An algebraic dual number $a + b\\varepsilon$, with central $\\varepsilon$
+satisfying $\\varepsilon^2 = 0$. Equality and hashing use both coefficients:
+$(0,1)$ is nonzero even though its square is zero. There is no `Ord`
+instance. Use `AD` when a comparison should inspect only $a$."
     (primal-part "The primal part." :t)
     (dual-part "The dual part." :t))
 
@@ -110,24 +105,6 @@ component."
   (inline)
   (define (sq x)
     (* x x))
-
-  (define-instance (Eq :t => Eq (Dual :t))
-    "Compare primal values for branching in automatic differentiation. This is not a test for algebraic zero: `(Dual 0 1)` compares equal to `(Dual 0 0)`."
-    (inline)
-    (define (== (Dual a _) (Dual p _))
-      (== a p)))
-
-  (define-instance ((Ord :t) => Ord (Dual :t))
-    "Note: Ord only compares the primal component."
-    (inline)
-    (define (<=> (Dual p1 _) (Dual p2 _))
-      (<=> p1 p2)))
-
-  (define-instance ((Hash :t) => (Hash (Dual :t)))
-    "Note: Hash only considers the primal component in order to be consistent with Eq."
-    (inline)
-    (define (hash (Dual p1 _))
-      (hash p1)))
 
   (define-instance (HasAdd :t => HasAdd (Dual :t))
     (inline)
@@ -277,22 +254,12 @@ component."
   (define-instance ((Polar :t) (Elementary :t) (Ord :t) => Polar (Dual :t))
     (inline)
     (define (phase z)
-      (atan2 (imag-part z) (real-part z)))
+      ;; Choosing a quadrant is a comparison of primals, not an order on Dual.
+      (let (AD phi) = (atan2 (AD (imag-part z)) (AD (real-part z))))
+      phi)
     (inline)
     (define (polar z)
       (values (magnitude z) (phase z))))
-
-  (define-instance (Quantizable :t => Quantizable (Dual :t))
-    (inline)
-    (define (floor (Dual p _))
-      (floor p))
-    (inline)
-    (define (ceiling (Dual p _))
-      (ceiling p))
-    (inline)
-    (define (proper (Dual p d))
-      (let (values t r) = (proper p))
-      (values t (Dual r d))))
 
   (define-instance (Approximable :a :b => Approximable (Dual :a) (Dual :b))
     (inline)
@@ -327,11 +294,189 @@ component."
     (define (default)
       (Dual (default) (default))))
 
-  (declare d-x (Semiring :t => (Dual :t -> Dual :t) * :t -> :t))
-  (define (d-x f x)
-    "Compute the first derivative $f'(x)$ using forward-mode automatic differentiation."
-    (dual-part (f (Dual x one)))))
+  (repr :transparent)
+  (define-type (AD :a)
+    "A forward-mode differentiation view of a `Dual`. It has the same runtime
+representation and arithmetic, but `Eq`, `Ord` and `Hash` observe only the
+primal value. This follows the branch taken by an unseeded scalar; it does
+not make a piecewise function differentiable at a branch boundary. Unwrap
+with the `AD` pattern to compare both coefficients as algebraic data."
+    (AD (Dual :a)))
 
+  (inline)
+  (declare make-ad (:a * :a -> AD :a))
+  (define (make-ad x dx)
+    "Construct an `AD` value with primal $x$ and tangent $dx$."
+    (AD (Dual x dx)))
+
+  (inline)
+  (declare primal (AD :a -> :a))
+  (define (primal (AD x))
+    "Return the primal value of an `AD` result."
+    (primal-part x))
+
+  (inline)
+  (declare tangent (AD :a -> :a))
+  (define (tangent (AD x))
+    "Return the tangent propagated from the seeded input."
+    (dual-part x))
+
+  (define-instance (Eq :a => Eq (AD :a))
+    (inline)
+    (define (== x y) (== (primal x) (primal y))))
+
+  (define-instance (Ord :a => Ord (AD :a))
+    (inline)
+    (define (<=> x y) (<=> (primal x) (primal y))))
+
+  (define-instance (Hash :a => Hash (AD :a))
+    (inline)
+    (define (hash x) (hash (primal x))))
+
+  (define-instance (HasAdd :a => HasAdd (AD :a))
+    (inline)
+    (define (+ (AD x) (AD y)) (AD (+ x y))))
+
+  (define-instance (Additive :a => Additive (AD :a))
+    (define zero (AD zero)))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (AD :a))
+    (inline)
+    (define (- (AD x) (AD y)) (AD (- x y)))
+    (inline)
+    (define (neg (AD x)) (AD (neg x))))
+
+  (define-instance ((HasAdd :a) (HasMul :a) => HasMul (AD :a))
+    (inline)
+    (define (* (AD x) (AD y)) (AD (* x y))))
+
+  (define-instance (Semiring :a => Multiplicative (AD :a))
+    (define one (AD one)))
+
+  (define-instance (Semiring :a => Semiring (AD :a)))
+
+  (define-instance (Ring :a => Ring (AD :a))
+    (inline)
+    (define (from-int n) (AD (from-int n))))
+
+  (define-instance (Num :a => Num (AD :a)))
+
+  (define-instance (HasMul :a => Scale :a (AD :a))
+    (inline)
+    (define (scale k (AD x)) (AD (scale k x))))
+
+  (define-instance (Ring :a => Module :a (AD :a)))
+  (define-instance (CommutativeRing :a => CommutativeRing (AD :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (AD :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (AD :a)))
+  (define-instance (RationalScalars :a => RationalScalars (AD :a))
+    (inline)
+    (define (embed-fraction q) (AD (embed-fraction q))))
+
+  (define-instance (ConjugateRing :a => ConjugateRing (AD :a))
+    (inline)
+    (define (conjugate (AD x)) (AD (conjugate x))))
+
+  (define-instance (Reciprocable :a => Reciprocable (AD :a))
+    (inline)
+    (define (/ (AD x) (AD y)) (AD (/ x y)))
+    (inline)
+    (define (recip (AD x)) (AD (recip x))))
+
+  (define-instance ((CommutativeRing :a) (Trigonometric :a) (Reciprocable :a) (Radical :a) => Trigonometric (AD :a))
+    (define (sin (AD x)) (AD (sin x)))
+    (define (cos (AD x)) (AD (cos x)))
+    (define (tan (AD x)) (AD (tan x)))
+    (define (asin (AD x)) (AD (asin x)))
+    (define (acos (AD x)) (AD (acos x)))
+    (define (atan (AD x)) (AD (atan x))))
+
+  (define-instance ((CommutativeRing :a) (Exponentiable :a) (Reciprocable :a) => Exponentiable (AD :a))
+    (define (exp (AD x)) (AD (exp x)))
+    (define (ln (AD x)) (AD (ln x)))
+    (define (pow (AD x) (AD y)) (AD (pow x y)))
+    (define (log (AD x) (AD y)) (AD (log x y)))
+    (define (sinh (AD x)) (AD (sinh x)))
+    (define (cosh (AD x)) (AD (cosh x)))
+    (define (tanh (AD x)) (AD (tanh x)))
+    (define (atanh (AD x)) (AD (atanh x)))
+    ;; The method supplies Radical (AD :a), not Radical :a.
+    (define (asinh x) (canonical-asinh x))
+    (define (acosh x) (canonical-acosh x)))
+
+  (define-instance ((CommutativeRing :a) (Radical :a) (Reciprocable :a) => Radical (AD :a))
+    (define (sqrt (AD x)) (AD (sqrt x)))
+    (define (nth-root n (AD x)) (AD (nth-root n x)))
+    (define (hypot (AD x) (AD y)) (AD (hypot x y))))
+
+  (define-instance ((CommutativeRing :a) (Elementary :a) => Elementary (AD :a))
+    (define (atan2 y x)
+      ;; atan2 is smooth on the vertical axes, but canonical-atan2 selects
+      ;; a constant there. Use the other coordinate chart to retain dx.
+      (if (and (== x zero) (/= y zero))
+          (- (/ pi (if (< y zero) -2 2)) (atan (/ x y)))
+          (canonical-atan2 y x)))
+    (define pi (AD pi))
+    (define ee (AD ee)))
+
+  (define-instance (ComplexComponent :a => ComplexComponent (AD :a))
+    (inline)
+    (define (complex a b) (complex::%Complex a b))
+    (inline)
+    (define (real-part (complex::%Complex a _)) a)
+    (inline)
+    (define (imag-part (complex::%Complex _ b)) b))
+
+  (define-instance ((Polar :a) (Elementary :a) (Ord :a) => Polar (AD :a))
+    (define (phase z) (atan2 (imag-part z) (real-part z)))
+    (define (polar z) (values (magnitude z) (phase z))))
+
+  (define-instance (Quantizable :a => Quantizable (AD :a))
+    (inline)
+    (define (floor x) (floor (primal x)))
+    (inline)
+    (define (ceiling x) (ceiling (primal x)))
+    (define (proper x)
+      (let (values n r) = (proper (primal x)))
+      (values n (make-ad r (tangent x)))))
+
+  (define-instance (Approximable :a :b => Approximable (AD :a) (AD :b))
+    (define (approx bits (AD x)) (AD (approx bits x))))
+
+  (define-instance ((Transfinite :a) (Additive :a) => Transfinite (AD :a))
+    (define infinity (AD infinity))
+    (define (infinite? (AD x)) (infinite? x))
+    (define (finite? (AD x)) (finite? x)))
+
+  (define-instance ((IEEEFloat :a) (Additive :a) => IEEEFloat (AD :a))
+    (define nan (AD nan))
+    (define (nan? (AD x)) (nan? x)))
+
+  (define-instance (Default :a => Default (AD :a))
+    (define (default) (AD (default))))
+
+  (define-instance (show:Show :a => show:Show (AD :a))
+    (define (show:show-to f (AD x))
+      (f "(AD ")
+      (show:show-to f x)
+      (f ")")))
+
+  (inline)
+  (declare d-x (Multiplicative :a => (AD :a -> AD :a) * :a -> :a))
+  (define (d-x f x)
+    "Compute $f'(x)$ by evaluating `f` once with unit tangent and extracting
+its result's tangent. Use `d-x-map` when the result is a container."
+    (tangent (f (make-ad x one))))
+
+  (declare d-x-map
+    (forall ((:f (Type -> Type)) :a)
+      ((Functor :f) (Multiplicative :a) => (AD :a -> :f (AD :a)) * :a -> :f :a)))
+  (define (d-x-map f x)
+    "Differentiate a functor-valued function of one scalar. Evaluate `f` once
+at $x$ with unit tangent, then map `tangent` over the result. For example, a
+list of outputs gives a list of derivatives in the same order; an absent
+optional output stays absent."
+    (map tangent (f (make-ad x one)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/DUAL")

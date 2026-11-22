@@ -18,9 +18,10 @@
    #:coalton/math/complex)
   (:import-from
    #:coalton/xmath/dual
-   #:Dual
-   #:primal-part
-   #:dual-part)
+   #:AD
+   #:make-ad
+   #:primal
+   #:tangent)
   (:export
    #:Hyperdual
    #:d-x
@@ -117,14 +118,16 @@ $$
 (coalton-toplevel
 
   (define-type-alias (Hyperdual :t)
-    (Dual (Dual :t))
-    "Representation of a hyperdual number $a + b\\varepsilon_1 + c\\varepsilon_2 + d\\varepsilon_1\\varepsilon_2$ as a nested dual number `(Dual (Dual a b) (Dual c d))`.")
+    (AD (AD :t))
+    "A second-order `AD` value $a + b\\varepsilon_1 + c\\varepsilon_2 + d\\varepsilon_1\\varepsilon_2$.
+Comparisons and hashing observe $a$; use nested `Dual` for algebraic equality
+on all four coefficients.")
 
   (inline)
   (declare Hyperdual (:t * :t * :t * :t -> Hyperdual :t))
   (define (Hyperdual a b c d)
     "Construct a hyperdual number $a + b\\varepsilon_1 + c\\varepsilon_2 + d\\varepsilon_1\\varepsilon_2$."
-    (Dual (Dual a b) (Dual c d)))
+    (make-ad (make-ad a b) (make-ad c d)))
 
   (define-instance (Additive :t => Into :t (Hyperdual :t))
     (inline)
@@ -142,44 +145,43 @@ $$
   (declare d-x (Semiring :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-x f x)
     "Compute $f'(x)$."
-    (dual-part (primal-part (f (Hyperdual x one one zero)))))
+    (tangent (primal (f (Hyperdual x one one zero)))))
 
   (declare d-xx (Semiring :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-xx f x)
     "Compute $f''(x)$."
-    (dual-part (dual-part (f (Hyperdual x one one zero)))))
+    (tangent (tangent (f (Hyperdual x one one zero)))))
 
   (declare partial-x (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-x f x y)
     "Compute $\\frac{\\partial f}{\\partial x}(x, y)$."
-    (dual-part (primal-part (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
+    (tangent (primal (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
 
   (declare partial-y (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-y f x y)
     "Compute $\\frac{\\partial f}{\\partial y}(x, y)$."
-    (primal-part (dual-part (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
+    (primal (tangent (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
 
   (declare gradient (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
   (define (gradient f x y)
     "Compute the gradient $\\left(\\frac{\\partial f}{\\partial x}, \\frac{\\partial f}{\\partial y}\\right)$ at the point $(x, y)$."
-    (let (Dual (Dual _ b) (Dual c _)) =
-      (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))
-    (Cons b (Cons c Nil)))
+    (let z = (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))
+    [(tangent (primal z)) (primal (tangent z))])
 
   (declare partial-xx (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xx f x y)
     "Compute $\\frac{\\partial^2 f}{\\partial x^2}(x, y)$."
-    (dual-part (dual-part (f (Hyperdual x one one zero) (Hyperdual y zero zero zero)))))
+    (tangent (tangent (f (Hyperdual x one one zero) (Hyperdual y zero zero zero)))))
 
   (declare partial-xy (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xy f x y)
     "Compute $\\frac{\\partial^2 f}{\\partial x\\partial y}(x, y)$."
-    (dual-part (dual-part (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
+    (tangent (tangent (f (Hyperdual x one zero zero) (Hyperdual y zero one zero)))))
 
   (declare partial-yy (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-yy f x y)
     "Compute $\\frac{\\partial^2 f}{\\partial y^2}(x, y)$."
-    (dual-part (dual-part (f (Hyperdual x zero zero zero) (Hyperdual y one one zero)))))
+    (tangent (tangent (f (Hyperdual x zero zero zero) (Hyperdual y one one zero)))))
 
   (declare laplacian (Semiring :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (laplacian f x y)

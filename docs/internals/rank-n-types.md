@@ -17,12 +17,12 @@ level of a top-level `ty-scheme`. That prevents expressing APIs where a callee
 must instantiate a function argument at types chosen *internally* by the callee,
 such as:
 
-- Forward-mode automatic differentiation over `Dual` numbers:
+- Forward-mode automatic differentiation (instantiating the callback at `AD F32`):
   ```lisp
   (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
   (define (differentiate f)
     (fn (x)
-      (dual-part (f (Dual x 1)))))
+      (coalton/xmath/dual:d-x f x)))
   ```
 - Scoped resource/state tokens (`runST`-style phantom state):
   ```lisp
@@ -164,7 +164,7 @@ compile with zero overhead:
 
 1. **Unwrapping hoisted dictionary variables (`extract-dict` in `inliner.lisp`):**
    When a higher-rank function like `differentiate` constructs a parameterized
-   dictionary such as `(INSTANCE/NUM (DUAL :A) |INSTANCE/CLS:NUM F32|)`,
+   dictionary such as the `Num` instance for `AD F32`,
    `static-dict-lift` hoists that dictionary into a top-level `hoisted_N`
    binding. When `differentiate` is later inlined at a call site, `extract-dict`
    resolves `hoisted_N` via `tc:lookup-code` so `inline-method` and
@@ -173,9 +173,9 @@ compile with zero overhead:
 2. **Type-specializing beta-reduced lambdas (`specialize-inlined-abstraction` in `lawnmower.lisp`):**
    When a polymorphic `node-abstraction` argument is substituted into a call
    site and beta-reduced by the lawnmower, its parameter and body types are
-   unified with the call-site operand types (`Dual F32`), allowing downstream
-   method inlining and scalar replacement to eliminate intermediate `Dual`
-   allocations completely.
+   unified with the call-site operand types (`AD F32`, transparent over
+   `Dual F32`), allowing downstream method inlining and scalar replacement
+   to eliminate intermediate `Dual` allocations completely.
 
 ---
 

@@ -1826,38 +1826,35 @@
 (deftest test-rank-n-types ()
   ;; Rank-2 polymorphic function arguments with and without constraints
   (check-coalton-types
-   "(derive Eq)
-    (define-type (Dual :a) (Dual :a :a))
-    (define (primal-part (Dual x _)) x)
-    (define (dual-part (Dual _ dx)) dx)
-    (define-num (Num :a => Dual :a)
-      (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
-      (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
-      (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-      (define (from-int n) (Dual (from-int n) (from-int 0))))
-
-    (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+   "(declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
     (define (differentiate f)
       (fn (x)
-        (dual-part (f (Dual x 1)))))
+        (coalton/xmath/dual:d-x f x)))
 
     (declare val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32)))
     (define (val-and-deriv f)
       (fn (x)
-        (Tuple (f x) (dual-part (f (Dual x 1))))))
+        (Tuple (f x) (coalton/xmath/dual:d-x f x))))
+
+    (declare differentiate-in
+      (forall ((:f (Type -> Type)))
+        (Functor :f => (forall (:a) (Num :a => :a -> :f :a)) * F32 -> :f F32)))
+    (define (differentiate-in f x) (coalton/xmath/dual:d-x-map f x))
 
     (declare square (Num :a => (:a -> :a)))
     (define (square x) (* x x))
 
     (define d-square-var (differentiate square))
     (define d-square-fn (differentiate (fn (x) (+ (* x x) (* 2 x)))))
-    (define vd-square (val-and-deriv square))"
+    (define vd-square (val-and-deriv square))
+    (define d-some-square (differentiate-in (fn (x) (Some (* x x))) 3.0f0))"
 
    '("differentiate" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32))")
    '("val-and-deriv" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32))")
    '("d-square-var" . "(F32 -> F32)")
    '("d-square-fn" . "(F32 -> F32)")
-   '("vd-square" . "(F32 -> Tuple F32 F32)"))
+   '("vd-square" . "(F32 -> Tuple F32 F32)")
+   '("d-some-square" . "(Optional F32)"))
 
   ;; Rank-2 and Rank-3 types, ADT/struct fields, natural transformations, and type aliases
   (check-coalton-types

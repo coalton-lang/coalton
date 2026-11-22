@@ -146,11 +146,11 @@ functions or inline [`fn`](/manual/operators/fn/) lambdas without extra annotati
   (define (apply-both f x y)
     (Tuple (f x) (f y)))
 
-  ;; A Rank-2 automatic differentiation operator using Dual numbers
+  ;; A rank-2 callback; d-x instantiates f at AD F32 (load "coalton/xmath").
   (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
   (define (differentiate f)
     (fn (x)
-      (dual-part (f (Dual x 1)))))
+      (coalton/xmath/dual:d-x f x)))
 
   ;; A Rank-2 natural transformation between type constructors :f and :g
   (declare map-pair
@@ -162,6 +162,12 @@ functions or inline [`fn`](/manual/operators/fn/) lambdas without extra annotati
   (define (map-pair nat xs ys)
     (Tuple (nat xs) (nat ys))))
 ```
+
+The scalar variable `:a` in `differentiate` has kind `Type`. What makes the
+example *higher-rank* is that its argument must work at every such `:a`.
+By contrast, [`d-x-map`](/manual/topics/numbers-and-math/#forward-mode-differentiation)
+is *higher-kinded*: its result constructor varies over functors of kind
+`Type -> Type`. It does not require a rank-2 callback.
 
 Coalton's higher-rank polymorphism is **predicative**: type variables and type
 constructor arguments only ever instantiate to *monotypes* (types that do not

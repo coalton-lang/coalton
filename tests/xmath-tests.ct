@@ -27,6 +27,11 @@
     (check-coalton-types
      "(define (bad-acos) (acos (the (coalton/xmath/power-series:PowerSeries Fraction) zero)))")))
 
+(deftest algebraic-duals-have-no-default-order ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (bad-order) (< (the (coalton/xmath/dual:Dual Integer) zero) one))")))
+
 (deftest runtime-matrices-have-no-implicit-shape ()
   (dolist (constant '("zero" "one" "1"))
     (signals tc:tc-error
@@ -560,9 +565,8 @@
   (let j = (quat:quaternion (the Fraction 0) 0 1 0))
   (let u = (dual:Dual i j))
   (let v = (math:recip u))
-  ;; Dual equality only compares the primal parts.
-  (is (== (dual:dual-part (* u v)) zero))
-  (is (== (dual:dual-part (* v u)) zero)))
+  (is (== (* u v) one))
+  (is (== (* v u) one)))
 
 (define-test test-clifford-mask-and-signature ()
   (let width = (lisp (-> UFix) () (cl:integer-length cl:most-positive-fixnum)))
