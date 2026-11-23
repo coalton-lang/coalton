@@ -17,6 +17,7 @@
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
+   #:superclass-closure                 ; FUNCTION
    #:entail                             ; FUNCTION
    #:fundep-entail                      ; FUNCTION
    #:reduce-context                     ; FUNCTION
@@ -37,22 +38,17 @@
       t
       nil))
 
-(defun by-super (env pred)
+(defun superclass-closure (env pred)
   "Recursively get all super classes of predicate
 
 Requires acyclic superclasses"
   (declare (type environment env)
            (type ty-predicate pred)
            (values ty-predicate-list))
-  (let* ((class (lookup-class env (ty-predicate-class pred)))
-         (subs (predicate-match (ty-class-predicate class) pred)))
-    (cons
-     pred
-     (loop
-       :for super-class-pred :in (ty-class-superclasses class)
-       :append (by-super
-                env
-                (apply-substitution subs super-class-pred))))))
+  (let ((class (lookup-class env (ty-predicate-class pred))))
+    (cons pred
+          (loop :for super :in (context-superclasses class pred)
+                :append (superclass-closure env super)))))
 
 (defun by-inst (env pred)
   "Select the most-specific stable instance for PRED and return its constraints
@@ -77,7 +73,7 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean))
-  (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
+  (let* ((super (mapcan (lambda (p) (superclass-closure env p)) preds))
         (value
           (or (true (member pred super :test #'type-predicate=))
               (true (multiple-value-bind (inst-preds found)
@@ -92,7 +88,7 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean &optional))
-  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'type-predicate=)))
+  (true (member pred (mapcan (lambda (p) (superclass-closure env p)) preds) :test #'type-predicate=)))
 
 (defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"
@@ -399,7 +395,7 @@ through the typechecker, because the method M does not contain all of
 the type variables of the class D.
 "
   (flet ((expand (context)
-           (alexandria:mappend (alexandria:curry #'by-super env) context)))
+           (alexandria:mappend (alexandria:curry #'superclass-closure env) context)))
     (loop :with expr-preds := (expand expr-preds)
           :with preds      := (expand preds)
           :with subs       := nil

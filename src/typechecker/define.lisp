@@ -4896,6 +4896,8 @@ as a recursive function rather than a recursive value."
 
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
+               (tc:*given-superclass-expansions*
+                 (tc:apply-substitution subs tc:*given-superclass-expansions*))
 
                ;; Generalization should see outer scoped type variables, but not the
                ;; explicit binders introduced by the declaration currently being checked.

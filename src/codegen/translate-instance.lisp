@@ -95,16 +95,8 @@
                            :type ctx-ty
                            :value ctx-var)))
 
-         (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
-
-         (subs (nth-value 1
-                          (tc:solve-fundeps
-                           env
-                           (append (tc:apply-substitution subs (tc:ty-class-superclasses class))
-                                   (tc:toplevel-define-instance-context instance))
-                           subs)))
-
-         (superclass-preds (tc:apply-substitution subs (mapcar #'car (tc:ty-class-superclass-dict class))))
+         (tc:*given-superclass-expansions* (tc:toplevel-define-instance-given-expansions instance))
+         (superclass-preds (tc:toplevel-define-instance-superclasses instance))
 
          ;; These will be methods with the dict arguments
          (method-definitions

@@ -125,25 +125,12 @@
 
 
 (defun superclass-accessors (pred ctx-pred env)
-  (let* ((ctx-class (tc:lookup-class env (tc:ty-predicate-class ctx-pred)))
-         (subs (tc:predicate-match (tc:ty-class-predicate ctx-class) ctx-pred))
-         (ctx-class (tc:apply-substitution subs ctx-class))
-
-         (superclass-ret
-           (some
-            (lambda (super-dict-entry)
-              (let* ((superclass-pred (car super-dict-entry))
-                     (superclass-accessor (cdr super-dict-entry))
-                     (superclass-accessor-symbol
-                       (alexandria:format-symbol
-                        (symbol-package superclass-accessor)
-                        "CLASS/~A-~A"
-                        (tc:ty-predicate-class ctx-pred)
-                        superclass-accessor)))
-                (lookup-pred pred superclass-pred ctx-pred superclass-accessor-symbol env)))
-            (tc:ty-class-superclass-dict ctx-class))))
-
-    superclass-ret))
+  (let ((class (tc:lookup-class env (tc:ty-predicate-class ctx-pred))))
+    (loop :for super :in (tc:context-superclasses class ctx-pred)
+          :for (nil . field) :in (tc:ty-class-superclass-dict class)
+          :for accessor := (alexandria:format-symbol (symbol-package field) "CLASS/~A-~A"
+                                                     (tc:ty-class-name class) field)
+          :thereis (lookup-pred pred super ctx-pred accessor env))))
 
 (defun lookup-pred (pred ctx-pred sub-pred method-accessor env)
   "Search for PRED in CTX-PRED recursing through superclasses if necessary"

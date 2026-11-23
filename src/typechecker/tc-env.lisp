@@ -62,15 +62,18 @@
      (tc-env-typevar-table env))
     partial-env))
 
-(defun tc-env-extend-type-variable-scope (env tyvars)
+(defun tc-env-extend-type-variable-scope (env tyvars &key hidden)
   (declare (type tc-env env)
-           (type tc:tyvar-list tyvars)
+           (type tc:tyvar-list tyvars hidden)
            (values tc-env &optional))
   (let ((typevar-table (alexandria:copy-hash-table (tc-env-typevar-table env))))
     (loop :for tyvar :in tyvars
           :for source-name := (tc:tyvar-source-name tyvar)
           :when source-name
             :do (setf (gethash source-name typevar-table) tyvar))
+    ;; Dictionary witnesses are fixed by this scope, but are not source binders.
+    (dolist (tyvar hidden)
+      (setf (gethash (gensym) typevar-table) tyvar))
     (make-tc-env :env (tc-env-env env)
                  :ty-table (tc-env-ty-table env)
                  :typevar-table typevar-table)))

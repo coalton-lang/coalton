@@ -243,6 +243,9 @@
    #:initialize-fundep-environment          ; FUNCTION
    #:collect-fundeps                        ; FUNCTION
    #:collect-fundep-vars                    ; FUNCTION
+   #:given-superclass-expansions            ; FUNCTION
+   #:context-superclasses                   ; FUNCTION
+   #:*given-superclass-expansions*          ; VARIABLE
    #:update-instance-fundeps                ; FUNCTION
    #:check-instance-fundep-consistency      ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
@@ -2069,6 +2072,27 @@ but not with any other occurrence of the class."
                         :types (apply-substitution subs (ty-predicate-types super))
                         :location (source:location pred)))))))
 
+(defun given-superclass-expansions (env context)
+  "Instantiate the fields of each dictionary reachable from CONTEXT once."
+  (let ((expansions nil))
+    (labels ((visit (pred)
+               (unless (assoc pred expansions :test #'type-predicate=)
+                 (let ((supers (instantiate-superclasses (lookup-class env (ty-predicate-class pred)) pred)))
+                   (when supers
+                     (push (cons pred supers) expansions)
+                     (mapc #'visit supers))))))
+      (mapc #'visit context))
+    expansions))
+
+(defvar *given-superclass-expansions* nil
+  "Instantiated fields of the dictionaries in scope while checking or translating an instance.")
+
+(defun context-superclasses (class pred)
+  "Look up the superclass fields of a given dictionary in declaration order."
+  (or (cdr (assoc pred *given-superclass-expansions* :test #'type-predicate=))
+      (apply-substitution (predicate-match (ty-class-predicate class) pred)
+                          (ty-class-superclasses class))))
+
 (defun collect-fundeps (env preds &optional (scope (make-hash-table :test #'eq)))
   "Collect the functional dependencies associated with PREDS as CONSes of
 LISTs of TYs, recursively expanding to the superclass predicates.
@@ -2598,13 +2622,15 @@ that variable, so this falls back to the full instance list."
                              :second-pred (apply-substitution subs other)))))))
   subs)
 
-(defun solve-fundeps (env preds subs)
+(defun solve-fundeps (env preds subs &key given-expansions)
   "First, this function creates and applies substitutions to preds based
 on functional dependencies that constrain them with respect to one
 another, and then this function creates and applies substitutions to
 preds based on functional dependencies that constrain them with
 respect to defined type class instances. The values returned are the
 predicates with all substitutions applied and the new substitutions.
+GIVEN-EXPANSIONS, if supplied, fixes the identities of the hidden
+variables in dictionaries already in scope.
 
 Signal FUNDEP-NONTERMINATION if improvement keeps specializing PREDS
 without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
@@ -2681,7 +2707,10 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                   :for pred := (first remaining-preds)
                   :for class := (class-for (ty-predicate-class pred))
                   :for applied-pred := (apply-substitution subs pred)
-                  :do (alexandria:nconcf remaining-preds (instantiate-superclasses class applied-pred))
+                  :do (alexandria:nconcf
+                       remaining-preds
+                       (or (copy-list (cdr (assoc applied-pred given-expansions :test #'type-predicate=)))
+                           (instantiate-superclasses class applied-pred)))
                   :collect pred))
 
       ;; This block is meant to simplify PREDS if instances exist in the

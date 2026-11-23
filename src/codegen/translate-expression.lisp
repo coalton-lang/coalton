@@ -343,19 +343,6 @@ values."
            (values node &optional))
   (translate-body-elements-into body-nodes (zero-values-node) ctx env))
 
-(defun reachable-context-predicates (pred env)
-  "Return PRED plus any predicates reachable from it through superclasses."
-  (declare (type tc:ty-predicate pred)
-           (type tc:environment env)
-           (values tc:ty-predicate-list &optional))
-  (labels ((walk (pred)
-             (let* ((class (tc:lookup-class env (tc:ty-predicate-class pred)))
-                    (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
-                    (supers (tc:apply-substitution subs (tc:ty-class-superclasses class))))
-               (cons pred
-                     (mapcan #'walk supers)))))
-    (walk pred)))
-
 (defun specialize-qual-type-to-context (qual-ty ctx env)
   "Specialize QUAL-TY to any uniquely matching predicates in CTX.
 
@@ -370,7 +357,7 @@ application site, such as variables passed into `lisp` forms."
       (let ((matches
               (remove-duplicates
                (loop :for (ctx-pred . nil) :in ctx
-                     :append (loop :for reachable-pred :in (reachable-context-predicates ctx-pred env)
+                     :append (loop :for reachable-pred :in (tc:superclass-closure env ctx-pred)
                                    :for match
                                      := (and (eq (tc:ty-predicate-class pred)
                                                  (tc:ty-predicate-class reachable-pred))

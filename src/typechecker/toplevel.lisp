@@ -35,6 +35,8 @@
    #:toplevel-define-instance           ; STRUCT
    #:make-toplevel-define-instance      ; CONSTRUCTOR
    #:toplevel-define-instance-context   ; ACCESSOR
+   #:toplevel-define-instance-superclasses ; ACCESSOR
+   #:toplevel-define-instance-given-expansions ; ACCESSOR
    #:toplevel-define-instance-pred      ; ACCESSOR
    #:toplevel-define-instance-methods   ; ACCESSOR
    #:toplevel-define-instance-head-location ; ACCESSOR
@@ -101,6 +103,8 @@
             (:include toplevel-definition)
             (:copier nil))
   (context       (util:required 'context)       :type tc:ty-predicate-list :read-only t)
+  (superclasses  (util:required 'superclasses)  :type tc:ty-predicate-list :read-only t)
+  (given-expansions nil                         :type list                 :read-only t)
   (pred          (util:required 'pred)          :type tc:ty-predicate      :read-only t)
   (methods       (util:required 'methods)       :type hash-table           :read-only t)
   (head-location (util:required 'head-location) :type source:location      :read-only t))
