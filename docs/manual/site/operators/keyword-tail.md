@@ -71,7 +71,7 @@ weight: 40
 ; => #.(TUPLE (0 2 4) (0 1 2 3 4 5 6 7 8 9))
 ```
 
-## Other Notes
+## Other notes
 
 - Functions with keyword parameters are not inlined by Coalton's AST inliner or cloned by [`monomorphize`](/manual/operators/monomorphize/).
 - See [`->`](/manual/operators/arrow/), [`define`](/manual/operators/define/), and [`fn`](/manual/operators/fn/).

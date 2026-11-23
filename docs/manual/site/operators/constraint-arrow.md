@@ -67,7 +67,7 @@ weight: 20
       (show-equal? x y))))
 ```
 
-## Other Notes
+## Other notes
 
 - At compile time, each predicate to the left of `=>` in a value or instance declaration becomes a hidden typeclass dictionary parameter passed to the compiled function or instance constructor.
 - When Unicode type printing is enabled, Coalton displays `=>` as `⇒` in printed types and instance listings, while source code uses `=>`.

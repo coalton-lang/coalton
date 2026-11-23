@@ -1,5 +1,5 @@
 ---
-title: "Parallel Programming"
+title: "Parallel programming"
 description: "A tutorial on task and data parallelism with the coalton/threads library."
 hideMeta: true
 weight: 65
@@ -74,7 +74,7 @@ threads. Your
 numbers will differ, depending above all on the number of processors of
 your machine.
 
-## A First Parallel Loop
+## A first parallel loop
 
 This function counts the steps of a Collatz sequence, and the next one
 counts the steps of every integer below `n`, storing them in an array:
@@ -203,7 +203,7 @@ The integer below 10,000,000 with the longest sequence is 8,400,511, with
 685 steps. `longest-chain` finds it in 0.088 seconds, while a sequential
 loop, such as `longest-in-range` below, takes 1.49 seconds.
 
-### Chunked Loops
+### Chunked loops
 
 `map-reduce-range` calls its two functions once per integer, and here
 each value is a tuple, which must be allocated. When the work per
@@ -236,7 +236,7 @@ chunk is combined. This version takes 0.072 seconds, 21 times less than
 the sequential `(longest-in-range 2 10000000)`. Likewise, `par:for-chunks!`
 is the chunked counterpart of `for-range!`.
 
-### Reproducible Reductions
+### Reproducible reductions
 
 Floating-point addition is not exactly associative, so a parallel sum of
 floating-point numbers can differ in its last digits from one run to the
@@ -249,7 +249,7 @@ accept `:grain` too.
 Finally, `par:fold-map-range` is a reduction that combines values with
 `<>`, the operation of a `Monoid`, starting from `mempty`.
 
-## Divide and Conquer
+## Divide and conquer
 
 `par:join` calls two functions, potentially in parallel, and returns both
 of their values. It is the tool for *divide-and-conquer* algorithms,
@@ -497,7 +497,7 @@ coalton/threads/runtime:*debug-tasks* t)`: an error in a task then
 enters the debugger in the worker thread that ran the task, before it is
 transferred to the waiting thread.
 
-### Handlers and Resumptions
+### Handlers and resumptions
 
 A task runs either on the thread that started the parallel operation, or
 on another worker thread. On another thread, it does not see the dynamic
@@ -541,7 +541,7 @@ thread, because the task's `resumable` would already have been unwound.
 Likewise, a task must not `resume-to` a resumption established around
 the operation.
 
-## Sharing Data Between Tasks
+## Sharing data between tasks
 
 Nothing prevents tasks from changing the same data at the same time, with
 unpredictable results. Tasks may set distinct elements of the same array
@@ -654,7 +654,7 @@ A few more rules keep parallel programs correct:
   body of a `for` loop that refers to a loop variable may see a later
   value of it. Bind the value with `let` first.
 
-## Threads and Channels
+## Threads and channels
 
 The pool of workers is meant for computation. For activities that wait,
 such as input and output, or that last as long as the program, start an
@@ -732,7 +732,7 @@ show these effects. On the machine above:
 
 With 16 workers, one per core, the path tracer's speedup rises to 4.4x.
 
-## Further Reading
+## Further reading
 
 - The [`coalton/threads`
   README](https://github.com/coalton-lang/coalton/tree/main/threads)

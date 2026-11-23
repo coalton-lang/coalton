@@ -30,7 +30,7 @@ weight: 85
         (compute))))
 ```
 
-## Other Notes
+## Other notes
 
 - `likely` is defined as an identity function on `Boolean` in `coalton` (`src/intrinsic-applications.lisp`); the compiler does not currently emit host branch-prediction hints for it.
 - Use [`unlikely`](/manual/operators/unlikely/) for the complementary hint when a condition is expected to be `False`.

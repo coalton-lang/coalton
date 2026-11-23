@@ -89,7 +89,7 @@ error: Type mismatch
 
 Coalton is currently used in production to build defense and [quantum computing software](https://coalton-lang.github.io/20220906-quantum-compiler/).
 
-## Getting Started
+## Getting started
 
 > [!WARNING]
 > Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on recent versions of SBCL, Allegro CL, and Clozure CL.
@@ -108,7 +108,7 @@ Coalton is currently used in production to build defense and [quantum computing 
 
 **Open Source Community**: [Awesome Coalton](https://github.com/Jason94/awesome-coalton) has a list of community-built libraries, applications, and examples, that you can use in your own projects or as examples to learn from.
 
-## What's Here?
+## What's here?
 
 This repository contains the source code to the [Coalton compiler](src/), and the [standard library](library/). It also contains two optional libraries, which are not loaded by default: [`coalton/xmath`](xmath/), for extended mathematics, and [`coalton/threads`](threads/), for threads, synchronization, and parallel computation (SBCL only).
 
@@ -120,7 +120,7 @@ It also contains a few example programs, such as:
 
 Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory.
 
-## Get Involved
+## Get involved
 
 Want to ask a question about Coalton, propose a feature, or share a cool program you wrote? Try posting in the [GitHub Discussions](https://github.com/coalton-lang/coalton/discussions) page!
 

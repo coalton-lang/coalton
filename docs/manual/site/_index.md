@@ -1,5 +1,5 @@
 ---
-title: "Coalton Language Manual"
+title: "Coalton language manual"
 outputs:
   - HTML
 hideMeta: true
@@ -26,7 +26,7 @@ an error or or something is unclear, please fix it and submit a PR.
 - [Parallel Programming](/manual/topics/parallel-programming/)
 - [Standard Library Reference](/reference/)
 
-## Operators And Symbols
+## Operators and symbols
 
 Variables in Coalton can be named with almost any character; they typically have
 no special meaning. For `+`, `/`, `==`, `<=>`, `>>=`, and other library operators,

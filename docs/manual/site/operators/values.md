@@ -61,7 +61,7 @@ weight: 195
     (values)))
 ```
 
-## Other Notes
+## Other notes
 
 - `(values ...)` and `(let (values ...) = ...)` compile directly to Common Lisp `cl:values` and `cl:multiple-value-bind`, avoiding heap allocation of intermediate tuples. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
 - See [`*`](/manual/operators/star/), [`->`](/manual/operators/arrow/), [`let`](/manual/operators/let/), and [`forall`](/manual/operators/forall/).

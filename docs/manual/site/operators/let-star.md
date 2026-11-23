@@ -39,7 +39,7 @@ weight: 170
 ; => 30
 ```
 
-## Other Notes
+## Other notes
 
 - Non-escaping local functions bound by `let*` are declared `dynamic-extent`, allowing the Lisp compiler to stack-allocate their closures.
 - In release mode, a locally bound `coalton/cell:Cell` created with `cell:new` that does not escape its lexical scope is unboxed into a typed mutable lexical variable with no heap allocation. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

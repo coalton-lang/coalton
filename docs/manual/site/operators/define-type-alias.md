@@ -57,7 +57,7 @@ weight: 60
     (Ok 1)))
 ```
 
-## Other Notes
+## Other notes
 
 - Coalton records alias annotations alongside expanded types so REPL inspection tools ([`describe-type-of`](/manual/operators/describe-type-of/), [`describe-type-alias`](/manual/operators/describe-type-alias/), and [`set-type-printing-mode`](/manual/operators/set-type-printing-mode/)) can display both the alias name and the underlying type.
 - When you need a zero-overhead distinct type with its own typeclass instances rather than a synonym, use [`define-type`](/manual/operators/define-type/) or [`define-struct`](/manual/operators/define-struct/) with `(repr :transparent)`.

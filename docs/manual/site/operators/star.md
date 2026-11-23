@@ -47,7 +47,7 @@ weight: 35
     r))
 ```
 
-## Other Notes
+## Other notes
 
 - In expression contexts, `*` is the multiplication method of the `Num` type class (`(coalton/classes:* x y)`).
 - Surrounding a variable name with `*` earmuffs (`*name*`) designates a dynamic variable in [`define`](/manual/operators/define/) and [`dynamic-bind`](/manual/operators/dynamic-bind/).

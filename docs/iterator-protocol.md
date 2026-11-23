@@ -1,8 +1,8 @@
-# Iterator Protocol
+# Iterator protocol
 
 Coalton's iterators provide a lazy, forward-only traversal of sequences of values. They are the primary abstraction for looping and data transformation in Coalton.
 
-## The Iterator Type
+## The Iterator type
 
 An `Iterator :elt` is defined as a function that, when called, returns either `(Some value)` for the next element or `None` when the sequence is exhausted:
 
@@ -14,9 +14,9 @@ An `Iterator :elt` is defined as a function that, when called, returns either `(
 
 The second field is an optional size hint that some operations use for pre-allocation.
 
-## Creating Iterators
+## Creating iterators
 
-### From Collections
+### From collections
 
 Any type that implements `IntoIterator` can be converted into an iterator with `into-iter`:
 
@@ -27,7 +27,7 @@ Any type that implements `IntoIterator` can be converted into an iterator with `
   (define str-iter  (iter:into-iter "hello")))
 ```
 
-### Range Iterators
+### Range iterators
 
 ```lisp
 (coalton-toplevel
@@ -44,7 +44,7 @@ Any type that implements `IntoIterator` can be converted into an iterator with `
   (define countdown (iter:range-decreasing 2 10 0)))
 ```
 
-### Other Constructors
+### Other constructors
 
 ```lisp
 (coalton-toplevel
@@ -67,13 +67,13 @@ Any type that implements `IntoIterator` can be converted into an iterator with `
   (define custom (iter:new (fn () (Some 1)))))
 ```
 
-## Consuming Iterators
+## Consuming iterators
 
 Iterators are consumed by calling `next!` repeatedly. Most users will not call `next!` directly, but instead use higher-level consumers.
 
 **Important:** Consuming operations are destructive — they advance the iterator and the consumed elements are gone. An iterator can only be traversed once.
 
-### Collecting into a Container
+### Collecting into a container
 
 ```lisp
 ;; Collect into a list
@@ -94,7 +94,7 @@ Iterators are consumed by calling `next!` repeatedly. Most users will not call `
 (iter:sum! (iter:up-to 10))  ;; => 45
 ```
 
-### Iterating for Side Effects
+### Iterating for side effects
 
 ```lisp
 (iter:for-each! show
@@ -123,11 +123,11 @@ Iterators are consumed by calling `next!` repeatedly. Most users will not call `
 (iter:min!    (iter:into-iter (make-list 3 1 4 1 5)))  ;; => (Some 1)
 ```
 
-## Transforming Iterators
+## Transforming iterators
 
 Transformations create new iterators that lazily apply operations as elements are consumed. They do not process any elements until something downstream consumes the result.
 
-### Mapping and Filtering
+### Mapping and filtering
 
 ```lisp
 ;; Map a function over elements
@@ -144,7 +144,7 @@ Transformations create new iterators that lazily apply operations as elements ar
 ;; => (0 4 16 36 64)
 ```
 
-### Taking and Chaining
+### Taking and chaining
 
 ```lisp
 ;; Take the first n elements
@@ -192,17 +192,17 @@ Transformations create new iterators that lazily apply operations as elements ar
 ;; => (1 1 2 2 3 3)
 ```
 
-## Protocol Guarantees and Caveats
+## Protocol guarantees and caveats
 
-### Once-only Traversal
+### Once-only traversal
 
 An iterator can only be traversed once. After `next!` returns `None`, subsequent calls to `next!` should also return `None`, but this behavior is not strictly enforced by all iterator constructors.
 
-### Behavior After Exhaustion
+### Behavior after exhaustion
 
 The behavior of calling `next!` on an exhausted iterator (one that has already returned `None`) is currently unspecified. Most standard library iterators will continue to return `None`, but consumers should not rely on this. Best practice: stop consuming after the first `None`.
 
-### Thread Safety
+### Thread safety
 
 Iterators are not thread-safe. Calling `next!` from multiple threads concurrently on the same iterator without external synchronization is undefined behavior.
 
@@ -222,9 +222,9 @@ Transformations like `map`, `filter!`, and `take!` are lazy — they do not proc
       (iter:up-to 1000))))
 ```
 
-## Common Patterns
+## Common patterns
 
-### Pipeline Style
+### Pipeline style
 
 ```lisp
 (coalton-toplevel
@@ -235,7 +235,7 @@ Transformations like `map`, `filter!`, and `take!` are lazy — they do not proc
           iter:sum!)))
 ```
 
-### Building Collections from Iterators
+### Building collections from iterators
 
 Use the `FromIterator` type class via `collect!`:
 
@@ -247,7 +247,7 @@ Use the `FromIterator` type class via `collect!`:
     (iter:collect! (iter:filter! even? (iter:up-to 20)))))
 ```
 
-### Mutable Accumulation
+### Mutable accumulation
 
 ```lisp
 (coalton-toplevel

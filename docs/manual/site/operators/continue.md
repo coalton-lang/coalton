@@ -55,7 +55,7 @@ weight: 300
         (continue :outer)))))
 ```
 
-## Other Notes
+## Other notes
 
 - See [`break`](/manual/operators/break/), [`for`](/manual/operators/for/), and [`for*`](/manual/operators/for-star/).
 

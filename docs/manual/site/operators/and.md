@@ -36,7 +36,7 @@ weight: 230
 ; => #.(TUPLE COMMON-LISP:NIL COMMON-LISP:T)
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike Common Lisp's `cl:and`, which accepts arbitrary types as generalized booleans, Coalton's `and` requires every operand to have type `Boolean`.
 - Because `and` is a special form (to support short-circuiting), it cannot be passed as a first-class function value; use `boolean-and` when a function of type `(Boolean * Boolean -> Boolean)` is needed.

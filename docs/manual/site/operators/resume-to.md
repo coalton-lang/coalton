@@ -42,7 +42,7 @@ weight: 275
       ((UseDefault n) n))))
 ```
 
-## Other Notes
+## Other notes
 
 - When the concrete resumption type is statically known at the `resume-to` site, Coalton compiles `(resume-to expr)` directly to `(cl:invoke-restart 'ResumptionName ...)`; when the resumption type is a type variable constrained by `Resumption :r`, it dispatches through `coalton-impl/runtime:invoke-resumption`.
 - See [`define-resumption`](/manual/operators/define-resumption/), [`resumable`](/manual/operators/resumable/), and [`handle`](/manual/operators/handle/).

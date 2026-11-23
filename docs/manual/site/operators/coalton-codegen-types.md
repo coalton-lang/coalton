@@ -29,7 +29,7 @@ weight: 335
     (+ x x)))
 ```
 
-## Other Notes
+## Other notes
 
 - For formatted output printed to `*standard-output*` with local package prefixes stripped, use [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/).
 - To inspect the generated Common Lisp without type declarations, use [`coalton-codegen`](/manual/operators/coalton-codegen/) or [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/).

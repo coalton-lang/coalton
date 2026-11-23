@@ -50,7 +50,7 @@ weight: 265
     (values)))
 ```
 
-## Other Notes
+## Other notes
 
 - In Coalton, `return` is always an imperative early function exit (compiled to Common Lisp `cl:block` and `cl:return-from`), **not** a monadic unit operator. To lift a pure value into a `Monad` or `Applicative` (such as inside a [`do`](/manual/operators/do/) block), use `pure`.
 - For early return on `Result` or `Optional` failures, see [`need`](/manual/operators/need/).

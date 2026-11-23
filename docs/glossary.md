@@ -1,10 +1,10 @@
-# Glossary: A Comparison of Lisp and Coalton Naming
+# Glossary: a comparison of Lisp and Coalton naming
 
 *Note: This is a pedagogical document intended to help clarify the
 naming of things. Comparisons between the two languages are almost
 always approximate. This document is also not exhaustive.*
 
-## Differences in Naming Conventions
+## Differences in naming conventions
 
 In Lisp, almost everything is defined with lowercase
 `kebab-case`. This includes variables, functions, classes, types, etc.
@@ -24,7 +24,7 @@ trailing `!`, as in Scheme.
 Broadly speaking, Coalton borrows a lot of naming conventions from
 Haskell, since Coalton's type system is most similar to Haskell's.
 
-## Differences in Naming of Basic Language Constructs
+## Differences in naming of basic language constructs
 
 There is no direct equivalent to Lisp's `let` in Coalton. Coalton's
 `let` is closer to Haskell's `let` or Scheme's `letrec`. All `let`
@@ -47,7 +47,7 @@ Coalton has a notion of records which it calls "structures". They are
 unrelated to the Common Lisp `structure-class` or `defstruct` but play
 a similar role.
 
-## Differences in Naming of Basic Values
+## Differences in naming of basic values
 
 | Lisp               | Coalton |
 |:-------------------|:--------|
@@ -56,7 +56,7 @@ a similar role.
 | `nil` (empty list) | `Nil`   |
 | `nil` (absence)    | `None`  |
 
-## Differences in Naming of Basic Functions
+## Differences in naming of basic functions
 
 Equality in Coalton is done with `==` and is specific to each
 type. The closest equivalent in Common Lisp would be the relatively
@@ -96,7 +96,7 @@ Other miscellaneous functions:
 | `eq`         | `unsafe-pointer-eq?` |
 
 
-## Differences in Naming of Basic Types
+## Differences in naming of basic types
 
 Common Lisp does not have a named recursive list type. `cl:list` is
 equivalent to `(cl:or cl:null cl:cons)`. Coalton's `List` type is a

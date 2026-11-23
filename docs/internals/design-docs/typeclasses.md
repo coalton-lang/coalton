@@ -36,13 +36,13 @@
   (== a b))
 ```
 
-## Design Decisions
+## Design decisions
 
-### Higher Kinded Types
+### Higher kinded types
 
 Higher kinded types are outside of scope of the initial typeclass implementation.
 
-### Constraints in Class Declarations
+### Constraints in class declarations
 
 _This section is no longer accurate._
 
@@ -60,7 +60,7 @@ Referred to as Decision 9 in Jones 1997.
 
 Constraints of class variables in class methods are not allowed since this complicates code and will result in the constraint being propogated up to the class, which is already supported by the class definition syntax.
 
-### Self Referential Class Definitions
+### Self referential class definitions
 
 ```lisp
 ;; Is allowed
@@ -68,7 +68,7 @@ Constraints of class variables in class methods are not allowed since this compl
   ...)
 ```
 
-### Polymorphic Recursion
+### Polymorphic recursion
 
 Contained in Decision 2 in Jones 1997.
 
@@ -85,7 +85,7 @@ In order to allow polymorphic recursion, context reduction cannot be deferred to
 
 To allow for polymorphic recursion, context reduction is done before generalization but the _inst_ rule is avoided except in the case of tautological constraints (`Num Int`, etc.). Additionally, inferred type signatures must be entailed by the context given in the type signature.
 
-### Overlapping Instances
+### Overlapping instances
 
 Referred to as Decision 3 in Jones 1997.
 
@@ -105,7 +105,7 @@ Instances are not allowed to overlap. Adding overlapping instances requires care
 
 In summary, this requires the formalisation of context reduction and defined resolution semantics which are beyond the scope of this implementation.
 
-### Flexible Instances
+### Flexible instances
 
 Referred to as Decision 4 in Jones 1997.
 
@@ -122,7 +122,7 @@ Referred to as Decision 4 in Jones 1997.
 
 In order to allow for non-simple instance types and ensure that context reduction terminates, at least one of the instance types must not be a type variable (optionally, all types must be simple). 
 
-### Repeated Type Variables in Instance Head
+### Repeated type variables in instance head
 
 Referred to as Decision 5 in Jones 1997.
 
@@ -134,7 +134,7 @@ Referred to as Decision 5 in Jones 1997.
 
 In order to allow for repeating type variables in an instance head, we must perform one-way unification to match candidates with constraints.
 
-### Flexible Contexts
+### Flexible contexts
 
 Referred to as Decision 6 in Jones 1997.
 

@@ -51,7 +51,7 @@ weight: 250
        (+ lo delta)))))
 ```
 
-## Other Notes
+## Other notes
 
 - `cond` is preferred over [`if`](/manual/operators/if/) whenever branches perform side effects, contain multiple expressions or local `let` bindings, or test more than one condition.
 - For structural pattern matching on algebraic data types or literals, use [`match`](/manual/operators/match/).

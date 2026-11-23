@@ -31,7 +31,7 @@ weight: 320
 ; => "30"
 ```
 
-## Other Notes
+## Other notes
 
 - `nest` writes stages in standard mathematical order (outermost function first, initial argument last), whereas [`pipe`](/manual/operators/pipe/) writes the same pipeline in execution order (initial argument first, outermost function last).
 - To build a reusable unary function in right-to-left order without supplying the final argument `x`, use [`.<`](/manual/operators/compose-right/).

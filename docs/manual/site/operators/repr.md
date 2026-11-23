@@ -61,7 +61,7 @@ weight: 70
       (cl:cons x y))))
 ```
 
-## Other Notes
+## Other notes
 
 - Without an explicit `repr` attribute, Coalton compiles `define-type` and `define-struct` definitions as CLOS classes in development mode and frozen `cl:defstruct` types in release mode.
 - Parametric opaque native types (`(repr :native ...) (define-type (T :a))`) have their type parameters inferred as invariant because Coalton cannot inspect their internal mutability.

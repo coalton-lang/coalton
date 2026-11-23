@@ -43,7 +43,7 @@ weight: 155
 ; => #.(TUPLE 0 4)
 ```
 
-## Other Notes
+## Other notes
 
 - Inside any expression body (`define`, `fn`, `progn`, `do`, etc.), you can also write the shorthand `(let *⟨name⟩* = ⟨init-expr⟩)`, which expands to a `dynamic-bind` over the remainder of that body.
 - `dynamic-bind` compiles directly to a Common Lisp special-variable `cl:let` binding, which is thread-local per dynamic binding in multi-threaded Common Lisp implementations.

@@ -1,4 +1,4 @@
-# Computable Reals
+# Computable reals
 
 This library is built on [computable-reals](https://github.com/stylewarning/computable-reals).
 

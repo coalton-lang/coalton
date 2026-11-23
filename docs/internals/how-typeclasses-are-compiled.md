@@ -1,6 +1,6 @@
-# How Type Classes are Compiled in Coalton
+# How type classes are compiled in Coalton
 
-## Function Calls
+## Function calls
  
 Type class constraints on functions are turned into additional parameters. These additional parameters are used to pass type class dictionaries. For example the following type `f :: (Num :a) (Ord :a) => :a * :a -> :a` would be compiled to the following lisp function definition.
 
@@ -68,7 +68,7 @@ These functions are used for static method calls. The `==` method on
   ...)
 ```
 
-## Static Method Inlining
+## Static method inlining
 
 Coalton maintains a mapping of `(method, instance) -> static method`. These mappings are used to rewrite method calls on instances known at compile time.
 

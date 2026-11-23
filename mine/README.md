@@ -1,4 +1,4 @@
-# mine: A Coalton and Common Lisp IDE
+# mine: a Coalton and Common Lisp IDE
 
 `mine` is a full-featured, TUI-based IDE for Coalton and Common Lisp. Inspired by QBASIC and Borland's Turbo products, it provides an all-in-one compiler/editor/debugger experience that is suitable for beginners and experts alike.
 
@@ -29,7 +29,7 @@ There are also anti-features:
 - No Git integration, no AI
 - Not Emacs
 
-## Downloading, Installing, and Running mine
+## Downloading, installing, and running mine
 
 `mine` can be downloaded from the [GitHub releases page](https://github.com/coalton-lang/coalton/releases).
 

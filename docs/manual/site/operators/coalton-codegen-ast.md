@@ -34,7 +34,7 @@ weight: 340
 ; => NIL
 ```
 
-## Other Notes
+## Other notes
 
 - See [`pprint-coalton-codegen-ast`](/manual/operators/pprint-coalton-codegen-ast/), [`coalton-codegen`](/manual/operators/coalton-codegen/), and [`coalton-codegen-types`](/manual/operators/coalton-codegen-types/).
 - To look up the post-optimization codegen AST (`coalton-impl/codegen/ast:node`) of an already-defined top-level symbol in the global environment, call `(coalton:lookup-code 'name)`.

@@ -44,7 +44,7 @@ weight: 60
 ; => 42
 ```
 
-## Other Notes
+## Other notes
 
 - For pure (non-monadic) bindings inside a `do` block, use `(let ⟨pattern⟩ = ⟨expr⟩)` instead of `<-`.
 - See [`do`](/manual/operators/do/) and [`need`](/manual/operators/need/).

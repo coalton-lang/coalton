@@ -82,7 +82,7 @@ weight: 72
     (+ x y)))
 ```
 
-## Other Notes
+## Other notes
 
 - When a function with `:unpacked` or `:unboxed` worker entrypoints is redefined with a compatible type signature, all of its entrypoints are updated in lockstep. When it is redefined with an incompatible signature, Coalton installs forwarding stubs on any retired worker symbols so existing compiled callers continue to route through the new definition.
 - See [Performance and Optimization](/manual/topics/performance-and-optimization/) and [`repr`](/manual/operators/repr/).

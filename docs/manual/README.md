@@ -1,4 +1,4 @@
-# Coalton Manual Source
+# Coalton manual source
 
 This directory is the source of truth for the Coalton language manual that is
 published on the Hugo website.

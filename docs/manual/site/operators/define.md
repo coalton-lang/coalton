@@ -37,7 +37,7 @@ weight: 40
 
 ## Semantics
 
-### Ordinary Top-Level Values
+### Ordinary top-level values
 
 - `(define ⟨name⟩ ...)` binds `⟨name⟩` as a top-level value in the current package.
 - Top-level value initializers are evaluated at load time in dependency order. Unlike local [`let`](/manual/operators/let/) bindings, top-level values cannot form recursive or mutually recursive cycles; cyclic definitions must be functions.
@@ -55,7 +55,7 @@ weight: 40
 - Top-level functions in the same `coalton-toplevel` unit may be mutually recursive in any order.
 - A function can also be defined using value syntax with [`fn`](/manual/operators/fn/), such as `(define f (fn (x) ...))`.
 
-### Dynamic Variables
+### Dynamic variables
 
 - A name beginning and ending with `*` and containing at least one non-`*` character (such as `*config*`) defines a dynamically scoped variable.
 - Earmuffs are a syntactic rule in Coalton: ordinary lexical variables, function parameters, patterns, and method names cannot use `*...*` names, and function definition syntax `(define (*f* x) ...)` is invalid.
@@ -64,7 +64,7 @@ weight: 40
 - Dynamic variables may have any Coalton type, including function types (defined in value syntax with [`fn`](/manual/operators/fn/)).
 - Dynamic variables cannot be annotated with [`inline`](/manual/operators/inline/) or [`abi`](/manual/operators/abi/).
 
-### Declarations, Docstrings, and Attributes
+### Declarations, docstrings, and attributes
 
 - Types are inferred automatically, or may be specified with a matching [`declare`](/manual/operators/declare/) in the same `coalton-toplevel`.
 - Exported definitions without a matching `declare` signal a `coalton:deprecation-warning`.
@@ -101,7 +101,7 @@ weight: 40
 ; => #.(TUPLE 30 48)
 ```
 
-## Other Notes
+## Other notes
 
 - Unconstrained top-level functions compile to Common Lisp `defun` definitions with the same symbol name and arity, plus a global lexical binding so the symbol can be used both as a direct call operator and as a first-class function value.
 - Functions with typeclass constraints receive hidden dictionary parameters before their positional arguments.

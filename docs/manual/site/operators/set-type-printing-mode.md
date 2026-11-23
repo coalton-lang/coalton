@@ -46,7 +46,7 @@ weight: 320
 ; => [PAIR INTEGER := TUPLE INTEGER INTEGER]
 ```
 
-## Other Notes
+## Other notes
 
 - [`describe-type-of`](/manual/operators/describe-type-of/) and [`describe-type-alias`](/manual/operators/describe-type-alias/) locally bind the printing mode to `:types-and-aliases` regardless of the current global setting.
 

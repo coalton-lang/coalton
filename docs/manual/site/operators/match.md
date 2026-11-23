@@ -55,7 +55,7 @@ weight: 150
 ;;   (None     0))  ; <-- BUG: `None` is a variable pattern here; write `((None) 0)`!
 ```
 
-## Other Notes
+## Other notes
 
 - Matching on a `Boolean` with `(True)` and `(False)` branches compiles directly to `cl:if`. Matching on a [`(repr :enum)`](/manual/operators/repr/) type compiles to a `cl:case` jump table.
 - In release mode, matching on a locally constructed data type or struct—including values produced across local `if`, `cond`, and `match` branches—can eliminate the intermediate allocation and keep extracted fields in typed local bindings. When a `match` scrutinizes a freshly constructed value whose pattern bindings do not escape, the scrutinee is also declared `dynamic-extent`. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

@@ -1,5 +1,5 @@
 ---
-title: "Lisp Interop"
+title: "Lisp interop"
 description: "Interop guarantees and calling conventions between Coalton and Common Lisp."
 hideMeta: true
 weight: 60
@@ -9,7 +9,7 @@ weight: 60
 
 Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp code. As such, it is relatively easy to have Coalton and Lisp interoperate with one another with little to no overhead. This document describes the guarantees.
 
-## Interaction Mode
+## Interaction mode
 
 *See [Configuring Coalton](/manual/topics/configuring-coalton/) for a broader discussion of compiler modes.*
 
@@ -31,7 +31,7 @@ The default is development mode. If you want to run Coalton in release mode, you
 the appropriate environment variable before compiling and loading Coalton, and you must
 ensure that ASDF is not loading cached fasls compiled for development mode.
 
-### Development Mode
+### Development mode
 
 Development mode allows most structures to be re-defined. This means:
 
@@ -39,14 +39,14 @@ Development mode allows most structures to be re-defined. This means:
 * Most types are not flattened or unwrapped in any way.
 * Certain optimizations that obscure debugging are disabled.
 
-### Release Mode
+### Release mode
 
 Release mode freezes most structures and optimizes them.
 
 * Most types are defined as frozen `defstruct`s or flattened Lisp data types.
 * Many optimizations are performed.
 
-### Pitfalls of Having Two Modes
+### Pitfalls of having two modes
 
 Unfortunately, having two modes may mean that a user might inadvertently depend on the behavior of one mode that is not supported in the other. We advise testing your code against both modes.
 
@@ -56,7 +56,7 @@ In release mode, the Coalton compiler will `declaim freeze-type` on its internal
 structures. Altering one of these structures in release mode will likely require you to
 restart your Lisp process and reload Coalton.
 
-## Promises of Data and Basic Data Types
+## Promises of data and basic data types
 
 **PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `cl:t` in general circumstances.
 
@@ -94,7 +94,7 @@ Nonetheless, there is one practical guarantee: the existence of Lisp functions f
 
 **WARNING**: Coalton gives no guarantee about the structure of the values that are constructed by the constructors in Lisp.
 
-### Achieving Guaranteed Lisp Compatibility with `(REPR :LISP)`
+### Achieving guaranteed Lisp compatibility with `(REPR :LISP)`
 
 The pragma `(repr :lisp)` helps achieve Lisp compatibility of structures regardless of interaction mode, at the expense of optimization opportunities. Consider a type:
 
@@ -251,7 +251,7 @@ separate from this and may still inline Coalton code according to Coalton's rule
 function returning `Void` returns zero Lisp values, a function returning one type returns one Lisp
 value, and a function returning `:a * :b * ...` returns multiple Lisp values in order.
 
-### Keyword-Bearing Functions
+### Keyword-bearing functions
 
 Keyword-bearing Coalton functions compile to ordinary Common Lisp functions with `&key`
 lambda lists. Coalton keywords are still part of Coalton's own source-level function types and
@@ -280,11 +280,11 @@ The same rule applies when calling a keyword-bearing first-class Coalton functio
 arguments. For constrained higher-order Coalton values, any hidden type class
 dictionaries are already bound into the function value before Lisp sees it.
 
-## Lisp-Calls-Coalton Bridge
+## Lisp-calls-Coalton bridge
 
 There are two ways to call Coalton from Lisp.
 
-### Safe Calls
+### Safe calls
 
 The safe way to call Coalton is to use the `coalton` operator. This will type check, compile, and evaluate a Coalton expression and return its value to Lisp. Note that `coalton` does not accept definitions or top-level forms. For example:
 
@@ -302,7 +302,7 @@ CL-USER> (format t "~R" (coalton:coalton (coalton-prelude:length (coalton:the co
 ;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
-### Unsafe Calls
+### Unsafe calls
 
 Using the aforementioned promises, it's possible to call into raw Coalton-compiled code by using the generated functions. These calls are not checked in any way!
 
@@ -326,7 +326,7 @@ CL-USER> (format t "~R" (coalton-prelude:length 1))
 
 We do *not* recommend raw calls of Coalton-compiled functions, as they may be optimized and may be unsafe to call.
 
-## Coalton-Calls-Lisp Bridge
+## Coalton-calls-Lisp bridge
 
 Coalton can call Lisp code with the `lisp` operator, which has the syntax:
 
@@ -407,13 +407,13 @@ CL-USER> (multiple-value-list (coalton-user::quot-rem 17 5))
 (3 2)
 ```
 
-## Soundness of Coalton-Lisp Interop
+## Soundness of Coalton-Lisp interop
 
 As with almost any "foreign function interface" (especially those interfacing with C), there's lots of potential for type errors to be made that Coalton simply cannot check for at compile time. We recommend being extra cautious and being liberal with `check-type`s and other assertions when putting a value into the hands of Coalton-managed code.
 
 Always be vigilant about _all_ possible return types of Lisp functions. Lisp, being a dynamically typed language, is sometimes lax about the possible return types, especially as they relate to the input type. Things like numerical contagion, `nil`, and error conditions can be serious sources of type errors.
 
-## Recipes for calling Coalton functions from inside a Coalton-Calls-Lisp Bridge
+## Recipes for calling Coalton functions from inside a Coalton-calls-Lisp bridge
 
 The simplest example is calling a function without type class constraints. This allows you to call it directly from lisp:
 ```

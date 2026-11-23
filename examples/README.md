@@ -1,4 +1,4 @@
-# Coalton Examples
+# Coalton examples
 
 This folder contains example Coalton projects to show off the features as well as provide a set of good real-world tests.
 

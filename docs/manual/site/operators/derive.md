@@ -48,7 +48,7 @@ weight: 45
 
 The standard library derives `Ord` for `Tuple3`, `Tuple4`, and `Tuple5`. Like pairs, they compare lexicographically and can be used as `OrdMap` keys when all their components implement `Ord`.
 
-## Other Notes
+## Other notes
 
 - Custom type classes can support `derive` by defining a Common Lisp method on the generic function `coalton-impl/typechecker:derive-methods` EQL-specialized on the class symbol.
 - `define-exception`, `define-resumption`, and `define-type-alias` do not accept `derive`.

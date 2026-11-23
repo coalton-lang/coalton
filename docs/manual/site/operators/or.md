@@ -35,7 +35,7 @@ weight: 240
 ; => #.(TUPLE COMMON-LISP:NIL COMMON-LISP:T)
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike Common Lisp's `cl:or`, which accepts arbitrary types and returns the first non-`nil` value, Coalton's `or` requires every operand to have type `Boolean` and always returns a `Boolean`.
 - Because `or` is a special form (to support short-circuiting), it cannot be passed as a first-class function value; use `boolean-or` when a function of type `(Boolean * Boolean -> Boolean)` is needed.

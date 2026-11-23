@@ -61,7 +61,7 @@ weight: 145
 ; => 60
 ```
 
-## Other Notes
+## Other notes
 
 - Standard library types supporting `[]` are `Seq`, `List`, `Vector`, `Queue`, and `LispArray`. (For key-value maps and associations, use [`[=>]`](/manual/operators/association-builder/).)
 - User-defined collection types can opt into `[]` syntax by implementing `FromItemizedCollection` and `FromCollectionComprehension` from `coalton/classes`.

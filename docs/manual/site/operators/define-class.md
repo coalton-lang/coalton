@@ -54,7 +54,7 @@ weight: 80
     "Marks types that may cross a channel boundary."))
 ```
 
-## Other Notes
+## Other notes
 
 - Coalton compiles type classes using dictionary passing: each class compiles to a struct/class holding its superclass dictionaries and method functions, and constrained functions receive the required dictionaries as hidden arguments.
 - See [`define-instance`](/manual/operators/define-instance/), [`derive`](/manual/operators/derive/), and [`overlap`](/manual/operators/overlap/).

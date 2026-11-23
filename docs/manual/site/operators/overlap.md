@@ -150,7 +150,7 @@ instance, and another instance may be selected.
 Likewise, a polymorphic identity conversion needs `Into :a :a`; ordinary
 identity functions can simply return their argument.
 
-## Other Notes
+## Other notes
 
 ### Efficiency
 

@@ -1,4 +1,4 @@
-# Rank-$N$ Polymorphism in Coalton
+# Rank-$N$ polymorphism in Coalton
 
 This document describes how arbitrary-rank (Rank-$N$) polymorphism is represented,
 typechecked, and compiled in Coalton, as well as the design tradeoffs chosen
@@ -6,7 +6,7 @@ and lessons learned from GHC Haskell.
 
 ---
 
-## 1. Overview and Goals
+## 1. Overview and goals
 
 Coalton's core type system is based on Hindley–Milner (Rank-1 prenex
 polymorphism) extended with typeclasses, functional dependencies, multi-arity
@@ -39,7 +39,7 @@ annotations enable arbitrary-rank types via top-down type checking.
 
 ---
 
-## 2. Representation in the Compiler
+## 2. Representation in the compiler
 
 ### 2.1 Parser (`src/parser/types.lisp`, `collect.lisp`, `renamer.lisp`)
 
@@ -89,7 +89,7 @@ while `unify.lisp` and `scheme.lisp` enforce rigidity:
 
 ---
 
-## 3. Bidirectional Checking and Escape Detection
+## 3. Bidirectional checking and escape detection
 
 ### 3.1 Skolemization (`check-forall-expression-type` in `src/typechecker/define.lisp`)
 
@@ -123,7 +123,7 @@ expressions) and invokes `check-forall-expression-type`:
    `wrap-expression-with-given-predicates` and relaxes the local `skolems` back
    to fresh flexible variables for downstream codegen passes.
 
-### 3.2 Two-Pass Application Checking
+### 3.2 Two-pass application checking
 
 In `parser:node-application`, arguments whose expected parameter type is *not* a
 `forall-ty` are inferred in a first pass, and `forall-ty` arguments are checked
@@ -133,7 +133,7 @@ discharges predicates on the higher-rank arguments.
 
 ---
 
-## 4. Dictionary Passing and Codegen
+## 4. Dictionary passing and codegen
 
 In Coalton, a constrained function `(Num :a => :a -> :a)` compiles to an
 uncurried Common Lisp function taking its dictionary parameters followed by its
@@ -156,7 +156,7 @@ Post-translation passes (`typecheck-node`, `inliner`, `ast-substitutions`) use
 `relax-codegen-type` to view `forall-ty` values as their physical
 dictionary-passing function types.
 
-### 4.1 Inlining, Dictionary Elimination, and Scalar Replacement
+### 4.1 Inlining, dictionary elimination, and scalar replacement
 
 Two optimizer enhancements in `src/codegen/inliner.lisp` and
 `src/codegen/lawnmower.lisp` ensure that `(inline)` higher-rank functions can
@@ -179,9 +179,9 @@ compile with zero overhead:
 
 ---
 
-## 5. Comparison with GHC Haskell & Mistakes Avoided
+## 5. Comparison with GHC Haskell & mistakes avoided
 
-### 5.1 Strictly Predicative (Avoiding `ImpredicativeTypes`)
+### 5.1 Strictly predicative (avoiding `ImpredicativeTypes`)
 
 GHC spent more than fifteen years attempting to support impredicative
 instantiation (binding unification variables to `forall` types) through a
@@ -201,7 +201,7 @@ Coalton avoids this entirely:
   nominal `define-type` or `define-struct`, making introduction and elimination
   explicit and zero-ambiguity.
 
-### 5.2 Simplified Subsumption (Avoiding Deep Subsumption)
+### 5.2 Simplified subsumption (avoiding deep subsumption)
 
 Prior to GHC 9.0, GHC implemented *deep subsumption*: the typechecker
 contravariantly/covariantly compared function types and silently eta-expanded
@@ -223,7 +223,7 @@ subsumption from the start: skolemization and instantiation happen only at the
 top level of a checked expression, while nested `forall-ty`s inside compound
 types must match invariant alpha-equivalence (`mgu-forall-types`).
 
-### 5.3 Explicit Quantification on Nested Contexts
+### 5.3 Explicit quantification on nested contexts
 
 Haskell permits signatures like `(Num a => a -> a) -> Int` without an inner
 `forall`, which creates visual and syntactic ambiguity about whether `a` is
@@ -231,7 +231,7 @@ scoped to the inner argument or the outer declaration. Coalton requires an
 explicit `forall` whenever `=>` appears in a nested type position:
 `((forall (:a) (Num :a => (:a -> :a))) -> Integer)`.
 
-### 5.4 Value Restriction on Unconstrained Higher-Rank Expressions
+### 5.4 Value restriction on unconstrained higher-rank expressions
 
 Because Haskell is pure, any expression can be generalized to a `forall` type.
 In strict ML-family languages with mutable references (`Cell`, `Vector`),

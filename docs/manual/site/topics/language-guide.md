@@ -1,5 +1,5 @@
 ---
-title: "Coalton Language Guide"
+title: "Coalton language guide"
 description: "A broad, practical tour of Coalton's core language and workflow."
 hideMeta: true
 weight: 20
@@ -11,7 +11,7 @@ This document is aimed toward people who are already familiar with functional pr
 
 {{<toc>}}
 
-## Program Structure and the REPL
+## Program structure and the REPL
 
 If you are experimenting with Coalton in a Common Lisp REPL, switch to the `#:coalton-user` scratch package:
 
@@ -45,7 +45,7 @@ There are two primary entry points into Coalton from Lisp:
 > [!IMPORTANT]
 > Coalton packages, including `#:coalton-user`, do *not* `:use` the `#:common-lisp` (`#:cl`) package, so Common Lisp symbols must be prefixed with `cl:` when referenced directly.
 
-## Variables, Functions, and Static Types
+## Variables, functions, and static types
 
 Variables and functions are defined with `define`:
 
@@ -92,7 +92,7 @@ Unlike Common Lisp, Coalton is a Lisp-1: functions and variables share a single 
   (define z-short (map ƒx.(+ 2 x) [1 2 3 4])))
 ```
 
-### Type Inference and Declarations (`declare` and `forall`)
+### Type inference and declarations (`declare` and `forall`)
 
 Coalton code is statically type-checked with full Hindley–Milner type inference, so explicit type signatures are optional:
 
@@ -137,7 +137,7 @@ Polymorphic type signatures use keyword symbols such as `:a` and `:b` for type v
 
 Writing an explicit `forall` also brings those type variable names into lexical scope inside the definition body so nested `declare`, `the`, and `lisp` forms can refer to them. See [Scoped Type Variables, Higher Kinds, and Result Polymorphism](/manual/topics/advanced-coalton-programming/#scoped-type-variables-higher-kinds-and-result-polymorphism) and [Higher-Rank Polymorphism](/manual/topics/advanced-coalton-programming/#higher-rank-polymorphism) in Advanced Coalton Programming for details.
 
-### Inline Type Annotations (`the`)
+### Inline type annotations (`the`)
 
 Inline type annotations can be added anywhere in an expression using `the` to constrain a value's type or resolve ambiguities:
 
@@ -146,7 +146,7 @@ Inline type annotations can be added anywhere in an expression using `the` to co
   (define f (the U32 (+ 5 7))))
 ```
 
-### Fixed-Arity Functions, Nullary Functions, and Manual Currying
+### Fixed-arity functions, nullary functions, and manual currying
 
 Coalton functions have fixed input and output arities. A type like `Integer * String -> Boolean`
 describes a function that takes two arguments and returns one value. A type like
@@ -221,7 +221,7 @@ Functions may also return multiple values directly using `values`. This is disti
     (+ s p))) ;; 19
 ```
 
-### Keyword Arguments
+### Keyword arguments
 
 Coalton also supports keyword arguments. Keyword arguments come after all positional arguments and are introduced with `&key`:
 
@@ -277,7 +277,7 @@ Explicit declarations are exact about which keywords exist. Inferred higher-orde
 may internally remain open to additional keywords for compatibility, but there is no separate
 surface syntax for those open rows.
 
-### Pipelining Syntax and Function Composition
+### Pipelining syntax and function composition
 
 There are convenient syntaxes for composing functions with the `pipe` and `nest` macros.
 
@@ -298,7 +298,7 @@ These are useful to make code less noisy.
 > [!NOTE]
 > Since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either an explicit `fn` wrapper or the `compose` function if you're thinking in that direction.
 
-### Ignoring Function Parameters
+### Ignoring function parameters
 
 Consider the function:
 
@@ -331,9 +331,9 @@ Variables prefixed with `_` like `_y` are still normal variables, and can be rea
 
 One should treat underscore-prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
 
-## Data Types, Structs, and Pattern Matching
+## Data types, structs, and pattern matching
 
-### Algebraic Data Types (`define-type`)
+### Algebraic data types (`define-type`)
 
 Coalton supports parametric algebraic data types (ADTs) using `define-type`:
 
@@ -366,7 +366,7 @@ Type definitions introduce value constructors with the same names as the variant
 
 Two ubiquitous standard library sum types are `Optional :a` (with constructors `None` and `(Some x)`) and `Result :err :ok` (with constructors `(Err e)` and `(Ok x)`).
 
-### Pattern Matching (`match`)
+### Pattern matching (`match`)
 
 `match` expressions inspect and deconstruct algebraic data types, literals, and nested structures:
 
@@ -472,7 +472,7 @@ Structs can also be parametric:
     (second :a)))
 ```
 
-### Type Aliases (`define-type-alias`)
+### Type aliases (`define-type-alias`)
 
 Parametric type aliases give shorthand names to existing types created with primitive types, `define-type`, `define-struct`, or other aliases:
 
@@ -550,9 +550,9 @@ COALTON-USER> (describe-type-alias 'Pair)
 ; prints a diagnostic representation containing [PAIR :A := TUPLE :A :A]
 ```
 
-## Local Bindings, Sequencing, and Conditionals
+## Local bindings, sequencing, and conditionals
 
-### Local Variables: `let` and `let*`
+### Local variables: `let` and `let*`
 
 The operators `let` and `let*` are expression forms
 for local bindings. `let` binds its variables recursively and in parallel
@@ -603,7 +603,7 @@ functions:
 > not allowed for non-function variables to be self-referential, as in
 > `(let ((x (1+ x))) ...)`. Instead, use `let*`.
 
-### `progn` and Shorthand `let`
+### `progn` and shorthand `let`
 
 Coalton has a `coalton:progn` construct similar to Common Lisp's `cl:progn` for evaluating a sequence of expressions in order and returning the value(s) of the final expression. This is useful in positions that expect a single expression, such as the branches of an `if`:
 
@@ -740,7 +740,7 @@ Both `unless` and `when` establish an implicit `progn` block:
       (traceObject "sum" (+ x y)))))
 ```
 
-### Early Returns: `return` and `need`
+### Early returns: `return` and `need`
 
 Functions can return early with `return`:
 
@@ -770,9 +770,9 @@ When working with `Optional` or `Result`, `need` unwraps a `Some` or `Ok` value 
     (Some (+ x y))))
 ```
 
-## Collections and Mutable State
+## Collections and mutable state
 
-### Collection and Association Builder Syntax
+### Collection and association builder syntax
 
 When the Coalton reader is active, square brackets construct collections and key-value associations:
 
@@ -852,7 +852,7 @@ The supported comprehension clauses are:
 
 User-defined types can also opt into `[...]` and `[k => v]` syntax. See [Extending Builder Syntax to User-Defined Types](/manual/topics/advanced-coalton-programming/#extending-builder-syntax-to-user-defined-types) in Advanced Coalton Programming.
 
-### Immutable Sequences and Maps
+### Immutable sequences and maps
 
 Coalton encourages writing efficient *immutable* code by offering persistent collection types in the standard library. The two most important general-purpose collections are `Seq` (from `coalton/seq`) and `HashMap` (from `coalton/hashmap`), which provide logarithmic-time lookup/update and efficient concatenation.
 
@@ -879,7 +879,7 @@ Lists are deconstructed with `match` using `(Cons head tail)` and `(Nil)`:
       ((Nil) "is empty"))))
 ```
 
-### Mutable Cells and Vectors
+### Mutable cells and vectors
 
 While Coalton defaults to immutable bindings, local imperative state is often convenient for accumulators and loops:
 
@@ -899,7 +899,7 @@ To keep the type system sound in the presence of mutation, Coalton applies a rel
 
 See [Polymorphism, Mutation, and the Value Restriction](/manual/topics/advanced-coalton-programming/#polymorphism-mutation-and-the-value-restriction) in Advanced Coalton Programming for the full rules.
 
-## Looping & Iteration
+## Looping & iteration
 
 Coalton offers three main ways to write explicit loops:
 
@@ -907,7 +907,7 @@ Coalton offers three main ways to write explicit loops:
 - Built-in imperative `for` and `for*` loops, and
 - Experimental Lisp-style iteration macros (e.g., `dotimes`).
 
-### Tail-Recursion and `rec`
+### Tail-recursion and `rec`
 
 Coalton eliminates self-tail calls, making tail recursion idiomatic:
 
@@ -994,7 +994,7 @@ Now it can be called without type annotations at the call site:
 55
 ```
 
-### Conventional Looping: `for` and `for*`
+### Conventional looping: `for` and `for*`
 
 The built-in imperative `for` form and its sequential variant `for*` have the
 following shape:
@@ -1118,7 +1118,7 @@ The `continue` form skips the remainder of the current iteration's body and proc
 
 Note that `continue` still evaluates the loop's step expressions before the next iteration, whereas `break` skips the step phase and exits immediately.
 
-#### For Labels
+#### For labels
 
 `for` and `for*` accept an optional keyword label immediately after the operator name, allowing `break` and `continue` to target an enclosing loop:
 
@@ -1137,7 +1137,7 @@ Note that `continue` still evaluates the loop's step expressions before the next
     (cell:read acc)))
 ```
 
-### Experimental Lisp Iteration Macros
+### Experimental Lisp iteration macros
 
 > [!WARNING]
 > These constructs are experimental and may change.
@@ -1161,7 +1161,7 @@ The standard library package [`coalton/experimental/loops`](https://coalton-lang
 ;; triple: #.(TUPLE3 8 15 17)
 ```
 
-## Type Classes
+## Type classes
 
 Type classes define interfaces of overloaded operations that types can implement.
 
@@ -1204,7 +1204,7 @@ All member methods declared by a class must be defined in each `define-instance`
 
 For multi-parameter type classes with functional dependencies, overlapping instances (`overlap`), and method-scoped type variables, see [Advanced Coalton Programming](/manual/topics/advanced-coalton-programming/).
 
-### Builtin Type Classes
+### Builtin type classes
 
 The most common standard library type classes fall into three groups:
 
@@ -1229,7 +1229,7 @@ The most common standard library type classes fall into three groups:
 * `Into` (`into`) — total conversions from one type to another.
 * `TryInto` (`tryInto`) — fallible conversions returning `Optional`.
 
-### Automatically Deriving Type Class Instances (`derive`)
+### Automatically deriving type class instances (`derive`)
 
 Instances of `Eq`, `Ord`, `Hash`, `Default`, and `Show` can be derived automatically on `define-type` and `define-struct` definitions using [`derive`](/manual/operators/derive/):
 
@@ -1256,7 +1256,7 @@ Now `==` and `hash` work on `Point` values directly:
 
 The generated instance follows the structural definition of the type (for example, `Eq` compares every field of matching constructors). When a type needs custom comparison or hashing semantics, write a manual `define-instance` instead. Writing custom derivers does not yet have a public API, though see [derivers.lisp](https://github.com/coalton-lang/coalton/blob/main/library/derivers.lisp) for how built-in derivers are implemented.
 
-### Type Casting, Coercing, and Conversion
+### Type casting, coercing, and conversion
 
 Total conversions between types use the two-parameter `Into :from :to` type class and its method `into`. Because `into` takes only the source value, the target type `:to` is determined either by the surrounding context:
 
@@ -1291,7 +1291,7 @@ Because `(the Target (into expr))` is so common, Coalton provides the `as` short
 
 The standard library provides the identity conversion `Into :a :a` alongside more specific generic conversions using [overlapping instances](/manual/topics/advanced-coalton-programming/#overlapping-instances).
 
-### Do Notation
+### Do notation
 
 The `do` macro provides a readable sequential syntax for chaining `Monad` operations (such as `Optional`, `Result`, `List`, or state/IO-like types) without deeply nested `>>=` callbacks:
 
@@ -1339,7 +1339,7 @@ The `coalton-prelude` package exports `/` (from `Reciprocable`), `floor`, `ceili
 - If you want an exact rational (`Fraction`) from two integers, use `math:exact/`.
 - If you are writing generic code over a single field-like type, use `/` (from `Reciprocable`).
 
-### Details about Division
+### Details about division
 
 Why isn't `/` part of `Num`? Division is separated from `Num` for two reasons:
 
@@ -1411,7 +1411,7 @@ COALTON-USER> (coalton (the F32 (math:fromfrac 999/1000)))
 0.999
 ```
 
-## Dynamic Variables
+## Dynamic variables
 
 Coalton supports dynamically scoped variables, analogous to Common Lisp special variables:
 
@@ -1467,7 +1467,7 @@ Inside `progn`, function bodies, and similar flattened-body contexts, `(let *var
 
 Every dynamic rebinding must preserve the variable's declared type (and polymorphic rebindings remain subject to the value restriction). Because `dynamic-bind` restores the old dynamic bindings on exit, wrapping a recursive call in `dynamic-bind` prevents tail-call elimination.
 
-## Error Handling and Exceptions
+## Error handling and exceptions
 
 For expected recoverable failures, idiomatic Coalton code usually returns `Optional` or `Result` and propagates failures with [`need`](#early-returns-return-and-need) or [`do` notation](#do-notation).
 
@@ -1480,7 +1480,7 @@ Coalton also provides an exception and condition handling facility that interope
 
 Coalton also supports non-unwinding handlers and restarts (`define-resumption`, `handle`, `resumable`, and `resume-to`); see [Resumptions and Non-Unwinding Handlers](/manual/topics/advanced-coalton-programming/#resumptions-and-non-unwinding-handlers) in Advanced Coalton Programming.
 
-### Defining, Throwing, and Catching Exceptions
+### Defining, throwing, and catching exceptions
 
 To catch any exception—including arbitrary Common Lisp `error` conditions—use a wildcard `_` pattern in `catch`:
 
@@ -1548,7 +1548,7 @@ The standard library functions `coalton/result:try` and `coalton/result:ok-or-th
 
 Functions such as `error`, `unwrap`, `expect`, `unreachable`, and `undefined`, as well as failed `assert`s, signal a `Panic`. A panic indicates a bug rather than an expected failure. Panics are exceptions like any other: a wildcard `_` branch catches them along with all other Lisp errors, and a `(the Panic p)` branch catches only panics. From Common Lisp, they are conditions of type `coalton/classes:panic`.
 
-### Catching Lisp Conditions
+### Catching Lisp conditions
 
 An existing Common Lisp condition type (which must be a subtype of `cl:serious-condition`) can be exposed as a Coalton exception type using `(repr :native ...)` and an empty `define-exception`:
 
@@ -1574,7 +1574,7 @@ The `coalton/exception` package predefines exception types for standard Common L
 
 `exception:LispError` covers every Common Lisp `cl:error`. `exception:message` returns the condition's formatted message, and `exception:cast` narrows an exception to a more specific condition type when applicable (such as `ArithmeticError` to `DivisionByZero`). See [Lisp Interop](/manual/topics/lisp-interop/) for details.
 
-### Cleaning Up (`protect`)
+### Cleaning up (`protect`)
 
 `protect` runs its cleanup forms however control leaves the protected expression—whether normally, via `throw`, or via `return` or `break`:
 
@@ -1586,7 +1586,7 @@ The `coalton/exception` package predefines exception types for standard Common L
     Unit))
 ```
 
-## Packages and ASDF Systems
+## Packages and ASDF systems
 
 Coalton uses ordinary Common Lisp packages and ASDF systems to organize libraries and applications. For a step-by-step walkthrough of creating a new project from scratch, see [Introduction and Getting Started](/manual/topics/introduction/).
 
@@ -1611,7 +1611,7 @@ When defining a package for your own code, *do not `:use` `#:cl` or `#:common-li
 
 Using `:local-nicknames` avoids symbol clashes: many Coalton packages intentionally export the same short function names (for example, both `str:length` and `vec:length`). We recommend never `:use`-ing any standard library packages other than `#:coalton` and `#:coalton-prelude`.
 
-### `.ct` Files and ASDF
+### `.ct` files and ASDF
 
 Coalton code can be written in `.ct` files or in ordinary `.lisp` files:
 
@@ -1632,7 +1632,7 @@ To use `.ct` files in an ASDF system, add `"coalton-asdf"` to `:defsystem-depend
                (:ct-file "core")))        ; .ct file
 ```
 
-## Inline Lisp and Inspecting the System
+## Inline Lisp and inspecting the system
 
 ### Inline Lisp (`lisp`)
 
@@ -1671,7 +1671,7 @@ The syntax is:
 
 For full details on data representation guarantees, calling conventions, and bridging Coalton and Common Lisp, see [Lisp Interop](/manual/topics/lisp-interop/).
 
-### Inspecting the Coalton System
+### Inspecting the Coalton system
 
 The `coalton` package provides several interactive inspection helpers. `type-of` (inside `coalton`) and `kind-of` (in Common Lisp) inspect types and kinds:
 

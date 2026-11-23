@@ -35,7 +35,7 @@ weight: 315
 ;; prints: #<COALTON-IMPL/TYPECHECKER/TYPES:TAPP [INTPAIR := PAIR INTEGER := TUPLE INTEGER INTEGER]>
 ```
 
-## Other Notes
+## Other notes
 
 - See [`define-type-alias`](/manual/operators/define-type-alias/), [`describe-type-of`](/manual/operators/describe-type-of/), and [`set-type-printing-mode`](/manual/operators/set-type-printing-mode/).
 

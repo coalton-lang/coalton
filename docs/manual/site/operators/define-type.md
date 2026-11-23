@@ -66,7 +66,7 @@ weight: 50
       ((Branch l r) (+ (tree-sum l) (tree-sum r))))))
 ```
 
-## Other Notes
+## Other notes
 
 - By default, `define-type` compiles to CLOS classes in development mode (supporting interactive redefinition) and frozen `cl:defstruct` definitions in release mode. Use [`repr`](/manual/operators/repr/) to select `:enum`, `:transparent`, `:lisp`, or `:native` representations explicitly.
 - In release mode, the compiler can eliminate locally constructed data type values—including single-constructor types such as `Tuple` and sum types such as `Optional` and `Result` produced across local `if`, `cond`, and `match` branches—when they are consumed only by local pattern matching. Constructor arguments still evaluate once, in left-to-right order. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

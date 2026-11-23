@@ -61,7 +61,7 @@ weight: 75
     (inline (sum-of-squares x (+ x 1)))))
 ```
 
-## Other Notes
+## Other notes
 
 - Inlining small higher-order helpers and constructors often exposes local `Cell`s, structs, and `Optional`/`Result` values to unboxing and scalar replacement in release mode. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
 - Use [`noinline`](/manual/operators/noinline/) at a call site to prevent inlining of a specific call.

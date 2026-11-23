@@ -46,7 +46,7 @@ weight: 142
 ; => 3
 ```
 
-## Other Notes
+## Other notes
 
 - `ƒ` is available whenever the `coalton:coalton` readtable is active, including inside `.ct` files and inside `(coalton ...)` / `(coalton-toplevel ...)` forms.
 - In the `mine` editor, `ƒ` can be entered by typing `Ctrl+\ fn`. In Emacs, it can be entered with `C-x 8 RET 0192 RET`.

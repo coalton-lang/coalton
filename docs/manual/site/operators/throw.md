@@ -43,7 +43,7 @@ weight: 260
     (throw e)))
 ```
 
-## Other Notes
+## Other notes
 
 - `throw` compiles directly to `(cl:error ⟨exception-expr⟩)`.
 - To convert between thrown exceptions and `Result` values, use `coalton/result:try` (which catches exceptions into `Result`) and `coalton/result:ok-or-throw` (which unwraps `Ok` or `throw`s the `Err` payload).

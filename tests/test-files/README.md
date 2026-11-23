@@ -1,4 +1,4 @@
-# Test Case Input Format
+# Test case input format
 
 The files in this directory contain test cases in a structured text
 format.

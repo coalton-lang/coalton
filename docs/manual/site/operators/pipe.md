@@ -31,7 +31,7 @@ weight: 310
 ; => 28
 ```
 
-## Other Notes
+## Other notes
 
 - `pipe` is the data-first counterpart of [`nest`](/manual/operators/nest/), which writes the same functions in outside-in (right-to-left) order.
 - To build a reusable unary function from a left-to-right pipeline without supplying the initial value `x` yet, use [`.>`](/manual/operators/compose-left/).

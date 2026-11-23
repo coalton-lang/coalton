@@ -1,4 +1,4 @@
-# Coalton Docs
+# Coalton docs
 
 ## Tutorials
 * [Coalton for Common Lispers](./manual/site/topics/coalton-for-common-lispers.md)
@@ -26,5 +26,5 @@
 * [Rank-N Polymorphism](./internals/rank-n-types.md)
 * [Weak Type Variables](./internals/weak-type-variables.md)
 
-## Additional Resources
+## Additional resources
 * [Introducing Coalton](https://coalton-lang.github.io/20211010-introducing-coalton/) - external
