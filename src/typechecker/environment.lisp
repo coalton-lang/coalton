@@ -2146,27 +2146,12 @@ This function will return the single functional dependency
            (type ty-predicate pred)
            (type ty-predicate-list context))
 
-  ;; Ensure dependent types do not contain type variables that
-  ;; are not present in the corresponding determinant types,
-  ;; unless they are otherwise determined by the context.
-  ;; See "Type Class with Functional Dependencies" §6.1 (Jones)
-  ;; Compare the head with its context in the same scope: if both reach
-  ;; the same superclass predicate, its hidden variables are the same.
-  (loop :with scope := (make-hash-table :test #'eq)
-        :with superfundeps := (collect-fundep-vars env context scope)
-        :for (from-vars . to-vars) :in (collect-fundep-vars env (list pred) scope)
-        :for known-to-vars
-          := (generic-closure from-vars superfundeps :test #'ty=)
-        :for unknown-to-vars
-          := (set-difference to-vars known-to-vars :test #'ty=)
-        :unless (subsetp unknown-to-vars from-vars :test #'ty=)
-          :do (error 'fundep-ambiguity))
-
   (let* ((class (lookup-class env (ty-predicate-class pred)))
          (fundep-env
            (lookup-fundep-environment env (ty-predicate-class pred)))
          (class-variables (ty-class-class-variables class))
-         (pred-tys (ty-predicate-types pred)))
+         (pred-tys (ty-predicate-types pred))
+         (context-fundeps (collect-fundep-vars env context)))
 
     (loop :for fundep :in (ty-class-fundeps class)
           :for i :from 0
@@ -2180,6 +2165,13 @@ This function will return the single functional dependency
                           (fundep-to fundep)
                           class-variables
                           pred-tys)
+          ;; Coverage (Jones, §6.1) applies to the relation this instance adds.
+          ;; The context supplies dependencies, including inherited ones. The
+          ;; head's superclasses are checked separately by requiring dictionaries.
+          :unless (subsetp (type-variables to-tys)
+                           (generic-closure (type-variables from-tys) context-fundeps :test #'ty=)
+                           :test #'ty=)
+            :do (error 'fundep-ambiguity)
           :do (let ((redundant-p nil))
                 ;; Check every intersecting determinant, including pairs where
                 ;; neither side is a one-way instance of the other.

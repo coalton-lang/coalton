@@ -435,3 +435,72 @@ error: Invalid qualified type
    |
  6 |  (declare f ((Child :a) (Child :b) => :a -> :a))
    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The type variable :B is ambiguous in the type (Child :A) (Child :B) => :A -> :A
+
+================================================================================
+121 A superclass instance supplies its hidden dependent independently of the subclass fundep
+================================================================================
+
+(package coalton-unit-test/fundep-hidden-instance
+  (import-from coalton/classes Tuple))
+
+(define-class (A :a :b (:a -> :b))
+  (parent-value (:a -> :b)))
+
+(define-class (A :a :b => B :a :c (:a -> :c))
+  (both-values (:a -> Tuple :b :c)))
+
+(define-instance (B Unit Boolean)
+  (define (both-values x) (Tuple (parent-value x) True)))
+
+(define-instance (A Unit Integer)
+  (define (parent-value _) 42))
+
+(declare result (Tuple Integer Boolean))
+(define result (both-values Unit))
+
+================================================================================
+122 Superclasses of the instance context can cover a subclass dependent
+================================================================================
+
+(package coalton-unit-test/fundep-inherited-context)
+
+(define-class (A :x :y (:x -> :y)))
+(define-class (A :x :y => Given :x :y))
+(define-class (A :x :hidden => B :x :result (:x -> :result)))
+
+(define-instance (Given :x :y => B :x (List :y)))
+
+================================================================================
+123 A superclass instance cannot specialize an exposed subclass parameter
+================================================================================
+
+(package coalton-unit-test/fundep-exposed-instance)
+
+(define-class (Parent :x :hidden :p (:x -> :hidden :p)))
+(define-class (Parent :x :h :p => Child :x :p :tag (:x -> :tag)))
+
+(define-instance (Parent Unit Integer String))
+(define-instance (Child Unit :p Boolean))
+
+--------------------------------------------------------------------------------
+
+error: Instance missing context
+  --> test:7:17
+   |
+ 7 |  (define-instance (Child Unit :p Boolean))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^ cannot satisfy Parent Unit :H :P without specializing the instance's type variables
+
+================================================================================
+124 A concrete determinant in the instance context can fix an exposed superclass argument
+================================================================================
+
+(package coalton-unit-test/fundep-ground-context)
+
+(define-class (Given :x :p (:x -> :p)))
+(define-instance (Given Unit Integer))
+
+(define-class (Parent :p :h (:p -> :h)))
+(define-instance (Parent Integer String))
+
+(define-class (Parent :p :h => Child :x :p (:x -> :p)))
+(define-instance (Given Unit :p => Child Unit :p))
