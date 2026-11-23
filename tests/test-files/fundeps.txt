@@ -540,3 +540,22 @@ error: Ambiguous method
    |
  5 |    (value (:a -> Integer)))
    |    ^^^^^^^^^^^^^^^^^^^^^^^ the method is ambiguous
+
+================================================================================
+127 A wanted superclass cannot specialize a hidden type in a given dictionary
+================================================================================
+
+(package coalton-unit-test/fundep-fixed-witness)
+
+(define-class (Parent :x :y (:x -> :y)))
+(define-class (Parent :x :y => LeftChild :x))
+(define-class (Parent :x String => RightChild :x))
+(define-instance (LeftChild :x => RightChild :x))
+
+--------------------------------------------------------------------------------
+
+error: Instance missing context
+  --> test:6:17
+   |
+ 6 |  (define-instance (LeftChild :x => RightChild :x))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot satisfy Parent :X String without specializing the instance's type variables

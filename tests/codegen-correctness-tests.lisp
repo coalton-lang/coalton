@@ -20,6 +20,28 @@
 (defun codegen-test-eval (text)
   (eval (list 'coalton:coalton (read-from-string text))))
 
+(deftest forward-hidden-superclass-dictionaries ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-class (Parent :x :value (:x -> :value))
+        (parent-value (:x -> :value)))
+      (define-class (Parent :x :value => LeftChild :x))
+      (define-class (LeftChild :x => Indirect :x))
+      (define-class (Parent :x :value => RightChild :x :tag (:x -> :tag))
+        (right-value (:x -> :value)))
+      (define-instance (Indirect :x => RightChild :x Boolean)
+        (define (right-value x) (parent-value x)))")
+    ;; The polymorphic instance is compiled before either concrete dictionary exists.
+    (codegen-test-compile
+     "(define-instance (Parent Unit String) (define (parent-value _) \"unit\"))
+      (define-instance (Parent Boolean Integer) (define (parent-value _) 73))
+      (define-instance (LeftChild Unit))
+      (define-instance (LeftChild Boolean))
+      (define-instance (Indirect Unit))
+      (define-instance (Indirect Boolean))")
+    (is (equal "unit" (codegen-test-eval "(the String (right-value Unit))")))
+    (is (= 73 (codegen-test-eval "(the Integer (right-value True))")))))
+
 (defun codegen-test-event-recorder ()
   (codegen-test-compile
    "(declare observe (Integer -> Integer))

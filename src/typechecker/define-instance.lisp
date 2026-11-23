@@ -288,10 +288,23 @@ must not collapse distinct variables or specialize one to a concrete type.
 
          (required-superclasses (tc:apply-substitution head-subs (tc:ty-class-superclasses class)))
 
+         (given-expansions (when required-superclasses (tc:given-superclass-expansions env context)))
+
          (instance-subs
            (with-fundep-errors (head-location env)
              ;; Put the instance's context last to preserve its variables when unifying dependents.
-             (nth-value 1 (tc:solve-fundeps env (append required-superclasses context) head-subs))))
+             (nth-value 1 (tc:solve-fundeps env (append required-superclasses context) head-subs
+                                           :given-expansions given-expansions))))
+
+         (superclasses (tc:apply-substitution instance-subs (tc:ty-class-superclasses class)))
+         (tc:*given-superclass-expansions*
+           (loop :for (given . supers) :in given-expansions
+                 :for solved := (tc:apply-substitution instance-subs given)
+                 :for fields := (tc:apply-substitution instance-subs supers)
+                 ;; Lookup starts at an original dictionary parameter, then follows solved fields.
+                 :collect (cons given fields)
+                 :unless (tc:type-predicate= given solved)
+                   :collect (cons solved fields)))
 
          ;; HACK: store this as a hash table in the environment
          ;; HACK: these should *not* be stored as schemes
@@ -306,12 +319,15 @@ must not collapse distinct variables or specialize one to a concrete type.
     ;; may not restrict the instance's own variables beyond what its givens
     ;; already imply. Match back to the declared variables to allow renaming.
     (when required-superclasses
-      (let* ((vars (tc:type-variables (cons pred context)))
+      ;; A given's hidden types are fixed by its dictionary too. Do not choose
+      ;; one to fit a wanted superclass just because it is absent from the head.
+      (let* ((vars (tc:type-variables (list pred context (mapcar #'cdr given-expansions))))
              (improved (tc:apply-substitution instance-subs vars)))
         (unless (or (tc:match-list-p vars improved)
                     (and context
                          (with-fundep-errors (head-location env)
-                           (let ((given-subs (nth-value 1 (tc:solve-fundeps env context nil))))
+                           (let ((given-subs (nth-value 1 (tc:solve-fundeps env context nil
+                                                                           :given-expansions given-expansions))))
                              (tc:match-list-p (tc:apply-substitution given-subs vars) improved)))))
           (tc-error "Instance missing context"
                     (tc-location head-location
@@ -319,10 +335,7 @@ must not collapse distinct variables or specialize one to a concrete type.
                                  (mapcar (lambda (p) (type-object-string p env)) required-superclasses))))))
 
     ;; Check for superclasses and check the context of superinstances
-    (loop :for superclass_ :in (tc:ty-class-superclasses class)
-
-          :for superclass := (tc:apply-substitution instance-subs superclass_)
-
+    (loop :for superclass :in superclasses
           :unless (tc:entail env context superclass)
 
             :do (let* ((superclass-instance
@@ -379,8 +392,10 @@ must not collapse distinct variables or specialize one to a concrete type.
             :do (tc-error "Missing method"
                           (tc-note unparsed-instance "The method ~S is not defined" name)))
 
-    (let* ((methods (loop :with table := (make-hash-table :test #'eq)
+    (let* ((evidence (append context (a:mappend #'cdr tc:*given-superclass-expansions*)))
+           (methods (loop :with table := (make-hash-table :test #'eq)
                           :with instance-scoped-tvars := (tc:type-variables (cons pred context))
+                          :with fixed-tvars := (tc:type-variables (cons pred evidence))
 
                           :for method :in (parser:toplevel-define-instance-methods unparsed-instance)
                           :for name := (parser:node-variable-name (parser:instance-method-definition-name method))
@@ -436,7 +451,7 @@ must not collapse distinct variables or specialize one to a concrete type.
                                    (tc:quantify
                                     (set-difference
                                      (tc:type-variables instance-method-qual-ty)
-                                     instance-scoped-tvars
+                                     fixed-tvars
                                      :test #'tc:ty=)
                                     instance-method-qual-ty))
                           :for instance-method-env
@@ -444,7 +459,8 @@ must not collapse distinct variables or specialize one to a concrete type.
                                 (make-tc-env :env env)
                                 (remove-duplicates
                                  (append instance-scoped-tvars scoped-method-tvars)
-                                 :test #'tc:ty=))
+                                 :test #'tc:ty=)
+                                :hidden (set-difference fixed-tvars instance-scoped-tvars :test #'tc:ty=))
 
                           :do (multiple-value-bind (preds method subs)
                                   (with-fundep-errors ((source:location method) env)
@@ -474,7 +490,7 @@ must not collapse distinct variables or specialize one to a concrete type.
                                                         subs))))
                                 (check-instance-predicate-not-narrowed method
                                                                        pred
-                                                                       context
+                                                                       evidence
                                                                        subs
                                                                        env)
                                 (setf (gethash name table) (tc:apply-substitution subs method)))
@@ -501,6 +517,8 @@ must not collapse distinct variables or specialize one to a concrete type.
 
       (make-toplevel-define-instance
        :context context
+       :superclasses superclasses
+       :given-expansions tc:*given-superclass-expansions*
        :pred pred
        :methods methods
        :location (source:location unparsed-instance)
