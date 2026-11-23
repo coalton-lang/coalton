@@ -70,18 +70,9 @@ A class header can also include multiple functional dependency clauses, and each
 
 Functional dependencies are enforced whenever instances are defined:
 
-1. **Consistency across instances**: If `(C String Integer)` is defined, it is invalid to also define `(C String Char)`, because the same `:a` (`String`) would map to two different types for `:b` (`Integer` and `Char`).
+1. **Consistency across instances**: Instances that match the same determining arguments must agree on the determined types, even if their other arguments differ. For example, `C` cannot have both `(C String Integer)` and `(C String Char)`.
 
-   This check compares the inputs to the dependency, not the entire instance heads. A parameter outside the dependency (such as a tag) cannot distinguish two outputs for the same input. The output may come from a prerequisite:
-
-   ```lisp
-   (define-class (Key :k :v (:k -> :v)))
-   (define-class (TaggedKey :k :v :tag (:k -> :v)))
-   (define-instance (Key :k :v => TaggedKey :k :v Boolean))
-   (define-instance (Key :k :w => TaggedKey :k :w Char))
-   ```
-
-   Both instances ask `Key` for the output at the same `:k`, so `:v` and `:w` must agree. If the second instance used an unrelated `OtherKey` instead, Coalton would reject it, even if all current `Key` and `OtherKey` instances happen to agree. The check uses declared dependencies of the prerequisites and their superclasses, not a search through the available instances. Where the inputs coincide, the output types must also have the same structure up to renaming variables not fixed by the inputs: type inference uses that structure even before a prerequisite dictionary is available.
+   Agreement may follow from functional dependencies declared by the prerequisites or their superclasses, but not from which instances happen to be defined. Where the determining arguments match, the determined types in the instance heads must also have the same structure, up to renaming variables not fixed by those arguments.
 
 2. **Consistency with an instance's own context**: An instance may not contradict its own prerequisites. For example, the instance
 
