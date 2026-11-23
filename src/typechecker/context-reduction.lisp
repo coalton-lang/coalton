@@ -5,6 +5,7 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
    #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/unify
    #:coalton-impl/typechecker/environment)
   (:import-from
@@ -38,49 +39,53 @@
       t
       nil))
 
-(defun superclass-closure (env pred)
-  "Recursively get all super classes of predicate
-
-Requires acyclic superclasses"
-  (declare (type environment env)
-           (type ty-predicate pred)
-           (values ty-predicate-list))
-  (let ((class (lookup-class env (ty-predicate-class pred))))
-    (cons pred
-          (loop :for super :in (context-superclasses class pred)
-                :append (superclass-closure env super)))))
-
 (defun by-inst (env pred)
   "Select the most-specific stable instance for PRED and return its constraints
 
-Returns (PREDS FOUNDP)"
+Returns (PREDS FOUNDP INSTANCE)"
   (declare (type environment env)
            (type ty-predicate pred)
-           (values ty-predicate-list boolean))
+           (values ty-predicate-list boolean (or null ty-class-instance symbol)))
   (let ((inst (lookup-class-instance env pred :no-error t)))
     (when inst
       (return-from by-inst
-        (values (instantiate-instance-context inst pred) t))))
+        (values (instantiate-instance-context inst pred) t inst))))
   (multiple-value-bind (preds foundp)
       (synthesized-class-instance-constraints pred)
     (when foundp
-      (return-from by-inst (values preds t))))
-  (values nil nil))
+      (return-from by-inst (values preds t ':synthesized))))
+  (values nil nil nil))
 
-(defun entail (env preds pred)
+(defun entail (env preds pred &key initial-stack check-superclasses-p)
   "Does PRED hold if and only if all of PREDS hold?"
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type ty-predicate pred)
+           (type list initial-stack)
+           (type boolean check-superclasses-p)
            (values boolean))
   (let* ((super (mapcan (lambda (p) (superclass-closure env p)) preds))
-        (value
-          (or (true (member pred super :test #'type-predicate=))
-              (true (multiple-value-bind (inst-preds found)
-                        (by-inst env pred)
-                      (and found
-                           (every (lambda (p) (entail env preds p)) inst-preds)))))))
-    value))
+         (fixed-vars (type-variables (append (cons pred preds)
+                                             (mapcar #'cdr initial-stack))))
+         (height-cache (make-hash-table :test #'eq))
+         (max-given-height (loop :for p :in (cons pred super)
+                                 :maximize (predicate-height p height-cache))))
+    (labels ((entail-pred (pred stack)
+               (or (true (member pred super :test #'type-predicate=))
+                   (multiple-value-bind (inst-preds found inst)
+                       (by-inst env pred)
+                     (and found
+                          (not (instance-recursion-blocked-p
+                                env inst pred stack fixed-vars max-given-height height-cache))
+                          (let ((next-stack (acons inst pred stack))
+                                (obligations
+                                  (if (and check-superclasses-p (not (symbolp inst)))
+                                      (append inst-preds
+                                              (instance-superclass-obligations env pred inst-preds))
+                                      inst-preds)))
+                            (every (lambda (p) (entail-pred p next-stack))
+                                   obligations)))))))
+      (true (entail-pred pred initial-stack)))))
 
 (defun super-entail (env preds pred)
   "Does PRED hold if and only if all of PREDS hold, only checking superclass relations?"

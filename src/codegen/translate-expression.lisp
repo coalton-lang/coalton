@@ -352,24 +352,30 @@ application site, such as variables passed into `lisp` forms."
            (type pred-context ctx)
            (type tc:environment env)
            (values tc:qualified-ty &optional))
-  (let ((subs nil))
+  (let* ((subs nil)
+         (reachable-ctx-preds
+           (loop :for (ctx-pred . nil) :in ctx
+                 :append (tc:superclass-closure env ctx-pred)))
+         (ctx-vars (tc:type-variables reachable-ctx-preds)))
     (dolist (pred (tc:qualified-ty-predicates qual-ty))
       (let ((matches
               (remove-duplicates
-               (loop :for (ctx-pred . nil) :in ctx
-                     :append (loop :for reachable-pred :in (tc:superclass-closure env ctx-pred)
-                                   :for match
-                                     := (and (eq (tc:ty-predicate-class pred)
-                                                 (tc:ty-predicate-class reachable-pred))
-                                             (handler-case
-                                                 (tc:predicate-match pred reachable-pred subs)
-                                               (tc:predicate-unification-error ()
-                                                 nil)
-                                               (tc:coalton-internal-type-error ()
-                                                 nil)))
-                                   :when match
-                                     :collect (cons (tc:apply-substitution match pred)
-                                                    match)))
+               (loop :for reachable-pred :in reachable-ctx-preds
+                     :for match
+                       := (and (eq (tc:ty-predicate-class pred)
+                                   (tc:ty-predicate-class reachable-pred))
+                               (handler-case
+                                   (tc:predicate-match pred reachable-pred subs)
+                                 (tc:predicate-unification-error ()
+                                   nil)
+                                 (tc:coalton-internal-type-error ()
+                                   nil)))
+                     :when (and match
+                                (every (lambda (v)
+                                         (tc:ty= v (tc:apply-substitution match v)))
+                                       ctx-vars))
+                       :collect (cons (tc:apply-substitution match pred)
+                                      match))
                :test #'tc:type-predicate=
                :key #'car)))
         (when (= 1 (length matches))

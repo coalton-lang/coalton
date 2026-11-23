@@ -35,17 +35,20 @@
   (let ((bindings (global-environment-bindings environment)))
     (or (gethash name bindings)
         (setf (gethash name bindings)
-              (cons ':|@@unbound@@| name)))))
+              ;; Wrap the mutable value cell one cons deeper so SBCL's
+              ;; depth-1 CTYPE-OF on LOAD-TIME-VALUE constants in EVAL
+              ;; sees CONS rather than (EQL :|@@unbound@@|).
+              (cons (cons ':|@@unbound@@| nil) name)))))
 
 (declaim (inline top-level-binding-value
                  top-level-binding-name
                  (setf top-level-binding-value)))
 
-(defun top-level-binding-value (binding) (car binding))
+(defun top-level-binding-value (binding) (caar binding))
 (defun top-level-binding-name (binding) (cdr binding))
 
 (defun (setf top-level-binding-value) (new-value binding)
-  (setf (car binding) new-value))
+  (setf (caar binding) new-value))
 
 (defun ensure-top-level-constant (name environment thunk)
   "Return the value of NAME in ENVIRONMENT, initializing it with THUNK if unbound."

@@ -31,6 +31,7 @@
    #:forall-ty-predicates               ; FUNCTION
    #:forall-ty-body                     ; FUNCTION
    #:instantiate-forall-ty              ; FUNCTION
+   #:call-with-aligned-forall-binders   ; FUNCTION
    #:contains-forall-ty-p               ; FUNCTION
    #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
@@ -374,7 +375,11 @@
 
 (defvar *forall-ty=-counter* -1)
 
-(defmethod ty= ((type1 forall-ty) (type2 forall-ty))
+(defun call-with-aligned-forall-binders (type1 type2 fn)
+  "When TYPE1 and TYPE2 have compatible forall binders, call FN on their bodies instantiated with shared TGENs."
+  (declare (type forall-ty type1 type2)
+           (type function fn)
+           (values boolean &optional))
   (and (= (length (forall-ty-binders type1))
           (length (forall-ty-binders type2)))
        (every (lambda (b1 b2)
@@ -399,5 +404,10 @@
                 (loop :for b2 :in (forall-ty-binders type2)
                       :for sv :in shared-vars
                       :collect (make-substitution :from b2 :to sv))))
-         (qualified-ty= (apply-substitution subs1 (forall-ty-type type1))
-                        (apply-substitution subs2 (forall-ty-type type2))))))
+         (and (funcall fn
+                       (apply-substitution subs1 (forall-ty-type type1))
+                       (apply-substitution subs2 (forall-ty-type type2)))
+              t))))
+
+(defmethod ty= ((type1 forall-ty) (type2 forall-ty))
+  (call-with-aligned-forall-binders type1 type2 #'qualified-ty=))
