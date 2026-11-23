@@ -35,7 +35,9 @@
    #:source-name
    #:source-external-format
    #:source-stream
+   #:source-style-warning
    #:source-warning
+   #:style-warn
    #:stream-span-to-char-span
    #:deprecation-warn
    #:span
@@ -994,6 +996,15 @@ CR characters elsewhere, including at EOF, are preserved."
 (defmethod severity ((condition source-warning))
   :warn)
 
+(define-condition source-style-warning (source-warning style-warning)
+  ()
+  (:documentation "A source-located warning about valid Coalton code that could be
+improved, such as inefficient code, deprecated features, or ineffective annotations.
+These warnings can be muffled separately from more serious warnings."))
+
+(defmethod severity ((condition source-style-warning))
+  :style-warning)
+
 (define-condition coalton:deprecation-warning (source-warning style-warning)
   ()
   (:documentation "A user-facing warning for deprecated Coalton language features."))
@@ -1012,6 +1023,14 @@ CR characters elsewhere, including at EOF, are preserved."
 (defun deprecation-warn (message note &rest notes)
   "Signal a deprecation warning related to one or more source locations."
   (let ((condition (make-condition 'coalton:deprecation-warning
+                                   :message message
+                                   :notes (cons note notes))))
+    (emit-source-diagnostic condition)
+    (cl:warn condition)))
+
+(defun style-warn (message note &rest notes)
+  "Signal a style warning related to one or more source locations."
+  (let ((condition (make-condition 'source-style-warning
                                    :message message
                                    :notes (cons note notes))))
     (emit-source-diagnostic condition)

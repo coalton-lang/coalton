@@ -31,6 +31,8 @@ weight: 75
 - **As a top-level or method attribute**:
   - `(inline)` takes no arguments and must appear immediately before [`declare`](/manual/operators/declare/), [`define`](/manual/operators/define/), or a method definition inside [`define-instance`](/manual/operators/define-instance/).
   - It marks the function or method for inlining across all saturated call sites.
+  - It can also inline uses of typeclass-constrained values.
+  - On a non-function value without typeclass constraints, `(inline)` has no effect and signals a style warning. It does not change when or how often such a value is initialized.
   - Dynamic variables (`*name*`) cannot be marked `inline`.
 - **As an expression**:
   - `inline` has type `(:a -> :a)` and returns the value of its argument unchanged.

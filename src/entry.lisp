@@ -25,6 +25,25 @@
 
 (defvar *global-environment* (tc:make-default-environment))
 
+(defun warn-ineffective-inline-attributes (program env)
+  (declare (type parser:program program)
+           (type tc:environment env))
+  (dolist (form (append (parser:program-defines program)
+                       (parser:program-declares program)))
+    (multiple-value-bind (attribute name)
+        (etypecase form
+          (parser:toplevel-define
+           (values (parser:toplevel-define-inline form)
+                   (parser:node-variable-name (parser:toplevel-define-name form))))
+          (parser:toplevel-declare
+           (values (parser:toplevel-declare-inline form)
+                   (parser:identifier-src-name (parser:toplevel-declare-name form)))))
+      (when (and attribute
+                 (not (tc:lookup-function env name :no-error t)))
+        (source:style-warn "Ineffective inline attribute"
+                           (source:note attribute
+                                        "inline has no effect on the value ~A" name))))))
+
 (defun entry-point (program)
   (let* ((selections nil)
          (tc:*defer-instance-validation* t)
@@ -149,11 +168,14 @@
 
                   (analysis:analyze-translation-unit translation-unit env)
 
-                  (codegen:compile-translation-unit translation-unit
-                                                    monomorphize-table
-                                                    inline-p-table
-                                                    env
-                                                    calling-convention-table))))))))))
+                  (multiple-value-bind (code env)
+                      (codegen:compile-translation-unit translation-unit
+                                                       monomorphize-table
+                                                       inline-p-table
+                                                       env
+                                                       calling-convention-table)
+                    (warn-ineffective-inline-attributes program env)
+                    (values code env)))))))))))
 
 
 (defun expression-entry-point (node)
