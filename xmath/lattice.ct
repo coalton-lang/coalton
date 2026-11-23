@@ -1,0 +1,122 @@
+(coalton/utils:defstdlib-package #:coalton/xmath/lattice
+  (:documentation "LLL reduction of row lattices over the integers, with exact decisions and a unimodular witness.")
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:mat #:coalton/xmath/matrix)
+                    (#:nf #:coalton/xmath/normal-form)
+                    (#:w #:coalton/xmath/internal/matrix-workspace)
+                    (#:vec #:coalton/vector)
+                    (#:list #:coalton/list))
+  (:export #:lll))
+
+(in-package #:coalton/xmath/lattice)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (declare %inner (w:Grid Integer * UFix * UFix -> Fraction))
+  (define (%inner b i j)
+    (from-int
+      (for ((t 0 (1+ t))
+            (s 0 (+ s (* (w:at b i t) (w:at b j t)))))
+        :returns s :while (< t (w:.width b)))))
+
+  (declare %initialize-gso! (w:Grid Integer * w:Grid Fraction * vec:Vector Fraction -> Boolean))
+  (define (%initialize-gso! b mu norms)
+    ;; LDL^T of the Gram matrix. Only the leading independent rows are
+    ;; needed; stop on dependence rather than dividing by a zero norm.
+    (for ((i 0 (1+ i))) :while (< i (vec:length norms))
+      (for ((j 0 (1+ j))) :while (<= j i)
+        (let d =
+          (for ((t 0 (1+ t))
+                (s (%inner b i j)
+                   (- s (* (* (w:at mu i t) (w:at mu j t)) (vec:index-unsafe t norms)))))
+            :returns s :while (< t j)))
+        (cond
+          ((< j i) (w:put! mu i j (/ d (vec:index-unsafe j norms))))
+          ((zero? d) (return False))
+          (True (vec:set! i d norms)))))
+    True)
+
+  (declare %reduce-row! (w:Grid Integer * w:Grid Integer * w:Grid Fraction * UFix -> Void))
+  (define (%reduce-row! b u mu k)
+    (for ((end k (1- end))) :while (> end 0)
+      (let j = (1- end))
+      (let q = (round (w:at mu k j)))
+      (unless (zero? q)
+        (w:add-row! b k j (neg q))
+        (w:add-row! u k j (neg q))
+        (let c = (from-int q))
+        (for ((i 0 (1+ i))) :while (< i j)
+          (w:put! mu k i (- (w:at mu k i) (* c (w:at mu j i)))))
+        (w:put! mu k j (- (w:at mu k j) c)))))
+
+  (declare %swap-adjacent! (w:Grid Integer * w:Grid Integer * w:Grid Fraction *
+                            vec:Vector Fraction * UFix -> Void))
+  (define (%swap-adjacent! b u mu norms k)
+    ;; An adjacent swap changes just two orthogonal directions. Update their
+    ;; lengths and the coordinates in those directions, not the Gram matrix.
+    (let j = (1- k))
+    (let t = (w:at mu k j))
+    (let a = (vec:index-unsafe j norms))
+    (let d = (vec:index-unsafe k norms))
+    (let new-a = (+ d (* (* t t) a)))
+    (let new-t = (/ (* t a) new-a))
+    (w:swap-rows! b j k)
+    (w:swap-rows! u j k)
+    (vec:set! j new-a norms)
+    (vec:set! k (/ (* a d) new-a) norms)
+    (w:put! mu k j new-t)
+    (for ((i 0 (1+ i))) :while (< i j)
+      (let x = (w:at mu j i))
+      (w:put! mu j i (w:at mu k i))
+      (w:put! mu k i x))
+    (for ((i (1+ k) (1+ i))) :while (< i (vec:length norms))
+      (let x = (w:at mu i k))
+      (let y = (- (w:at mu i j) (* t x)))
+      (w:put! mu i k y)
+      (w:put! mu i j (+ x (* new-t y)))))
+
+  (declare %lll! (w:Grid Integer * w:Grid Integer * Fraction * UFix -> Boolean))
+  (define (%lll! b u delta rank)
+    (let mu = (w:tabulate rank rank (fn (_ _) 0)))
+    (let norms = (vec:with-initial-element rank 0))
+    (unless (%initialize-gso! b mu norms)
+      (return False))
+    (rec reduce ((k 1))
+      (when (< k rank)
+        (%reduce-row! b u mu k)
+        (let j = (1- k))
+        (let t = (w:at mu k j))
+        (cond
+          ((>= (vec:index-unsafe k norms)
+               (* (- delta (* t t)) (vec:index-unsafe j norms)))
+           (reduce (1+ k)))
+          (True
+           (%swap-adjacent! b u mu norms k)
+           (reduce (max 1 j))))))
+    True)
+
+  (declare lll (mat:Matrix Integer &key (:delta Fraction)
+                -> mat:Matrix Integer * mat:Matrix Integer * UFix))
+  (define (lll input &key (delta 3/4))
+    "Return `(values B U rank)` for an integer matrix $A$ of row generators. The square matrix $U$ is unimodular and $B=UA$ has the same shape as $A$. Its first $r$ rows are an LLL-reduced basis of the original integer lattice; the remaining rows are zero. Empty matrices have rank zero.
+
+All size reductions and Lovász comparisons use exact arithmetic. The rational parameter must satisfy $1/4<\\delta<1$. The basis satisfies $|\\mu_{ij}|\\le1/2$ and $\\|b_i^*\\|^2\\ge(\\delta-\\mu_{i,i-1}^2)\\|b_{i-1}^*\\|^2$."
+    (unless (and (< 1/4 delta) (< delta 1))
+      (error "lll: delta must be strictly between 1/4 and 1."))
+    (let m = (mat:rows input))
+    (when (<= m (mat:cols input))
+      (let b = (w:copy-matrix input))
+      (let u = (w:identity-grid m))
+      (when (%lll! b u delta m)
+        (return (values (w:freeze b) (w:freeze u) m))))
+    ;; Merely dropping dependent rows need not preserve an integer lattice:
+    ;; e.g. [6], [10] generate [2], not [6]. HNF supplies a unimodular start.
+    (let (values h transform pivots) = (nf:hermite-normal-form input))
+    (let rank = (list:length pivots))
+    (let b = (w:copy-matrix h))
+    (let u = (w:copy-matrix transform))
+    (unless (%lll! b u delta rank)
+      (error "lll: dependent nonzero rows in row Hermite form."))
+    (values (w:freeze b) (w:freeze u) rank)))

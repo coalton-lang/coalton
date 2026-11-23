@@ -7,6 +7,9 @@
     (define (~ (dual:Dual a1 b1) (dual:Dual a2 b2))
       (and (~ a1 a2) (~ b1 b2))))
 
+  (define-instance (LooseCompare :t => LooseCompare (dual:AD :t))
+    (define (~ (dual:AD x) (dual:AD y)) (~ x y)))
+
   ;; Some test functions.
 
   ;; Doubling
@@ -32,7 +35,7 @@
   (define (dual-test4 x) (math:exp (math:sin (math:cos (+ x 1)))))
 
   (define (dtest4 x)
-    (math:negate
+    (math:neg
      (* (math:sin (+ x 1))
         (* (math:cos (math:cos (+ x 1)))
            (math:exp (math:sin (math:cos (+ x 1))))))))
@@ -66,4 +69,47 @@
   (test-dual dual-test4 dual-test4 dtest4 1.0d0)
   (test-dual dual-test4 dual-test4 dtest4 -1.0d0)
   (test-dual dual-test4 dual-test4 dtest4 2.0d0)
-  (test-dual dual-test4 dual-test4 dtest4 (the Double-Float math:pi)))
+  (test-dual dual-test4 dual-test4 dtest4 (the F64 math:pi)))
+
+(define-test algebraic-dual-coefficients ()
+  (let eps = (dual:Dual (the Integer 0) 1))
+  (is (/= eps zero))
+  (is (== (* eps eps) zero))
+  (is (== (hash (+ eps zero)) (hash eps)))
+  ;; Only the final coefficient is zero; the quadratic term is not.
+  (let p = (poly:polynomial [1 zero eps zero]))
+  (is (== (poly:degree p) 2))
+  (is (== (poly:coefficients p) [1 zero eps]))
+  (is (== (poly:evaluate p 3) (dual:Dual 1 9))))
+
+(define-test ad-primal-branching ()
+  (let x = (dual:make-ad (the Integer 0) 7))
+  (is (== x zero))
+  (is (== (hash x) (hash (the (dual:AD Integer) zero))))
+  (is (== (<=> x zero) EQ))
+  (is (< x (dual:make-ad 1 -100)))
+  (is (== (dual:d-x (fn (z) (if (== z 0) (* 3 z) (* 2 z))) 0) 3))
+  ;; The inner and outer seeds must both survive this primal comparison.
+  (is (== (dual:d-x (fn (z)
+                       (dual:d-x (fn (w) (if (< w 0) (* w (* w w)) w)) z))
+                     -2)
+          -12)))
+
+(define-test ad-functor-derivatives ()
+  (let calls = (cell:new (the Integer 0)))
+  (let ds = (the (List Integer)
+              (dual:d-x-map (fn (x)
+                              (cell:increment! calls)
+                              [(* x x) (* x (* x x))])
+                            3)))
+  (is (== ds [6 27]))
+  (is (== (cell:read calls) 1))
+  (let positive-square = (fn (x) (if (> x 0) (Some (* x x)) None)))
+  (is (== (dual:d-x-map positive-square 3) (Some 6)))
+  (is (== (dual:d-x-map positive-square -3) None)))
+
+(define-test ad-elementary-derivatives ()
+  (is (~ (dual:d-x (fn (x) (+ (math:sinh x) (math:cosh x))) 0.5d0) (exp 0.5d0)))
+  (is (~ (dual:d-x (fn (x) (math:acosh (math:cosh x))) 0.5d0) 1.0d0))
+  (is (~ (dual:d-x (fn (x) (math:atanh (math:tanh x))) 0.5d0) 1.0d0))
+  (is (~ (dual:d-x (fn (x) (math:atan2 1 x)) 0.0d0) -1.0d0)))

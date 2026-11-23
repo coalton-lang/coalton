@@ -111,14 +111,8 @@ matching, as in the following example.
 
   (repr :native cl:fixnum)
   (define-type IFix
-    "Non-allocating tagged integer; range is platform-dependent. Does not error on overflow. Uses `fixnum`.")
+    "Signed tagged integer with a platform-dependent range. Arithmetic signals on overflow. Uses `fixnum`.")
 
   (repr :native coalton-impl/util:ufixnum)
   (define-type UFix
-    "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`.")
-
-  (define-type-alias Single-Float F32
-    "Deprecated name for F32. This is provided for backward compatibility.")
-
-  (define-type-alias Double-Float F64
-    "Deprecated name for F64. This is provided for backward compatibility."))
+    "Non-negative tagged integer through `cl:most-positive-fixnum`, inclusive. Arithmetic wraps modulo one more than this maximum. Uses `(and fixnum unsigned-byte)`."))

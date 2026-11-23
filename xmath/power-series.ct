@@ -1,0 +1,659 @@
+;;;; power-series.ct
+;;;;
+;;;; Lazy memoized formal power series R[[x]]
+
+(coalton/utils:defstdlib-package #:coalton/xmath/power-series
+  (:documentation "The ring $R[[x]]$ of formal power series $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$, represented lazily with memoized coefficients.
+
+Termwise addition and the Cauchy product $(fg)_n = \\sum_{k=0}^n a_k b_{n-k}$ make the series a semiring when $R$ is a semiring, and a ring when $R$ is a ring. The formal derivative is $f'(x) = \\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$. There is no `Eq` instance for unrestricted series: `series-approx-equal?` tests agreement modulo $x^N$ for an explicit number $N$ of coefficients.
+
+**Inversion and division.** A series $g(x) = \\sum_{n=0}^{\\infty} b_n x^n$ is a unit in $R[[x]]$ if and only if its constant term $b_0$ is invertible, in which case the coefficients of $c = g^{-1}$ are determined recursively by
+$$c_0 = b_0^{-1}, \\qquad c_n = -b_0^{-1} \\sum_{k=1}^n b_k c_{n-k} \\quad (n \\ge 1).$$
+Ordinary division is the right quotient $f g^{-1}$, and never cancels powers of $x$. To cancel a common factor $x^v$, use `series-divide-through` with an inclusive bound on $v$. The first nonzero denominator coefficient must still be a unit. A zero prefix cannot prove an infinite series is zero.
+
+**Elementary functions and calculus.** Rational scalars permit formal integration $\\int_0^x f(t)\\,dt = \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$. For commuting coefficients, ordinary elementary functions expand at the constant term of their argument, using the coefficient type's scalar values and branches at regular centers. For instance $E=\\exp(f)$ solves $E'=f'E$ with $E(0)=\\exp(f(0))$. Singular centers are not general Taylor expansions; rounded types retain their scalar domain and rounding limitations.
+
+The separately named formal functions need only commuting rational scalars and coefficient equality to check normalization. For $u(0)=0$, `series-exp`, the circular and hyperbolic functions, and their normalized inverses have rational Taylor coefficients. `series-ln`, `series-sqrt`, `series-nth-root`, and the base of `series-pow` instead require constant term one. These functions neither evaluate scalar transcendentals nor choose an arbitrary root: the formal root has constant term one.
+
+**Composition and Lagrange reversion.** When $g(0) = 0$, the formal substitution $(f \\circ g)(x) = \\sum_{k=0}^{\\infty} a_k g(x)^k$ (`series-compose`) is well-defined because $g(x)^k$ has valuation at least $k$. For commuting coefficients and a unit $g'(0)$, Lagrange reversion (`series-revert`) computes the unique compositional inverse $g^{[-1]}(x)$ satisfying $g(g^{[-1]}(x)) = g^{[-1]}(g(x)) = x$.")
+  (:nicknames
+   #:coalton/math/power-series
+   #:coalton-library/math/power-series)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral
+   #:coalton/math/elementary)
+  (:local-nicknames
+   (#:frac #:coalton/math/fraction)
+   (#:list #:coalton/list)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:vec #:coalton/vector))
+  (:export
+   #:PowerSeries
+   #:series-approx-equal?
+   #:make-series
+   #:from-coefficients
+   #:series-var
+   #:series-coeff
+   #:series-prefix
+   #:series->polynomial
+   #:series-shift
+   #:series-divide-through
+   #:series-differentiate
+   #:series-integrate
+   #:series-compose
+   #:series-revert
+   #:series-exp
+   #:series-ln
+   #:series-pow
+   #:series-sqrt
+   #:series-nth-root
+   #:series-sin
+   #:series-cos
+   #:series-tan
+   #:series-asin
+   #:series-atan
+   #:series-sinh
+   #:series-cosh
+   #:series-tanh
+   #:series-asinh
+   #:series-atanh))
+
+(in-package #:coalton/xmath/power-series)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (PowerSeries :a)
+    "An infinite formal power series $\\sum_{n=0}^{\\infty} a_n x^n$ with memoized coefficients."
+    (%PowerSeries (vec:Vector :a) (UFix -> :a)))
+
+  (declare make-series ((UFix -> :a) -> PowerSeries :a))
+  (define (make-series gen)
+    "Construct a formal power series $\\sum_{n=0}^{\\infty} a_n x^n$ from a coefficient generator $n \\mapsto a_n$."
+    (%PowerSeries (vec:new) gen))
+
+  (declare series-coeff (PowerSeries :a * UFix -> :a))
+  (define (series-coeff (%PowerSeries cache gen) n)
+    "Return the coefficient $a_n$ of $x^n$, computing and caching coefficients $a_0, \\ldots, a_n$ in order."
+    (rec fill ((k (vec:length cache)))
+      (cond
+        ((> k n) (vec:index-unsafe n cache))
+        (True
+         (vec:push! (gen k) cache)
+         (fill (+ k 1))))))
+
+  (declare series-prefix (UFix * PowerSeries :a -> List :a))
+  (define (series-prefix count ps)
+    "Return the first `count` coefficients $(a_0, \\ldots, a_{\\mathtt{count}-1})$ of `ps`."
+    (when (> count 0)
+      (series-coeff ps (- count 1))
+      (values))
+    (rec collect ((i count) (acc Nil))
+      (if (== i 0)
+          acc
+          (let ((idx (- i 1)))
+            (collect idx (Cons (series-coeff ps idx) acc))))))
+
+  (declare series->polynomial (UFix * PowerSeries :a -> poly:Polynomial :a))
+  (define (series->polynomial count ps)
+    "Truncate `ps` to its first `count` terms $\\sum_{k=0}^{\\mathtt{count}-1} a_k x^k$ as a `Polynomial`."
+    (poly:polynomial (series-prefix count ps)))
+
+  (declare from-coefficients (Additive :a => List :a -> PowerSeries :a))
+  (define (from-coefficients xs)
+    "Construct a `PowerSeries` from a finite list of leading coefficients, padded with `zero`."
+    (let p = (poly:polynomial xs))
+    (make-series (fn (n) (poly:coeff p n))))
+
+  (declare constant-series (Additive :a => :a -> PowerSeries :a))
+  (define (constant-series c)
+    "Construct the constant power series $c + 0x + 0x^2 + \\cdots$."
+    (make-series (fn (n) (if (== n 0) c zero))))
+
+  (declare series-var (Semiring :a => PowerSeries :a))
+  (define series-var
+    "The indeterminate series $x = 0 + 1x + 0x^2 + \\cdots$."
+    (make-series (fn (n) (if (== n 1) one zero))))
+
+  (declare series-shift (Additive :a => UFix * PowerSeries :a -> PowerSeries :a))
+  (define (series-shift k ps)
+    "Multiply `ps` by $x^k$."
+    (make-series
+     (fn (n)
+       (if (< n k)
+           zero
+           (series-coeff ps (- n k))))))
+
+  (define-instance (Additive :a => Into (poly:Polynomial :a) (PowerSeries :a))
+    (define (into p)
+      (make-series (fn (n) (poly:coeff p n)))))
+
+  (declare series-approx-equal? (Eq :a => UFix * PowerSeries :a * PowerSeries :a -> Boolean))
+  (define (series-approx-equal? order a b)
+    "Return `True` if the first `order` coefficients ($a_0$ through $a_{\\mathtt{order}-1}$) of `a` and `b` are equal."
+    (rec check ((i 0))
+      (if (>= i order)
+          True
+          (and (== (series-coeff a i) (series-coeff b i))
+               (check (+ i 1))))))
+
+  ;;
+  ;; Coefficient arithmetic
+  ;;
+
+  (define-instance (HasAdd :a => HasAdd (PowerSeries :a))
+    (define (+ a b)
+      (make-series (fn (n) (+ (series-coeff a n) (series-coeff b n))))))
+
+  (define-instance (Additive :a => Additive (PowerSeries :a))
+    (define zero
+      (make-series (fn (_) zero))))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (PowerSeries :a))
+    (define (neg a)
+      (make-series (fn (n) (neg (series-coeff a n)))))
+    (define (- a b)
+      (make-series (fn (n) (- (series-coeff a n) (series-coeff b n))))))
+
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (PowerSeries :a))
+    (define (* a b)
+      (make-series
+       (fn (n)
+         (rec cauchy ((k 0) (acc zero))
+           (let term = (* (series-coeff a k) (series-coeff b (- n k))))
+           (let next = (+ acc term))
+           (if (== k n)
+               next
+               (cauchy (+ k 1) next)))))))
+
+  (define-instance (Semiring :a => Multiplicative (PowerSeries :a))
+    (define one
+      (constant-series one)))
+
+  (define-instance (Semiring :a => Semiring (PowerSeries :a)))
+
+  (define-instance (Ring :a => Ring (PowerSeries :a))
+    (inline)
+    (define (from-int n)
+      (constant-series (from-int n))))
+
+  (define-instance (CommutativeRing :a => CommutativeRing (PowerSeries :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (PowerSeries :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (PowerSeries :a)))
+  (define-instance (RationalScalars :a => RationalScalars (PowerSeries :a))
+    (inline)
+    (define (embed-fraction q) (constant-series (embed-fraction q))))
+
+  (define-instance (HasMul :a => Scale :a (PowerSeries :a))
+    (define (scale c ps)
+      (make-series (fn (n) (* c (series-coeff ps n))))))
+
+  (define-instance (Ring :a => Module :a (PowerSeries :a)))
+
+  (define-instance (ConjugateRing :a => ConjugateRing (PowerSeries :a))
+    (define (conjugate ps)
+      (make-series (fn (n) (conjugate (series-coeff ps n))))))
+
+  (declare %series-drop (UFix * PowerSeries :a -> PowerSeries :a))
+  (define (%series-drop k ps)
+    "Divide `ps` by $x^k$, dropping the first `k` coefficients."
+    (if (== k 0)
+        ps
+        (make-series (fn (n) (series-coeff ps (+ n k))))))
+
+  (declare %with-constant (:a * PowerSeries :a -> PowerSeries :a))
+  (define (%with-constant c a)
+    (make-series (fn (n) (if (== n 0) c (series-coeff a n)))))
+
+  (declare series-divide-through
+    ((Eq :a) (Reciprocable :a) => UFix * PowerSeries :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-divide-through order a b)
+    "Divide `a` by `b`, searching coefficients through `order` (inclusive) for the leading denominator coefficient. It must be invertible. Signal an error if `a` has a lower valuation or if the search is inconclusive."
+    (rec find-val ((k 0))
+      (cond
+        ((nonzero? (series-coeff b k))
+         (/ (%series-drop k a) (%series-drop k b)))
+        ((nonzero? (series-coeff a k))
+         (error "PowerSeries division: numerator has smaller valuation than denominator."))
+        ((== k order)
+         (error "PowerSeries division: denominator valuation undetermined at search limit; try series-divide-through with a higher order."))
+        (True (find-val (+ k 1))))))
+
+  ;; With the inverse of b(0) already known, no coefficient division is needed.
+  (declare %recip-from (Ring :a => :a * PowerSeries :a -> PowerSeries :a))
+  (define (%recip-from inv-b0 b)
+    (let cache = (vec:new))
+    (vec:push! inv-b0 cache)
+    (%PowerSeries cache
+      (fn (n)
+        (rec sum ((k 1) (acc zero))
+          (let next = (+ acc (* (series-coeff b k) (vec:index-unsafe (- n k) cache))))
+          (if (== k n)
+              (neg (* inv-b0 next))
+              (sum (+ k 1) next))))))
+
+  (declare %require-nonzero ((Eq :a) (Additive :a) => :a -> Void))
+  (define (%require-nonzero c)
+    (when (zero? c)
+      (error "PowerSeries: a unit constant term is required.")))
+
+  (declare %inverse-at-center ((Eq :a) (Reciprocable :a) => :a -> :a))
+  (define (%inverse-at-center c)
+    (%require-nonzero c)
+    ;; A nonzero coefficient can still be a non-unit. Its own inverse decides.
+    (recip c))
+
+  (define-instance ((Eq :a) (Reciprocable :a) => Reciprocable (PowerSeries :a))
+    (define (recip b)
+      (%recip-from (%inverse-at-center (series-coeff b 0)) b))
+    (define (/ a b) (* a (recip b))))
+
+  ;;
+  ;; Calculus & Composition on Power Series
+  ;;
+
+  (declare series-differentiate (Semiring :a => PowerSeries :a -> PowerSeries :a))
+  (define (series-differentiate ps)
+    "Formal derivative $\\sum_{n=0}^{\\infty} (n + 1) a_{n+1} x^n$."
+    (make-series
+     (fn (n)
+       (* (from-nat (+ n 1)) (series-coeff ps (+ n 1))))))
+
+  (declare series-integrate (RationalScalars :a => :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-integrate c0 ps)
+    "Formal integral $c_0 + \\sum_{n=1}^{\\infty} \\frac{a_{n-1}}{n} x^n$."
+    (make-series
+     (fn (n)
+       (if (== n 0)
+           c0
+           (frac:divide-by-integer (series-coeff ps (- n 1)) (to-integer n))))))
+
+  (declare series-compose ((Eq :a) (Semiring :a) => PowerSeries :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-compose f g)
+    "Formal composition $f(g(x))$, requiring `(series-coeff g 0) == zero`."
+    ;; Wait until evaluation so constructing `series-compose` is lazy.
+    ;; We cache `g^k` in a vector of PowerSeries so each power is built once.
+    (let powers = (vec:new))
+    (let power-of-g =
+      (fn (k)
+        (rec ensure ((m (vec:length powers)))
+          (if (> m k)
+              (vec:index-unsafe k powers)
+              (let ((next-pow
+                      (cond
+                        ((== m 0) one)
+                        ((== m 1) g)
+                        (True (* (vec:index-unsafe (- m 1) powers) g)))))
+                (vec:push! next-pow powers)
+                (ensure (+ m 1)))))))
+    (make-series
+     (fn (n)
+       (when (nonzero? (series-coeff g 0))
+         (error "series-compose requires g(0) == 0."))
+       (if (== n 0)
+           (series-coeff f 0)
+           (rec loop ((k 1) (acc zero))
+             (let term = (* (series-coeff f k)
+                            (series-coeff (power-of-g k) n)))
+             (let next = (+ acc term))
+             (if (== k n)
+                 next
+                 (loop (+ k 1) next)))))))
+
+  (declare series-revert ((Eq :a) (CommutativeRing :a) (Reciprocable :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-revert f)
+    "Compositional inverse $g(x)$ satisfying $f(g(x)) = x$, requiring $f(0) = 0$ and a unit $f'(0)$."
+    (let cache = (vec:new))
+    ;; h(x) = g(x) / x = g_1 + g_2 x + g_3 x^2 + ...
+    ;; For k >= 2, [x^n] g(x)^k = [x^{n-k}] h(x)^k, which depends only on
+    ;; h_0 .. h_{n-k} = g_1 .. g_{n-k+1} <= g_{n-1}, all already in `cache`.
+    (let h = (make-series (fn (m) (vec:index-unsafe (+ m 1) cache))))
+    (let h-powers = (vec:new))
+    (let power-of-h =
+      (fn (k)
+        (rec ensure ((m (vec:length h-powers)))
+          (if (> m k)
+              (vec:index-unsafe k h-powers)
+              (let ((next-pow
+                      (cond
+                        ((== m 0) one)
+                        ((== m 1) h)
+                        (True (* (vec:index-unsafe (- m 1) h-powers) h)))))
+                (vec:push! next-pow h-powers)
+                (ensure (+ m 1)))))))
+    (let gen =
+      (fn (n)
+        (when (nonzero? (series-coeff f 0))
+          (error "series-revert requires f(0) == 0."))
+        (let f1 = (series-coeff f 1))
+        (when (zero? f1)
+          (error "series-revert requires f'(0) /= 0."))
+        (cond
+          ((== n 0) zero)
+          ((== n 1) (recip f1))
+          (True
+           (rec sum-k ((k 2) (acc zero))
+             (let term = (* (series-coeff f k)
+                            (series-coeff (power-of-h k) (- n k))))
+             (let next-acc = (+ acc term))
+             (if (== k n)
+                 (neg (* (recip f1) next-acc))
+                 (sum-k (+ k 1) next-acc)))))))
+    (%PowerSeries cache gen))
+
+  ;;
+  ;; Differential recurrences. Initial values select the scalar branch.
+  ;;
+
+  ;; [x^n] integral(f y), n > 0. Only y_0,...,y_{n-1} are needed.
+  (declare %integral-product-coeff (RationalScalars :a => UFix * PowerSeries :a * vec:Vector :a -> :a))
+  (define (%integral-product-coeff n f ys)
+    (rec sum ((k 1) (acc zero))
+      (let next = (+ acc (* (series-coeff f (- k 1)) (vec:index-unsafe (- n k) ys))))
+      (if (== k n)
+          (frac:divide-by-integer next (to-integer n))
+          (sum (+ k 1) next))))
+
+  ;; Solve y' = f y, y(0) = y0.
+  (declare %exp-integral (RationalScalars :a => :a * PowerSeries :a -> PowerSeries :a))
+  (define (%exp-integral y0 f)
+    (let ys = (vec:new))
+    (vec:push! y0 ys)
+    (%PowerSeries ys (fn (n) (%integral-product-coeff n f ys))))
+
+  ;; a y' = a'. Divide each coefficient by a0 rather than forming 1/a0;
+  ;; ln(t + t*x) has slope one even if the floating reciprocal of t overflows.
+  (declare %ln-from ((CommutativeRing :a) (RationalScalars :a) =>
+                     :a * (:a -> :a) * PowerSeries :a -> PowerSeries :a))
+  (define (%ln-from y0 divide-by-a0 a)
+    (let ys = (vec:new))
+    (vec:push! y0 ys)
+    (%PowerSeries ys
+      (fn (n)
+        (rec sum ((k 1) (acc zero))
+          (if (== k n)
+              (divide-by-a0 (- (series-coeff a n) (frac:divide-by-integer acc (to-integer n))))
+              (let ((term (* (from-nat k) (* (vec:index-unsafe k ys) (series-coeff a (- n k))))))
+                (sum (+ k 1) (+ acc term))))))))
+
+  ;; Solve m a y' = a' y without taking a scalar logarithm. In particular
+  ;; an odd root of a negative real uses the real root as its initial value.
+  (declare %root-from ((CommutativeRing :a) (RationalScalars :a) =>
+                       Integer * :a * (:a -> :a) * PowerSeries :a -> PowerSeries :a))
+  (define (%root-from m y0 divide-by-a0 a)
+    (when (== m 0)
+      (error "PowerSeries nth-root requires a nonzero index."))
+    (let alpha = (embed-fraction (frac:make-fraction 1 m)))
+    ;; This quotient both checks the unit and avoids forming 1/a0: the
+    ;; derivative of sqrt at a tiny positive float can still be finite.
+    (let slope = (divide-by-a0 (* alpha y0)))
+    (let ys = (vec:new))
+    (vec:push! y0 ys)
+    (%PowerSeries ys
+      (fn (n)
+        ;; n a0 yn = sum (k/m - (n-k)) ak y(n-k). Isolate the k=n term.
+        (rec sum ((k 1) (acc zero))
+          (if (== n k)
+              (+ (* slope (series-coeff a n))
+                 (divide-by-a0 (frac:divide-by-integer acc (to-integer n))))
+              (let* ((j (- n k))
+                     (weight (- (* alpha (from-nat k)) (from-nat j))))
+                (sum (+ k 1) (+ acc (* weight (* (series-coeff a k) (vec:index-unsafe j ys)))))))))))
+
+  ;; Coupled circular/hyperbolic recurrences: s' = a' c, c' = +/- a' s.
+  (declare %sincos-from ((CommutativeRing :a) (RationalScalars :a) =>
+                         (:a -> :a) * :a * :a * PowerSeries :a -> PowerSeries :a * PowerSeries :a))
+  (define (%sincos-from sign-c s0 c0 a)
+    (let da = (series-differentiate a))
+    (let sin-cache = (vec:new))
+    (let cos-cache = (vec:new))
+    (vec:push! s0 sin-cache)
+    (vec:push! c0 cos-cache)
+    (let compute-sin-at = (fn (n) (%integral-product-coeff n da cos-cache)))
+    (let compute-cos-at = (fn (n) (sign-c (%integral-product-coeff n da sin-cache))))
+    (let fill-below =
+      (fn (n)
+        (rec fill ((m (min (vec:length sin-cache) (vec:length cos-cache))))
+          (when (< m n)
+            (when (== (vec:length sin-cache) m)
+              (vec:push! (compute-sin-at m) sin-cache))
+            (when (== (vec:length cos-cache) m)
+              (vec:push! (compute-cos-at m) cos-cache))
+            (fill (+ m 1))))))
+    (values (%PowerSeries sin-cache
+                          (fn (n)
+                            (fill-below n)
+                            (compute-sin-at n)))
+            (%PowerSeries cos-cache
+                          (fn (n)
+                            (fill-below n)
+                            (compute-cos-at n)))))
+
+  (declare %require-zero-center ((Eq :a) (Additive :a) => PowerSeries :a -> Void))
+  (define (%require-zero-center a)
+    (when (nonzero? (series-coeff a 0))
+      (error "Formal expansion requires constant term zero.")))
+
+  (declare %require-one-center ((Eq :a) (Multiplicative :a) => PowerSeries :a -> Void))
+  (define (%require-one-center a)
+    (when (/= one (series-coeff a 0))
+      (error "Formal expansion requires constant term one.")))
+
+  (declare series-exp ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-exp a)
+    "The formal exponential $\\exp(a)$ for $a(0)=0$."
+    (%require-zero-center a)
+    (%exp-integral one (series-differentiate a)))
+
+  (declare series-ln ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-ln a)
+    "The formal logarithm $\\int a'/a$ with zero constant term, for $a(0)=1$."
+    (%require-one-center a)
+    (%ln-from zero id a))
+
+  (declare series-pow ((Eq :a) (CommutativeRing :a) (RationalScalars :a) =>
+                       PowerSeries :a * PowerSeries :a -> PowerSeries :a))
+  (define (series-pow a b)
+    "The formal power $a^b=\\exp(b\\ln a)$ for $a(0)=1$ and arbitrary $b$."
+    (series-exp (* b (series-ln a))))
+
+  (declare series-nth-root ((Eq :a) (CommutativeRing :a) (RationalScalars :a) =>
+                            Integer * PowerSeries :a -> PowerSeries :a))
+  (define (series-nth-root m a)
+    "The root $r^m=a$ with $r(0)=1$, for $a(0)=1$ and nonzero integer $m$."
+    (%require-one-center a)
+    (%root-from m one id a))
+
+  (declare series-sqrt ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-sqrt a)
+    "The formal square root with constant term one."
+    (series-nth-root 2 a))
+
+  (declare %formal-sincos ((Eq :a) (CommutativeRing :a) (RationalScalars :a) =>
+                           (:a -> :a) * PowerSeries :a -> PowerSeries :a * PowerSeries :a))
+  (define (%formal-sincos sign-c a)
+    (%require-zero-center a)
+    (%sincos-from sign-c zero one a))
+
+  (declare series-sin ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-sin a)
+    "The formal sine of a series with constant term zero."
+    (let (values s _) = (%formal-sincos neg a))
+    s)
+
+  (declare series-cos ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-cos a)
+    "The formal cosine of a series with constant term zero."
+    (let (values _ c) = (%formal-sincos neg a))
+    c)
+
+  (declare series-tan ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-tan a)
+    "The formal tangent of a series with constant term zero."
+    (let (values s c) = (%formal-sincos neg a))
+    (* s (%recip-from one c)))
+
+  (declare series-asin ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-asin a)
+    "The formal arcsine of a series with constant term zero."
+    (%require-zero-center a)
+    (series-integrate zero (* (series-differentiate a) (series-nth-root -2 (- one (* a a))))))
+
+  (declare series-atan ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-atan a)
+    "The formal arctangent of a series with constant term zero."
+    (%require-zero-center a)
+    (series-integrate zero (* (series-differentiate a) (%recip-from one (+ one (* a a))))))
+
+  (declare series-sinh ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-sinh a)
+    "The formal hyperbolic sine of a series with constant term zero."
+    (let (values s _) = (%formal-sincos id a))
+    s)
+
+  (declare series-cosh ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-cosh a)
+    "The formal hyperbolic cosine of a series with constant term zero."
+    (let (values _ c) = (%formal-sincos id a))
+    c)
+
+  (declare series-tanh ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-tanh a)
+    "The formal hyperbolic tangent of a series with constant term zero."
+    (let (values s c) = (%formal-sincos id a))
+    (* s (%recip-from one c)))
+
+  (declare series-asinh ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-asinh a)
+    "The formal inverse hyperbolic sine of a series with constant term zero."
+    (%require-zero-center a)
+    (series-integrate zero (* (series-differentiate a) (series-nth-root -2 (+ one (* a a))))))
+
+  (declare series-atanh ((Eq :a) (CommutativeRing :a) (RationalScalars :a) => PowerSeries :a -> PowerSeries :a))
+  (define (series-atanh a)
+    "The formal inverse hyperbolic tangent of a series with constant term zero."
+    (%require-zero-center a)
+    (series-integrate zero (* (series-differentiate a) (%recip-from one (- one (* a a))))))
+
+  ;;
+  ;; Ordinary elementary functions take their initial values from the scalar
+  ;; functions. No comparison of series, or valuation search, is involved.
+  ;;
+
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) (Radical :a)
+                    => Radical (PowerSeries :a))
+    (define (sqrt a)
+      (let c = (series-coeff a 0))
+      (%require-nonzero c)
+      (%root-from 2 (sqrt c) (fn (v) (/ v c)) a))
+    (define (nth-root m a)
+      (when (== m 0)
+        (error "PowerSeries nth-root requires a nonzero index."))
+      (if (== m 1)
+          a
+          (let ((c (series-coeff a 0)))
+            (%require-nonzero c)
+            (%root-from m (nth-root m c) (fn (v) (/ v c)) a))))
+    (define (hypot a b)
+      (let a0 = (series-coeff a 0))
+      (let b0 = (series-coeff b 0))
+      (let h0 = (hypot a0 b0))
+      (when (zero? h0)
+        (error "PowerSeries hypot requires a unit scalar hypot at the center."))
+      ;; h^2 = a^2 + b^2. Isolate 2 h0 hn, without ever squaring a0, b0,
+      ;; or h0; unlike sqrt(a^2+b^2), this also preserves tiny centers.
+      (let u = (/ a0 h0))
+      (let v = (/ b0 h0))
+      (let hs = (vec:new))
+      (vec:push! h0 hs)
+      (%PowerSeries hs
+        (fn (n)
+          (let ends = (+ (* u (series-coeff a n)) (* v (series-coeff b n))))
+          (rec sum ((k 1) (acc zero))
+            (if (== k n)
+                (+ ends (frac:divide-by-integer (/ acc h0) 2))
+                (let ((j (- n k)))
+                  (sum (+ k 1)
+                       (+ acc (- (+ (* (series-coeff a k) (series-coeff a j))
+                                    (* (series-coeff b k) (series-coeff b j)))
+                                 (* (vec:index-unsafe k hs) (vec:index-unsafe j hs))))))))))))
+
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a)
+                    (Exponentiable :a) (Radical :a) => Exponentiable (PowerSeries :a))
+    (define (exp a)
+      (%exp-integral (exp (series-coeff a 0)) (series-differentiate a)))
+    (define (ln a)
+      (let c = (series-coeff a 0))
+      (%require-nonzero c)
+      (%ln-from (ln c) (fn (v) (/ v c)) a))
+    (define (pow a b)
+      (%exp-integral (pow (series-coeff a 0) (series-coeff b 0))
+                     (series-differentiate (* b (ln a)))))
+    (define (log b a)
+      (let q = (/ (ln a) (ln b)))
+      (%with-constant (log (series-coeff b 0) (series-coeff a 0)) q))
+    (define (asinh a)
+      (series-integrate (asinh (series-coeff a 0)) (/ (series-differentiate a) (hypot one a))))
+    (define (acosh a)
+      (let d = (* (sqrt (- a one)) (sqrt (+ a one))))
+      (series-integrate (acosh (series-coeff a 0)) (/ (series-differentiate a) d)))
+    (define (atanh a)
+      (let d = (* (- one a) (+ one a)))
+      (series-integrate (atanh (series-coeff a 0)) (/ (series-differentiate a) d)))
+    (define (sinh a)
+      (let c = (series-coeff a 0))
+      (let (values s _) = (%sincos-from id (sinh c) (cosh c) a))
+      s)
+    (define (cosh a)
+      (let c = (series-coeff a 0))
+      (let (values _ co) = (%sincos-from id (sinh c) (cosh c) a))
+      co)
+    (define (tanh a)
+      (let c = (series-coeff a 0))
+      (let t0 = (tanh c))
+      ;; tanh(c+d) = t0 + sech(c)^2 tanh(d)/(1+t0 tanh(d)).
+      ;; At saturation compute sech(c) from the *decaying* exponential.
+      (let sech = (cond
+                    ((or (== t0 one) (== t0 (neg one)))
+                     (let e = (exp (if (== t0 one) (neg c) c)))
+                     (/ (+ e e) (+ one (* e e))))
+                    (True (%inverse-at-center (cosh c)))))
+      (let t = (series-tanh (%with-constant zero a)))
+      (+ (constant-series t0)
+         (scale (* sech sech) (* t (%recip-from one (+ one (scale t0 t))))))))
+
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Reciprocable :a) (Trigonometric :a) (Radical :a)
+                    => Trigonometric (PowerSeries :a))
+    (define (sin a)
+      (let c = (series-coeff a 0))
+      (let (values s _) = (%sincos-from neg (sin c) (cos c) a))
+      s)
+    (define (cos a)
+      (let c = (series-coeff a 0))
+      (let (values _ co) = (%sincos-from neg (sin c) (cos c) a))
+      co)
+    (define (tan a)
+      (let sec = (recip (cos a)))
+      (series-integrate (tan (series-coeff a 0)) (* (series-differentiate a) (* sec sec))))
+    (define (asin a)
+      (series-integrate (asin (series-coeff a 0)) (/ (series-differentiate a) (sqrt (* (- one a) (+ one a))))))
+    (define (acos a)
+      (series-integrate (acos (series-coeff a 0)) (/ (neg (series-differentiate a)) (sqrt (* (- one a) (+ one a))))))
+    (define (atan a)
+      ;; Avoid squaring a large real center. hypot also detects the
+      ;; singular complex centers where 1 + a(0)^2 vanishes.
+      (let inv-h = (recip (hypot one a)))
+      (series-integrate (atan (series-coeff a 0)) (* (* (series-differentiate a) inv-h) inv-h))))
+
+  (define-instance ((Eq :a) (CommutativeRing :a) (RationalScalars :a) (Elementary :a) => Elementary (PowerSeries :a))
+    (define (atan2 y x) (canonical-atan2 y x))
+    (define pi (constant-series pi))
+    (define ee (constant-series ee))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/POWER-SERIES")

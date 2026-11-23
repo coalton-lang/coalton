@@ -1,0 +1,639 @@
+;;;; polynomial.ct
+;;;;
+;;;; Univariate polynomials over semirings, rings, and fields
+
+(coalton/utils:defstdlib-package #:coalton/xmath/polynomial
+  (:documentation "Univariate polynomials $p(x) = \\sum_{k=0}^d c_k x^k \\in R[x]$ and recursive multivariate polynomials in $R[x][y]\\cdots$.
+
+Over any semiring or ring $R$, polynomials form a ring under termwise addition and Cauchy convolution $(pq)_n = \\sum_{i+j=n} a_i b_j$, and support Horner evaluation $p(x_0)$, composition $p(q(x))$, and formal differentiation $p'(x) = \\sum_{k=1}^d k c_k x^{k-1}$.
+
+Over an exact field $K$ (`Eq` and `Field`), $K[x]$ is a `EuclideanDomain` with degree valuation $\\deg p$, supporting division with remainder $a = qb + r$ ($\\deg r < \\deg b$) and extended GCDs. Formal integration $\\int_0^x p(t)\\,dt = \\sum_{k=0}^d \\frac{c_k}{k+1} x^{k+1}$ requires only `RationalScalars` (exact in a `RationalAlgebra`).
+
+Over any `GcdDomain` $D$ (such as $\\mathbb{Z}$ or a nested polynomial ring $D[x]$), Gauss's lemma decomposes every nonzero $p \\in D[x]$ into its content $\\operatorname{cont}(p) = \\gcd(c_0, \\ldots, c_d) \\in D$ and primitive part $\\operatorname{pp}(p) = p / \\operatorname{cont}(p)$, making $D[x]$ itself a `GcdDomain` via primitive pseudo-remainder sequences.
+
+The resultant $\\operatorname{res}(f, g) = \\det S(f, g)$ of two polynomials of degrees $m$ and $n$ is the determinant of their $(m + n) \\times (m + n)$ Sylvester matrix, computed fraction-free by Bareiss elimination over any `GcdDomain`; $\\operatorname{res}(f, g) = 0$ if and only if $f$ and $g$ share a common factor of positive degree. Over a field of characteristic $0$, Yun's algorithm computes the square-free factorization $p(x) = \\operatorname{lc}(p) \\prod_{i \\ge 1} q_i(x)^i$ into pairwise coprime monic square-free factors $q_i$.")
+  (:nicknames
+   #:coalton/math/polynomial
+   #:coalton-library/math/polynomial)
+  (:shadow
+   #:compose)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral
+   #:coalton/math/real)
+  (:local-nicknames
+   (#:frac #:coalton/math/fraction)
+   (#:list #:coalton/list)
+   (#:show #:coalton/show)
+   (#:vec #:coalton/vector))
+  (:export
+   #:Polynomial
+   #:polynomial
+   #:monomial
+   #:poly-var
+   #:coefficients
+   #:coeff
+   #:degree
+   #:leading-coefficient
+   #:content
+   #:primitive-part
+   #:evaluate
+   #:compose
+   #:differentiate
+   #:integrate
+   #:resultant
+   #:square-free-part
+   #:square-free-factorization))
+
+(in-package #:coalton/xmath/polynomial)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (repr :transparent)
+  (define-type (Polynomial :a)
+    "A univariate polynomial $c_0 + c_1 x + \\cdots + c_d x^d$ with coefficients in ascending degree order:
+`(coeff p k)` is the coefficient $c_k$ of $x^k$."
+    (%Polynomial (vec:Vector :a)))
+
+  (inline)
+  (declare %poly-vec (Polynomial :a -> vec:Vector :a))
+  (define (%poly-vec (%Polynomial v))
+    v)
+
+  (declare polynomial (List :a -> Polynomial :a))
+  (define (polynomial xs)
+    "Construct a `Polynomial` $c_0 + c_1 x + \\cdots + c_d x^d$ from a list of coefficients $(c_0, c_1, \\ldots, c_d)$ in ascending degree order."
+    (let v = (vec:with-capacity (list:length xs)))
+    (rec fill ((rest xs))
+      (match rest
+        ((Nil) (%Polynomial v))
+        ((Cons c more)
+         (vec:push! c v)
+         (fill more)))))
+
+  (declare constant-polynomial (:a -> Polynomial :a))
+  (define (constant-polynomial c)
+    "Construct the constant polynomial $c$."
+    (let v = (vec:with-capacity 1))
+    (vec:push! c v)
+    (%Polynomial v))
+
+  (declare monomial (Additive :a => :a * UFix -> Polynomial :a))
+  (define (monomial c deg)
+    "Construct the monomial $c x^{\\mathtt{deg}}$."
+    (let v = (vec:with-capacity (+ deg 1)))
+    (rec fill ((i 0))
+      (cond
+        ((== i deg)
+         (vec:push! c v)
+         (%Polynomial v))
+        (True
+         (vec:push! zero v)
+         (fill (+ i 1))))))
+
+  (declare poly-var (Semiring :a => Polynomial :a))
+  (define poly-var
+    "The indeterminate $x$."
+    (monomial one 1))
+
+  (declare coeff (Additive :a => Polynomial :a * UFix -> :a))
+  (define (coeff (%Polynomial v) k)
+    "Return the coefficient $c_k$ of $x^k$ in polynomial `p` (`zero` when `k` exceeds stored length)."
+    (if (< k (vec:length v))
+        (vec:index-unsafe k v)
+        zero))
+
+  (declare %effective-length ((Eq :a) (Additive :a) => vec:Vector :a -> UFix))
+  (define (%effective-length v)
+    "Return the number of coefficients excluding trailing zeros."
+    (rec scan ((k (vec:length v)))
+      (if (== k 0)
+          0
+          (if (zero? (vec:index-unsafe (- k 1) v))
+              (scan (- k 1))
+              k))))
+
+  (declare degree ((Eq :a) (Additive :a) => Polynomial :a -> UFix))
+  (define (degree (%Polynomial v))
+    "Return the degree of `p` ($0$ for the zero polynomial)."
+    (let len = (%effective-length v))
+    (if (== len 0)
+        0
+        (- len 1)))
+
+  (declare leading-coefficient ((Eq :a) (Additive :a) => Polynomial :a -> :a))
+  (define (leading-coefficient (%Polynomial v))
+    "Return the coefficient of the highest-degree nonzero term (`zero` for the zero polynomial)."
+    (let len = (%effective-length v))
+    (if (== len 0)
+        zero
+        (vec:index-unsafe (- len 1) v)))
+
+  (declare coefficients ((Eq :a) (Additive :a) => Polynomial :a -> List :a))
+  (define (coefficients (%Polynomial v))
+    "Return canonical ascending coefficients $(c_0, c_1, \\ldots, c_d)$ with trailing zeros stripped."
+    (let len = (%effective-length v))
+    (rec build ((i len) (acc Nil))
+      (if (== i 0)
+          acc
+          (let ((idx (- i 1)))
+            (build idx (Cons (vec:index-unsafe idx v) acc))))))
+
+  (define-instance ((Eq :a) (Additive :a) => Eq (Polynomial :a))
+    (define (== (%Polynomial va) (%Polynomial vb))
+      (let la = (%effective-length va))
+      (let lb = (%effective-length vb))
+      (and (== la lb)
+           (rec check ((i 0))
+             (if (== i la)
+                 True
+                 (and (== (vec:index-unsafe i va)
+                          (vec:index-unsafe i vb))
+                      (check (+ i 1))))))))
+
+  (define-instance ((Eq :a) (Additive :a) (show:Show :a) => show:Show (Polynomial :a))
+    (define (show:show-to f p)
+      (f "(polynomial")
+      (rec loop ((xs (coefficients p)))
+        (match xs
+          ((Nil) (f ")"))
+          ((Cons c more)
+           (f " ")
+           (show:show-to f c)
+           (loop more))))))
+
+  ;;
+  ;; Coefficient arithmetic
+  ;;
+
+  (define-instance (Additive :a => HasAdd (Polynomial :a))
+    (define (+ (%Polynomial va) (%Polynomial vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (let n = (max la lb))
+      (let out = (vec:with-capacity n))
+      (rec loop ((i 0))
+        (if (== i n)
+            (%Polynomial out)
+            (let ((ca (if (< i la) (vec:index-unsafe i va) zero))
+                  (cb (if (< i lb) (vec:index-unsafe i vb) zero)))
+              (vec:push! (+ ca cb) out)
+              (loop (+ i 1)))))))
+
+  (define-instance (Additive :a => Additive (Polynomial :a))
+    (define zero (%Polynomial (vec:new))))
+
+  (define-instance (AdditiveGroup :a => AdditiveGroup (Polynomial :a))
+    (define (neg (%Polynomial v))
+      (let len = (vec:length v))
+      (let out = (vec:with-capacity len))
+      (rec loop ((i 0))
+        (cond
+          ((== i len) (%Polynomial out))
+          (True
+           (vec:push! (neg (vec:index-unsafe i v)) out)
+           (loop (+ i 1))))))
+    (define (- (%Polynomial va) (%Polynomial vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (let n = (max la lb))
+      (let out = (vec:with-capacity n))
+      (rec loop ((i 0))
+        (if (== i n)
+            (%Polynomial out)
+            (let ((ca (if (< i la) (vec:index-unsafe i va) zero))
+                  (cb (if (< i lb) (vec:index-unsafe i vb) zero)))
+              (vec:push! (- ca cb) out)
+              (loop (+ i 1)))))))
+
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (Polynomial :a))
+    (define (* (%Polynomial va) (%Polynomial vb))
+      (let la = (vec:length va))
+      (let lb = (vec:length vb))
+      (if (or (== la 0) (== lb 0))
+          zero
+          (let ((n (- (+ la lb) 1))
+                (out (vec:with-initial-element n zero)))
+            (rec outer ((i 0))
+              (if (== i la)
+                  (%Polynomial out)
+                  (let ((ai (vec:index-unsafe i va)))
+                    (rec inner ((j 0))
+                      (when (< j lb)
+                        (let k = (+ i j))
+                        (vec:set! k (+ (vec:index-unsafe k out)
+                                       (* ai (vec:index-unsafe j vb)))
+                                  out)
+                        (inner (+ j 1))))
+                    (outer (+ i 1)))))))))
+
+  (define-instance (Semiring :a => Multiplicative (Polynomial :a))
+    (define one (constant-polynomial one)))
+
+  (define-instance (Semiring :a => Semiring (Polynomial :a)))
+
+  (define-instance (Ring :a => Ring (Polynomial :a))
+    (inline)
+    (define (from-int n)
+      (constant-polynomial (from-int n))))
+
+  (define-instance (Num :a => Num (Polynomial :a)))
+  (define-instance (CommutativeRing :a => CommutativeRing (Polynomial :a)))
+  (define-instance (CharacteristicZero :a => CharacteristicZero (Polynomial :a)))
+  (define-instance (RationalAlgebra :a => RationalAlgebra (Polynomial :a)))
+  (define-instance (RationalScalars :a => RationalScalars (Polynomial :a))
+    (inline)
+    (define (embed-fraction q) (constant-polynomial (embed-fraction q))))
+
+  (define-instance (HasMul :a => Scale :a (Polynomial :a))
+    (define (scale c (%Polynomial v))
+      (let len = (vec:length v))
+      (let out = (vec:with-capacity len))
+      (rec loop ((i 0))
+        (cond
+          ((== i len) (%Polynomial out))
+          (True
+           (vec:push! (* c (vec:index-unsafe i v)) out)
+           (loop (+ i 1)))))))
+
+  (define-instance (Ring :a => Module :a (Polynomial :a)))
+
+  (define-instance (ConjugateRing :a => ConjugateRing (Polynomial :a))
+    (define (conjugate (%Polynomial v))
+      (let len = (vec:length v))
+      (let out = (vec:with-capacity len))
+      (rec loop ((i 0))
+        (cond
+          ((== i len) (%Polynomial out))
+          (True
+           (vec:push! (conjugate (vec:index-unsafe i v)) out)
+           (loop (+ i 1)))))))
+
+  (define-instance (Into :a (Polynomial :a))
+    (inline)
+    (define (into c)
+      (constant-polynomial c)))
+
+  ;;
+  ;; Evaluation, Composition, Differentiation, Integration
+  ;;
+
+  (declare evaluate (Semiring :a => Polynomial :a * :a -> :a))
+  (define (evaluate (%Polynomial v) x)
+    "Evaluate polynomial $p(x)$ at `x` using Horner's method."
+    (let len = (vec:length v))
+    (if (== len 0)
+        zero
+        (rec horner ((i (- len 1)) (acc zero))
+          (let next = (+ (* acc x) (vec:index-unsafe i v)))
+          (if (== i 0)
+              next
+              (horner (- i 1) next)))))
+
+  (declare compose (Semiring :a => Polynomial :a * Polynomial :a -> Polynomial :a))
+  (define (compose (%Polynomial v) q)
+    "Compose polynomials $p(q(x))$ using Horner's method."
+    (let len = (vec:length v))
+    (if (== len 0)
+        zero
+        (rec horner ((i (- len 1)) (acc zero))
+          (let next = (+ (* acc q) (constant-polynomial (vec:index-unsafe i v))))
+          (if (== i 0)
+              next
+              (horner (- i 1) next)))))
+
+  (declare differentiate (Semiring :a => Polynomial :a -> Polynomial :a))
+  (define (differentiate (%Polynomial v))
+    "Compute the formal derivative $p'(x) = \\sum_{k=1}^d k c_k x^{k-1}$ over any `Semiring`."
+    (let len = (vec:length v))
+    (if (<= len 1)
+        zero
+        (let ((out (vec:with-capacity (- len 1))))
+          (rec loop ((i 1))
+            (cond
+              ((== i len) (%Polynomial out))
+              (True
+               (vec:push! (* (from-nat i) (vec:index-unsafe i v)) out)
+               (loop (+ i 1))))))))
+
+  (declare integrate (RationalScalars :a => Polynomial :a -> Polynomial :a))
+  (define (integrate (%Polynomial v))
+    "Compute the formal antiderivative $\\int_0^x p(t)\\,dt = \\sum_{k=0}^d \\frac{c_k}{k+1} x^{k+1}$ with zero constant term."
+    (let len = (vec:length v))
+    (if (== len 0)
+        zero
+        (let ((out (vec:with-capacity (+ len 1))))
+          (vec:push! zero out)
+          (rec loop ((i 0))
+            (cond
+              ((== i len) (%Polynomial out))
+              (True
+               (vec:push! (frac:divide-by-integer (vec:index-unsafe i v) (+ (to-integer i) 1)) out)
+               (loop (+ i 1))))))))
+
+  ;;
+  ;; GCD Domain (over any GcdDomain :a, including Integer and Polynomial :a)
+  ;; and Euclidean Domain (over any Field :a)
+  ;;
+
+  (declare %trim-poly ((Eq :a) (Additive :a) => Polynomial :a -> Polynomial :a))
+  (define (%trim-poly p)
+    (polynomial (coefficients p)))
+
+  (declare %cancel-leading-step
+    ((Eq :a) (AdditiveGroup :a) (Multiplicative :a) =>
+     Polynomial :a * :a * UFix * Polynomial :a * UFix -> Polynomial :a))
+  (define (%cancel-leading-step r q-coeff shift divisor dr)
+    "Compute $r(x) - q\\, x^{\\mathtt{shift}}\\, d(x)$ below degree `dr`,
+guaranteeing that the remainder degree strictly decreases at each step."
+    (let out = (vec:with-capacity dr))
+    (rec loop ((i 0))
+      (if (== i dr)
+          (%trim-poly (%Polynomial out))
+          (let ((ri (coeff r i))
+                (sub-i (if (< i shift)
+                           zero
+                           (* q-coeff (coeff divisor (- i shift))))))
+            (vec:push! (- ri sub-i) out)
+            (loop (+ i 1))))))
+
+  (declare %map-div-by ((Eq :a) (GcdDomain :a) => Polynomial :a * :a -> Polynomial :a))
+  (define (%map-div-by (%Polynomial v) d)
+    (let len = (%effective-length v))
+    (let out = (vec:with-capacity len))
+    (rec loop ((i 0))
+      (cond
+        ((== i len) (%Polynomial out))
+        (True
+         (vec:push! (exact-div (vec:index-unsafe i v) d) out)
+         (loop (+ i 1))))))
+
+  (declare content ((Eq :a) (GcdDomain :a) => Polynomial :a -> :a))
+  (define (content (%Polynomial v))
+    "Return the greatest common divisor $\\gcd(c_0, \\ldots, c_d)$ of all coefficients of a polynomial."
+    (let len = (%effective-length v))
+    (rec loop ((i 0) (acc zero))
+      (if (== i len)
+          acc
+          (let ((c (vec:index-unsafe i v)))
+            (if (zero? c)
+                (loop (+ i 1) acc)
+                (loop (+ i 1) (gcd acc c)))))))
+
+  (declare primitive-part ((Eq :a) (GcdDomain :a) => Polynomial :a -> Polynomial :a))
+  (define (primitive-part p)
+    "Return the unit-normalized primitive part of `p` (`p` divided by its `content` and leading unit)."
+    (let lc = (leading-coefficient p))
+    (if (zero? lc)
+        zero
+        (let ((u (unit-part lc))
+              (c (content p)))
+          (%map-div-by p (* u c)))))
+
+  (declare pseudo-rem ((Eq :a) (GcdDomain :a) => Polynomial :a * Polynomial :a -> Polynomial :a))
+  (define (pseudo-rem dividend divisor)
+    "Fraction-free pseudo-remainder of `dividend` by `divisor` over any `GcdDomain`."
+    (let lb = (leading-coefficient divisor))
+    (when (zero? lb)
+      (error "Polynomial pseudo-remainder by zero."))
+    (let db = (degree divisor))
+    (if (== db 0)
+        zero
+        (rec loop ((r (%trim-poly dividend)))
+          (let lr = (leading-coefficient r))
+          (let dr = (degree r))
+          (if (or (zero? lr) (< dr db))
+              r
+              (let ((g (gcd lr lb))
+                    (mul-r (exact-div lb g))
+                    (mul-b (exact-div lr g))
+                    (shift (- dr db)))
+                (loop (%cancel-leading-step (scale mul-r r) mul-b shift divisor dr)))))))
+
+  (define-instance ((Eq :a) (GcdDomain :a) => GcdDomain (Polynomial :a))
+    (define (unit-part p)
+      (let lc = (leading-coefficient p))
+      (if (zero? lc)
+          one
+          (constant-polynomial (unit-part lc))))
+    (define (normal-part p)
+      (let lc = (leading-coefficient p))
+      (if (zero? lc)
+          zero
+          (let ((u (unit-part lc)))
+            (if (== u one)
+                (%trim-poly p)
+                (%map-div-by p u)))))
+    (define (exact-quot dividend divisor)
+      (let lb = (leading-coefficient divisor))
+      (if (zero? lb)
+          None
+          (let ((db (degree divisor)))
+            (rec div-loop ((q zero) (r (%trim-poly dividend)))
+              (let lr = (leading-coefficient r))
+              (let dr = (degree r))
+              (cond
+                ((zero? lr)
+                 (Some (%trim-poly q)))
+                ((< dr db)
+                 None)
+                (True
+                 (match (exact-quot lr lb)
+                   ((None) None)
+                   ((Some q-coeff)
+                    (let ((shift (- dr db))
+                          (term (monomial q-coeff shift)))
+                      (div-loop (+ q term)
+                                (%cancel-leading-step r q-coeff shift divisor dr)))))))))))
+    (define (gcd a b)
+      (cond
+        ((zero? a) (normal-part b))
+        ((zero? b) (normal-part a))
+        (True
+         (let ((c (gcd (content a) (content b)))
+               (pa (primitive-part a))
+               (pb (primitive-part b)))
+           (rec prs ((p pa) (q pb))
+             (if (zero? q)
+                 (scale c (primitive-part p))
+                 (if (< (degree p) (degree q))
+                     (prs q p)
+                     (prs q (primitive-part (pseudo-rem p q)))))))))))
+
+  (define-instance ((Eq :a) (Field :a) => EuclideanDomain (Polynomial :a))
+    (inline)
+    (define (euclidean-degree p)
+      (into (degree p))))
+
+  (define-instance ((Eq :a) (DivisionRing :a) => QuotRem (Polynomial :a))
+    (define (quotrem dividend divisor)
+      (let lb = (leading-coefficient divisor))
+      (when (zero? lb)
+        (error "Polynomial division by zero."))
+      (let db = (degree divisor))
+      (let inv-lb = (recip lb))
+      (rec div-loop ((q zero) (r (%trim-poly dividend)))
+        (let lr = (leading-coefficient r))
+        (let dr = (degree r))
+        (if (or (zero? lr) (< dr db))
+            (values (%trim-poly q) r)
+            (let ((shift (- dr db))
+                  (q-coeff (* lr inv-lb))
+                  (term (monomial q-coeff shift)))
+              (div-loop (+ q term)
+                        (%cancel-leading-step r q-coeff shift divisor dr))))))
+    (inline)
+    (define (quot a b)
+      (let (values q _) = (quotrem a b))
+      q)
+    (inline)
+    (define (rem a b)
+      (let (values _ r) = (quotrem a b))
+      r))
+
+  ;;
+  ;; Square-free decomposition (characteristic 0)
+  ;;
+
+  (declare square-free-part ((Eq :a) (Field :a) (CharacteristicZero :a) => Polynomial :a -> Polynomial :a))
+  (define (square-free-part p)
+    "The monic square-free part $\\frac{p}{\\gcd(p, p')}$ of `p` (normalized), over a field of characteristic $0$. Returns `zero` for the zero polynomial."
+    (if (zero? p)
+        zero
+        (exact-div (normal-part p) (gcd p (differentiate p)))))
+
+  (declare square-free-factorization
+    ((Eq :a) (Field :a) (CharacteristicZero :a) =>
+     Polynomial :a -> :a * List (Tuple (Polynomial :a) UFix)))
+  (define (square-free-factorization p)
+    "Square-free factorization of `p` over a field of characteristic $0$ using Yun's algorithm.
+
+Returns `(values lc factors)` where `factors` is a list of `(Tuple q_i i)` in increasing order of $i$, each $q_i$ is monic, square-free, of positive degree, and pairwise coprime, such that $p = \\mathtt{lc} \\cdot \\prod_i q_i^i$. Constant polynomials (including `zero`) yield `(values p Nil)`."
+    (let lc = (leading-coefficient p))
+    (if (== (degree p) 0)
+        (values lc Nil)
+        (let ((f (normal-part p))
+              (df (differentiate f))
+              (a0 (gcd f df))
+              (b1 (exact-div f a0))
+              (c1 (exact-div df a0))
+              (d1 (- c1 (differentiate b1))))
+          (rec yun ((i 1) (b b1) (d d1) (acc Nil))
+            (if (== (degree b) 0)
+                (values lc (list:reverse acc))
+                (let ((a (gcd b d))
+                      (b-next (exact-div b a))
+                      (c-next (exact-div d a))
+                      (d-next (- c-next (differentiate b-next))))
+                  (yun (+ i 1)
+                       b-next
+                       d-next
+                       (if (== (degree a) 0)
+                           acc
+                           (Cons (Tuple a i) acc)))))))))
+
+  ;;
+  ;; Resultants
+  ;;
+
+  (declare %sylvester-matrix
+    (Additive :a =>
+     Polynomial :a * Polynomial :a * UFix * UFix -> vec:Vector (vec:Vector :a)))
+  (define (%sylvester-matrix f g m n)
+    "The $(m + n) \\times (m + n)$ Sylvester matrix of `f` (degree $m$) and `g` (degree $n$)."
+    (let size = (+ m n))
+    (let rows = (vec:with-capacity size))
+    (let push-shifted! =
+      (fn (p deg i)
+        (let row = (vec:with-initial-element size zero))
+        (rec fill ((k 0))
+          (when (<= k deg)
+            (vec:set! (+ i k) (coeff p (- deg k)) row)
+            (fill (+ k 1))))
+        (vec:push! row rows)
+        (values)))
+    (rec fill-f ((i 0))
+      (when (< i n)
+        (push-shifted! f m i)
+        (fill-f (+ i 1))))
+    (rec fill-g ((i 0))
+      (when (< i m)
+        (push-shifted! g n i)
+        (fill-g (+ i 1))))
+    rows)
+
+  (declare %bareiss-det
+    ((Eq :a) (GcdDomain :a) => vec:Vector (vec:Vector :a) * UFix -> :a))
+  (define (%bareiss-det mat size)
+    "Fraction-free determinant of a `size` $\\times$ `size` matrix by Bareiss elimination (destructive)."
+    (let entry = (fn (i j) (vec:index-unsafe j (vec:index-unsafe i mat))))
+    (let set-entry! = (fn (i j x) (vec:set! j x (vec:index-unsafe i mat))))
+    (let swap-rows! =
+      (fn (i j)
+        (let tmp = (vec:index-unsafe i mat))
+        (vec:set! i (vec:index-unsafe j mat) mat)
+        (vec:set! j tmp mat)))
+    (rec elim ((k 0) (prev one) (negated False))
+      (if (== (+ k 1) size)
+          (if negated
+              (neg (entry k k))
+              (entry k k))
+          (let ((pivot-row
+                  (rec search ((i k))
+                    (cond
+                      ((== i size) None)
+                      ((nonzero? (entry i k)) (Some i))
+                      (True (search (+ i 1)))))))
+            (match pivot-row
+              ((None) zero)
+              ((Some p)
+               (let swapped = (/= p k))
+               (when swapped
+                 (swap-rows! p k))
+               (let pivot = (entry k k))
+               (rec row-loop ((i (+ k 1)))
+                 (when (< i size)
+                   (let eik = (entry i k))
+                   (rec col-loop ((j (+ k 1)))
+                     (when (< j size)
+                       (set-entry! i j (exact-div (- (* (entry i j) pivot)
+                                                     (* eik (entry k j)))
+                                                  prev))
+                       (col-loop (+ j 1))))
+                   (row-loop (+ i 1))))
+               (elim (+ k 1)
+                     pivot
+                     (/= swapped negated))))))))
+
+  (declare resultant ((Eq :a) (GcdDomain :a) => Polynomial :a * Polynomial :a -> :a))
+  (define (resultant f g)
+    "The resultant $\\operatorname{res}(f, g)$, i.e., the determinant of the Sylvester matrix of `f` and `g`, computed by fraction-free Bareiss elimination over any `GcdDomain`.
+
+The resultant is `zero` if either polynomial is `zero` or if $f$ and $g$ share a nonconstant common factor, and `one` if both are nonzero constants."
+    (if (or (zero? f) (zero? g))
+        zero
+        (let ((m (degree f))
+              (n (degree g))
+              (size (+ m n)))
+          (if (== size 0)
+              one
+              (%bareiss-det (%sylvester-matrix f g m n) size)))))
+
+  (define-instance (Approximable :a :b => Approximable (Polynomial :a) (Polynomial :b))
+    (define (approx bits (%Polynomial v))
+      (let n = (vec:length v))
+      (let out = (vec:with-capacity n))
+      (rec loop ((i 0))
+        (cond
+          ((== i n) (%Polynomial out))
+          (True
+           (vec:push! (approx bits (vec:index-unsafe i v)) out)
+           (loop (+ i 1))))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/POLYNOMIAL")

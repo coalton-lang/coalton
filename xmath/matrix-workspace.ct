@@ -1,0 +1,71 @@
+;;;; Private mutable storage for algorithms that apply elementary operations.
+
+(cl:defpackage #:coalton/xmath/internal/matrix-workspace
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:mat #:coalton/xmath/matrix)
+                    (#:vec #:coalton/vector))
+  (:export #:Grid #:.height #:.width #:tabulate #:identity-grid #:copy-matrix
+           #:freeze #:transpose-view #:at #:put! #:swap-rows! #:add-row! #:scale-row!))
+
+(in-package #:coalton/xmath/internal/matrix-workspace)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-struct (Grid :a)
+    (height UFix)
+    (width UFix)
+    (row-stride UFix)
+    (col-stride UFix)
+    (cells (vec:Vector :a)))
+
+  (declare tabulate (UFix * UFix * (UFix * UFix -> :a) -> Grid :a))
+  (define (tabulate rows cols f)
+    (Grid rows cols cols 1 [(f i j) :for i :below rows :for j :below cols]))
+
+  (declare identity-grid (Semiring :a => UFix -> Grid :a))
+  (define (identity-grid n)
+    (tabulate n n (fn (i j) (if (== i j) one zero))))
+
+  (declare copy-matrix (mat:Matrix :a -> Grid :a))
+  (define (copy-matrix a)
+    (tabulate (mat:rows a) (mat:cols a) (fn (i j) (mat:entry a i j))))
+
+  ;; A row operation on this alias is a column operation on the original.
+  (declare transpose-view (Grid :a -> Grid :a))
+  (define (transpose-view (Grid r c rs cs cells))
+    (Grid c r cs rs cells))
+
+  (inline)
+  (declare at (Grid :a * UFix * UFix -> :a))
+  (define (at a i j)
+    (vec:index-unsafe (+ (* i (.row-stride a)) (* j (.col-stride a))) (.cells a)))
+
+  (inline)
+  (declare put! (Grid :a * UFix * UFix * :a -> Void))
+  (define (put! a i j x)
+    (vec:set! (+ (* i (.row-stride a)) (* j (.col-stride a))) x (.cells a)))
+
+  (declare freeze (Grid :a -> mat:Matrix :a))
+  (define (freeze a)
+    (mat:matrix (.height a) (.width a)
+      [(at a i j) :for i :below (.height a) :for j :below (.width a)]))
+
+  (declare swap-rows! (Grid :a * UFix * UFix -> Void))
+  (define (swap-rows! a i k)
+    (unless (== i k)
+      (for ((j 0 (1+ j))) :while (< j (.width a))
+        (let x = (at a i j))
+        (put! a i j (at a k j))
+        (put! a k j x))))
+
+  (declare add-row! (Semiring :a => Grid :a * UFix * UFix * :a -> Void))
+  (define (add-row! a dst src c)
+    (for ((j 0 (1+ j))) :while (< j (.width a))
+      (put! a dst j (+ (at a dst j) (* c (at a src j))))))
+
+  (declare scale-row! (Multiplicative :a => Grid :a * UFix * :a -> Void))
+  (define (scale-row! a i c)
+    (for ((j 0 (1+ j))) :while (< j (.width a))
+      (put! a i j (* c (at a i j))))))

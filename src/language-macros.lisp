@@ -36,7 +36,7 @@ Note that this may copy the object or allocate memory."
 
 is equivalent to
 
-    (the (Optional <type>) (tryInto <expr>))
+    (the (Optional <type>) (try-into <expr>))
 
 and
 
@@ -44,11 +44,11 @@ and
 
 is equivalent to
 
-    (fn (expr) (the (Optional <type>) (tryInto expr))).
+    (fn (expr) (the (Optional <type>) (try-into expr))).
 
 Note that this may copy the object or allocate memory."
 
-  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON/CLASSES")))
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRY-INTO" "COALTON/CLASSES")))
            (Optional (cl:ignore-errors (cl:find-symbol "OPTIONAL" "COALTON/CLASSES"))))
     (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
     (cl:assert Optional () "`try-as` macro does not have access to `Optional` yet.")
@@ -65,7 +65,7 @@ Note that this may copy the object or allocate memory."
 
 is equivalent to
 
-    (the <type> (uwrap (tryInto <expr>)))
+    (the <type> (uwrap (try-into <expr>)))
 
 and
 
@@ -73,11 +73,11 @@ and
 
 is equivalent to
 
-    (fn (expr) (the <type> (unwrap (tryInto expr)))).
+    (fn (expr) (the <type> (unwrap (try-into expr)))).
 
 Note that this may copy the object or allocate memory."
 
-  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON/CLASSES")))
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRY-INTO" "COALTON/CLASSES")))
            (unwrap (cl:ignore-errors (cl:find-symbol "UNWRAP" "COALTON/CLASSES"))))
     (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
     (cl:assert unwrap () "`unwrap` macro does not have access to `unwrap` yet.")

@@ -7,7 +7,8 @@
    #:coalton
    #:coalton/math/num-defining-macros)
   (:local-nicknames
-   (#:cls #:coalton/classes))
+   (#:cls #:coalton/classes)
+   (#:arith #:coalton/math/arith))
   (:import-from
    #:coalton/hash
    #:define-sxhash-hasher))
@@ -35,8 +36,8 @@
   (define-eq U32)
   (define-eq I64)
   (define-eq U64)
-  (define-eq F32)
-  (define-eq F64)
+  (define-eq F32 :floatp cl:t)
+  (define-eq F64 :floatp cl:t)
 
 
 ;;;
@@ -55,8 +56,8 @@
   (define-ord U32)
   (define-ord I64)
   (define-ord U64)
-  (define-ord F32)
-  (define-ord F64)
+  (define-float-ord F32)
+  (define-float-ord F64)
 
 
 ;;;
@@ -64,6 +65,7 @@
 ;;;
 
   (define-num-checked Integer cl:identity)
+  (define-instance (arith:CharacteristicZero Integer))
 
   (define-num-checked I8 %handle-8bit-overflow)
   (define-num-checked I16 %handle-16bit-overflow)
@@ -75,14 +77,21 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
+  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
-  (define-instance (cls:Num Bit)
+  (define-instance (cls:HasAdd Bit)
     (inline)
     (define (cls:+ a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
-          (cl:logxor a b))))
+          (cl:logxor a b)))))
 
+  (define-instance (cls:Additive Bit)
+    (define cls:zero
+      (coalton++:unsafe
+        (lisp (-> Bit) () 0))))
+
+  (define-instance (cls:AdditiveGroup Bit)
     (inline)
     (define (cls:- a b)
       (coalton++:unsafe
@@ -90,48 +99,56 @@
           (cl:logxor a b))))
 
     (inline)
+    (define (cls:neg a)
+      a))
+
+  (define-instance (cls:HasMul Bit)
+    (inline)
     (define (cls:* a b)
       (coalton++:unsafe
         (lisp (-> Bit) (a b)
-          (cl:logand a b))))
+          (cl:logand a b)))))
 
+  (define-instance (cls:Multiplicative Bit)
+    (define cls:one
+      (coalton++:unsafe
+        (lisp (-> Bit) () 1))))
+
+  (define-instance (cls:Semiring Bit))
+
+  (define-instance (cls:Ring Bit)
     (inline)
-    (define (cls:fromInt x)
+    (define (cls:from-int x)
       "The integer `x` is converted to a `Bit` by its zeroth bit (i.e.,
 whether it's even or odd)."
       (coalton++:unsafe
         (lisp (-> Bit) (x)
           (cl:ldb (cl:byte 1 0) x)))))
 
-  ;; UFixes are unsafe and depend on implementation.
-  (define-instance (cls:Num UFix)
-    (inline)
-    (define (cls:+ a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:+ a b)))))
+  (define-instance (cls:Num Bit))
+  (define-instance (arith:CommutativeRing Bit))
+  ;; XOR and AND are the field operations in characteristic two.
+  (define-instance (arith:Reciprocable Bit)
+    (define (arith:recip b)
+      (when (arith:zero? b)
+        (coalton/builtin:error "Cannot invert zero in the two-element field."))
+      b)
+    (define (arith:/ a b) (cls:* a (arith:recip b))))
+  (define-instance (arith:DivisionRing Bit))
 
+  (define-instance (arith:Scale Bit Bit)
     (inline)
-    (define (cls:- a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:- a b)))))
+    (define (arith:scale a b) (cls:* a b)))
 
+  (define-instance (arith:Module Bit Bit))
+
+  (define-instance (arith:ConjugateRing Bit)
     (inline)
-    (define (cls:* a b)
-      (coalton++:unsafe
-        (lisp (-> UFix) (a b)
-          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-            (cl:* a b)))))
-
+    (define (arith:conjugate x) x))
+  (define-instance (arith:HermitianForm Bit Bit)
     (inline)
-    (define (cls:fromInt x)
-      (coalton++:unsafe
-        (lisp (-> UFix) (x)
-          (cl:mod x #.(cl:expt 2 +fixnum-bits+))))))
-
+    (define (arith:inner-product x y) (cls:* x y)))
+  (define-instance (arith:InnerSpace Bit Bit))
 
 ;;;
 ;;; Float Num instances

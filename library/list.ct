@@ -630,15 +630,15 @@
     "Returns a least element of a list, or `None`."
     (optimumBy < l))
 
-  (declare sum (Num :a => ((List :a) -> :a)))
+  (declare sum (Additive :a => ((List :a) -> :a)))
   (define (sum xs)
     "Returns the sum of `xs`."
-    (fold + (fromInt 0) xs))
+    (fold + zero xs))
 
-  (declare product (Num :a => ((List :a) -> :a)))
+  (declare product (Multiplicative :a => ((List :a) -> :a)))
   (define (product xs)
     "Returns the product of `xs`."
-    (fold * (fromInt 1) xs))
+    (fold * one xs))
 
   (declare all ((:a -> Boolean) * (List :a) -> Boolean))
   (define (all f? xs)

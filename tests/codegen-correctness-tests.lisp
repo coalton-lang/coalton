@@ -844,25 +844,15 @@
 (deftest codegen-rank-n-polymorphism ()
   (with-codegen-test-environment
     (codegen-test-compile
-     "(derive Eq)
-      (define-type (Dual :a) (Dual :a :a))
-      (define (primal-part (Dual x _)) x)
-      (define (dual-part (Dual _ dx)) dx)
-      (define-instance (Num :a => Num (Dual :a))
-        (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
-        (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
-        (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-        (define (fromInt n) (Dual (fromInt n) (fromInt 0))))
-
-      (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+     "(declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
       (define (differentiate f)
         (fn (x)
-          (dual-part (f (Dual x 1)))))
+          (coalton/xmath/dual:d-x f x)))
 
       (declare val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32)))
       (define (val-and-deriv f)
         (fn (x)
-          (Tuple (f x) (dual-part (f (Dual x 1))))))
+          (Tuple (f x) (coalton/xmath/dual:d-x f x))))
 
       (declare square (Num :a => (:a -> :a)))
       (define (square x) (* x x))
@@ -876,7 +866,7 @@
 
       (declare make-scaler (Integer -> (forall (:a) (Num :a => (:a -> :a)))))
       (define (make-scaler k)
-        (fn (x) (* (fromInt k) x)))
+        (fn (x) (* (from-int k) x)))
 
       (declare rank3 ((((forall (:a) (:a -> :a)) -> Tuple Integer String) -> Tuple Integer String)))
       (define (rank3 k)
@@ -897,13 +887,13 @@
       (define (vd f) (Tuple (f) (f)))
 
       (declare three (Num :a => Void -> :a))
-      (define (three) (fromInt 3))
+      (define (three) (from-int 3))
 
       ;; Monomorphize on a Rank-2 function with an outer Num :b constraint
       (monomorphize)
       (declare diff-at (Num :b => (forall (:a) (Num :a => (:a -> :a))) * :b -> :b))
       (define (diff-at f x)
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (monomorphize)
       (declare call-diff-at-f32 (F32 -> F32))
@@ -913,11 +903,11 @@
       ;; Specialize on a Rank-2 function
       (declare diff-spec-generic (Num :b => (forall (:a) (Num :a => (:a -> :a))) * :b -> :b))
       (define (diff-spec-generic f x)
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (declare diff-spec-f32 ((forall (:a) (Num :a => (:a -> :a))) * F32 -> F32))
       (define (diff-spec-f32 f x)
-        (+ 100.0f0 (dual-part (f (Dual x 1)))))
+        (+ 100.0f0 (coalton/xmath/dual:d-x f x)))
 
       (specialize diff-spec-generic diff-spec-f32 ((forall (:a) (Num :a => (:a -> :a))) * F32 -> F32))
 
@@ -929,7 +919,7 @@
       (inline)
       (declare inline-val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) * F32 -> Tuple F32 F32))
       (define (inline-val-and-deriv f x)
-        (Tuple (f x) (dual-part (f (Dual x 1)))))
+        (Tuple (f x) (coalton/xmath/dual:d-x f x)))
 
       (declare poly-fn (Num :a => (:a -> :a)))
       (define (poly-fn x) (+ x x))
@@ -950,7 +940,7 @@
       (abi :unpacked)
       (declare eval-num-fn-pair (NumFnPair -> F32))
       (define (eval-num-fn-pair (NumFnPair f x))
-        (dual-part (f (Dual x 1))))
+        (coalton/xmath/dual:d-x f x))
 
       (declare call-eval-pair (F32 -> F32))
       (define (call-eval-pair x)
@@ -968,9 +958,9 @@
     (is (= 11 (codegen-test-eval "(gg (the Integer 10))")))
     (is (= 6 (codegen-test-eval "(apply3 scale-it)")))
     (is (= 30 (codegen-test-eval "(apply3-scaled scale-it)")))
-    (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd (fn () (fromInt 3))))")))
+    (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd (fn () (from-int 3))))")))
     (is (eq t (codegen-test-eval "(== (Tuple 3 3.0d0) (vd three))")))
-    (is (= 3 (codegen-test-eval "((the (forall (:a) (Num :a => (Void -> :a))) (fn () (fromInt 3))))")))
+    (is (= 3 (codegen-test-eval "((the (forall (:a) (Num :a => (Void -> :a))) (fn () (from-int 3))))")))
     (is (= 6.0f0 (codegen-test-eval "(call-diff-at-f32 3.0f0)")))
     (is (= (if coalton-impl/settings:*coalton-disable-specialization*
                6.0f0

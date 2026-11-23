@@ -63,15 +63,15 @@ type. The closest equivalent in Common Lisp would be the relatively
 flexible `equalp`.
 
 Conversion and casting is done in Coalton with `into` or
-`tryinto`. The closest equivalent in Common Lisp is `coerce`.
+`try-into`. The closest equivalent in Common Lisp is `coerce`.
 
 Numerical functions are mostly similar. There are some notable
 exceptions:
 
 | Lisp    | Coalton          |
 |:--------|:-----------------|
-| `(- x)` | `(negate x)`     |
-| `(/ x)` | `(reciprocal x)` |
+| `(- x)` | `(neg x)`        |
+| `(/ x)` | `(recip x)`      |
 | `ash`   | `lsh`, `rsh`     |
 | `expt`  | `^`, `^^`, `pow` |
 

@@ -1,0 +1,536 @@
+;;;; groebner.ct
+;;;;
+;;;; Sparse multivariate polynomials and reduced Groebner bases.
+
+(coalton/utils:defstdlib-package #:coalton/xmath/groebner
+  (:documentation "Sparse multivariate polynomials in $R[x_0, x_1, \\ldots]$, admissible monomial orderings, multivariate division, and Buchberger's algorithm for reduced Gröbner bases.
+
+A monomial $x^{\\alpha} = x_0^{\\alpha_0} x_1^{\\alpha_1} \\cdots$ is represented by its exponent vector $\\alpha = (\\alpha_0, \\alpha_1, \\ldots)$ (with trailing zeros omitted) and total degree $|\\alpha| = \\sum_i \\alpha_i$. Three admissible monomial orderings with $x_0 > x_1 > \\cdots$ are supported:
+- **Lexicographic (`Lex`):** $x^{\\alpha} >_{\\text{lex}} x^{\\beta}$ if the first nonzero entry of $\\alpha - \\beta$ is positive (used for variable elimination in polynomial systems);
+- **Graded lexicographic (`GrLex`):** compares total degree $|\\alpha|$ first, breaking ties by `Lex`;
+- **Graded reverse lexicographic (`GRevLex`):** compares total degree $|\\alpha|$ first, then prefers the monomial with smaller exponent in the last variable where $\\alpha$ and $\\beta$ differ.
+
+**Multivariate division and Gröbner bases.** Multivariate left division (`mpoly-divrem`) over an exact `DivisionRing` with `Eq` decomposes $f = \\sum_{i=1}^s q_i g_i + r$ where no term of the remainder $r$ is divisible by any leading monomial $\\operatorname{LM}(g_i)$. Over a commutative `Field` $K$, a generating set $G$ of an ideal $I \\subseteq K[x_0, x_1, \\ldots]$ is a **Gröbner basis** with respect to $<$ if $\\langle \\operatorname{LT}(G) \\rangle = \\langle \\operatorname{LT}(I) \\rangle$; then the remainder `normal-form` of any polynomial modulo $G$ is unique, and $f \\in I$ (`ideal-member?`) if and only if its normal form is $0$.
+
+Buchberger's algorithm constructs the unique monic **reduced Gröbner basis** (`groebner-basis`) by repeatedly reducing S-polynomials
+$$S(f, g) = \\frac{L}{\\operatorname{LT}(f)} f - \\frac{L}{\\operatorname{LT}(g)} g, \\qquad L = \\operatorname{lcm}(\\operatorname{LM}(f), \\operatorname{LM}(g)),$$
+using Buchberger's first criterion to skip pairs with coprime leading monomials, followed by minimal-basis pruning and interreduction.")
+  (:nicknames
+   #:coalton/math/groebner
+   #:coalton-library/math/groebner)
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:list #:coalton/list))
+  (:export
+   #:MonomialOrder #:Lex #:GrLex #:GRevLex
+   #:Monomial
+   #:make-monomial
+   #:monomial-exponents
+   #:monomial-degree
+   #:MPoly
+   #:mpoly
+   #:mpoly-var
+   #:mpoly-terms
+   #:leading-term
+   #:leading-coeff
+   #:leading-monomial
+   #:mpoly-evaluate
+   #:mpoly-divrem
+   #:normal-form
+   #:groebner-basis
+   #:ideal-member?))
+
+(in-package #:coalton/xmath/groebner)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (derive Eq)
+  (repr :enum)
+  (define-type MonomialOrder
+    "Admissible orders with $x_0 > x_1 > \\cdots$: lexicographic, graded lexicographic, and graded reverse lexicographic."
+    Lex
+    GrLex
+    GRevLex)
+
+  (derive Eq)
+  (repr :transparent)
+  (define-type Monomial
+    "The monomial $x_0^{e_0} x_1^{e_1} \\cdots$, stored without trailing zero exponents."
+    (%Monomial (List UFix)))
+
+  (declare make-monomial (List UFix -> Monomial))
+  (define (make-monomial exponents)
+    "Construct a canonical monomial; the empty exponent vector represents $1$."
+    (%Monomial
+     (list:reverse
+      (rec trim ((xs (list:reverse exponents)))
+        (match xs
+          ((Cons 0 rest) (trim rest))
+          (_ xs))))))
+
+  (declare monomial-exponents (Monomial -> List UFix))
+  (define (monomial-exponents (%Monomial exponents))
+    "Return the exponent vector, with trailing zeros stripped."
+    exponents)
+
+  (declare monomial-degree (Monomial -> UFix))
+  (define (monomial-degree (%Monomial exponents))
+    "Return the total degree $\\sum_i e_i$."
+    (rec sum ((xs exponents) (degree 0))
+      (match xs
+        ((Nil) degree)
+        ((Cons e rest) (sum rest (+ degree e))))))
+
+  (declare %combine-exponents
+    ((UFix * UFix -> UFix) * List UFix * List UFix -> List UFix))
+  (define (%combine-exponents combine xs ys)
+    (match (Tuple xs ys)
+      ((Tuple (Nil) _) ys)
+      ((Tuple _ (Nil)) xs)
+      ((Tuple (Cons x more-xs) (Cons y more-ys))
+       (Cons (combine x y) (%combine-exponents combine more-xs more-ys)))))
+
+  (declare monomial-mul (Monomial * Monomial -> Monomial))
+  (define (monomial-mul (%Monomial xs) (%Monomial ys))
+    "Multiply monomials by adding their exponents."
+    (make-monomial (%combine-exponents + xs ys)))
+
+  (declare monomial-lcm (Monomial * Monomial -> Monomial))
+  (define (monomial-lcm (%Monomial xs) (%Monomial ys))
+    "Return the least common multiple, with exponents $\\max(e_i, f_i)$."
+    (make-monomial (%combine-exponents max xs ys)))
+
+  (declare monomial-divides? (Monomial * Monomial -> Boolean))
+  (define (monomial-divides? (%Monomial divisor) (%Monomial dividend))
+    "Whether the first monomial divides the second."
+    (rec divides ((xs divisor) (ys dividend))
+      (match (Tuple xs ys)
+        ((Tuple (Nil) _) True)
+        ((Tuple _ (Nil)) False)
+        ((Tuple (Cons x more-xs) (Cons y more-ys))
+         (and (<= x y) (divides more-xs more-ys))))))
+
+  (declare monomial-quot (Monomial * Monomial -> Optional Monomial))
+  (define (monomial-quot dividend divisor)
+    "Return the first monomial divided by the second, or `None` for inexact division."
+    (if (monomial-divides? divisor dividend)
+        (Some
+         (make-monomial
+          (rec subtract ((xs (monomial-exponents dividend))
+                         (ys (monomial-exponents divisor))
+                         (acc Nil))
+            (match (Tuple xs ys)
+              ((Tuple _ (Nil)) (list:append (list:reverse acc) xs))
+              ((Tuple (Cons x more-xs) (Cons y more-ys))
+               (subtract more-xs more-ys (Cons (- x y) acc)))
+              (_ (error "Inexact monomial division after divisibility check."))))))
+        None))
+
+  (declare monomial-coprime? (Monomial * Monomial -> Boolean))
+  (define (monomial-coprime? (%Monomial xs) (%Monomial ys))
+    "Whether the monomials have no variable of positive exponent in common."
+    (rec check ((xs xs) (ys ys))
+      (match (Tuple xs ys)
+        ((Tuple (Cons x more-xs) (Cons y more-ys))
+         (and (or (== x 0) (== y 0)) (check more-xs more-ys)))
+        (_ True))))
+
+  (declare %compare-lex (List UFix * List UFix -> Ordering))
+  (define (%compare-lex xs ys)
+    (match (Tuple xs ys)
+      ((Tuple (Nil) (Nil)) EQ)
+      ((Tuple (Nil) _) LT)
+      ((Tuple _ (Nil)) GT)
+      ((Tuple (Cons x more-xs) (Cons y more-ys))
+       (match (<=> x y)
+         ((EQ) (%compare-lex more-xs more-ys))
+         (ordering ordering)))))
+
+  (declare %compare-revlex (List UFix * List UFix -> Ordering))
+  (define (%compare-revlex xs ys)
+    (match (Tuple xs ys)
+      ((Tuple (Nil) (Nil)) EQ)
+      ((Tuple (Nil) _) GT)
+      ((Tuple _ (Nil)) LT)
+      ((Tuple (Cons x more-xs) (Cons y more-ys))
+       (match (%compare-revlex more-xs more-ys)
+         ((EQ) (<=> y x))
+         (ordering ordering)))))
+
+  (declare compare-monomial (MonomialOrder * Monomial * Monomial -> Ordering))
+  (define (compare-monomial order a b)
+    "Compare monomials, padding missing exponents with zeros. `GRevLex` reverses the last unequal exponent comparison after comparing total degrees."
+    (match order
+      ((Lex) (%compare-lex (monomial-exponents a) (monomial-exponents b)))
+      (_
+       (match (<=> (monomial-degree a) (monomial-degree b))
+         ((EQ)
+          (match order
+            ((GRevLex) (%compare-revlex (monomial-exponents a) (monomial-exponents b)))
+            (_ (%compare-lex (monomial-exponents a) (monomial-exponents b)))))
+         (ordering ordering)))))
+
+  (repr :transparent)
+  (define-type (MPoly :a)
+    "A sparse polynomial $\\sum_m c_m m$ with distinct, nonzero terms in descending `Lex` order."
+    (%MPoly (List (Tuple :a Monomial))))
+
+  (declare %sort-terms
+    (MonomialOrder * List (Tuple :a Monomial) -> List (Tuple :a Monomial)))
+  (define (%sort-terms order terms)
+    (list:sortBy
+     (fn ((Tuple _ a) (Tuple _ b)) (compare-monomial order b a))
+     terms))
+
+  (declare %merge-terms
+    ((Eq :a) (Additive :a) =>
+     MonomialOrder * List (Tuple :a Monomial) * List (Tuple :a Monomial)
+     -> List (Tuple :a Monomial)))
+  (define (%merge-terms order xs ys)
+    (match (Tuple xs ys)
+      ((Tuple (Nil) _) ys)
+      ((Tuple _ (Nil)) xs)
+      ((Tuple (Cons (Tuple a ma) more-xs) (Cons (Tuple b mb) more-ys))
+       (match (compare-monomial order ma mb)
+         ((GT) (Cons (Tuple a ma) (%merge-terms order more-xs ys)))
+         ((LT) (Cons (Tuple b mb) (%merge-terms order xs more-ys)))
+         ((EQ)
+          (let c = (+ a b))
+          (if (zero? c)
+              (%merge-terms order more-xs more-ys)
+              (Cons (Tuple c ma) (%merge-terms order more-xs more-ys))))))))
+
+  (declare %term-poly ((Eq :a) (Additive :a) => :a * Monomial -> MPoly :a))
+  (define (%term-poly c m)
+    (%MPoly (if (zero? c) Nil (Cons (Tuple c m) Nil))))
+
+  (declare mpoly ((Eq :a) (Additive :a) => List (Tuple :a (List UFix)) -> MPoly :a))
+  (define (mpoly terms)
+    "Construct a sparse polynomial from coefficient/exponent-vector pairs, merging repeated monomials and removing zero coefficients."
+    (%MPoly
+     (rec collect ((xs terms) (acc Nil))
+       (match xs
+         ((Nil) acc)
+         ((Cons (Tuple c exponents) rest)
+          (collect rest
+                   (if (zero? c)
+                       acc
+                       (%merge-terms Lex (Cons (Tuple c (make-monomial exponents)) Nil) acc))))))))
+
+  (declare mpoly-constant ((Eq :a) (Additive :a) => :a -> MPoly :a))
+  (define (mpoly-constant c)
+    "Construct the constant polynomial $c$."
+    (%term-poly c (make-monomial Nil)))
+
+  (declare mpoly-var (Semiring :a => UFix -> MPoly :a))
+  (define (mpoly-var i)
+    "Construct the variable $x_i$, numbering variables from zero."
+    (%MPoly
+     (Cons (Tuple one
+                  (%Monomial
+                   (rec pad ((n i) (exponents (Cons 1 Nil)))
+                     (if (== n 0)
+                         exponents
+                         (pad (- n 1) (Cons 0 exponents))))))
+           Nil)))
+
+  (declare mpoly-zero? ((Eq :a) (Additive :a) => MPoly :a -> Boolean))
+  (define (mpoly-zero? (%MPoly terms))
+    "Whether the polynomial is zero."
+    (not (list:any (fn ((Tuple c _)) (nonzero? c)) terms)))
+
+  (declare mpoly-terms
+    (MonomialOrder * MPoly :a -> List (Tuple :a Monomial)))
+  (define (mpoly-terms order (%MPoly terms))
+    "Return coefficient/monomial pairs in descending `order`."
+    (match order
+      ((Lex) terms)
+      (_ (%sort-terms order terms))))
+
+  (declare leading-term
+    ((Eq :a) (Additive :a) =>
+     MonomialOrder * MPoly :a -> Optional (Tuple :a Monomial)))
+  (define (leading-term order p)
+    "Return the leading term, or `None` for the zero polynomial."
+    (list:head (list:filter (fn ((Tuple c _)) (nonzero? c))
+                            (mpoly-terms order p))))
+
+  (declare leading-coeff ((Eq :a) (Additive :a) => MonomialOrder * MPoly :a -> :a))
+  (define (leading-coeff order p)
+    "Return the leading coefficient, or `zero` for the zero polynomial."
+    (match (leading-term order p)
+      ((Some (Tuple c _)) c)
+      ((None) zero)))
+
+  (declare leading-monomial
+    ((Eq :a) (Additive :a) => MonomialOrder * MPoly :a -> Monomial))
+  (define (leading-monomial order p)
+    "Return the leading monomial, or the monomial $1$ for the zero polynomial."
+    (match (leading-term order p)
+      ((Some (Tuple _ m)) m)
+      ((None) (make-monomial Nil))))
+
+  (define-instance ((Eq :a) (Additive :a) => Eq (MPoly :a))
+    (define (== (%MPoly xs) (%MPoly ys))
+      (== (list:filter (fn ((Tuple c _)) (nonzero? c)) xs)
+          (list:filter (fn ((Tuple c _)) (nonzero? c)) ys))))
+
+  (define-instance ((Eq :a) (Additive :a) => HasAdd (MPoly :a))
+    (define (+ (%MPoly xs) (%MPoly ys))
+      (%MPoly (%merge-terms Lex xs ys))))
+
+  (define-instance ((Eq :a) (Additive :a) => Additive (MPoly :a))
+    (define zero (%MPoly Nil)))
+
+  (define-instance ((Eq :a) (AdditiveGroup :a) => AdditiveGroup (MPoly :a))
+    (define (neg (%MPoly terms))
+      (%MPoly (map (fn ((Tuple c m)) (Tuple (neg c) m)) terms)))
+    (define (- a b)
+      (+ a (neg b))))
+
+  (declare %multiply-term
+    ((Eq :a) (Semiring :a) => :a * Monomial * MPoly :a -> MPoly :a))
+  (define (%multiply-term c m (%MPoly terms))
+    (%MPoly
+     (rec multiply ((xs terms) (acc Nil))
+       (match xs
+         ((Nil) (list:reverse acc))
+         ((Cons (Tuple a n) rest)
+          (let product = (* c a))
+          (if (zero? product)
+              (multiply rest acc)
+              (multiply rest (Cons (Tuple product (monomial-mul m n)) acc))))))))
+
+  (define-instance ((Eq :a) (Semiring :a) => HasMul (MPoly :a))
+    (define (* (%MPoly terms) q)
+      (rec multiply ((xs terms) (acc zero))
+        (match xs
+          ((Nil) acc)
+          ((Cons (Tuple c m) rest)
+           (multiply rest (+ acc (%multiply-term c m q))))))))
+
+  (define-instance ((Eq :a) (Semiring :a) => Multiplicative (MPoly :a))
+    (define one (mpoly-constant one)))
+
+  (define-instance ((Eq :a) (Semiring :a) => Semiring (MPoly :a)))
+
+  (define-instance ((Eq :a) (Ring :a) => Ring (MPoly :a))
+    (define (from-int n)
+      (mpoly-constant (from-int n))))
+
+  (define-instance (Num :a => Num (MPoly :a)))
+
+  (define-instance ((Eq :a) (Semiring :a) => Scale :a (MPoly :a))
+    (define (scale c p)
+      (%multiply-term c (make-monomial Nil) p)))
+
+  (define-instance ((Eq :a) (Ring :a) => Module :a (MPoly :a)))
+
+  (define-instance ((Eq :a) (Additive :a) => Into :a (MPoly :a))
+    (inline)
+    (define (into c)
+      (mpoly-constant c)))
+
+  (define-instance ((Eq :a) (ConjugateRing :a) => ConjugateRing (MPoly :a))
+    (define (conjugate (%MPoly terms))
+      (%MPoly (map (fn ((Tuple c m)) (Tuple (conjugate c) m)) terms))))
+
+  (declare %evaluate-monomial (Semiring :a => Monomial * List :a -> :a))
+  (define (%evaluate-monomial (%Monomial exponents) point)
+    (rec evaluate ((xs exponents) (point-rest point) (acc one))
+      (match (Tuple xs point-rest)
+        ((Tuple (Nil) _) acc)
+        ((Tuple (Cons e rest) (Cons x more-values))
+         (evaluate rest more-values (* acc (^ x e))))
+        ((Tuple (Cons e rest) (Nil))
+         (if (== e 0) (evaluate rest Nil acc) zero)))))
+
+  (declare mpoly-evaluate (Semiring :a => MPoly :a * List :a -> :a))
+  (define (mpoly-evaluate (%MPoly terms) point)
+    "Evaluate at $(x_0, x_1, \\ldots)$. Missing coordinates are zero; extra coordinates are ignored."
+    (rec evaluate ((xs terms) (acc zero))
+      (match xs
+        ((Nil) acc)
+        ((Cons (Tuple c m) rest)
+         (evaluate rest (+ acc (* c (%evaluate-monomial m point))))))))
+
+  (declare mpoly-monic
+    ((Eq :a) (DivisionRing :a) => MonomialOrder * MPoly :a -> MPoly :a))
+  (define (mpoly-monic order p)
+    "Divide a nonzero polynomial by its leading coefficient; zero remains zero."
+    (match (leading-term order p)
+      ((None) zero)
+      ((Some (Tuple c _)) (scale (recip c) p))))
+
+  (declare %without-leading (MonomialOrder * MPoly :a -> MPoly :a))
+  (define (%without-leading order p)
+    (match (mpoly-terms order p)
+      ((Nil) (%MPoly Nil))
+      ((Cons _ rest) (%MPoly (%sort-terms Lex rest)))))
+
+  (declare %divisor-multiple
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * :a * Monomial * MPoly :a
+     -> Optional (Tuple (MPoly :a) (MPoly :a))))
+  (define (%divisor-multiple order c m divisor)
+    (match (leading-term order divisor)
+      ((None) None)
+      ((Some (Tuple d n))
+       (match (monomial-quot m n)
+         ((None) None)
+         ((Some shift)
+          (let factor = (/ c d))
+          (Some (Tuple (%term-poly factor shift)
+                       (%multiply-term factor shift (%without-leading order divisor)))))))))
+
+  (declare %division-step
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * :a * Monomial * List (MPoly :a) * List (MPoly :a)
+     -> Optional (Tuple (List (MPoly :a)) (MPoly :a))))
+  (define (%division-step order c m divisors quotients)
+    (match (Tuple divisors quotients)
+      ((Tuple (Nil) (Nil)) None)
+      ((Tuple (Cons divisor more-divisors) (Cons q more-quotients))
+       (match (%divisor-multiple order c m divisor)
+         ((Some (Tuple factor tail))
+          (Some (Tuple (Cons (+ q factor) more-quotients) tail)))
+         ((None)
+          (match (%division-step order c m more-divisors more-quotients)
+            ((None) None)
+            ((Some (Tuple updated tail))
+             (Some (Tuple (Cons q updated) tail)))))))
+      (_ (error "Mismatched divisor and quotient lists in multivariate division."))))
+
+  (declare mpoly-divrem
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * MPoly :a * List (MPoly :a) -> List (MPoly :a) * MPoly :a))
+  (define (mpoly-divrem order dividend divisors)
+    "Return `(values quotients remainder)` with $f = \\sum_i q_i g_i + r$. Try divisors in list order; zero divisors are ignored and have zero quotients. No term of $r$ is divisible by a nonzero divisor's leading monomial."
+    (rec divide ((p dividend)
+                 (quotients (map (fn (_) zero) divisors))
+                 (remainder zero))
+      (match (leading-term order p)
+        ((None) (values quotients remainder))
+        ((Some (Tuple c m))
+         (match (%division-step order c m divisors quotients)
+           ((None)
+            (divide (%without-leading order p)
+                    quotients
+                    (+ remainder (%term-poly c m))))
+           ((Some (Tuple updated tail))
+            ;; Exact division cancels the leading term; only its tail remains.
+            (divide (- (%without-leading order p) tail) updated remainder)))))))
+
+  (declare normal-form
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * MPoly :a * List (MPoly :a) -> MPoly :a))
+  (define (normal-form order f basis)
+    "Return the division remainder; it is the unique ideal normal form when `basis` is a Gröbner basis."
+    (let (values _ remainder) = (mpoly-divrem order f basis))
+    remainder)
+
+  (declare s-polynomial
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * MPoly :a * MPoly :a -> MPoly :a))
+  (define (s-polynomial order f g)
+    "Compute $S(f,g) = (L/\\operatorname{LT}(f))f - (L/\\operatorname{LT}(g))g$, where $L = \\operatorname{lcm}(\\operatorname{LM}(f),\\operatorname{LM}(g))$. Return zero if either argument is zero."
+    (match (Tuple (leading-term order f) (leading-term order g))
+      ((Tuple (Some (Tuple cf mf)) (Some (Tuple cg mg)))
+       (let common = (monomial-lcm mf mg))
+       (match (Tuple (monomial-quot common mf) (monomial-quot common mg))
+         ((Tuple (Some qf) (Some qg))
+          (- (%multiply-term (recip cf) qf (%without-leading order f))
+             (%multiply-term (recip cg) qg (%without-leading order g))))
+         (_ (error "A monomial did not divide its least common multiple."))))
+      (_ zero)))
+
+  (declare %basis-pairs
+    (List (MPoly :a) -> List (Tuple (MPoly :a) (MPoly :a))))
+  (define (%basis-pairs basis)
+    (match basis
+      ((Nil) Nil)
+      ((Cons f rest)
+       (list:append (map (fn (g) (Tuple f g)) rest) (%basis-pairs rest)))))
+
+  (declare %sort-basis
+    ((Eq :a) (Additive :a) =>
+     MonomialOrder * List (MPoly :a) -> List (MPoly :a)))
+  (define (%sort-basis order basis)
+    (list:sortBy
+     (fn (f g) (compare-monomial order (leading-monomial order g) (leading-monomial order f)))
+     basis))
+
+  (declare %minimal-basis
+    ((Eq :a) (Additive :a) =>
+     MonomialOrder * List (MPoly :a) -> List (MPoly :a)))
+  (define (%minimal-basis order basis)
+    (rec minimize ((remaining basis) (kept Nil))
+      (match remaining
+        ((Nil) kept)
+        ((Cons f rest)
+         (let m = (leading-monomial order f))
+         ;; Only retained and unexamined polynomials can eliminate f, so
+         ;; equal leading monomials retain one representative rather than none.
+         (if (list:any
+              (fn (g) (monomial-divides? (leading-monomial order g) m))
+              (list:append kept rest))
+             (minimize rest kept)
+             (minimize rest (Cons f kept)))))))
+
+  (declare %interreduce
+    ((Eq :a) (DivisionRing :a) =>
+     MonomialOrder * List (MPoly :a) -> List (MPoly :a)))
+  (define (%interreduce order basis)
+    (let minimal = (%minimal-basis order basis))
+    (%sort-basis
+     order
+     (map
+      (fn (f)
+        (mpoly-monic order
+                     (normal-form order f (list:filter (fn (g) (not (== f g))) minimal))))
+      minimal)))
+
+  (declare reduced-groebner-basis
+    ((Eq :a) (Field :a) =>
+     MonomialOrder * List (MPoly :a) -> List (MPoly :a)))
+  (define (reduced-groebner-basis order generators)
+    "Return the unique reduced Gröbner basis of the generated ideal, monic and sorted by descending leading monomial. Buchberger's first criterion skips pairs with coprime leading monomials. The zero ideal has the empty basis."
+    (let initial = (%sort-basis
+                   order
+                   (map (fn (f) (mpoly-monic order f))
+                        (list:filter (fn (f) (not (mpoly-zero? f))) generators))))
+    (rec complete ((basis initial) (pending (%basis-pairs initial)))
+      (match pending
+        ((Nil) (%interreduce order basis))
+        ((Cons (Tuple f g) rest)
+         (if (monomial-coprime? (leading-monomial order f) (leading-monomial order g))
+             (complete basis rest)
+             (let ((h (mpoly-monic order (normal-form order (s-polynomial order f g) basis))))
+               (if (mpoly-zero? h)
+                   (complete basis rest)
+                   (complete (Cons h basis)
+                             (list:append (map (fn (b) (Tuple h b)) basis) rest)))))))))
+
+  (declare groebner-basis
+    ((Eq :a) (Field :a) =>
+     MonomialOrder * List (MPoly :a) -> List (MPoly :a)))
+  (define (groebner-basis order generators)
+    "Return the canonical reduced Gröbner basis; an alias for `reduced-groebner-basis`."
+    (reduced-groebner-basis order generators))
+
+  (declare ideal-member?
+    ((Eq :a) (Field :a) =>
+     MonomialOrder * MPoly :a * List (MPoly :a) -> Boolean))
+  (define (ideal-member? order f generators)
+    "Whether $f$ belongs to the ideal generated by `generators`."
+    (mpoly-zero? (normal-form order f (groebner-basis order generators)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/GROEBNER")

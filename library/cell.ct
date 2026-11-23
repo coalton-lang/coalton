@@ -114,57 +114,17 @@ value."
 
 ;;; operators on cells of numbers
   (inline)
-  (declare increment! (Num :counter => Cell :counter -> :counter))
+  (declare increment! ((HasAdd :counter) (Multiplicative :counter) => Cell :counter -> :counter))
   (define (increment! cel)
-    "Add one to the contents of `cel`, storing and returning the new value."
-    (update! ƒx.(+ x 1) cel))
+    "Add `one` to the contents of `cel`, storing and returning the new value."
+    (update! ƒx.(+ x one) cel))
 
   (inline)
-  (declare decrement! (Num :counter => (Cell :counter) -> :counter))
+  (declare decrement! ((AdditiveGroup :counter) (Multiplicative :counter) => (Cell :counter) -> :counter))
   (define (decrement! cel)
-    "Subtract one from the contents of `cel`, storing and returning the new
+    "Subtract `one` from the contents of `cel`, storing and returning the new
 value."
-    (update! ƒx.(- x 1) cel))
-
-  ;; i am very skeptical of these instances
-  (define-instance (Eq :a => Eq (Cell :a))
-    (inline)
-    (define (== c1 c2)
-      (== (read c1) (read c2))))
-
-  (define-instance (Ord :a => Ord (Cell :a))
-    (inline)
-    (define (<=> c1 c2)
-      (<=> (read c1) (read c2))))
-
-  (define-instance (Num :a => Num (Cell :a))
-    (define (+ c1 c2)
-      (new (+ (read c1) (read c2))))
-    (define (- c1 c2)
-      (new (- (read c1) (read c2))))
-    (define (* c1 c2)
-      (new (* (read c1) (read c2))))
-    (define (fromInt i)
-      (new (fromInt i))))
-
-  (define-instance (Semigroup :a => Semigroup (Cell :a))
-    (inline)
-    (define (<> a b)
-      (new (<> (read a) (read b)))))
-
-  (define-instance (Functor Cell)
-    (define (map f c)
-      (new (f (read c)))))
-
-  (define-instance (Applicative Cell)
-    (inline)
-    (define pure new)
-    (define (liftA2 f c1 c2)
-      (new (f (read c1) (read c2)))))
-
-  (define-instance (Default :a => Default (Cell :a))
-    (inline)
-    (define (default) (new (default)))))
+    (update! ƒx.(- x one) cel)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/CELL")

@@ -80,7 +80,7 @@ The pool starts the first time it is needed.
      0 n
      (fn (lo hi)
        (for ((declare i UFix) (declare acc F64)
-             (i lo (1+ i)) (acc 0d0 (+ acc (math:sin (fromInt (into i))))))
+             (i lo (1+ i)) (acc 0d0 (+ acc (math:sin (from-int (into i))))))
          :returns acc
          :repeat (- hi lo)
          Unit))

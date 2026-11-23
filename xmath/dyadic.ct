@@ -4,21 +4,25 @@
 ;;; It is not exported into the math package as it is a niche numeric type
 
 (coalton/utils::defstdlib-package #:coalton/xmath/dyadic
+    (:documentation "Dyadic rationals $\\mathbb{Z}[1/2] = \\{n \\cdot 2^k : n, k \\in \\mathbb{Z}\\}$.
+
+Dyadic rationals form the smallest subring of $\\mathbb{Q}$ containing $\\mathbb{Z}$ and $1/2$: they are closed under exact addition, subtraction, negation, multiplication, and binary shifts (`scale`), while supporting exact conversion to `Fraction` (`Into`) and $O(1)$ bit-manipulation rounding (`Quantizable`, `Approximable`).")
     (:nicknames
      #:coalton/math/dyadic
      #:coalton-library/math/dyadic)
+    (:shadow #:scale)
     (:use
      #:coalton
      #:coalton/builtin
      #:coalton/classes
      #:coalton/math/arith
+     #:coalton/math/fraction
      #:coalton/math/integral
      #:coalton/math/real)
   (:local-nicknames
    (#:bits #:coalton/bits))
   (:export
    #:Dyadic
-   #:integer
    #:simplify
    #:simplify-integer
    #:scale
@@ -36,7 +40,7 @@
 
   (declare exact-ilog (Integer * Integer -> (Optional Integer)))
   (define (exact-ilog b x)
-    "Compute `k` such that `x = b^k` when it exists."
+    "Compute $k$ such that $x = b^k$ when it exists."
     (if (or (<= b 1)
             (<= x 0))
         None
@@ -107,52 +111,86 @@
          (True
           (Dyadic (f (lsh n (- k j)) m) j))))))
 
-  (define-instance (Num Dyadic)
+  (define-instance (HasAdd Dyadic)
+    (inline)
     (define (+ a b)
-      (dyadic-group + a b))
+      (dyadic-group + a b)))
+
+  (define-instance (Additive Dyadic)
+    (define zero (Dyadic 0 0)))
+
+  (define-instance (AdditiveGroup Dyadic)
+    (inline)
     (define (- a b)
       (dyadic-group - a b))
+    (inline)
+    (define (neg (Dyadic n k))
+      (Dyadic (neg n) k)))
+
+  (define-instance (HasMul Dyadic)
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (Dyadic n k)
                 (Dyadic m j))
          (if (or (== n 0) (== m 0))
              (Dyadic 0 0)
-             (Dyadic (* n m) (+ j k))))))
-    (define (fromInt x) (Dyadic x 0)))
+             (Dyadic (* n m) (+ j k)))))))
+
+  (define-instance (Multiplicative Dyadic)
+    (define one (Dyadic 1 0)))
+
+  (define-instance (Semiring Dyadic))
+
+  (define-instance (Ring Dyadic)
+    (inline)
+    (define (from-int x) (Dyadic x 0)))
+
+  (define-instance (Num Dyadic))
+  (define-instance (coalton/math/arith:CommutativeRing Dyadic))
+  (define-instance (coalton/math/arith:CharacteristicZero Dyadic))
+
+  (define-instance (coalton/math/arith:Scale Dyadic Dyadic)
+    (inline)
+    (define (coalton/math/arith:scale a b) (* a b)))
+
+  (define-instance (Module Dyadic Dyadic))
+
+  (define-instance (ConjugateRing Dyadic)
+    (inline)
+    (define (conjugate x) x))
 
   (declare simplify-integer (Integer -> Dyadic))
   (define (simplify-integer n)
     "Finds the simplest dyadic given an integer."
-    (if (== n 0)
-        (Dyadic 0 0)
-        (progn
-          (let tz = (dyadic-ctz n))
-          (Dyadic (rsh n tz) tz))))
+    (cond
+      ((== n 0) (Dyadic 0 0))
+      (True
+       (let tz = (dyadic-ctz n))
+       (Dyadic (rsh n tz) tz))))
 
   (declare simplify (Dyadic -> Dyadic))
   (define (simplify d)
     "Simplifies a dyadic by maximizing the absolute value of the exponent."
     (match d
       ((Dyadic m k)
-       (if (== m 0)
-           (Dyadic 0 0)
-           (progn
-             (let tz = (dyadic-ctz m))
-             (Dyadic (rsh m tz) (+ k tz)))))))
+       (cond
+         ((== m 0) (Dyadic 0 0))
+         (True
+          (let tz = (dyadic-ctz m))
+          (Dyadic (rsh m tz) (+ k tz)))))))
 
   (define-instance (Into Dyadic Fraction)
     (define (into a)
       (match a
         ((Dyadic n k)
          (cond
-           ((or (== n 0) (== k 0)) (fromInt n))
-           ((> k 0) (fromInt (lsh n k)))
+           ((or (== n 0) (== k 0)) (from-int n))
+           ((> k 0) (from-int (lsh n k)))
            (True
             (let tz = (dyadic-ctz n))
-            (let shift = (negate k))
+            (let shift = (neg k))
             (if (>= tz shift)
-                (fromInt (rsh n shift))
+                (from-int (rsh n shift))
                 (exact/ (rsh n tz) (lsh 1 (- shift tz))))))))))
 
   (define-instance (Quantizable Dyadic)
@@ -163,18 +201,19 @@
            ((== n 0) (values 0 (Dyadic 0 0)))
            ((>= k 0) (values (lsh n k) (Dyadic 0 0)))
            (True
-            (let shift = (negate k))
+            (let shift = (neg k))
             (let abs-n = (abs n))
             (let len = (dyadic-bit-length abs-n))
-            (if (<= len shift)
-                (values 0 x)
-                (progn
-                  (let q-abs = (rsh abs-n shift))
-                  (let r-abs = (lisp (-> Integer) (abs-n shift)
-                                 (cl:ldb (cl:byte shift 0) abs-n)))
-                  (if (< n 0)
-                      (values (negate q-abs) (Dyadic (negate r-abs) k))
-                      (values q-abs (Dyadic r-abs k))))))))))
+            (cond
+              ((<= len shift)
+               (values 0 x))
+              (True
+               (let q-abs = (rsh abs-n shift))
+               (let r-abs = (lisp (-> Integer) (abs-n shift)
+                              (cl:ldb (cl:byte shift 0) abs-n)))
+               (if (< n 0)
+                   (values (neg q-abs) (Dyadic (neg r-abs) k))
+                   (values q-abs (Dyadic r-abs k))))))))))
     (define (floor x)
       (match x
         ((Dyadic n k)
@@ -187,7 +226,7 @@
     (define (ceiling x)
       (match x
         ((Dyadic n k)
-         (negate (floor (Dyadic (negate n) k)))))))
+         (neg (floor (Dyadic (neg n) k)))))))
 
   (specialize round dyadic-round (Dyadic -> Integer))
   (define (dyadic-round x)
@@ -199,39 +238,86 @@ numbers."
          ((== n 0) 0)
          ((>= k 0) (lsh n k))
          (True
-          (let shift = (negate k))
+          (let shift = (neg k))
           (let abs-n = (abs n))
           (let len = (dyadic-bit-length abs-n))
-          (if (< len shift)
-              0
-              (progn
-                (let q = (rsh abs-n shift))
-                (let half? = (lisp (-> Boolean) (abs-n shift)
-                               (cl:logbitp (cl:1- shift) abs-n)))
-                (let mag =
-                  (if (not half?)
-                      q
-                      (if (odd? q)
-                          (+ q 1)
-                          (if (and (> shift 1)
-                                   (lisp (-> Boolean) (abs-n shift)
-                                     (cl:ldb-test (cl:byte (cl:1- shift) 0) abs-n)))
-                              (+ q 1)
-                              q))))
-                (if (< n 0)
-                    (negate mag)
-                    mag))))))))
+          (cond
+            ((< len shift) 0)
+            (True
+             (let q = (rsh abs-n shift))
+             (let half? = (lisp (-> Boolean) (abs-n shift)
+                            (cl:logbitp (cl:1- shift) abs-n)))
+             (let mag =
+               (cond
+                 ((not half?) q)
+                 ((odd? q) (+ q 1))
+                 ((and (> shift 1)
+                       (lisp (-> Boolean) (abs-n shift)
+                         (cl:ldb-test (cl:byte (cl:1- shift) 0) abs-n)))
+                  (+ q 1))
+                 (True q)))
+             (if (< n 0)
+                 (neg mag)
+                 mag))))))))
 
-  (define-instance (Real Dyadic)
-    (define (real-approx a x)
-      (real-approx a (the Fraction (into x)))))
+  (define-instance (Approximable Dyadic Fraction)
+    (inline)
+    (define (approx _ x) (into x)))
 
-  (define-instance (Rational Dyadic)
-    (define (to-fraction x) (into x))
-    (define (best-approx x) (into x)))
+  (define-instance (Approximable Dyadic Dyadic)
+    (inline)
+    (define (approx _ x) x))
+
+  (define-instance (Rationalizable Dyadic)
+    (define (simplest-fraction bits x)
+      (simplest-fraction bits (the Fraction (into x)))))
+
+  (declare fraction-for-native (UFix * Dyadic * Integer * Integer -> Fraction))
+  (define (fraction-for-native bits x min-exp max-exp)
+    ;; Do not materialize 2^e when e itself is an arbitrary-size integer.
+    (let (Dyadic m e) = x)
+    (let top = (+ e (dyadic-bit-length m)))
+    (cond
+      ((== m 0) 0)
+      ((> top (+ 1 max-exp)) (error "Dyadic is outside the native float range."))
+      ((< top min-exp)
+       (when (> (Dyadic (abs m) e) (Dyadic 1 (neg (to-integer bits))))
+         (error "Dyadic is too small to approximate to the requested absolute precision."))
+       0)
+      (True (into x))))
+
+  (define-instance (Approximable Dyadic F32)
+    (define (approx bits x)
+      (approx bits (fraction-for-native bits x -149 128))))
+
+  (define-instance (Approximable Dyadic F64)
+    (define (approx bits x)
+      (approx bits (fraction-for-native bits x -1074 1024))))
+
+  (define-instance (Approximable Fraction Dyadic)
+    (define (approx bits q)
+      (let den = (denominator q))
+      (cond
+        ((== 0 (bits:and den (- den 1)))
+         (Dyadic (numerator q) (- 1 (dyadic-bit-length den))))
+        (True
+         (let k = (to-integer bits))
+         (Dyadic (round/ (lsh (numerator q) k) den) (neg k))))))
+
+  (define-instance (Approximable Integer Dyadic)
+    (inline)
+    (define (approx _ n) (from-int n)))
+
+  (define-instance (Approximable F32 Dyadic)
+    (define (approx bits x)
+      (approx bits (the Fraction (approx bits x)))))
+
+  (define-instance (Approximable F64 Dyadic)
+    (define (approx bits x)
+      (approx bits (the Fraction (approx bits x)))))
 
   (define-instance (Into Integer Dyadic)
-    (define into fromInt))
+    (define into from-int))
 
   (declare scale (Dyadic * Integer -> Dyadic))
   (define (scale x j)
@@ -246,14 +332,14 @@ numbers."
   (define (shift k a)
     "Shift dyadic `a` to its floor with $\\mathtt{k}+1$ bits of precision."
     (let (Dyadic m e) = a)
-    (if (== m 0)
-        a
-        (progn
-          (let j = (- (dyadic-bit-length m) 1))
-          (let delta = (- j (toInteger k)))
-          (if (<= delta 0)
-              a
-              (Dyadic (rsh m delta) (+ delta e)))))))
+    (cond
+      ((== m 0) a)
+      (True
+       (let j = (- (dyadic-bit-length m) 1))
+       (let delta = (- j (to-integer k)))
+       (if (<= delta 0)
+           a
+           (Dyadic (rsh m delta) (+ delta e)))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/DYADIC")

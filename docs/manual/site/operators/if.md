@@ -30,7 +30,7 @@ weight: 200
   (declare abs-int (Integer -> Integer))
   (define (abs-int n)
     (if (< n 0)
-        (negate n)
+        (neg n)
         n))
 
   ;; Returning multiple values from `if` branches

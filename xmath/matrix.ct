@@ -1,0 +1,778 @@
+;;;; matrix.ct
+;;;;
+;;;; Dense matrices over semirings, rings, GCD domains, and fields
+
+(coalton/utils:defstdlib-package #:coalton/xmath/matrix
+  (:documentation "Dense $m \\times n$ matrices $A = (a_{ij})$ and linear algebra over semirings, rings, GCD domains, and fields.
+
+Matrices of the same shape add entrywise. Over a semiring, an $m \\times n$ matrix times an $n \\times p$ matrix has entries $(AB)_{ij} = \\sum_k a_{ik} b_{kj}$. Square matrices of a fixed size admit powers $A^e$ and the trace $\\operatorname{tr}(A) = \\sum_i a_{ii}$. Over a $\\ast$-ring (`ConjugateRing`), the Hermitian adjoint $(A^*)_{ij} = \\overline{a_{ji}}$ makes these square matrices a $\\ast$-ring as well.
+
+**Fraction-free elimination over GCD domains.** Over any `GcdDomain` $D$ (such as $\\mathbb{Z}$, $\\mathbb{Z}[i]$, or a polynomial ring $D[x]$), Bareiss's fraction-free algorithm maintains $2 \\times 2$ Sylvester-identity minors
+$$a_{ij}^{(k)} = \\frac{a_{kk}^{(k-1)} a_{ij}^{(k-1)} - a_{ik}^{(k-1)} a_{kj}^{(k-1)}}{a_{k-1,k-1}^{(k-2)}},$$
+where every division by the previous pivot $a_{k-1,k-1}^{(k-2)}$ is exact in $D$. This computes determinants $\\det(A)$ in $O(n^3)$ ring operations without fractions, along with classical adjugates $\\operatorname{adj}(A)$ satisfying $A \\operatorname{adj}(A) = \\det(A) I$ and characteristic polynomials $\\chi_A(x) = \\det(xI - A) \\in D[x]$ (by running Bareiss over $D[x]$).
+
+**Linear systems and subspaces.** Over an exact `DivisionRing`, Gauss–Jordan elimination computes the reduced row echelon form (`rref`) and pivot columns of $A$, yielding $\\operatorname{rank}(A)$, a basis of the right kernel $\\ker(A) = \\{x : Ax = 0\\}$ (`nullspace`), solutions of linear systems $AX = B$ (`solve`, `solve-vector`), and matrix inverses $A^{-1}$ (`inv`). For a square `F64` system, `solve-pivoted` instead uses scaled partial pivoting and reports the absolute residual. With scalar conjugation, modified Gram–Schmidt orthogonalizes left-scaled vectors for the Hermitian form $\\langle u,v\\rangle = \\sum_i v_i\\overline{u_i}$, unless it encounters a nonzero isotropic pivot.")
+  (:nicknames
+   #:coalton/math/matrix
+   #:coalton-library/math/matrix)
+  (:shadow
+   #:trace)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral
+   #:coalton/math/real
+   #:coalton/math/elementary)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:show #:coalton/show)
+   (#:vec #:coalton/vector))
+  (:export
+   #:Matrix
+   #:matrix
+   #:from-rows
+   #:to-rows
+   #:zero-matrix
+   #:identity-matrix
+   #:diagonal-matrix
+   #:zero-matrix?
+   #:rows
+   #:cols
+   #:entry
+   #:row
+   #:col
+   #:transpose
+   #:adjoint
+   #:trace
+   #:mat-add
+   #:mat-sub
+   #:mat-neg
+   #:mat-mul
+   #:mat-vec-mul
+   #:mat-pow
+   #:det
+   #:charpoly
+   #:adjugate
+   #:rref
+   #:rref-with
+   #:rank
+   #:nullspace
+   #:solve
+   #:solve-vector
+   #:PivotedSolveError
+   #:SolveShapeMismatch
+   #:InvalidPivotTolerance
+   #:SmallPivot
+   #:NonFiniteSolve
+   #:solve-pivoted
+   #:solve-pivoted-vector
+   #:inv
+   #:gram-schmidt
+   #:try-gram-schmidt))
+
+(in-package #:coalton/xmath/matrix)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (Matrix :a)
+    "A dense matrix with a runtime row count, column count, and row-major entries. Equality compares both dimensions and corresponding entries, even for empty shapes. Addition requires equal shapes; multiplication requires matching inner dimensions. Use `zero-matrix` and `identity-matrix` for the identities of a particular shape, and `scale` for scalar multiplication."
+    (%Matrix UFix UFix (vec:Vector :a)))
+
+  ;;
+  ;; Internal helpers
+  ;;
+
+  (inline)
+  (declare %data (Matrix :a -> vec:Vector :a))
+  (define (%data (%Matrix _ _ v)) v)
+
+  (inline)
+  (declare %get (vec:Vector :a * UFix * UFix * UFix -> :a))
+  (define (%get v stride i j)
+    (vec:index-unsafe (+ (* i stride) j) v))
+
+  (inline)
+  (declare %put! (vec:Vector :a * UFix * UFix * UFix * :a -> Void))
+  (define (%put! v stride i j x)
+    (vec:set! (+ (* i stride) j) x v))
+
+  (declare %list->vector (List :a -> vec:Vector :a))
+  (define (%list->vector xs)
+    (let v = (vec:with-capacity (list:length xs)))
+    (rec fill ((rest xs))
+      (match rest
+        ((Nil) v)
+        ((Cons x more)
+         (vec:push! x v)
+         (fill more)))))
+
+  (declare %entry-count (UFix * UFix -> UFix))
+  (define (%entry-count r c)
+    ;; A wrapped product would let a concrete shape disagree with its storage.
+    (match (try-into (* (to-integer r) (to-integer c)))
+      ((Some n) n)
+      ((None) (error "matrix: the number of entries exceeds the index range."))))
+
+  (declare %generate-vector (UFix * UFix * (UFix * UFix -> :a) -> vec:Vector :a))
+  (define (%generate-vector r c f)
+    (let n = (%entry-count r c))
+    (let v = (vec:with-capacity n))
+    (when (== n 0) (return v))
+    (rec outer ((i 0))
+      (cond
+        ((== i r) v)
+        (True
+         (rec inner ((j 0))
+           (when (< j c)
+             (vec:push! (f i j) v)
+             (inner (+ j 1))))
+         (outer (+ i 1))))))
+
+  (declare %generate (UFix * UFix * (UFix * UFix -> :a) -> Matrix :a))
+  (define (%generate r c f)
+    (%Matrix r c (%generate-vector r c f)))
+
+  (declare %map ((:a -> :b) * Matrix :a -> Matrix :b))
+  (define (%map f (%Matrix r c v))
+    (let n = (vec:length v))
+    (let out = (vec:with-capacity n))
+    (rec loop ((k 0))
+      (cond
+        ((== k n) (%Matrix r c out))
+        (True
+         (vec:push! (f (vec:index-unsafe k v)) out)
+         (loop (+ k 1))))))
+
+  (declare %zip-dense ((:a * :a -> :a) * String * Matrix :a * Matrix :a -> Matrix :a))
+  (define (%zip-dense f name (%Matrix ra ca va) (%Matrix rb cb vb))
+    (when (or (/= ra rb) (/= ca cb))
+      (error (<> name ": matrix dimensions do not match.")))
+    (let n = (vec:length va))
+    (let out = (vec:with-capacity n))
+    (rec loop ((k 0))
+      (cond
+        ((== k n) (%Matrix ra ca out))
+        (True
+         (vec:push! (f (vec:index-unsafe k va) (vec:index-unsafe k vb)) out)
+         (loop (+ k 1))))))
+
+  (declare %require-square (String * Matrix :a -> UFix))
+  (define (%require-square name (%Matrix r c _))
+    (unless (== r c)
+      (error (<> name " requires a square matrix.")))
+    r)
+
+  (declare %find-pivot ((:a -> Boolean) * vec:Vector :a * UFix * UFix * UFix * UFix -> Optional UFix))
+  (define (%find-pivot is-zero? v stride j start end)
+    "Find the first row `i` in `[start, end)` with a nonzero entry in column `j`."
+    (rec loop ((i start))
+      (cond
+        ((>= i end) None)
+        ((is-zero? (%get v stride i j)) (loop (+ i 1)))
+        (True (Some i)))))
+
+  (declare %swap-rows! (vec:Vector :a * UFix * UFix * UFix -> Void))
+  (define (%swap-rows! v stride p q)
+    (unless (== p q)
+      (rec loop ((j 0))
+        (when (< j stride)
+          (let x = (%get v stride p j))
+          (let y = (%get v stride q j))
+          (%put! v stride p j y)
+          (%put! v stride q j x)
+          (loop (+ j 1))))))
+
+  ;;
+  ;; Construction and access
+  ;;
+
+  (declare matrix (UFix * UFix * List :a -> Matrix :a))
+  (define (matrix r c xs)
+    "Construct an $r \\times c$ matrix from a list of $rc$ entries in row-major order, signaling an error if the list has the wrong length."
+    (unless (== (list:length xs) (%entry-count r c))
+      (error "matrix: the number of entries does not equal rows * cols."))
+    (%Matrix r c (%list->vector xs)))
+
+  (declare from-rows (List (List :a) -> Matrix :a))
+  (define (from-rows rs)
+    "Construct a matrix from a list of rows, signaling an error if the rows have differing lengths. The empty list gives the $0 \\times 0$ matrix."
+    (match rs
+      ((Nil) (%Matrix 0 0 (vec:new)))
+      ((Cons first _)
+       (let c = (list:length first))
+       (let r = (list:length rs))
+       (let v = (vec:with-capacity (%entry-count r c)))
+       (rec fill-rows ((rest rs))
+         (match rest
+           ((Nil) (%Matrix r c v))
+           ((Cons xs more)
+            (when (/= (list:length xs) c)
+              (error "from-rows: rows have differing lengths."))
+            (rec fill ((ys xs))
+              (match ys
+                ((Nil) (values))
+                ((Cons y yr)
+                 (vec:push! y v)
+                 (fill yr))))
+            (fill-rows more)))))))
+
+  (inline)
+  (declare rows (Matrix :a -> UFix))
+  (define (rows (%Matrix r _ _))
+    "The number of rows of `m`."
+    r)
+
+  (inline)
+  (declare cols (Matrix :a -> UFix))
+  (define (cols (%Matrix _ c _))
+    "The number of columns of `m`."
+    c)
+
+  (declare entry (Matrix :a * UFix * UFix -> :a))
+  (define (entry m i j)
+    "The entry $m_{ij}$ of `m` in (zero-indexed) row `i` and column `j`."
+    (let r = (rows m))
+    (let c = (cols m))
+    (unless (and (< i r) (< j c))
+      (error "entry: matrix index out of bounds."))
+    (%get (%data m) c i j))
+
+  (declare row (Matrix :a * UFix -> List :a))
+  (define (row m i)
+    "The (zero-indexed) row `i` of `m` as a list."
+    (let c = (cols m))
+    (let v = (%data m))
+    (when (>= i (rows m))
+      (error "row: matrix index out of bounds."))
+    (rec build ((j c) (acc Nil))
+      (if (== j 0)
+          acc
+          (build (- j 1) (Cons (%get v c i (- j 1)) acc)))))
+
+  (declare col (Matrix :a * UFix -> List :a))
+  (define (col m j)
+    "The (zero-indexed) column `j` of `m` as a list."
+    (let c = (cols m))
+    (let v = (%data m))
+    (when (>= j c)
+      (error "col: matrix index out of bounds."))
+    (rec build ((i (rows m)) (acc Nil))
+      (if (== i 0)
+          acc
+          (build (- i 1) (Cons (%get v c (- i 1) j) acc)))))
+
+  (declare to-rows (Matrix :a -> List (List :a)))
+  (define (to-rows m)
+    "The rows of `m` as a list of lists."
+    (rec build ((i (rows m)) (acc Nil))
+      (if (== i 0)
+          acc
+          (build (- i 1) (Cons (row m (- i 1)) acc)))))
+
+  (declare zero-matrix (Additive :a => UFix * UFix -> Matrix :a))
+  (define (zero-matrix r c)
+    "The $r \\times c$ zero matrix."
+    (%Matrix r c (vec:with-initial-element (%entry-count r c) zero)))
+
+  (declare zero-matrix? ((Eq :a) (Additive :a) => Matrix :a -> Boolean))
+  (define (zero-matrix? (%Matrix _ _ v))
+    "Are all entries zero? This holds vacuously for every empty shape."
+    (let n = (vec:length v))
+    (rec check ((k 0))
+      (or (== k n)
+          (and (zero? (vec:index-unsafe k v)) (check (+ k 1))))))
+
+  (declare identity-matrix (Semiring :a => UFix -> Matrix :a))
+  (define (identity-matrix n)
+    "The $n \\times n$ identity matrix $I_n$."
+    (%generate n n (fn (i j) (if (== i j) one zero))))
+
+  (declare diagonal-matrix (Additive :a => List :a -> Matrix :a))
+  (define (diagonal-matrix xs)
+    "The square diagonal matrix $\\operatorname{diag}(d_0, \\ldots, d_{n-1})$ with the given diagonal entries."
+    (let d = (%list->vector xs))
+    (let n = (vec:length d))
+    (%generate n n (fn (i j) (if (== i j) (vec:index-unsafe i d) zero))))
+
+  ;;
+  ;; Instances
+  ;;
+
+  (define-instance (Eq :a => Eq (Matrix :a))
+    (define (== (%Matrix ra ca va) (%Matrix rb cb vb))
+      (and (== ra rb) (== ca cb) (== va vb))))
+
+  (define-instance (show:Show :a => show:Show (Matrix :a))
+    (define (show:show-to f m)
+      (f "(from-rows (")
+      (rec show-rows ((rs (to-rows m)) (first True))
+        (match rs
+          ((Nil) (f "))"))
+          ((Cons xs more)
+           (unless first (f " ") (values))
+           (f "(")
+           (rec show-entries ((ys xs) (first-entry True))
+             (match ys
+               ((Nil) (f ")"))
+               ((Cons y yr)
+                (unless first-entry (f " ") (values))
+                (show:show-to f y)
+                (show-entries yr False))))
+           (show-rows more False))))))
+
+  ;;
+  ;; Basic operations
+  ;;
+
+  (declare transpose (Matrix :a -> Matrix :a))
+  (define (transpose (%Matrix r c v))
+    "The transpose $M^T$ of `m`, with $(M^T)_{ij} = m_{ji}$."
+    (%generate c r (fn (i j) (%get v c j i))))
+
+  (declare adjoint (ConjugateRing :a => Matrix :a -> Matrix :a))
+  (define (adjoint (%Matrix r c v))
+    "The conjugate transpose (Hermitian adjoint) $M^* = \\overline{M}^T$ of `m`, with $(M^*)_{ij} = \\overline{m_{ji}}$."
+    (%generate c r (fn (i j) (conjugate (%get v c j i)))))
+
+  (declare trace (Additive :a => Matrix :a -> :a))
+  (define (trace m)
+    "The trace $\\operatorname{tr}(M) = \\sum_i m_{ii}$ of a square matrix `m`, signaling an error if `m` is not square."
+    (let n = (%require-square "trace" m))
+    (let v = (%data m))
+    (rec loop ((i 0) (acc zero))
+      (if (== i n)
+          acc
+          (loop (+ i 1) (+ acc (%get v n i i))))))
+
+  (inline)
+  (declare mat-add (HasAdd :a => Matrix :a * Matrix :a -> Matrix :a))
+  (define (mat-add a b)
+    "The entrywise sum $A + B$, signaling an error if the dimensions differ."
+    (%zip-dense + "mat-add" a b))
+
+  (inline)
+  (declare mat-sub (AdditiveGroup :a => Matrix :a * Matrix :a -> Matrix :a))
+  (define (mat-sub a b)
+    "The entrywise difference $A - B$, signaling an error if the dimensions differ."
+    (%zip-dense - "mat-sub" a b))
+
+  (inline)
+  (declare mat-neg (AdditiveGroup :a => Matrix :a -> Matrix :a))
+  (define (mat-neg m)
+    "The entrywise negation $-M$."
+    (%map neg m))
+
+  (declare mat-mul ((Additive :a) (HasMul :a) => Matrix :a * Matrix :a -> Matrix :a))
+  (define (mat-mul (%Matrix n k va) (%Matrix kb p vb))
+    "The matrix product $AB$ with $(AB)_{ij} = \\sum_k a_{ik} b_{kj}$, signaling an error if `(cols a)` differs from `(rows b)`."
+    (when (/= k kb)
+      (error "mat-mul: matrix dimensions do not match."))
+    (%generate n p
+               (fn (i j)
+                 (rec dot ((l 0) (acc zero))
+                   (if (== l k)
+                       acc
+                       (dot (+ l 1)
+                            (+ acc (* (%get va k i l) (%get vb p l j)))))))))
+
+  (declare mat-pow (Semiring :a => Matrix :a * UFix -> Matrix :a))
+  (define (mat-pow m e)
+    "The matrix power $M^e$ of a square matrix `m` by binary exponentiation, with $M^0 = I$."
+    (let n = (%require-square "mat-pow" m))
+    (rec loop ((base m) (k e) (acc (identity-matrix n)))
+      (if (== k 0)
+          acc
+          (let ((acc2 (if (odd? k) (mat-mul acc base) acc))
+                (k2 (div k 2)))
+            (if (== k2 0)
+                acc2
+                (loop (mat-mul base base) k2 acc2))))))
+
+  (declare mat-vec-mul ((Additive :a) (HasMul :a) => Matrix :a * List :a -> List :a))
+  (define (mat-vec-mul m x)
+    "The matrix-vector product $Mx$ with $(Mx)_i = \\sum_j m_{ij} x_j$, signaling an error if the length of `x` differs from `(cols m)`."
+    (let r = (rows m))
+    (let c = (cols m))
+    (let v = (%data m))
+    (let xv = (%list->vector x))
+    (when (/= (vec:length xv) c)
+      (error "mat-vec-mul: vector length does not match matrix columns."))
+    (rec build ((i r) (acc Nil))
+      (if (== i 0)
+          acc
+          (let ((ii (- i 1))
+                (s (rec dot ((j 0) (s zero))
+                     (if (== j c)
+                         s
+                         (dot (+ j 1) (+ s (* (%get v c ii j) (vec:index-unsafe j xv))))))))
+            (build ii (Cons s acc))))))
+
+  (define-instance (HasAdd :a => HasAdd (Matrix :a))
+    (inline)
+    (define (+ a b) (mat-add a b)))
+
+  (define-instance ((Additive :a) (HasMul :a) => HasMul (Matrix :a))
+    (inline)
+    (define (* a b) (mat-mul a b)))
+
+  (define-instance (HasMul :a => Scale :a (Matrix :a))
+    (define (scale c m)
+      (%map (fn (x) (* c x)) m)))
+
+  ;;
+  ;; Determinants and related quantities over GCD domains
+  ;;
+
+  (declare det-bareiss ((Eq :a) (GcdDomain :a) => Matrix :a -> :a))
+  (define (det-bareiss m)
+    "The determinant $\\det(M)$ of a square matrix `m` by the fraction-free Bareiss algorithm.
+
+All intermediate divisions are exact (`exact-div`), so this works over any GCD domain, such as `Integer`, `Complex Integer`, `Polynomial Integer`, or `Fraction`, using $O(n^3)$ ring operations."
+    (let n = (%require-square "det" m))
+    (if (== n 0)
+        one
+        (let ((w (vec:copy (%data m))))
+          (rec elim ((k 0) (prev one) (negated False))
+            (if (== k (- n 1))
+                (let ((d (%get w n k k)))
+                  (if negated (neg d) d))
+                (match (%find-pivot zero? w n k k n)
+                  ((None) zero)
+                  ((Some p)
+                   (%swap-rows! w n p k)
+                   (let pkk = (%get w n k k))
+                   (rec iloop ((i (+ k 1)))
+                     (when (< i n)
+                       (let pik = (%get w n i k))
+                       (rec jloop ((j (+ k 1)))
+                         (when (< j n)
+                           (%put! w n i j
+                                  (exact-div (- (* (%get w n i j) pkk)
+                                                (* pik (%get w n k j)))
+                                             prev))
+                           (jloop (+ j 1))))
+                       (iloop (+ i 1))))
+                   (elim (+ k 1) pkk (if (== p k) negated (if negated False True))))))))))
+
+  (inline)
+  (declare det ((Eq :a) (GcdDomain :a) => Matrix :a -> :a))
+  (define (det m)
+    "The determinant $\\det(M)$ of a square matrix `m`, computed with `det-bareiss`."
+    (det-bareiss m))
+
+  (declare charpoly ((Eq :a) (GcdDomain :a) => Matrix :a -> poly:Polynomial :a))
+  (define (charpoly m)
+    "The characteristic polynomial $\\chi_M(x) = \\det(xI - M)$ of a square matrix `m`, computed fraction-free by applying `det` to $xI - M$."
+    (let n = (%require-square "charpoly" m))
+    (let v = (%data m))
+    (det (%generate n n
+                    (fn (i j)
+                      (let ((a (%get v n i j)))
+                        (if (== i j)
+                            (poly:polynomial (Cons (neg a) (Cons one Nil)))
+                            (into (neg a))))))))
+
+  (declare %minor (Matrix :a * UFix * UFix -> Matrix :a))
+  (define (%minor m r c)
+    "The submatrix of square `m` with row `r` and column `c` deleted."
+    (let n = (rows m))
+    (let v = (%data m))
+    (%generate (- n 1) (- n 1)
+               (fn (i j)
+                 (%get v n
+                       (if (< i r) i (+ i 1))
+                       (if (< j c) j (+ j 1))))))
+
+  (declare adjugate ((Eq :a) (GcdDomain :a) => Matrix :a -> Matrix :a))
+  (define (adjugate m)
+    "The adjugate (classical adjoint) $\\operatorname{adj}(M)$ of a square matrix `m`, the transpose of its cofactor matrix: $\\operatorname{adj}(M)_{ij} = (-1)^{i+j} \\det(M_{ji})$, where $M_{ji}$ is `m` with row $j$ and column $i$ deleted. It satisfies $M \\operatorname{adj}(M) = \\det(M) I$."
+    (let n = (%require-square "adjugate" m))
+    (if (== n 1)
+        (%Matrix 1 1 (vec:singleton one))
+        (%generate n n
+                   (fn (i j)
+                     (let ((d (det (%minor m j i))))
+                       (if (even? (+ i j)) d (neg d)))))))
+
+  ;;
+  ;; Linear algebra over fields
+  ;;
+
+  (declare %rref! (Reciprocable :a => (:a -> Boolean) * vec:Vector :a * UFix * UFix -> List UFix))
+  (define (%rref! is-zero? w r c)
+    "Reduce the $r \\times c$ row-major matrix `w` to reduced row echelon form in place, returning the pivot columns in ascending order."
+    (rec col-loop ((j 0) (pr 0) (pivots Nil))
+      (if (or (== j c) (== pr r))
+          (list:reverse pivots)
+          (match (%find-pivot is-zero? w c j pr r)
+            ((None) (col-loop (+ j 1) pr pivots))
+            ((Some p)
+             (%swap-rows! w c p pr)
+             (let inv-p = (recip (%get w c pr j)))
+             (rec scale-loop ((jj (+ j 1)))
+               (when (< jj c)
+                 (%put! w c pr jj (* inv-p (%get w c pr jj)))
+                 (scale-loop (+ jj 1))))
+             (%put! w c pr j one)
+             (rec row-loop ((i 0))
+               (when (< i r)
+                 (let f = (%get w c i j))
+                 (unless (or (== i pr) (is-zero? f))
+                   (rec elim-loop ((jj (+ j 1)))
+                     (when (< jj c)
+                       (%put! w c i jj (- (%get w c i jj) (* f (%get w c pr jj))))
+                       (elim-loop (+ jj 1))))
+                   (%put! w c i j zero))
+                 (row-loop (+ i 1))))
+             (col-loop (+ j 1) (+ pr 1) (Cons j pivots)))))))
+
+  (declare rref-with (Reciprocable :a => (:a -> Boolean) * Matrix :a -> Matrix :a * List UFix))
+  (define (rref-with is-zero? m)
+    "Run Gauss–Jordan elimination with an explicit zero test. Every selected
+pivot must be invertible. This permits numerical calculations, for example
+with a near-zero test on `F64`; the resulting pivots are not an exact rank
+certificate. The first admissible row is used, not a stability-maximizing pivot."
+    (let r = (rows m))
+    (let c = (cols m))
+    (let w = (vec:copy (%data m)))
+    (let pivots = (%rref! is-zero? w r c))
+    (values (%Matrix r c w) pivots))
+
+  (declare rref ((Eq :a) (DivisionRing :a) => Matrix :a -> Matrix :a * List UFix))
+  (define (rref m)
+    "The exact reduced row echelon form and ascending pivot columns, using left row operations."
+    (rref-with zero? m))
+
+  (declare rank ((Eq :a) (DivisionRing :a) => Matrix :a -> UFix))
+  (define (rank m)
+    "The rank of `m`, the number of pivots in its reduced row echelon form."
+    (let (values _ pivots) = (rref m))
+    (list:length pivots))
+
+  (declare nullspace ((Eq :a) (DivisionRing :a) => Matrix :a -> List (List :a)))
+  (define (nullspace m)
+    "A basis of the kernel $\\ker(M) = \\{x : Mx = 0\\}$ of `m`, with one basis vector per free (non-pivot) column of the reduced row echelon form, in ascending column order."
+    (let c = (cols m))
+    (let (values rm pivots) = (rref m))
+    (let v = (%data rm))
+    (let pivot-row = (vec:with-initial-element c None))
+    (rec mark ((ps pivots) (k 0))
+      (match ps
+        ((Nil) (values))
+        ((Cons p more)
+         (vec:set! p (Some k) pivot-row)
+         (mark more (+ k 1)))))
+    (rec build ((f c) (acc Nil))
+      (if (== f 0)
+          acc
+          (let ((free (- f 1)))
+            (match (vec:index-unsafe free pivot-row)
+              ((Some _) (build free acc))
+              ((None)
+               (let ((basis
+                       (rec fill ((jj c) (xs Nil))
+                         (if (== jj 0)
+                             xs
+                             (let ((j (- jj 1)))
+                               (fill j
+                                     (Cons (if (== j free)
+                                               one
+                                               (match (vec:index-unsafe j pivot-row)
+                                                 ((Some k) (neg (%get v c k free)))
+                                                 ((None) zero)))
+                                           xs)))))))
+                 (build free (Cons basis acc)))))))))
+
+  (declare solve ((Eq :a) (DivisionRing :a) => Matrix :a * Matrix :a -> Optional (Matrix :a)))
+  (define (solve a b)
+    "Solve $AX = B$ for $X$ by Gauss–Jordan elimination on the augmented matrix $[A \\mid B]$, where `a` is square. Returns `None` if `a` is singular."
+    (let n = (%require-square "solve" a))
+    (let k = (cols b))
+    (when (/= n (rows b))
+      (error "solve: the right-hand side must have as many rows as the coefficient matrix."))
+    (let va = (%data a))
+    (let vb = (%data b))
+    (let width = (+ n k))
+    (let w = (%generate-vector n width
+                               (fn (i j)
+                                 (if (< j n)
+                                     (%get va n i j)
+                                     (%get vb k i (- j n))))))
+    (let pivots = (%rref! zero? w n width))
+    (if (== (list:length (list:filter (fn (p) (< p n)) pivots)) n)
+        (Some (%generate n k (fn (i j) (%get w width i (+ n j)))))
+        None))
+
+  (declare solve-vector ((Eq :a) (DivisionRing :a) => Matrix :a * List :a -> Optional (List :a)))
+  (define (solve-vector a b)
+    "Solve $Ax = b$ for the vector $x$, where `a` is square. Returns `None` if `a` is singular."
+    (match (solve a (matrix (list:length b) 1 b))
+      ((None) None)
+      ((Some x) (Some (col x 0)))))
+
+  (declare inv ((Eq :a) (DivisionRing :a) => Matrix :a -> Optional (Matrix :a)))
+  (define (inv m)
+    "The inverse $M^{-1}$ of a square matrix `m`, or `None` if `m` is singular."
+    (let n = (%require-square "inv" m))
+    (solve m (identity-matrix n)))
+
+  ;;
+  ;; Numerical linear systems
+  ;;
+
+  (derive Eq)
+  (define-type PivotedSolveError
+    "A shape mismatch, invalid tolerance, rejected pivot (with its zero-based column), or non-finite input or arithmetic result. A rejected pivot is not an exact singularity or rank certificate."
+    SolveShapeMismatch
+    InvalidPivotTolerance
+    (SmallPivot UFix)
+    NonFiniteSolve)
+
+  (declare %finite-max-abs (UFix * (UFix -> F64) -> Optional F64))
+  (define (%finite-max-abs n at)
+    (rec scan ((i 0) (peak 0.0d0))
+      (cond
+        ((== i n) (Some peak))
+        (True
+         (let v = (at i))
+         (if (finite? v)
+             (scan (1+ i) (max peak (abs v)))
+             None)))))
+
+  (declare %equilibrate! (vec:Vector F64 * UFix * vec:Vector F64 * UFix -> Boolean))
+  (define (%equilibrate! u n rhs m)
+    (for ((i 0 (1+ i))) :while (< i n)
+      (let divisor =
+        (match (%finite-max-abs n (fn (j) (%get u n i j)))
+          ((None) (return False))
+          ;; Leave a zero row intact; pivot selection will reject it.
+          ((Some s) (if (zero? s) 1.0d0 s))))
+      (for ((j 0 (1+ j))) :while (< j n)
+        (%put! u n i j (/ (%get u n i j) divisor)))
+      (for ((j 0 (1+ j))) :while (< j m)
+        (let y = (/ (%get rhs m i j) divisor))
+        (unless (finite? y) (return False))
+        (%put! rhs m i j y)))
+    True)
+
+  (declare %subtract-scaled-row! (vec:Vector F64 * UFix * UFix * UFix * UFix * F64 -> Boolean))
+  (define (%subtract-scaled-row! v width start dst src factor)
+    (for ((j start (1+ j))) :while (< j width)
+      (let y = (- (%get v width dst j) (* factor (%get v width src j))))
+      (unless (finite? y) (return False))
+      (%put! v width dst j y))
+    True)
+
+  (declare solve-pivoted (F64 * Matrix F64 * Matrix F64 -> Result PivotedSolveError (Tuple (Matrix F64) F64)))
+  (define (solve-pivoted tolerance a b)
+    "Solve $AX=B$ in `F64` for $n \\times n$ coefficients $A$ and $n \\times m$ right-hand sides $B$. The solution has shape $n \\times m$. Neither input is modified.
+
+Scale each equation by dividing by the largest absolute coefficient in its original row of $A$, leaving zero coefficient rows unchanged. In each column, pivot on the largest magnitude at or below the diagonal (first on ties). Reject a pivot whose magnitude after scaling and elimination is at most `tolerance`, which must be finite and in $[0,1)$. Zero tolerance rejects only computed zero pivots. Pivots are checked even when $m=0$.
+
+On success return the solution and $\\max_{ij}|(AX-B)_{ij}|$, evaluated in `F64` from the original inputs, with zero for an empty residual. This absolute diagnostic is not divided by the size of the right-hand side and does not bound the solution error. Fail with `NonFiniteSolve` for non-finite entries or arithmetic results."
+    (let n = (rows a))
+    (let m = (cols b))
+    (unless (and (== n (cols a)) (== n (rows b)))
+      (return (Err SolveShapeMismatch)))
+    (unless (and (finite? tolerance) (<= 0.0d0 tolerance) (< tolerance 1.0d0))
+      (return (Err InvalidPivotTolerance)))
+    (let u = (vec:copy (%data a)))
+    (let rhs = (vec:copy (%data b)))
+    (unless (%equilibrate! u n rhs m) (return (Err NonFiniteSolve)))
+    (for ((k 0 (1+ k))) :while (< k n)
+      (let p = (for ((i (1+ k) (1+ i))
+                     (best k (if (> (abs (%get u n i k)) (abs (%get u n best k))) i best)))
+                 :returns best :while (< i n)))
+      (let pivot = (%get u n p k))
+      (when (<= (abs pivot) tolerance) (return (Err (SmallPivot k))))
+      (%swap-rows! u n k p)
+      (%swap-rows! rhs m k p)
+      (for ((i (1+ k) (1+ i))) :while (< i n)
+        (let factor = (/ (%get u n i k) pivot))
+        ;; Later steps read only the trailing block and upper triangle.
+        (unless (zero? factor)
+          (unless (and (%subtract-scaled-row! u n (1+ k) i k factor)
+                       (%subtract-scaled-row! rhs m 0 i k factor))
+            (return (Err NonFiniteSolve))))))
+    (for ((end n (1- end))) :while (> end 0)
+      (let i = (1- end))
+      (for ((j 0 (1+ j))) :while (< j m)
+        (let y = (for ((k (1+ i) (1+ k))
+                       (s (%get rhs m i j) (- s (* (%get u n i k) (%get rhs m k j)))))
+                   :returns s :while (< k n)))
+        (let x = (/ y (%get u n i i)))
+        (unless (finite? x) (return (Err NonFiniteSolve)))
+        (%put! rhs m i j x)))
+    (let x = (%Matrix n m rhs))
+    (let ax = (%data (mat-mul a x)))
+    (let b0 = (%data b))
+    (match (%finite-max-abs (vec:length ax)
+             (fn (i) (- (vec:index-unsafe i ax) (vec:index-unsafe i b0))))
+      ((None) (Err NonFiniteSolve))
+      ((Some residual) (Ok (Tuple x residual)))))
+
+  (declare solve-pivoted-vector (F64 * Matrix F64 * List F64 -> Result PivotedSolveError (Tuple (List F64) F64)))
+  (define (solve-pivoted-vector tolerance a b)
+    "The one-column form of `solve-pivoted`. Return the solution vector and its absolute residual $\\|Ax-b\\|_\\infty$."
+    (match (solve-pivoted tolerance a (matrix (list:length b) 1 b))
+      ((Err e) (Err e))
+      ((Ok (Tuple x residual)) (Ok (Tuple (col x 0) residual)))))
+
+  ;;
+  ;; Orthogonalization
+  ;;
+
+  (declare %inner (ConjugateRing :a => List :a * List :a -> :a))
+  (define (%inner u v)
+    (rec loop ((xs u) (ys v) (acc zero))
+      (match (Tuple xs ys)
+        ((Tuple (Cons x xr) (Cons y yr))
+         (loop xr yr (+ acc (* y (conjugate x)))))
+        (_ acc))))
+
+  (declare try-gram-schmidt ((Eq :a) (ConjugateRing :a) (DivisionRing :a) => List (List :a) -> Optional (List (List :a))))
+  (define (try-gram-schmidt vs)
+    "Orthogonalize left-scaled vectors. Each projection subtracts $c e$ with
+$c=\\langle e,u\\rangle\\langle e,e\\rangle^{-1}$. Skip zero residuals
+(dependent inputs); return `None` for a nonzero isotropic pivot, which
+cannot be used for projection. Require equal input lengths."
+    (match vs
+      ((Nil) (Some Nil))
+      ((Cons v0 _)
+       (let len = (list:length v0))
+       (when (list:any (fn (v) (/= (list:length v) len)) vs)
+         (error "gram-schmidt: vectors have differing lengths."))
+       (rec outer ((rest vs) (basis Nil))
+         (match rest
+           ((Nil) (Some (list:reverse basis)))
+           ((Cons v more)
+            (let ((u (rec project ((es basis) (u v))
+                       (match es
+                         ((Nil) u)
+                         ((Cons e er)
+                          (let ((c (/ (%inner e u) (%inner e e))))
+                            (project er (list:zipWith (fn (ui ei) (- ui (* c ei))) u e))))))))
+              (cond
+                ((list:all zero? u) (outer more basis))
+                ((zero? (%inner u u)) None)
+                (True (outer more (Cons u basis)))))))))))
+
+  (declare gram-schmidt ((Eq :a) (ConjugateRing :a) (DivisionRing :a) => List (List :a) -> List (List :a)))
+  (define (gram-schmidt vs)
+    "Return an orthogonal, unnormalized basis in input order. Signals an error
+on a nonzero isotropic pivot; use `try-gram-schmidt` to handle that case."
+    (match (try-gram-schmidt vs)
+      ((Some basis) basis)
+      ((None) (error "gram-schmidt: nonzero isotropic pivot (zero self-product)."))))
+
+  (define-instance (Approximable :a :b => Approximable (Matrix :a) (Matrix :b))
+    (define (approx bits m)
+      (%map (fn (x) (approx bits x)) m))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/MATRIX")

@@ -199,12 +199,33 @@
   (check-coalton-types
    "(define (one? x) (match x (1 True) (_ False)))
     (define (nested-one? x) (match x ((Some 1) True) (_ False)))"
-   '("one?" . "(Num :a => :a -> Boolean)")
-   '("nested-one?" . "(Num :a => Optional :a -> Boolean)"))
+   '("one?" . "((Ring :a) (Eq :a) => :a -> Boolean)")
+   '("nested-one?" . "((Ring :a) (Eq :a) => Optional :a -> Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare one? (Ring :a => :a -> Boolean))
+      (define (one? x) (match x (1 True) (_ False)))"))
   (signals tc:tc-error
     (check-coalton-types
      "(declare one? (String -> Boolean))
       (define (one? x) (match x (1 True) (_ False)))")))
+
+(deftest computable-real-comparison-constraints ()
+  (let ((setup "(declare needs-num (Num :a => :a -> :a))
+                (define (needs-num n) n)
+                (define x (the coalton/computable-reals:CReal (+ 2 (into 1/3))))"))
+    (check-coalton-types
+     (concatenate 'string setup
+                  "(define decision (coalton/computable-reals:compare-at 8 x (* x x)))
+                   (define z (* (complex x x) (complex x x)))")
+     '("decision" . "(Optional Ordering)")
+     '("z" . "(Complex coalton/computable-reals:CReal)"))
+    (dolist (expression '("(== x x)" "(<=> x x)" "(match x (1 True) (_ False))"
+                          "(needs-num x)" "(hash x)" "(floor x)"
+                          "(== (complex x x) (complex x x))"
+                          "(coalton/math:phase (complex x x))"))
+      (signals tc:tc-error
+        (check-coalton-types (format nil "~A (define invalid ~A)" setup expression))))))
 
 (deftest test-numeric-defaulting-preserves-predicate-structure ()
   (check-coalton-types
@@ -434,7 +455,7 @@
       (let (values a b) = (f))
       (+ a b))"
 
-   '("example2" . "(Num :a => (Void -> :a * :a) -> :a)"))
+   '("example2" . "(HasAdd :a => (Void -> :a * :a) -> :a)"))
 
   (check-coalton-types
    "(declare unit-identity (Unit -> Integer))
@@ -591,7 +612,7 @@
         (unless (== i 0)
           (loop (- i 1)))))"
 
-   '("count-down" . "(Num :a => :a -> Void)"))
+   '("count-down" . "((Ring :a) (Eq :a) => :a -> Void)"))
 
   (check-coalton-types
    "(define (count-to n)
@@ -653,8 +674,8 @@
 
    '("declared-keyword-only" . "(&key (:x Integer) -> Integer)")
    '("declared-empty-keyword" . "(Void -> Integer)")
-   '("keyword-add" . "(Num :a => :a &key (:y :a) -> :a)")
-   '("keyword-only" . "(Num :a => &key (:x :a) -> :a)")
+   '("keyword-add" . "(Ring :a => :a &key (:y :a) -> :a)")
+   '("keyword-only" . "(Ring :a => &key (:x :a) -> :a)")
    '("empty-keyword" . "(:a -> :a)")
    '("optional-default" . "(&key (:tag (Optional :a)) -> Optional :a)")))
 
@@ -728,7 +749,7 @@
     (define d (run0 keywordy0))"
 
    '("plain" . "(:a -> :a)")
-   '("keywordy" . "(Num :a => :a &key (:extra :a) (:timeout :a) -> :a)")
+   '("keywordy" . "(Ring :a => :a &key (:extra :a) (:timeout :a) -> :a)")
    '("a" . "Integer")
    '("b" . "Integer")
    '("c" . "Integer")
@@ -832,7 +853,7 @@
    "(define f
        (fn (_a) (f 5)))"
 
-   '("f" . "(forall (:a (:b Values)) (Num :a => :a -> :b))")))
+   '("f" . "(forall (:a (:b Values)) (Ring :a => :a -> :b))")))
 
 (deftest test-explicit-type-declarations ()
   ;; Check that explicit declarations can reduce the type of a definition
@@ -1322,7 +1343,7 @@
       (let ((g (fn (x) (Tuple x a))))
         (g 5)))"
 
-   '("f" . "(Num :b => :a -> Tuple :b :a)")))
+   '("f" . "(Ring :b => :a -> Tuple :b :a)")))
 
 (deftest test-weak-type-variables ()
   ;; See gh #84
@@ -1535,19 +1556,21 @@
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
    "(define f (fn () 5))"
-   '("f" . "(Num :a => (Void -> :a))")))
+   '("f" . "(Ring :a => (Void -> :a))")))
 
 (deftest test-short-lambda-shorthand ()
   (check-coalton-types
    "(define short-id ƒx.x)
     (define short-zero ƒ.True)
     (define short-add ƒxy.(+ x y))
+    (define short-mul ƒxy.(* x y))
     (define short-nested-add ƒx.ƒy.(+ x y))
     (define short-ignore ƒ_x_.x)"
    '("short-id" . "(:a -> :a)")
    '("short-zero" . "(Void -> Boolean)")
-   '("short-add" . "(Num :a => :a * :a -> :a)")
-   '("short-nested-add" . "(Num :a => :a -> :a -> :a)")
+   '("short-add" . "(HasAdd :a => :a * :a -> :a)")
+   '("short-mul" . "(HasMul :a => :a * :a -> :a)")
+   '("short-nested-add" . "(HasAdd :a => :a -> :a -> :a)")
    '("short-ignore" . "(:a * :b * :c -> :b)"))
 
   (signals coalton-impl/parser:parse-error
@@ -1600,7 +1623,7 @@
     (define (float-sum)
       (let ((sum (fold + 0 [1 2]))) (+ sum 0.5)))"
    '("count-items" . "(:a -> Integer)")
-   '("sum-items" . "(Num :a => Void -> :a)")
+   '("sum-items" . "(Ring :a => Void -> :a)")
    '("numeric-count" . "Integer")
    '("float-sum" . "(Void -> F32)")))
 
@@ -1756,10 +1779,10 @@
    '("mk-assoc-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
    '("mk-seq-comprehension-default" . "(Void -> coalton/seq:Seq Boolean)")
    '("mk-seq-comprehension-underscore" . "(Void -> coalton/seq:Seq Boolean)")
-   '("mk-seq-below-default" . "((Num :num) (Ord :num) => (Void -> coalton/seq:Seq :num))")
+   '("mk-seq-below-default" . "((Ring :num) (Ord :num) => (Void -> coalton/seq:Seq :num))")
    '("mk-assoc-comprehension-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
    '("mk-assoc-comprehension-underscore" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
-   '("mk-assoc-below-default" . "((Num :num) (Ord :num) => (Void -> coalton/seq:Seq (Tuple :num :num)))")))
+   '("mk-assoc-below-default" . "((Ring :num) (Ord :num) => (Void -> coalton/seq:Seq (Tuple :num :num)))")))
 
 (deftest test-function-implicit-progn ()
   (check-coalton-types
@@ -1767,7 +1790,7 @@
       (let _a = (+ a 1))
       a)"
 
-   '("f" . "(Num :a => :a -> :a)")))
+   '("f" . "(Ring :a => :a -> :a)")))
 
 (deftest test-returns ()
   (check-coalton-types
@@ -1815,43 +1838,40 @@
   (check-coalton-types
    "(define f (fn (x) (fn (y) (+ x y))))"
 
-   '("f" . "(Num :a => :a -> :a -> :a)")))
+   '("f" . "(HasAdd :a => :a -> :a -> :a)")))
 
 (deftest test-rank-n-types ()
   ;; Rank-2 polymorphic function arguments with and without constraints
   (check-coalton-types
-   "(derive Eq)
-    (define-type (Dual :a) (Dual :a :a))
-    (define (primal-part (Dual x _)) x)
-    (define (dual-part (Dual _ dx)) dx)
-    (define-instance (Num :a => Num (Dual :a))
-      (define (+ (Dual a da) (Dual b db)) (Dual (+ a b) (+ da db)))
-      (define (- (Dual a da) (Dual b db)) (Dual (- a b) (- da db)))
-      (define (* (Dual a da) (Dual b db)) (Dual (* a b) (+ (* a db) (* da b))))
-      (define (fromInt n) (Dual (fromInt n) (fromInt 0))))
-
-    (declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
+   "(declare differentiate ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32)))
     (define (differentiate f)
       (fn (x)
-        (dual-part (f (Dual x 1)))))
+        (coalton/xmath/dual:d-x f x)))
 
     (declare val-and-deriv ((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32)))
     (define (val-and-deriv f)
       (fn (x)
-        (Tuple (f x) (dual-part (f (Dual x 1))))))
+        (Tuple (f x) (coalton/xmath/dual:d-x f x))))
+
+    (declare differentiate-in
+      (forall ((:f (Type -> Type)))
+        (Functor :f => (forall (:a) (Num :a => :a -> :f :a)) * F32 -> :f F32)))
+    (define (differentiate-in f x) (coalton/xmath/dual:d-x-map f x))
 
     (declare square (Num :a => (:a -> :a)))
     (define (square x) (* x x))
 
     (define d-square-var (differentiate square))
     (define d-square-fn (differentiate (fn (x) (+ (* x x) (* 2 x)))))
-    (define vd-square (val-and-deriv square))"
+    (define vd-square (val-and-deriv square))
+    (define d-some-square (differentiate-in (fn (x) (Some (* x x))) 3.0f0))"
 
    '("differentiate" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> F32))")
    '("val-and-deriv" . "((forall (:a) (Num :a => (:a -> :a))) -> (F32 -> Tuple F32 F32))")
    '("d-square-var" . "(F32 -> F32)")
    '("d-square-fn" . "(F32 -> F32)")
-   '("vd-square" . "(F32 -> Tuple F32 F32)"))
+   '("vd-square" . "(F32 -> Tuple F32 F32)")
+   '("d-some-square" . "(Optional F32)"))
 
   ;; Rank-2 and Rank-3 types, ADT/struct fields, natural transformations, and type aliases
   (check-coalton-types
@@ -1882,7 +1902,7 @@
 
     (declare make-scaler (Integer -> PolyNumFn))
     (define (make-scaler k)
-      (fn (x) (* (fromInt k) x)))
+      (fn (x) (* (from-int k) x)))
 
     (declare apply-nat
       (forall (:f :g)
@@ -2139,8 +2159,8 @@
   (check-coalton-types
    "(define (early &key (x (return 1))) x)
     (define (early-or-body &key (x (return 1))) (return 2) x)"
-   '("early" . "(Num :a => &key (:x :a) -> :a)")
-   '("early-or-body" . "(Num :a => &key (:x :a) -> :a)"))
+   '("early" . "(Ring :a => &key (:x :a) -> :a)")
+   '("early-or-body" . "(Ring :a => &key (:x :a) -> :a)"))
   (dolist (program '("(define (bad &key (x (return \"bad\"))) 1)"
                      "(define (bad &key (x (return \"bad\"))) True)"))
     (signals tc:tc-error (check-coalton-types program))))
@@ -2153,7 +2173,7 @@
            (y <- (fn (r) (* r 2)))
            (pure (+ x y)))
        r0))"
-   '("reader-sum" . "(Num :a => :a -> :a)"))
+   '("reader-sum" . "(Ring :a => :a -> :a)"))
   (let ((*package* (find-package "COALTON-USER"))
         (entry:*global-environment* entry:*global-environment*)
         (source (source:make-source-string

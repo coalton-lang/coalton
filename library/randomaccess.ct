@@ -39,7 +39,8 @@
 
 It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
     (make (UFix * :t -> :f))
-    (make-uninitialized (UFix -> :f))
+    (make-uninitialized "Allocate storage with the requested logical length. Write each element before reading it."
+                        (UFix -> :f))
     (length (:f -> UFix))
     (readable? (:f -> Boolean))
     (writable? (:f -> Boolean))

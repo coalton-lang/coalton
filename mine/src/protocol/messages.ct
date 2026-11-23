@@ -221,7 +221,7 @@
   (declare %decode-ufix (wire:SExpr -> Optional UFix))
   (define (%decode-ufix expr)
     (match expr
-      ((wire:SInteger number) (tryInto number))
+      ((wire:SInteger number) (try-into number))
       (_ None)))
 
   (declare %decode-request-id (wire:SExpr -> Optional RequestId))

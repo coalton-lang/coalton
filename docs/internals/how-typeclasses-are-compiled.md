@@ -24,7 +24,7 @@ Each class defines a struct with fields for methods and superclasses. For instan
   +       ; remaining fields hold methods
   -
   *
-  FROMINT)
+  FROM-INT)
 ```
 
 Classes also define stub functions for dispatching methods on a dictionary. Each stub function selects the correct field from a dict and forwards the remaining arguments. See the definition of the `+` stub function below:
@@ -48,7 +48,7 @@ Instances without constraints are compiled to variables.
         (cl:- a b))
    :* (lambda (a b)
         (cl:* a b))
-   :FROMINT (lambda (a)
+   :FROM-INT (lambda (a)
               a)))
 ```
 

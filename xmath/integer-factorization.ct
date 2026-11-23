@@ -1,0 +1,292 @@
+;;;; Primality and factorization of arbitrary-precision integers
+
+(coalton/utils:defstdlib-package #:coalton/xmath/integer-factorization
+  (:documentation "Primality testing and factorization of arbitrary-precision integers. `primality` distinguishes proved primes from strong probable primes. `factor-integer` preserves any unresolved cofactor; `factor-integer-exact` permits exhaustive search to finish the proof.")
+  (:nicknames
+   #:coalton/math/integer-factorization
+   #:coalton-library/math/integer-factorization)
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:modular #:coalton/xmath/modular))
+  (:export
+   #:Primality #:ProvenPrime #:CompositeOrUnit #:ProbablePrime
+   #:primality
+   #:Factorization
+   #:FactorizationResult #:ZeroFactorization #:CompleteFactorization #:PartialFactorization
+   #:factor-integer #:factor-integer-exact))
+
+(in-package #:coalton/xmath/integer-factorization)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (derive Eq)
+  (repr :enum)
+  (define-type Primality
+    "`ProvenPrime` certifies primality. `CompositeOrUnit` means definitely not prime (including all $n < 2$). `ProbablePrime` means inconclusive, not a proof."
+    ProvenPrime
+    CompositeOrUnit
+    ProbablePrime)
+
+  (declare small-primes (List Integer))
+  (define small-primes [2 3 5 7 11 13 17 19 23 29 31 37 41])
+
+  ;; For positive n, extract the odd part and the exact exponent of two.
+  (declare remove-twos (Integer -> Integer * Integer))
+  (define (remove-twos n)
+    (let s = (lisp (-> Integer) (n)
+               (cl:1- (cl:integer-length (cl:logand n (cl:- n))))))
+    (values (rsh n s) s))
+
+  ;; n - 1 = d * 2^s, with d odd and 1 < a < n.
+  (declare passes-base? (Integer * Integer * Integer * Integer -> Boolean))
+  (define (passes-base? n d s a)
+    (let x = (modular:mod-expt a d n))
+    (or (== x 1)
+        (rec square ((y x) (rounds s))
+          (cond
+            ((== y (- n 1)) True)
+            ((or (== rounds 1) (== y 1)) False)
+            (True (square (rem (* y y) n) (- rounds 1)))))))
+
+  ;; Caller has already excluded all factors through 41 and n = 1.
+  (declare miller-rabin (Integer -> Primality))
+  (define (miller-rabin n)
+    (let (values d s) = (remove-twos (- n 1)))
+    (let passes? = (fn (a) (passes-base? n d s a)))
+    (cond
+      ((not (list:all passes? small-primes)) CompositeOrUnit)
+      ;; Sorenson & Webster, Math. Comp. 86 (2017), Thm 1.1:
+      ;; this is the *least* strong pseudoprime to the first 13 prime bases.
+      ((< n 3317044064679887385961981) ProvenPrime)
+      ((not (list:all passes? [43 47 53 59])) CompositeOrUnit)
+      ;; Proth's theorem: the witness forces 2^s | p-1 for every prime p | n.
+      ;; If d < 2^s, every such p then exceeds sqrt(n).
+      ((and (< d (lsh 1 s))
+            (list:any (fn (a) (== (- n 1) (modular:mod-expt a (rsh n 1) n)))
+                      small-primes))
+       ProvenPrime)
+      (True ProbablePrime)))
+
+  (declare primality (Integer -> Primality))
+  (define (primality n)
+    "Classify $n$ by trial division and strong Miller--Rabin tests. The answer is exact for $n < 3317044064679887385961981$ (including every 64-bit integer). Beyond that bound a Miller--Rabin witness still proves compositeness and a Proth witness can prove primality. Otherwise, passing all tested bases is only `ProbablePrime`. The bases are fixed, not independent random samples."
+    (if (< n 2)
+        CompositeOrUnit
+        (rec trial ((primes small-primes))
+          (match primes
+            ((Nil) (miller-rabin n))
+            ((Cons p rest)
+             (cond
+               ((< n (* p p)) ProvenPrime)
+               ((== 0 (rem n p)) CompositeOrUnit)
+               (True (trial rest))))))))
+
+  (derive Eq)
+  (define-type Factorization
+    "`(Factorization unit powers)` represents $u\\prod_i p_i^{e_i}$. Results have $u=\\pm 1$, strictly increasing proved primes $p_i$, and positive multiplicities $e_i$. The units have empty factor lists."
+    (Factorization Integer (List (Tuple Integer Integer))))
+
+  (derive Eq)
+  (define-type FactorizationResult
+    "Zero has no finite prime factorization. `CompleteFactorization` represents the entire input; `(PartialFactorization f r)` represents the product of the signed proved part `f` and an unresolved positive cofactor $r>1$. The cofactor need not be prime or coprime to the proved part."
+    ZeroFactorization
+    (CompleteFactorization Factorization)
+    (PartialFactorization Factorization Integer))
+
+  ;; Dividing by p, p^2, p^4, ... takes logarithmically many divisions
+  ;; even when a small prime occurs with a very high multiplicity.
+  (declare remove-power (Integer * Integer -> Integer * Integer))
+  (define (remove-power n p)
+    (let (values q r) = (quotrem n p))
+    (cond
+      ((nonzero? r) (values n 0))
+      (True
+       (let (values m k) = (remove-power q (* p p)))
+       (let (values m/p tail) = (quotrem m p))
+       (if (== tail 0)
+           (values m/p (+ 2 (* 2 k)))
+           (values m (+ 1 (* 2 k)))))))
+
+  (declare strip-small (Integer -> Integer * (List (Tuple Integer Integer))))
+  (define (strip-small n)
+    (rec strip ((m n) (ps small-primes) (found Nil))
+      (match ps
+        ((Nil) (values m found))
+        ((Cons p rest)
+         (let (values q k) = (if (== p 2) (remove-twos m) (remove-power m p)))
+         (strip q rest (if (== k 0) found (Cons (Tuple p k) found)))))))
+
+  ;; Integer bisection; the power-of-two bounds keep all products O(bits) bits.
+  (declare exact-root (Integer * Integer * Integer -> Optional Integer))
+  (define (exact-root n k bits)
+    (let hi = (lsh 1 (quot (+ bits (- k 1)) k)))
+    (rec bisect ((lo (rsh hi 1)) (hi hi))
+      (cond
+        ((>= lo hi) None)
+        (True
+         (let mid = (rsh (+ lo hi) 1))
+         (let power = (^ mid k))
+         (cond
+           ((== power n) (Some mid))
+           ((< power n) (bisect (+ mid 1) hi))
+           (True (bisect lo mid)))))))
+
+  (declare perfect-power (Integer -> Optional (Tuple Integer Integer)))
+  (define (perfect-power n)
+    (let root = (isqrt n))
+    (when (== (* root root) n) (return (Some (Tuple root 2))))
+    ;; A composite exponent has a prime divisor. All possible roots here
+    ;; exceed 2^5, since the caller has stripped every prime through 41.
+    (let bits = (lisp (-> Integer) (n) (cl:integer-length n)))
+    (let last-k = (quot (- bits 1) 5))
+    (rec test ((k 3))
+      (cond
+        ((> k last-k) None)
+        ((== (primality k) CompositeOrUnit) (test (+ k 2)))
+        (True
+         (match (exact-root n k bits)
+           ((Some b) (Some (Tuple b k)))
+           ((None) (test (+ k 2))))))))
+
+  (inline)
+  (declare rho-step (Integer * Integer * Integer -> Integer))
+  (define (rho-step x c n)
+    (rem (+ (* x x) c) n))
+
+  ;; Brent's power-of-two checkpoints. Compare each new iterate to its
+  ;; checkpoint, taking one gcd per block instead of one per difference.
+  (declare brent-walk (Integer * Integer * Integer * Integer -> (Optional Integer) * Integer))
+  (define (brent-walk n seed c budget)
+    (rec walk ((x seed) (y seed) (span 1) (ahead 1) (fuel budget))
+      (when (== fuel 0) (return (values None 0)))
+      (let count = (min 64 (min ahead fuel)))
+      (let (values end product) =
+        (rec block ((k count) (z y) (q 1))
+          (cond
+            ((== k 0) (values z q))
+            (True
+             (let next = (rho-step z c n))
+             (block (- k 1) next (rem (* q (- x next)) n))))))
+      (let left = (- fuel count))
+      (let g = (gcd product n))
+      (cond
+        ((== g n)
+         ;; A product may vanish while individual differences reveal proper
+         ;; divisors. Replay just this block and charge these evaluations too.
+         (rec replay ((k (min count left)) (z y) (fuel left))
+           (cond
+             ((== k 0) (values None fuel))
+             (True
+              (let next = (rho-step z c n))
+              (let d = (gcd (- x next) n))
+              (if (and (> d 1) (< d n))
+                  (values (Some d) (- fuel 1))
+                  (replay (- k 1) next (- fuel 1)))))))
+        ((> g 1) (values (Some g) left))
+        ((== ahead count) (walk end end (* 2 span) (* 2 span) left))
+        (True (walk x end span (- ahead count) left)))))
+
+  (declare rho-divisor (Integer * Integer -> (Optional Integer) * Integer))
+  (define (rho-divisor n budget)
+    (rec restart ((i 0) (limit 4096) (fuel budget))
+      (when (== fuel 0) (return (values None 0)))
+      (let allowance = (min limit fuel))
+      (let (values divisor unused) =
+        (brent-walk n (+ 2 i) (+ 1 (* 2 i)) allowance))
+      (let remaining = (+ (- fuel allowance) unused))
+      (match divisor
+        ((Some _) (values divisor remaining))
+        ((None) (restart (+ i 1) (* 4 limit) remaining)))))
+
+  ;; Exact fallback only. Odd n has no prime divisor below 43.
+  (declare least-divisor (Integer -> Integer))
+  (define (least-divisor n)
+    (let bound = (isqrt n))
+    (rec trial ((d 43) (step 4))
+      (cond
+        ((> d bound) n)
+        ((== (rem n d) 0) d)
+        (True (trial (+ d step) (- 6 step))))))
+
+  (define-type FactorStep
+    PrimeLeaf
+    (Power Integer Integer)
+    (Split Integer)
+    Unresolved)
+
+  (declare factor-step (Integer * Integer * Boolean -> FactorStep * Integer))
+  (define (factor-step n fuel exhaustive?)
+    (let status = (miller-rabin n))
+    (when (== status ProvenPrime) (return (values PrimeLeaf fuel)))
+    (when (and (== status ProbablePrime) (not exhaustive?))
+      (return (values Unresolved fuel)))
+    (match (perfect-power n)
+      ((Some (Tuple b k)) (values (Power b k) fuel))
+      ((None)
+       (let (values divisor left) = (rho-divisor n fuel))
+       (match divisor
+         ((Some d) (values (Split d) left))
+         ((None)
+          (cond
+            (exhaustive?
+             (let d = (least-divisor n))
+             (values (if (== d n) PrimeLeaf (Split d)) left))
+            (True (values Unresolved left))))))))
+
+  (declare coalesce ((List (Tuple Integer Integer)) -> List (Tuple Integer Integer)))
+  (define (coalesce powers)
+    (list:reverse
+     (fold (fn (rev (Tuple p e))
+             (match rev
+               ((Cons (Tuple q f) rest)
+                (if (== p q)
+                    (Cons (Tuple p (+ e f)) rest)
+                    (Cons (Tuple p e) rev)))
+               ((Nil) [(Tuple p e)])))
+           Nil (list:sort powers))))
+
+  (declare factor-nonzero (Integer * UFix * Boolean -> Factorization * Integer))
+  (define (factor-nonzero n steps exhaustive?)
+    (let (values m small) = (strip-small (abs n)))
+    (rec work ((pending [(Tuple m 1)]) (proved small)
+               (fuel (to-integer steps)) (residual 1))
+      (match pending
+        ((Nil) (values (Factorization (unit-part n) (coalesce proved)) residual))
+        ((Cons (Tuple 1 _) rest) (work rest proved fuel residual))
+        ((Cons (Tuple b e) rest)
+         (let (values next left) = (factor-step b fuel exhaustive?))
+         (match next
+           ((PrimeLeaf) (work rest (Cons (Tuple b e) proved) left residual))
+           ((Power root k) (work (Cons (Tuple root (* k e)) rest) proved left residual))
+           ((Split d)
+            (work (Cons (Tuple d e) (Cons (Tuple (quot b d) e) rest)) proved left residual))
+           ((Unresolved) (work rest proved left (* residual (^ b e)))))))))
+
+  (declare default-rho-steps UFix)
+  (define default-rho-steps 1048576)
+
+  (declare factor-integer (Integer &key (:rho-steps UFix) -> FactorizationResult))
+  (define (factor-integer n &key (rho-steps default-rho-steps))
+    "Factor $n$ by small-prime removal, primality tests, perfect powers, and restarting Brent--Pollard rho. `:rho-steps` caps polynomial evaluations across the whole factor tree (default $2^{20}$); it is not a wall-clock limit. An unproved probable prime or a composite left unsplit stays in the cofactor, never in the prime list."
+    (when (== n 0) (return ZeroFactorization))
+    (let (values f residual) = (factor-nonzero n rho-steps False))
+    (if (== residual 1) (CompleteFactorization f) (PartialFactorization f residual)))
+
+  (declare factor-integer-exact (Integer &key (:rho-steps UFix) -> Optional Factorization))
+  (define (factor-integer-exact n &key (rho-steps default-rho-steps))
+    "Return `None` for zero, otherwise the complete signed prime factorization of $n$. After the same rho budget as `factor-integer`, try divisors through $\\lfloor\\sqrt{m}\\rfloor$ of each unresolved cofactor $m$. This certifies the result and terminates mathematically, but can be impractical even for a large prime. Use `factor-integer` to avoid exhaustive search."
+    (when (== n 0) (return None))
+    (let (values f residual) = (factor-nonzero n rho-steps True))
+    (unless (== residual 1) (error "Unresolved cofactor after exhaustive division."))
+    (Some f)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/INTEGER-FACTORIZATION")

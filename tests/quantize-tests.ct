@@ -1,6 +1,11 @@
 (in-package #:coalton-native-tests)
 
 (define-test test-rounding ()
+  (is (== (math:round-half-up (the U8 200)) 200))
+  (is (== (math:round-half-down (the I8 -128)) -128))
+  (let huge = (lisp (-> F64) () cl:most-positive-double-float))
+  (is (== (math:round-half-up huge) (floor huge)))
+  (is (== (math:round-half-down (neg huge)) (ceiling (neg huge))))
   (is (== 0 (floor 0.1)))
   (is (== 1 (ceiling 0.1)))
   (is (== 0 (round 0.1)))
@@ -34,11 +39,31 @@
   (is (== (lisp (-> Integer) ()  (cl:round 0.5)) (round 0.5)))
   (is (== (lisp (-> Integer) ()  (cl:round -0.5)) (round -0.5))))
 
+(define-test simplest-closed-fractions ()
+  (is (== (math:simplest-fraction 2 (the Fraction 1/5)) 0))
+  (is (== (math:simplest-fraction 2 (the Fraction 3/4)) 1))
+  (is (== (math:simplest-fraction 0 (the Integer -5)) -4))
+  ;; Exhaust small closed intervals against direct denominator enumeration,
+  ;; including point intervals, negative endpoints and tied integers.
+  (is (lisp (-> Boolean) ()
+        (cl:loop :for d :from 1 :to 12 :always
+          (cl:loop :for i :from -24 :to 24 :always
+            (cl:loop :for j :from i :to 24
+                     :for lo = (cl:/ i d) :for hi = (cl:/ j d)
+                     :always
+                     (cl:= (math:simplest-fraction-between lo hi)
+                           (cl:loop :for q :from 1 :to d
+                                    :for a = (cl:ceiling (cl:* lo q))
+                                    :for b = (cl:floor (cl:* hi q))
+                                    :when (cl:<= a b)
+                                      :return (cl:/ (cl:max a (cl:min 0 b)) q)))))))))
+
 (define-test test-integer-division-quotients ()
-  (let ((cases (make-list (Tuple 7 2) (Tuple -7 2) (Tuple 7 -2) (Tuple -7 -2)
-                          (Tuple 6 3) (Tuple -6 3) (Tuple 0 5) (Tuple 1 1)
-                          (Tuple (^ 10 40) 3) (Tuple (negate (^ 10 40)) 7)
-                          (Tuple 12345 (^ 2 70)) (Tuple (negate 12345) (^ 2 70)))))
+  (let ((cases (the (List (Tuple Integer Integer))
+                    [(Tuple 7 2) (Tuple -7 2) (Tuple 7 -2) (Tuple -7 -2)
+                     (Tuple 6 3) (Tuple -6 3) (Tuple 0 5) (Tuple 1 1)
+                     (Tuple (^ 10 40) 3) (Tuple (neg (^ 10 40)) 7)
+                     (Tuple 12345 (^ 2 70)) (Tuple (neg 12345) (^ 2 70))])))
     (for ((xs cases (list:cdr xs)))
       :until (list:null? xs)
       (match (list:car xs)
@@ -46,3 +71,161 @@
          (is (== (math:floor/ a b) (floor (math:exact/ a b))))
          (is (== (math:ceiling/ a b) (ceiling (math:exact/ a b))))
          (is (== (math:floor/ a b) (math:div a b))))))))
+
+(coalton-toplevel
+  ;; 1. A floating-point module with a Hermitian form, without Num on vectors
+  (derive Eq)
+  (define-struct TestVec2
+    (vx F64)
+    (vy F64))
+
+  (define-instance (HasAdd TestVec2)
+    (define (+ (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (TestVec2 (+ x1 x2) (+ y1 y2))))
+
+  (define-instance (Additive TestVec2)
+    (define zero (TestVec2 0.0d0 0.0d0)))
+
+  (define-instance (AdditiveGroup TestVec2)
+    (define (- (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (TestVec2 (- x1 x2) (- y1 y2)))
+    (define (neg (TestVec2 x y))
+      (TestVec2 (neg x) (neg y))))
+
+  (define-instance (math:Scale F64 TestVec2)
+    (define (math:scale c (TestVec2 x y))
+      (TestVec2 (* c x) (* c y))))
+
+  (define-instance (math:Module F64 TestVec2))
+  (define-instance (math:HermitianForm F64 TestVec2)
+    (define (math:inner-product (TestVec2 x1 y1) (TestVec2 x2 y2))
+      (+ (* x1 x2) (* y1 y2))))
+
+  ;; 2. Multiplicative monoid without Additive (2x2 integer matrix)
+  (derive Eq)
+  (define-struct Mat2x2
+    (m00 Integer) (m01 Integer)
+    (m10 Integer) (m11 Integer))
+
+  (define-instance (HasMul Mat2x2)
+    (define (* (Mat2x2 a00 a01 a10 a11) (Mat2x2 b00 b01 b10 b11))
+      (Mat2x2 (+ (* a00 b00) (* a01 b10)) (+ (* a00 b01) (* a01 b11))
+              (+ (* a10 b00) (* a11 b10)) (+ (* a10 b01) (* a11 b11)))))
+
+  (define-instance (Multiplicative Mat2x2)
+    (define one (Mat2x2 1 0 0 1)))
+
+  ;; 3. Tropical min-plus Semiring (no AdditiveGroup)
+  (derive Eq)
+  (define-type TropicalMin
+    TropInf
+    (TropVal Integer))
+
+  (define-instance (HasAdd TropicalMin)
+    (define (+ a b)
+      (match (Tuple a b)
+        ((Tuple (TropInf) x) x)
+        ((Tuple x (TropInf)) x)
+        ((Tuple (TropVal x) (TropVal y)) (TropVal (min x y))))))
+
+  (define-instance (Additive TropicalMin)
+    (define zero TropInf))
+
+  (define-instance (HasMul TropicalMin)
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (TropInf) _) TropInf)
+        ((Tuple _ (TropInf)) TropInf)
+        ((Tuple (TropVal x) (TropVal y)) (TropVal (+ x y))))))
+
+  (define-instance (Multiplicative TropicalMin)
+    (define one (TropVal 0)))
+
+  (define-instance (Semiring TropicalMin))
+
+  ;; 4. Ring without Eq
+  (define-type NoEqRing
+    (NoEqRing Integer))
+
+  (define-ring NoEqRing
+    (define (+ (NoEqRing a) (NoEqRing b)) (NoEqRing (+ a b)))
+    (define (- (NoEqRing a) (NoEqRing b)) (NoEqRing (- a b)))
+    (define (* (NoEqRing a) (NoEqRing b)) (NoEqRing (* a b)))
+    (define (from-int n) (NoEqRing n)))
+
+  (declare unwrap-noeq (NoEqRing -> Integer))
+  (define (unwrap-noeq (NoEqRing n)) n))
+
+(define-test test-algebraic-hierarchy ()
+  ;; Additive, AdditiveGroup and a Hermitian form on TestVec2
+  (let ((u (TestVec2 1.0d0 2.0d0))
+        (v (TestVec2 3.0d0 -1.0d0)))
+    (is (== (+ u v) (TestVec2 4.0d0 1.0d0)))
+    (is (== (- u v) (TestVec2 -2.0d0 3.0d0)))
+    (is (== (neg u) (TestVec2 -1.0d0 -2.0d0)))
+    (is (== (negate u) (neg u)))
+    (is (== (math:recip (the Fraction 4)) 1/4))
+    (is (== (math:reciprocal (the Fraction 4)) (math:recip (the Fraction 4))))
+    (is (== (sum [u v]) (TestVec2 4.0d0 1.0d0)))
+    (is (== (sum (the (List TestVec2) Nil)) zero))
+    (is (== (math:scale 2.5d0 u) (TestVec2 2.5d0 5.0d0)))
+    (is (== (math:inner-product u v) 1.0d0)))
+
+  ;; ConjugateRing and Hermitian InnerSpace on Complex
+  (let ((c1 (math:complex (the Fraction 1) 2))
+        (c2 (math:complex (the Fraction 3) -4)))
+    (is (== (math:conjugate (the Integer 42)) 42))
+    (is (== (math:conjugate c1) (math:complex 1 -2)))
+    (is (== (math:inner-product c1 c2) (* (math:conjugate c1) c2)))
+    (is (== (the (Complex Fraction) (math:inner-product c1 c2)) (math:conjugate (math:inner-product c2 c1))))
+    (is (== (math:inner-product c1 c1) (math:complex (the Fraction 5) 0))))
+
+  ;; Multiplicative binary exponentiation (^) and product on 2x2 matrices
+  (let ((fib-mat (Mat2x2 1 1 1 0)))
+    (is (== (^ fib-mat 0) one))
+    (is (== (^ fib-mat 1) fib-mat))
+    (is (== (^ fib-mat 10) (Mat2x2 89 55 55 34)))
+    (is (== (product [fib-mat fib-mat fib-mat]) (^ fib-mat 3))))
+
+  ;; Tropical Semiring
+  (let ((a (TropVal 5))
+        (b (TropVal 3)))
+    (is (== (+ a b) (TropVal 3)))
+    (is (== (+ a zero) a))
+    (is (== (* a b) (TropVal 8)))
+    (is (== (* a one) a))
+    (is (== (* a zero) zero))
+    (is (== (^ a 4) (TropVal 20)))
+    (is (== (math:from-nat 0) TropInf))
+    (is (== (math:from-nat 5) (TropVal 0))))
+
+  ;; Ring without Eq
+  (let ((r1 (the NoEqRing (from-int 7)))
+        (r2 (the NoEqRing (from-int 3))))
+    (is (== (unwrap-noeq (+ r1 r2)) 10))
+    (is (== (unwrap-noeq (- r1 r2)) 4))
+    (is (== (unwrap-noeq (* r1 r2)) 21))
+    (is (== (unwrap-noeq (neg r1)) -7))
+    (is (== (unwrap-noeq (the NoEqRing zero)) 0))
+    (is (== (unwrap-noeq (the NoEqRing one)) 1)))
+
+  ;; EuclideanDomain and extended-gcd on Integer and Gaussian integers (Complex Integer)
+  (let (values g s t) = (math:extended-gcd -54 24))
+  (is (== g 6))
+  (is (== (+ (* s -54) (* t 24)) g))
+  (is (== (math:gcd -6 0) 6))
+  (let big = (^ (the Integer 2) 70))
+  (is (== (math:euclidean-degree big) big))
+
+  (let ((z1 (math:complex 11 3))
+        (z2 (math:complex 1 8)))
+    (let (values q r) = (math:quotrem z1 z2))
+    (is (== z1 (+ (* z2 q) r)))
+    (is (< (math:euclidean-degree r) (math:euclidean-degree z2)))
+    (let (values gz sz tz) = (math:extended-gcd z1 z2))
+    (is (== gz (math:gcd z1 z2)))
+    (is (== (math:normal-part gz) gz))
+    (is (== (+ (* sz z1) (* tz z2)) gz))
+    (let l = (math:lcm (math:complex 1 1) (math:complex 1 2)))
+    (is (== l (math:complex 3 1)))
+    (is (== (math:normal-part l) l))))
