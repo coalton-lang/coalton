@@ -1081,12 +1081,14 @@ Returns a `node'.")
        :branches (mapcar
                   (lambda (branch)
                     (let* ((pat (tc:node-match-branch-pattern branch))
-                           (ctx (pattern-predicate-context
-                                 (list pat) (list (tc:qualified-ty-type (tc:node-type (tc:node-match-expr expr))))
-                                 ctx env)))
+                           (input (tc:qualified-ty-type (tc:node-type (tc:node-match-expr expr))))
+                           (branch-ctx (pattern-predicate-context (list pat) (list input) ctx env)))
                       (make-match-branch
-                       :pattern (translate-pattern pat ctx env)
-                       :body (translate-expression (tc:node-match-branch-body branch) ctx env))))
+                       :pattern (coalton-impl/codegen/codegen-match:order-pattern-tests
+                                 (translate-pattern pat branch-ctx env) input env
+                                 (unless (eq ctx branch-ctx)
+                                   (lambda (test) (literal-dictionary-equalities test ctx env))))
+                       :body (translate-expression (tc:node-match-branch-body branch) branch-ctx env))))
                   (tc:node-match-branches expr)))))
 
   (:method ((expr tc:node-protect) ctx env)
@@ -1629,6 +1631,24 @@ Returns a `node'.")
                      :value (tc:pattern-literal-value pat)
                      :location (source:location pat))
                     ctx env))))))
+
+(defun literal-dictionary-equalities (test incoming-ctx env)
+  "Which captured dictionaries does TEST use at a type not yet established
+on entry to this pattern? Its operand annotation alone cannot tell: the
+dictionary for one abstract index may be used to compare another."
+  (let ((pairs nil))
+    (traverse test
+              (list (action (:before node-local-variable var)
+                      (let* ((name (node-variable-value var))
+                             (bindings (loop :for b :in incoming-ctx :when (eq name (cdr b)) :collect b))
+                             (required (node-type var)))
+                        (when (and bindings
+                                   (not (some (lambda (b) (tc:ty= (pred-type (car b) env) required))
+                                              bindings)))
+                          (pushnew (list (pred-type (caar bindings) env) required) pairs
+                                   :test (lambda (x y) (every #'tc:ty= x y)))))
+                      (values))))
+    (loop :for (given required) :in pairs :append (list given required))))
 
 (defgeneric translate-pattern (pat ctx env)
   (:documentation "Translate the typechecker AST pattern to the codegen AST.")

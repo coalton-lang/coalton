@@ -31,15 +31,18 @@ weight: 150
   - **Wildcard pattern**: [`_`](/manual/operators/wildcard/) matches any value without binding a variable.
   - **Alias (`=`) patterns**: `(= ⟨var⟩ ⟨pattern⟩)` matches `⟨pattern⟩` and also binds `⟨var⟩` to the entire subvalue matched by `⟨pattern⟩` (see [`=`](/manual/operators/pattern-bind/)).
   - **Literal patterns**: Numeric, character, and string literals match equal values. Integer literals in patterns are overloaded via `(Num :a) (Eq :a) => ==` and `fromInt`, so they work on any numeric type implementing `Num` and `Eq`.
+- An overloaded integer pattern tests equality; it does not select a constructor. If it succeeds but another part of its branch fails, later branches can still match the same value, including by constructor. A GADT constructor that establishes a field's type is matched before a comparison that needs that type.
 - Each branch body is an implicit [`progn`](/manual/operators/progn/) (supporting multiple expressions and shorthand `let`).
 - All branch bodies must unify to the same result type, which may be a single value, `Void`, or multiple values.
 - The final expression of each branch body is in tail position when the `match` expression is in tail position (including for [`rec`](/manual/operators/rec/) tail calls).
 - **Exhaustiveness**: The compiler checks pattern exhaustiveness and emits a warning at compile time if cases are missing. If a non-exhaustive `match` falls through at runtime without matching any branch, it signals an error.
+- The coverage checker does not run user-defined `fromInt` or `==`. For a datatype with a `Num` instance, it may therefore report a missing constructor case even if one of its values would match an earlier integer literal. Cover the constructor or add a wildcard rather than relying on the instance to make the match exhaustive.
 - **GADT patterns**: Matching a constructor declared inside [`define-type`](/manual/operators/define-type/) can refine the scrutinee's type arguments inside that branch. Coverage starts from the incoming scrutinee type: a constructor returning `Tag String` is not required for a `Tag Integer`, but it cannot be omitted merely because another branch matches `Tag Integer`.
 - Function parameter patterns are checked together. For example, if one parameter matches a witness that `:a` is `Integer`, a second parameter of type `Tag :a` need only cover `Tag Integer`.
 - A constructor can also be ruled out when a required field cannot exist, for example a product containing an equality witness for `Integer` and `String`. This search is bounded: if recursive or abstract types prevent a proof, the checker still requires the case.
 - Within a branch, an equality witness also applies to scoped annotations and existing typeclass constraints. If `Refl` proves that `:a` and `:b` are equal, an `Eq :b` constraint suffices to compare a value of `:a` with one of `:b`. The equality does not hold outside that branch.
 - A match result can use an enclosing index that is equal to the branch result type in every arm. Naming the result with `let` does not make it polymorphic in that index: all uses of the binding must agree on a type. An existential field cannot be returned unless the result can be expressed without exposing the hidden type.
+- An expected result type is checked inside each branch, including through enclosing ordinary `match`, `if`, and `cond` forms. A nested GADT witness can therefore justify constructing that result while its equality is in scope; the expected type does not itself supply equality evidence.
 - A shorthand `(let pattern = value)` has the same refinement scope as a one-arm match whose body is the rest of the block. Unlike an explicit `match`, the binding pattern must be exhaustive.
 
 ## Examples

@@ -67,6 +67,8 @@
   "Collects constraints on ambiguous result components until their use sites are known.")
 (defvar *enclosing-index-evidence* nil
   "Enclosing index equalities available when a nested match returns a value.")
+(defvar *return-result-contexts* nil
+  "Synthesized return results paired with checking contexts, not solver equations.")
 
 (declaim (type (or null hash-table) *pre-inferred-builder-items*))
 (defvar *pre-inferred-builder-items* nil
@@ -2283,6 +2285,22 @@ those older domains would turn a branch-local equality into an outer one."
         :unless (tc:ty= var local)
           :collect (tc:make-substitution :from var :to local)))
 
+(defun contextual-return-result-type (type subs)
+  (dolist (context *return-result-contexts*)
+    (destructuring-bind (actual expected watermark) context
+      (let ((renamings (handler-case
+                          (tc:match (tc:apply-substitution subs actual)
+                                    (tc:apply-substitution subs expected))
+                        (tc:coalton-internal-type-error () nil))))
+        ;; Only fresh result components may receive a hint. Caller variables
+        ;; must not be restricted to make the contextual spelling fit.
+        (when (every (lambda (s) (>= (tc:tyvar-id (tc:substitution-from s)) watermark))
+                     renamings)
+          (let* ((type (tc:apply-substitution subs type))
+                 (contextual-type (tc:apply-substitution renamings type)))
+            (unless (tc:ty= type contextual-type)
+              (return contextual-type))))))))
+
 (defun project-branch-result (type evidence hidden body-subs node)
   "Express TYPE in the enclosing scope. Where a result can be spelled in
 several ways, keep the choice monomorphic until its uses are known."
@@ -2561,7 +2579,7 @@ only the monadic action stays in the prefix; the match runs in its callback."
                 (when (and possible-p
                            (every (lambda (s) (>= (tc:tyvar-id (tc:substitution-from s)) watermark)) hint))
                   (setf subs (tc:compose-substitution-lists hint subs))))))))
-      (values ty preds accessors typed subs))))
+      (values ty preds accessors typed subs watermark))))
 
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
@@ -2775,14 +2793,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
-    (multiple-value-bind (fun-ty preds accessors rator-node subs)
+    (multiple-value-bind (fun-ty preds accessors rator-node subs watermark)
         (infer-application-rator node expected-type subs env)
 
       (let* ((positional-rands (or (parser:node-application-rands node) nil))
              (keyword-rands (or (parser:node-application-keyword-rands node) nil))
              (fun-ty_ (tc:apply-substitution subs fun-ty))
              (typed-rands (make-array (length positional-rands) :initial-element nil))
-             (typed-keyword-rands nil))
+             (typed-keyword-rands nil)
+             (*return-result-contexts* *return-result-contexts*))
 
         (when (tc:tyvar-p fun-ty_)
           (multiple-value-bind (resolved-ty subs_)
@@ -2796,6 +2815,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc-note node
                              "Unable to call value of type '~A': it is not a function"
                              (type-object-string (tc:apply-substitution subs fun-ty_)))))
+
+        (let ((context (contextual-return-result-type expected-type subs))
+              (result (tc:function-return-type fun-ty_)))
+          (when (and context (not (typep result 'tc:forall-ty)))
+            (push (list result context watermark) *return-result-contexts*)))
 
         (unless (= (length positional-rands) (tc:function-input-arity fun-ty_))
           (tc-error "Argument error"
@@ -3372,9 +3396,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                       (setf preds (append preds (pattern-predicates pat-node)))
                                       pat-node)))
 
-                   (ret-ty (if (tc:contains-forall-ty-p (tc:apply-substitution subs expected-type))
-                               (tc:apply-substitution subs expected-type)
-                               (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
+                   ;; Check results in their context before nested patterns
+                   ;; discharge their local index evidence.
+                   (ret-ty expected-type)
 
                    ;; Infer the type of each branch, unifying against ret-ty
                    (branch-body-nodes
@@ -3445,7 +3469,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       (tc:apply-substitution pat-subs branch-env)
                       (let* ((outer-givens *enclosing-predicates*)
                              (*enclosing-predicates* (tc:apply-substitution pat-subs outer-givens))
-                             (expected (tc:apply-substitution base-subs expected-type))
+                             (result-context (contextual-return-result-type expected-type base-subs))
+                             (expected (tc:apply-substitution base-subs (or result-context expected-type)))
                              (givens (append (branch-input-evidence input-types base-subs pat-subs)
                                              *enclosing-index-evidence*))
                              (evidence
@@ -3461,7 +3486,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                   (*branch-result-scope* body-scope))
                               (infer-expression-type body (if evidence
                                                               (tc:fresh-type-renamer expected)
-                                                              (tc:apply-substitution pat-subs expected-type))
+                                                              (tc:apply-substitution pat-subs
+                                                                                     (or result-context expected-type)))
                                                      pat-subs branch-env))
                           (multiple-value-setq (body-preds body-accessors body-subs)
                             (discharge-hidden-obligations hidden
@@ -3480,6 +3506,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             (setf subs (merge-branch-equations
                                         subs (branch-body-equations pat-subs body-subs watermark) last))
                             (export-nested-result-choices body-scope pat-subs body-subs)
+                            (when result-context
+                              (setf subs (unify-branch-result subs expected-type result-context last)))
                             (when evidence
                               (let ((outward (project-branch-result (tc:apply-substitution body-subs body-ty)
                                                                     evidence hidden body-subs last)))
@@ -3502,7 +3530,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-catch tc:substitution-list &optional))
-    (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+    (let ((ret-ty expected-type)
           (watermark tc:*next-variable-id*)
           (hidden nil)
           (name (parser:node-catch-operator-name node)))
@@ -3608,10 +3636,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-resumable tc:substitution-list &optional))
     
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
-        (infer-expression-type (parser:node-resumable-expr node)
-                               (tc:make-variable)
-                               subs
-                               env)
+        (let ((single-value-type (tc:make-variable)))
+          (handler-case
+              (setf subs (tc:unify subs single-value-type expected-type))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node subs single-value-type expected-type)))
+          (infer-expression-type (parser:node-resumable-expr node)
+                                 expected-type
+                                 subs
+                                 env))
 
       (let* ((watermark tc:*next-variable-id*)
              (hidden nil)
@@ -3750,7 +3783,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     ;; PROTECT returns the values of its protected expression, which may be
     ;; Void or multiple values, and discards those of its cleanup forms.
-    (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
+    (let ((ret-ty expected-type))
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-protect-expr node) ret-ty subs env)
         (declare (ignore expr-ty))
@@ -3938,11 +3971,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (handler-case
               (tc:match expr-ty declared-ty)
             (tc:coalton-internal-type-error ()
+              ;; Report the one-way check's operands, not their unified images.
               (with-shared-type-names ()
                 (tc-error "Declared type too general"
                           (tc-note node "Declared type '~A' is more general than inferred type '~A'"
-                                   (type-object-string (tc:apply-substitution subs declared-ty))
-                                   (type-object-string (tc:apply-substitution subs expr-ty)))))))
+                                   (type-object-string declared-ty)
+                                   (type-object-string expr-ty))))))
 
           (handler-case
               (progn
@@ -4019,15 +4053,23 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-return-from tc:substitution-list))
 
     (let* ((block-info (return-block-info (parser:node-return-from-name node)))
-           (local-evidence-p (rassoc block-info *gadt-return-targets*)))
+           (local-evidence-p (rassoc block-info *gadt-return-targets*))
+           (target-type (tc:apply-substitution subs (return-block-info-type block-info)))
+           (expr-expected
+             (if (or local-evidence-p (typep target-type 'tc:forall-ty))
+                 target-type
+                 (tc:make-variable :kind tc:+kstar+ :allow-result-p t))))
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
-          (infer-expression-type (parser:node-return-from-expr node)
-                                 (if (or local-evidence-p
-                                         (typep (return-block-info-type block-info) 'tc:forall-ty))
-                                     (return-block-info-type block-info)
-                                     (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
-                                 subs
-                                 env)
+          (let ((*return-result-contexts*
+                  (cond
+                    ((and (tc:tyvar-p expr-expected) (not (tc:tyvar-p target-type)))
+                     (cons (list expr-expected target-type (tc:tyvar-id expr-expected))
+                           *return-result-contexts*))
+                    (t *return-result-contexts*))))
+            (infer-expression-type (parser:node-return-from-expr node)
+                                   expr-expected
+                                   subs
+                                   env))
         (unless local-evidence-p
           (let ((first-return (return-block-info-first-return block-info)))
             (if first-return
@@ -4594,7 +4636,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (let* ((preds nil)
            (accessors nil)
 
-           (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+           (ret-ty expected-type)
 
            (clause-nodes
              (loop :for clause :in (parser:node-cond-clauses node)

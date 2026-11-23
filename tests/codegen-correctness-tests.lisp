@@ -1333,6 +1333,157 @@
                "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty)))
                   (rb-classify (RBNode RBRed b 40 b)))")))))
 
+(deftest codegen-match-requires-the-column-witness ()
+  (with-codegen-test-environment
+    (let ((source
+            (source:make-source-string
+             "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+              (repr :transparent) (define-type (Wrapped :a) (Wrap :a))
+              (define-type Inner (One Integer) (Two Integer))
+              (define-type (Box :a) (declare Packed (Inner -> Box Integer)))
+              (define-type-alias IntBox (Box Integer))
+              (define-type (Tag :a) (declare BoxTag (Tag IntBox)) (declare CountTag (Tag Integer)))
+              (declare classify (Tuple3 :b :a (Wrapped (Same :a (Tag :b))) -> Integer))
+              (define (classify p)
+                (match p
+                  ((Tuple3 (Packed (One n)) (= _tag (BoxTag)) (Wrap (Refl))) (1+ n))
+                  ((Tuple3 (Packed (Two n)) (BoxTag) (Wrap (Refl))) (+ n 2))
+                  ((Tuple3 n (CountTag) (Wrap (Refl))) n)))
+              (declare known (IntBox -> Inner))
+              (define (known p) (match p ((Packed x) x)))")))
+      ;; Inspect the emitted functions without loading them. Counting the
+      ;; reader alone would miss an unsafe hoist into the scrutinee LET.
+      (with-open-stream (s (source:source-stream source))
+        (let* ((program (entry:entry-point (parser:with-reader-context s (parser:read-program s source))))
+               (reader (intern "BOX/PACKED-_0"))
+               (class (intern "BOX/PACKED"))
+               (tag (intern "TAG/BOXTAG")))
+          (labels ((definition (name form)
+                     (when (consp form)
+                       (if (and (eq (car form) 'defun) (eq (second form) name))
+                           form
+                           (some (lambda (sub) (definition name sub)) form))))
+                   (box-test-p (x)
+                     (and (consp x) (eq (first x) 'typep)
+                          (member (third x) (list `',class `',tag) :test #'equal)))
+                   (walk-form (x guarded)
+                     (when (consp x)
+                       (case (first x)
+                         (quote)
+                         (cond (loop :for (test . body) :in (rest x)
+                                     :do (walk-form test guarded)
+                                         (dolist (b body) (walk-form b (or guarded (box-test-p test))))))
+                         (if (walk-form (second x) guarded)
+                             (walk-form (third x) (or guarded (box-test-p (second x))))
+                             (walk-form (fourth x) guarded))
+                         (otherwise (when (eq reader (first x)) (is guarded))
+                                    (dolist (form x) (walk-form form guarded)))))))
+            (let ((classify (definition (intern "CLASSIFY") program))
+                  (known (definition (intern "KNOWN") program)))
+              (is (= 1 (count-tree-occurrences reader classify)))
+              (walk-form classify nil)
+              ;; A known single-constructor input still projects without a
+              ;; tag test in release; globally retaining every test isn't a fix.
+              (is (= 1 (count-tree-occurrences reader known)))
+              (is (= (if (coalton-impl/settings:coalton-release-p) 0 1)
+                     (count-tree-occurrences `(quote ,class) known))))))))))
+
+(deftest codegen-sunk-literal-match-refines-its-dictionary ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (NumTag :a) (declare IntTag (NumTag Integer)) (declare FixTag (NumTag IFix)))
+      (declare zero-after? (Num :a => NumTag :a * :a -> Boolean))
+      (define (zero-after? tag x)
+        (match (match tag ((IntTag) (- x 1)) ((FixTag) (+ x 1)))
+          (0 True) (_ False)))")
+    (is (codegen-test-eval "(zero-after? IntTag 1)"))
+    (is (not (codegen-test-eval "(zero-after? FixTag 0)")))
+    (is (codegen-test-eval "(zero-after? FixTag -1)"))))
+
+(deftest codegen-match-ordered-comparisons ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(define-type Ticket (Stamp Integer) Blank)
+      (define-instance (Eq Ticket)
+        (define (== x y)
+          (observe 9)
+          (match (Tuple x y)
+            ((Tuple (Stamp a) (Stamp b)) (== a b))
+            (_ False))))
+      (define-instance (Num Ticket)
+        (define (+ x _) x) (define (- x _) x) (define (* x _) x)
+        (define (fromInt n) (observe n) (Stamp 0)))
+      (declare ordered (Tuple Ticket Boolean -> Integer))
+      (define (ordered p)
+        (match p
+          ((Tuple 1 (True)) 10)
+          ((Tuple 1 (True)) 20)
+          ((Tuple 2 (False)) 30)
+          (_ 40)))
+      (define-type (Witness :a) (declare IsInt (Witness Integer)) (declare IsText (Witness String)))
+      (declare known-before-witness (Tuple Ticket (Witness :a) -> Integer))
+      (define (known-before-witness p)
+        (match p ((Tuple 1 (IsText)) 1) (_ 0)))
+      (declare independent-between (Tuple3 :a Ticket (Witness :a) -> Integer))
+      (define (independent-between p)
+        (match p ((Tuple3 \"x\" 1 (IsText)) 1) (_ 0)))
+      (define-type (Link :a :b) (declare EqualTag (Link :x :x)) (declare AnyTag (Link :x :y)))
+      (inline)
+      (declare compare-linked (Num :a => Tuple :b (Link :a :b) -> Boolean))
+      (define (compare-linked p) (match p ((Tuple 1 (EqualTag)) True) (_ False)))
+      (declare compare-tickets (Tuple Ticket (Link Ticket Ticket) -> Boolean))
+      (define (compare-tickets p) (compare-linked p))
+      (declare pivot (Tuple Ticket Boolean -> Integer))
+      (define (pivot p)
+        (match p
+          ((Tuple _ (True)) 10)
+          ((Tuple 1 (True)) 20)
+          (_ 30)))
+      (declare literal-first (Tuple Ticket Boolean -> Integer))
+      (define (literal-first p)
+        (match p ((Tuple 1 (True)) 10) ((Tuple (Stamp n) (False)) (+ 20 n)) (_ 40)))
+      (declare constructor-first (Tuple Ticket Boolean -> Integer))
+      (define (constructor-first p)
+        (match p ((Tuple (Stamp n) (False)) (+ 20 n)) ((Tuple 1 (True)) 10) (_ 40)))")
+    ;; Different literal spellings can denote the same value. Identical ones
+    ;; still call fromInt and == once for each attempted row.
+    (is (= 30 (codegen-test-eval "(ordered (Tuple (Stamp 0) False))")))
+    (is (equal '(1 9 1 9 2 9) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    (is (= 0 (codegen-test-eval "(known-before-witness (Tuple (Stamp 0) IsInt))")))
+    (is (equal '(1 9) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    ;; Only the string test awaits IsText. Don't jump over the intervening
+    ;; independent comparison even if the witness or the string rejects.
+    (dolist (fields '("5 (Stamp 0) IsInt" "\"y\" (Stamp 0) IsText"))
+      (is (= 0 (codegen-test-eval (format nil "(independent-between (Tuple3 ~A))" fields))))
+      (is (equal '(1 9) (reverse *codegen-events*)))
+      (setf *codegen-events* nil))
+    ;; The operand's type is abstract on both sides. The *dictionary* needs
+    ;; EqualTag. Specializing both indices to Ticket makes the call type-safe
+    ;; even on the other path, but not unobservable.
+    (is (not (codegen-test-eval "(compare-tickets (Tuple (Stamp 0) AnyTag))")))
+    (is (null *codegen-events*))
+    (is (codegen-test-eval "(compare-tickets (Tuple (Stamp 0) EqualTag))"))
+    (is (equal '(1 9) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    ;; Factoring the Boolean in the first row must not suppress the earlier
+    ;; observable comparison in the second row on its failure path.
+    (is (= 30 (codegen-test-eval "(pivot (Tuple (Stamp 0) False))")))
+    (is (equal '(1 9) (reverse *codegen-events*)))
+    ;; The literal and constructor both match (Stamp 0). Failure in the
+    ;; Boolean column must continue to the next source row in either order.
+    (dolist (matcher '("literal-first" "constructor-first"))
+      (setf *codegen-events* nil)
+      (is (= 10 (codegen-test-eval (format nil "(~A (Tuple (Stamp 0) True))" matcher))))
+      (is (equal '(1 9) (reverse *codegen-events*)))
+      (setf *codegen-events* nil)
+      (is (= 20 (codegen-test-eval (format nil "(~A (Tuple (Stamp 0) False))" matcher))))
+      (is (equal (when (string= matcher "literal-first") '(1 9))
+                 (reverse *codegen-events*)))
+      (is (= 40 (codegen-test-eval (format nil "(~A (Tuple Blank False))" matcher)))))))
+
 
 
 

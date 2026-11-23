@@ -8,6 +8,7 @@
   (:export
    #:pattern                            ; STRUCT
    #:pattern-type                       ; ACCESSOR
+   #:pattern-test-order                 ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR
@@ -42,7 +43,10 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (type (util:required 'type) :type tc:ty :read-only t))
+  (type (util:required 'type) :type tc:ty :read-only t)
+  ;; Source order after moving the witnesses an observable comparison
+  ;; needs. Specializing a copy of the pattern must preserve this order.
+  (test-order nil :type (or null fixnum) :read-only t))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -120,7 +124,8 @@
 ;;; Methods
 ;;;
 
-(defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity))
+(defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity)
+                                 (order-function #'pattern-test-order))
   "Copy PATTERN, mapping its types and embedded literal tests."
   (labels ((walk (pat)
              (let ((type (funcall type-function (pattern-type pat))))
@@ -129,6 +134,7 @@
                  (pattern-wildcard (make-pattern-wildcard :type type))
                  (pattern-literal
                   (make-pattern-literal :type type :value (pattern-literal-value pat)
+                                        :test-order (funcall order-function pat)
                                         :test (and (pattern-literal-test pat)
                                                    (funcall test-function (pattern-literal-test pat)))))
                  (pattern-binding
@@ -136,6 +142,7 @@
                                         :pattern (walk (pattern-binding-pattern pat))))
                  (pattern-constructor
                   (make-pattern-constructor :type type :name (pattern-constructor-name pat)
+                                            :test-order (funcall order-function pat)
                                             :patterns (mapcar #'walk (pattern-constructor-patterns pat))))))))
     (walk pattern)))
 
@@ -152,6 +159,7 @@
   (make-pattern-literal
    :type (tc:apply-substitution subs (pattern-type pattern))
    :value (pattern-literal-value pattern)
+   :test-order (pattern-test-order pattern)
    :test (and (pattern-literal-test pattern)
               (tc:apply-substitution subs (pattern-literal-test pattern)))))
 
@@ -175,6 +183,7 @@
   (make-pattern-constructor
    :type (tc:apply-substitution subs (pattern-type pattern))
    :name (pattern-constructor-name pattern)
+   :test-order (pattern-test-order pattern)
    :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))))
 
 (defmethod tc:type-variables ((pattern pattern-var))

@@ -75,8 +75,16 @@
 
 (defun specialize-match (match expr env)
   "Move the alternatives of MATCH to EXPR, retaining only feasible cases."
-  (let ((moved (make-node-match :type (node-type match) :expr expr
-                               :branches (node-match-branches match))))
+  (let* ((from (node-type (node-match-expr match)))
+         (to (node-type expr))
+         (moved (make-node-match :type (node-type match) :expr expr
+                                 :branches (node-match-branches match))))
+    ;; On this path EXPR supplies the original scrutinee. For example,
+    ;; sinking into a GADT alternative can expose Integer where the parent
+    ;; returned :A. Transport the patterns, their dictionaries and the body
+    ;; together; the literal's type isn't evidence about its operand.
+    (unless (tc:ty= from to)
+      (setf moved (tc:apply-substitution (tc:unify-given nil from to :all) moved)))
     (if env (prune-impossible-match-branches moved env) moved)))
 
 (defun prune-impossible-match-branches (node env)

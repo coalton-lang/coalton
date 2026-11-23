@@ -598,6 +598,95 @@
   (is (== (Some False) (noinline (carry-through-two SameRefl SameRefl False))))
   (is (== "rank" (use-rank-witness (fn (w y) (let z = (match w ((SameRefl) y))) z)))))
 
+(coalton-toplevel
+  (declare pass-nested-optional-witness
+           (Optional (SameIndex :a :b) -> Optional (SameIndex :a :b)))
+  (define (pass-nested-optional-witness o)
+    (match o
+      ((Some w) (match w ((SameRefl) (Some SameRefl))))
+      ((None) None)))
+
+  (declare pass-conditional-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (pass-conditional-witness b w)
+    (cond
+      (b (match w ((SameRefl) (Some SameRefl))))
+      (True None)))
+
+  (declare pass-boolean-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (pass-boolean-witness b w)
+    (match b
+      ((True) (match w ((SameRefl) (Some SameRefl))))
+      ((False) None)))
+
+  (declare branch-compare (Eq :b => Boolean * SameIndex :a :b * :a * :b -> Boolean))
+  (define (branch-compare b w x y)
+    (cond (b (match w ((SameRefl) (== x y)))) (True False)))
+
+  (declare return-optional-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (return-optional-witness b w)
+    (when b (return (Some (match w ((SameRefl) SameRefl)))))
+    None)
+
+  (declare return-witness-pair
+           (Boolean * SameIndex :a :b * :a -> SameIndex :a :b * :b))
+  (define (return-witness-pair b w x)
+    (when b (return (match w ((SameRefl) (values SameRefl x)))))
+    (match w ((SameRefl) (values SameRefl x))))
+
+  (declare return-zero
+           (Boolean * SameIndex :a :b * coalton/cell:Cell Integer -> Void))
+  (define (return-zero b w count)
+    (when b (return (match w ((SameRefl) (values)))))
+    (coalton/cell:write! count 1)
+    (values))
+
+  (declare nested-return-witness
+           (forall (:a :b) (Boolean * SameIndex :a :b -> Integer)))
+  (define (nested-return-witness b w)
+    (let inner = (the (Void -> Optional (SameIndex :a :b))
+                     (fn ()
+                       (when b (return (match w ((SameRefl) (Some SameRefl)))))
+                       None)))
+    (match (inner) ((Some (SameRefl)) 1) ((None) 0))))
+
+(define-test gadt-nonlocal-return-checks-its-own-result ()
+  (is (match (noinline (return-optional-witness True (the (SameIndex String String) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (return-optional-witness False (the (SameIndex Integer Integer) SameRefl))
+        ((None) True) (_ False)))
+  (let (values proof value) = (return-witness-pair True SameRefl "pair"))
+  (is (match proof ((SameRefl) (== value "pair"))))
+  (let (values proof2 value2) = (return-witness-pair False SameRefl 7))
+  (is (match proof2 ((SameRefl) (== value2 7))))
+  (let count = (coalton/cell:new 0))
+  (return-zero True (the (SameIndex String String) SameRefl) count)
+  (is (== 0 (coalton/cell:read count)))
+  (return-zero False (the (SameIndex Integer Integer) SameRefl) count)
+  (is (== 1 (coalton/cell:read count)))
+  (is (== 1 (noinline (nested-return-witness True (the (SameIndex String String) SameRefl)))))
+  (is (== 0 (nested-return-witness False (the (SameIndex Integer Integer) SameRefl)))))
+
+(define-test gadt-ordinary-branches-check-nested-results ()
+  (is (match (noinline (pass-nested-optional-witness (the (Optional (SameIndex String String)) (Some SameRefl))))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-nested-optional-witness (the (Optional (SameIndex Integer String)) None))
+        ((None) True) (_ False)))
+  (is (match (noinline (pass-conditional-witness True (the (SameIndex String String) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-conditional-witness False (the (SameIndex Integer Integer) SameRefl))
+        ((None) True) (_ False)))
+  (is (match (noinline (pass-boolean-witness True (the (SameIndex Boolean Boolean) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-boolean-witness False (the (SameIndex String String) SameRefl))
+        ((None) True) (_ False)))
+  (is (branch-compare True SameRefl "same" "same"))
+  (is (not (branch-compare False SameRefl 1 1)))
+  (is (== "rank" (use-rank-witness
+                  (fn (w y) (cond (True (match w ((SameRefl) y)))))))))
+
 (define-test gadt-nested-patterns-and-scoped-annotations ()
   (is (== 7 (scoped-tag-value IntegerTag 7)))
   (is (== "word" (scoped-tag-value StringTag "word")))

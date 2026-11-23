@@ -458,7 +458,23 @@ type of each matrix column."
       ;; Now, we check based on the first member of CLAUSE.
       ;;
 
-      ;; Sub-case 1: The first member of CLAUSE is a constructor (or literal).
+      ;; Sub-case 1a: The first member of CLAUSE is a literal that may equal
+      ;; a value of a constructor pattern in the matrix. Which constructor
+      ;; values equal the literal is decided by a user Eq instance, so
+      ;; approximate the literal by every value of its type.
+      ((and (tc:pattern-literal-p (first clause))
+            (literal-constructor-overlap-p pattern-matrix (first clause)))
+       (multiple-value-bind (subs possible-p)
+           (tc:try-unify nil (pattern-bare-type (first clause)) (first column-types) :all)
+         (when possible-p
+           (useful-pattern-clause-p (literal-as-wildcard-matrix pattern-matrix (first clause))
+                                    (cons (tc:make-pattern-wildcard
+                                           :type (tc:pattern-type (first clause)))
+                                          (rest clause))
+                                    (tc:apply-substitution subs column-types)
+                                    env))))
+
+      ;; Sub-case 1b: The first member of CLAUSE is a constructor (or literal).
       ((or (tc:pattern-literal-p (first clause))
            (tc:pattern-constructor-p (first clause)))
        (multiple-value-bind (specialized-column-types possible-p)
@@ -489,6 +505,47 @@ type of each matrix column."
       (t
        (util:coalton-bug "Not reachable.")))))
 
+;;; Literal patterns
+;;; ----------------
+;;;
+;;;   A literal pattern L matches the values v with (== v L), so the
+;;;   set of values it matches is decided by an Eq instance. Analysis
+;;;   never runs that instance. For built-in types without
+;;;   constructors this only concerns other literals; there, as before,
+;;;   two occurrences of the same literal are the same test, and
+;;;   distinct literals are treated as matching different values. The
+;;;   latter can only make a later row seem useful or a match seem
+;;;   non-exhaustive.
+;;;
+;;;   A column can also hold both literals and constructor patterns:
+;;;
+;;;   1. Rows typed under different GADT evidence, such as "" in an arm
+;;;      that fixes the column to String and (Unit) in an arm that
+;;;      fixes it to Unit. No value matches both, which shows up as
+;;;      types that do not unify.
+;;;
+;;;   2. A Num literal of an ordinary data type, such as 5 and
+;;;      (Amount x) for a type Amount with constructors. Whether a
+;;;      constructor value equals the literal is unknown.
+;;;
+;;;   In both cases a literal row is never counted as covering a
+;;;   constructor case, and vice versa; in case 1 this is exact. In
+;;;   case 2 the values matching a literal clause are approximated by
+;;;   all values of its type (see USEFUL-PATTERN-CLAUSE-P). A literal
+;;;   case is reported useless only if the rows before it cover that
+;;;   whole type, counting earlier occurrences of the same literal.
+;;;   Any missing case reported for such a column may itself equal one
+;;;   of the literals.
+
+(defun patterns-may-share-value-p (pattern elem)
+  "Can a single value be described by both PATTERN and ELEM?
+
+The patterns may come from different arms, typed under different GADT
+evidence. Types that cannot unify have no value in common."
+  (declare (type tc:pattern pattern elem)
+           (values boolean))
+  (nth-value 1 (tc:try-unify nil (pattern-bare-type pattern) (pattern-bare-type elem) :all)))
+
 (defun specialize-matrix (pattern-matrix pattern)
   "Specialize the given PATTERN-MATRIX to the constructor given in PATTERN."
   (declare (type pattern-matrix pattern-matrix)
@@ -497,34 +554,11 @@ type of each matrix column."
   (loop :for row :in pattern-matrix
         ;; Only specialize on the first component of each row.
         :for elem := (first row)
-        ;; NOTE: ELEM cannot be a literal when PATTERN is a
-        ;;       constructor nor the other way around.
-        :append (cond
-                  ;; If ELEM is the same literal then remove this pattern.
-                  ((and (tc:pattern-literal-p elem)
-                        (util:literal-equal
-                         (tc:pattern-literal-value pattern)
-                         (tc:pattern-literal-value elem)))
-                   (list (rest row)))
-                  ;; If ELEM is not the same literal then emit nothing.
-                  ((tc:pattern-literal-p elem)
-                   nil)
-
-                  ;; If ELEM is the same constructor then expand the inner patterns.
-                  ((and (tc:pattern-constructor-p elem)
-                        (eq (tc:pattern-constructor-name pattern)
-                            (tc:pattern-constructor-name elem)))
-                   (list (append (tc:pattern-constructor-patterns elem)
-                                 (rest row))))
-                  ;; If ELEM is not the same constructor then emit nothing.
-                  ((tc:pattern-constructor-p elem)
-                   nil)
-
-                  ;; If ELEM is a wildcard (or variable) then emit
-                  ;; wildcards for each pattern in the constructor (or
-                  ;; literal).
-                  ((or (tc:pattern-wildcard-p elem)
-                       (tc:pattern-var-p elem))
+        :append (etypecase elem
+                  ;; A wildcard (or variable) matches every value, so emit
+                  ;; wildcards for each field of the constructor (or none for
+                  ;; a literal).
+                  ((or tc:pattern-wildcard tc:pattern-var)
                    (etypecase pattern
                      (tc:pattern-literal
                       (list (rest row)))
@@ -534,8 +568,61 @@ type of each matrix column."
                                                :type (tc:pattern-type pattern)))
                                             (tc:pattern-constructor-patterns pattern))
                                     (rest row))))))
-                  (t
-                   (util:coalton-bug "Not reachable.")))))
+                  ;; The same literal of a compatible type is the same test.
+                  ;; Anything else is not known to match a value matching
+                  ;; PATTERN; see "Literal patterns" above.
+                  (tc:pattern-literal
+                   (and (tc:pattern-literal-p pattern)
+                        (util:literal-equal (tc:pattern-literal-value pattern)
+                                            (tc:pattern-literal-value elem))
+                        (patterns-may-share-value-p pattern elem)
+                        (list (rest row))))
+                  ;; The same constructor expands its fields. A different
+                  ;; constructor, or a constructor against a literal, emits
+                  ;; nothing.
+                  (tc:pattern-constructor
+                   (and (tc:pattern-constructor-p pattern)
+                        (eq (tc:pattern-constructor-name pattern)
+                            (tc:pattern-constructor-name elem))
+                        (list (append (tc:pattern-constructor-patterns elem)
+                                      (rest row))))))))
+
+(defun literal-constructor-overlap-p (pattern-matrix literal)
+  "Does a row of PATTERN-MATRIX begin with a constructor pattern that may
+match a value equal to LITERAL?"
+  (declare (type pattern-matrix pattern-matrix)
+           (type tc:pattern-literal literal)
+           (values boolean))
+  (loop :for row :in pattern-matrix
+        :for elem := (first row)
+          :thereis (and (tc:pattern-constructor-p elem)
+                        (patterns-may-share-value-p literal elem))))
+
+(defun literal-as-wildcard-matrix (pattern-matrix literal)
+  "Rewrite the first column of PATTERN-MATRIX for a clause beginning with
+LITERAL, where the clause is approximated by a wildcard over the literal's
+type.
+
+Earlier occurrences of the same literal match every value that LITERAL
+matches, so they become wildcards. Other literals and patterns of
+incompatible types are dropped. Constructor patterns and wildcards stay."
+  (declare (type pattern-matrix pattern-matrix)
+           (type tc:pattern-literal literal)
+           (values pattern-matrix))
+  (loop :for row :in pattern-matrix
+        :for elem := (first row)
+        :append (etypecase elem
+                  ((or tc:pattern-wildcard tc:pattern-var)
+                   (list row))
+                  (tc:pattern-literal
+                   (and (util:literal-equal (tc:pattern-literal-value literal)
+                                            (tc:pattern-literal-value elem))
+                        (patterns-may-share-value-p literal elem)
+                        (list (cons (tc:make-pattern-wildcard :type (tc:pattern-type elem))
+                                    (rest row)))))
+                  (tc:pattern-constructor
+                   (and (patterns-may-share-value-p literal elem)
+                        (list row))))))
 
 (defun default-matrix (pattern-matrix)
   "Default the given PATTERN-MATRIX."

@@ -538,6 +538,109 @@
     (dolist (field '("(Tuple Boolean (Same Integer Integer))" "Integer" "Recursive"))
       (signals tc:tc-error (check-coalton-types (packet field))))))
 
+(defun match-analysis-report (program)
+  "Compile PROGRAM, returning the source lines of the useless match cases and
+the text of each non-exhaustive match warning."
+  (let ((useless nil)
+        (missing nil))
+    (handler-bind ((source:source-warning
+                     (lambda (condition)
+                       (let ((text (princ-to-string condition)))
+                         (cond
+                           ((search "useless match case" text :test #'char-equal)
+                            (let* ((arrow (search "-->" text))
+                                   (start (1+ (position #\: text :start arrow))))
+                              (push (parse-integer text :start start :junk-allowed t) useless)))
+                           ((search "non-exhaustive match" text :test #'char-equal)
+                            (push text missing))))
+                       (muffle-warning condition))))
+      (check-coalton-types program))
+    (values (sort useless #'<) missing)))
+
+(defun arm-lines (program &rest markers)
+  "The source line of each MARKER in PROGRAM."
+  (mapcar (lambda (marker)
+            (1+ (count #\Newline program :end (search marker program))))
+          markers))
+
+(deftest mixed-literal-constructor-gadt-coverage ()
+  ;; Literal and constructor patterns share a column when GADT evidence
+  ;; from another column fixes its type differently in each row.
+  (flet ((check (columns arms useless-markers &optional missing)
+           (let ((program
+                   (format nil "(define-type (Tag :a) (declare TextTag (Tag String)) (declare UnitTag (Tag Unit)))
+(declare classify (~A -> Integer))
+(define (classify p)
+  (match p~{~%    ~A~}))" columns arms)))
+             (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+               (is (equal (apply #'arm-lines program useless-markers) useless-lines))
+               (cond
+                 (missing
+                  (is (= 1 (length warnings)))
+                  (is (search missing (first warnings))))
+                 (t
+                  (is (null warnings))))))))
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple \"\" (TextTag)) 1)" "((Tuple (Unit) (UnitTag)) 2)" "((Tuple _ (TextTag)) 3)")
+           '())
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple (Unit) (UnitTag)) 1)" "((Tuple \"\" (TextTag)) 2)" "((Tuple _ (TextTag)) 3)")
+           '())
+    (check "(Tuple (Tag :a) :a)"
+           '("((Tuple (TextTag) \"\") 1)" "((Tuple (UnitTag) (Unit)) 2)" "((Tuple (TextTag) _) 3)")
+           '())
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple (Unit) (UnitTag)) 1)" "((Tuple _ (TextTag)) 2)" "((Tuple \"\" (TextTag)) 3)")
+           '("((Tuple \"\" (TextTag)) 3)"))
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple \"\" (TextTag)) 1)" "((Tuple (Unit) (UnitTag)) 2)")
+           '()
+           "missing case (TUPLE \"_\" (TEXTTAG))")))
+
+(deftest mixed-literal-constructor-overloaded-coverage ()
+  ;; A literal of a type with constructors matches the values that a user
+  ;; Eq instance relates to it, which the analysis cannot know. It may
+  ;; report a row as useless only if the row is unreachable for every
+  ;; such instance, and coverage never relies on a literal.
+  (flet ((check (type arms useless-markers &optional missing)
+           (let ((program
+                   (format nil "(define-type Amount (Amount Integer) Zero)
+(define-instance (Eq Amount)
+  (define (== a b)
+    (match (Tuple a b)
+      ((Tuple (Amount x) (Amount y)) (== x y))
+      ((Tuple (Zero) (Zero)) True)
+      (_ False))))
+(define-instance (Num Amount)
+  (define (+ _a b) b) (define (- _a b) b) (define (* _a b) b)
+  (define (fromInt n) (Amount n)))
+(declare classify (~A -> Integer))
+(define (classify p)
+  (match p~{~%    ~A~}))" type arms)))
+             (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+               (is (equal (apply #'arm-lines program useless-markers) useless-lines))
+               (cond
+                 (missing
+                  (is (= 1 (length warnings)))
+                  (is (search missing (first warnings))))
+                 (t
+                  (is (null warnings))))))))
+    (check "Amount" '("(5 1)" "((Amount _) 2)" "((Zero) 3)") '())
+    (check "Amount" '("((Amount _) 1)" "((Zero) 2)" "(5 3)") '("(5 3)"))
+    (check "Amount" '("((Amount 5) 1)" "(5 2)" "(_ 3)") '())
+    (check "Amount" '("(5 1)" "(5 2)" "((Amount _) 3)" "((Zero) 4)") '("(5 2)"))
+    (check "Amount" '("(5 1)" "((Amount _) 2)") '() "missing case (ZERO)")
+    (check "(Optional Amount)"
+           '("((Some (Amount _)) 1)" "((Some (Zero)) 2)" "((Some 5) 3)" "((None) 4)")
+           '("((Some 5) 3)"))
+    (check "(Tuple Amount Boolean)"
+           '("((Tuple 5 (True)) 1)" "((Tuple (Amount _) _) 2)" "((Tuple _ (False)) 3)" "((Tuple (Zero) _) 4)")
+           '())
+    (check "(Tuple Boolean Amount)"
+           '("((Tuple _ (Amount _)) 1)" "((Tuple (True) (Zero)) 2)" "((Tuple (True) 5) 3)")
+           '("((Tuple (True) 5) 3)")
+           "missing case (TUPLE (FALSE) (ZERO))")))
+
 (deftest test-deep-constructor-pattern-analysis ()
   (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)
          (original (symbol-function specializer))

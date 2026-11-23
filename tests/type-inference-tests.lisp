@@ -256,6 +256,239 @@
    "(define annotated (the (Integer -> Integer) (fn (x) x)))"
    '("annotated" . "(Integer -> Integer)")))
 
+(deftest test-branch-results-use-enclosing-expectation ()
+  (dolist (wrapper '("(match b ((True) ~A) ((False) None))"
+                     "(cond (b ~A) (True None))"
+                     "(if b ~A None)"
+                     "(catch ~A (_ None))"
+                     "(catch None (_ ~A))"
+                     "(handle ~A (_ None))"
+                     "(handle None (_ ~A))"
+                     "(protect ~A (values))"
+                     "(resumable ~A ((Again) None))"
+                     "(resumable None ((Again) ~A))"))
+    (check-coalton-types
+     (format nil
+             "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+              (define-resumption (Again))
+              (declare pass (Boolean * Same :a :b -> Optional (Same :a :b)))
+              (define (pass b w) ~A)"
+             (format nil wrapper "(match w ((Refl) (Some Refl)))"))
+     '("pass" . "(Boolean * Same :a :b -> Optional (Same :a :b))")))
+  (check-coalton-types
+   "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+    (declare pass (Optional (Same :a :b) -> Optional (Same :a :b)))
+    (define (pass o)
+      (match o ((Some w) (match w ((Refl) (Some Refl)))) ((None) None)))"
+   '("pass" . "(Optional (Same :a :b) -> Optional (Same :a :b))")))
+
+(deftest test-branch-results-do-not-invent-evidence ()
+  (dolist (wrapper '("(match b ((True) ~A) ((False) None))"
+                     "(cond (b ~A) (True None))"
+                     "(if b ~A None)"
+                     "(catch ~A (_ None))"
+                     "(catch None (_ ~A))"
+                     "(handle ~A (_ None))"
+                     "(handle None (_ ~A))"
+                     "(protect ~A (values))"
+                     "(resumable ~A ((Again) None))"
+                     "(resumable None ((Again) ~A))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil
+               "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+                (define-resumption (Again))
+                (declare bad (Boolean * Same :a :b -> Optional (Same :a :c)))
+                (define (bad b w) ~A)"
+               (format nil wrapper "(match w ((Refl) (Some Refl)))"))))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil
+               "(define-type Hidden (declare Wrap (:a -> Hidden)))
+                (define-resumption (Again))
+                (define (bad b h) ~A)"
+               (format nil wrapper "(match h ((Wrap x) (Some x)))")))))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+      (declare bad (Boolean * Same :a :b * :a -> :b))
+      (define (bad b w x)
+        (cond (b (match w ((Refl) x))) (True x)))"))
+  ;; A result chosen without a declaration stays monomorphic when let-bound.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare IntTag (Tag Integer)) (declare StrTag (Tag String)))
+      (define (bad b tag)
+        (let value = (cond (b (match tag ((IntTag) 1) ((StrTag) \"s\")))
+                          (True (match tag ((IntTag) 2) ((StrTag) \"t\")))))
+        (the Integer value)
+        (the String value))")))
+
+(deftest test-branch-results-preserve-inference-and-result-packs ()
+  (dolist (wrapper '("(match b ((True) ~A) ((False) ~A))"
+                     "(cond (b ~A) (True ~A))"
+                     "(if b ~A ~A)"
+                     "(catch ~A (_ ~A))"
+                     "(protect ~A ~A)"))
+    (check-coalton-types
+     (format nil
+             "(define-resumption (Again))
+              (define (keep b x) (the Boolean b) ~A)
+              (define (pair b x) (the Boolean b) ~A)
+              (define (finish-zero b) (the Boolean b) ~A)"
+             (format nil wrapper "x" "x")
+             (format nil wrapper "(values x x)" "(values x x)")
+             (format nil wrapper "(values)" "(values)"))
+     '("keep" . "(Boolean * :a -> :a)")
+     '("pair" . "(Boolean * :a -> :a * :a)")
+     '("finish-zero" . "(Boolean -> Void)"))))
+
+(deftest test-nested-branch-results-preserve-packs-and-inferred-indices ()
+  (dolist (wrapper '("(match b ((True) ~A) ((False) ~A))"
+                     "(cond (b ~A) (True ~A))"
+                     "(if b ~A ~A)"
+                     "(catch ~A (_ ~A))"
+                     "(protect ~A ~A)"))
+    (check-coalton-types
+     (format nil
+             "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+              (define-resumption (Again))
+              (define (keep b w y) (the Boolean b) ~A)
+              (declare pair (Boolean * Same :a :b * :a -> Same :a :b * :b))
+              (define (pair b w x) ~A)
+              (declare finish-zero (Boolean * Same :a :b -> Void))
+              (define (finish-zero b w) ~A)"
+             (format nil wrapper "(match w ((Refl) y))" "y")
+             (format nil wrapper
+                     "(match w ((Refl) (values Refl x)))"
+                     "(match w ((Refl) (values Refl x)))")
+             (format nil wrapper "(match w ((Refl) (values)))" "(values)"))
+     '("keep" . "(Boolean * Same :a :b * :c -> :c)")
+     '("pair" . "(Boolean * Same :a :b * :a -> Same :a :b * :b)")
+     '("finish-zero" . "(Boolean * Same :a :b -> Void)"))))
+
+(deftest test-resumable-retains-single-value-contract ()
+  (check-coalton-types
+   "(define-resumption (Again))
+    (define (keep b x)
+      (the Boolean b)
+      (resumable x ((Again) x)))"
+   '("keep" . "(Boolean * :a -> :a)"))
+  (dolist (result '("(values)" "(values 1 True)"))
+    (dolist (declaration '("" "(declare bad (Void -> Void))"
+                          "(declare bad (Void -> Integer * Boolean))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil
+                 "(define-resumption (Again))
+                  ~A
+                  (define (bad) (resumable ~A ((Again) ~A)))"
+                 declaration result result))))))
+
+(deftest test-return-results-use-target-expectation ()
+  (check-coalton-types
+   "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+    (declare early (Boolean * Same :a :b -> Optional (Same :a :b)))
+    (define (early b w)
+      (when b (return (match w ((Refl) (Some Refl)))))
+      None)
+    (declare wrapped (Boolean * Same :a :b -> Optional (Same :a :b)))
+    (define (wrapped b w)
+      (when b (return (Some (match w ((Refl) Refl)))))
+      None)
+    (declare other-target (forall (:a :b) (Boolean * Same :a :b -> Integer)))
+    (define (other-target b w)
+      (let inner = (the (Void -> Optional (Same :a :b))
+                       (fn ()
+                         (when b (return (match w ((Refl) (Some Refl)))))
+                         None)))
+      (match (inner) ((Some (Refl)) 1) ((None) 0)))
+    (declare pair (Boolean * Same :a :b * :a -> Same :a :b * :b))
+    (define (pair b w x)
+      (when b (return (match w ((Refl) (values Refl x)))))
+      (match w ((Refl) (values Refl x))))
+    (declare finish-zero (Boolean * Same :a :b -> Void))
+    (define (finish-zero b w)
+      (when b (return (match w ((Refl) (values)))))
+      (values))
+    (define (keep b x) (when b (return x)) x)"
+   '("early" . "(Boolean * Same :a :b -> Optional (Same :a :b))")
+   '("wrapped" . "(Boolean * Same :a :b -> Optional (Same :a :b))")
+   '("other-target" . "(Boolean * Same :a :b -> Integer)")
+   '("pair" . "(Boolean * Same :a :b * :a -> Same :a :b * :b)")
+   '("finish-zero" . "(Boolean * Same :a :b -> Void)")
+   '("keep" . "(Boolean * :a -> :a)")))
+
+(deftest test-return-results-do-not-export-local-evidence ()
+  (dolist (program
+            '("(define-type (Same :a :b) (declare Refl (Same :x :x)))
+               (declare bad (Boolean * Same :a :b -> Optional (Same :a :c)))
+               (define (bad b w)
+                 (when b (return (match w ((Refl) (Some Refl)))))
+                 None)"
+              "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+               (declare bad (Boolean * Same :a :b * :c -> Optional (Same :a :b)))
+               (define (bad b w x) (when b (return (Some x))) None)"
+              "(define-type Hidden (declare Wrap (:a -> Hidden)))
+               (declare bad (Boolean * Hidden -> Optional :r))
+               (define (bad b h)
+                 (when b (return (match h ((Wrap x) (Some x)))))
+                 None)"
+              "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+               (declare bad (Boolean * Same :a :b * :a -> :b))
+               (define (bad b w x)
+                 (when b (return (match w ((Refl) x))))
+                 x)"
+              "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+               (declare bad (forall (:a :b) (Boolean * Same :a :b -> Optional (Same :a :b))))
+               (define (bad b w)
+                 (let fixed = (the (Same :a :a -> Same :a :a) id))
+                 (when b (return (Some (fixed (match w ((Refl) Refl))))))
+                 None)"))
+    (signals tc:tc-error (check-coalton-types program))))
+
+(deftest test-return-results-preserve-diagnostic-origins ()
+  (dolist (case '(("" "\"first\"" "Unit" "String" "Unit")
+                 ("(declare mismatch (Boolean -> String))"
+                  "\"first\"" "Unit" "String" "Unit")
+                 ("(declare mismatch (Boolean -> Optional String))"
+                  "(Some \"first\")" "(Some Unit)" "Optional String" "Optional Unit")))
+    (destructuring-bind (declaration first-value second-value first-type second-type) case
+      (handler-case
+          (progn
+            (check-coalton-types
+             (format nil "~A (define (mismatch b)
+                              (when b (return ~A)) (return ~A))"
+                     declaration first-value second-value))
+            (is nil "Incompatible returns must be rejected."))
+        (tc:tc-error (condition)
+          (is (string= "Return type mismatch" (source:message condition)))
+          (is (= 2 (length (source:notes condition))))
+          (loop :for note :in (source:notes condition)
+                :for prefix :in '("First" "Second")
+                :for type :in (list first-type second-type)
+                :for value :in (list first-value second-value)
+                :for location := (source:location note)
+                :do (is (string= (format nil "~A return is of type '~A'" prefix type)
+                                 (source:message note)))
+                    (is (string= (format nil "(return ~A)" value)
+                                 (source:extract-source-text (source:location-source location)
+                                                             (source:location-span location))))))))))
+
+(deftest test-hidden-ascription-generality-diagnostic ()
+  (handler-case
+      (progn
+        (check-coalton-types
+         "(define-type Hidden (declare Wrap (:a -> Hidden)))
+          (declare bad (forall (:b) Hidden * :b -> Boolean))
+          (define (bad p fallback)
+            (match p ((Wrap x) (let _ = (the :b x)) True)))")
+        (is nil "A hidden value cannot have an arbitrary enclosing type."))
+    (tc:tc-error (condition)
+      (let ((message (princ-to-string condition)))
+        (is (search "Declared type too general" message))
+        (is (search "Declared type ':B' is more general than inferred type ':A'" message))))))
+
 (deftest test-matching-preserves-target-variables ()
   (let* ((a (tc:make-variable))
          (b (tc:make-variable))
