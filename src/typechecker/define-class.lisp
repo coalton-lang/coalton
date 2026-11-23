@@ -399,10 +399,6 @@
            (values partial-class tc:ksubstitution-list))
 
   (let* ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class)))
-         (vars (loop :for var :in (parser:toplevel-define-class-vars class)
-                     :for name :in var-names
-                     :collect (handler-case (partial-type-env-lookup-var env name var)
-                                (error () (util:coalton-bug "missing type variable")))))
          (superclass-tyvars
            (remove-duplicates
             (parser:collect-type-variables (parser:toplevel-define-class-preds class))
@@ -447,19 +443,28 @@
                                         (or (parser:tyvar-source-name tvar)
                                             (parser:tyvar-name tvar))))
 
-    (let* ((fundeps
-             (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
-                   :collect (tc:make-fundep
-                             :from (mapcar #'parser:keyword-src-name (parser:fundep-left fundep))
-                             :to (mapcar #'parser:keyword-src-name (parser:fundep-right fundep)))))
-
-           ;; Parse each of the superclasses
-           (preds
+    (let* ((preds
              (loop :for pred :in (parser:toplevel-define-class-preds class)
                    :collect (multiple-value-bind (pred ksubs_)
                                 (infer-predicate-kinds pred ksubs env)
                               (setf ksubs ksubs_)
                               (tc:apply-ksubstitution ksubs pred))))
+
+           (head-vars
+             (loop :for var :in (parser:toplevel-define-class-vars class)
+                   :for name :in var-names
+                   :collect (tc:apply-ksubstitution ksubs (partial-type-env-lookup-var env name var))))
+
+           ;; A dependency can start in the class head and continue through a
+           ;; superclass (or vice versa). Put both in the same binder scope.
+           (fundeps
+             (flet ((head-variables (names)
+                      (util:project-elements (mapcar #'parser:keyword-src-name names) var-names head-vars)))
+               (append (loop :for fd :in (parser:toplevel-define-class-fundeps class)
+                             :collect (cons (head-variables (parser:fundep-left fd))
+                                            (head-variables (parser:fundep-right fd))))
+                       (tc:collect-fundep-vars (partial-type-env-env env)
+                                               (tc:apply-ksubstitution ksubs preds)))))
 
            ;; Parse each of the methods
            (method-tys
@@ -490,14 +495,8 @@
 
                    ;; Type variables referenced in ty as well as the class predicate
                    :for known-method-tyvars
-                     := (loop :for tyvar :in method-tyvars
-                              :for name :in method-tyvar-names
-                              :when (member name var-names :test #'eq)
-                                :collect (handler-case (partial-type-env-lookup-var env name tyvar)
-                                           (error () (util:coalton-bug "missing type variable")))
-                                  :into known-method-tyvars
-                              :finally (return (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs)
-                                                       known-method-tyvars)))
+                     := (util:project-elements (intersection method-tyvar-names var-names)
+                                               var-names head-vars)
                    :for outer-method-tyvars
                      := (loop :for tyvar :in method-tyvars
                               :for name :in method-tyvar-names
@@ -509,31 +508,9 @@
                                                        outer-method-tyvars)))
 
                    ;; Ensure that methods are not ambiguous
-                   :unless (or
-                            ;; First, we check if the class variables are fully determined
-                            ;; by the functional dependencies which are immediately provided
-                            ;; in this class definition, such as in the following example.
-                            ;; (define-class (C :a :b (:a -> :b))
-                            ;;   (m (Void -> :a)) ; :B is determined by :A.
-                            ;;   )
-                            (subsetp var-names
-                                     (tc:closure method-tyvar-names fundeps)
-                                     :test #'eq)
-                            ;; Otherwise, we collect functional dependencies by recursing into
-                            ;; the superclass predicates and computing a generic closure on the
-                            ;; types themselves using TC:TY=. This allows for examples like the
-                            ;; following.
-                            ;; (define-class (C :a :b (:a -> :b)))
-                            ;; (define-class (D :a :b)
-                            ;;   (m (Void -> :a)) ; :B is determined by the functional dependency
-                            ;;                    ; provided in the class definition of C.
-                            ;;   )
-                            (subsetp (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs) vars)
-                                     (tc:generic-closure
-                                      known-method-tyvars
-                                      (tc:collect-fundep-vars (partial-type-env-env env) preds)
-                                      :test #'tc:ty=)
-                                     :test #'tc:ty=))
+                   :unless (subsetp head-vars
+                                    (tc:generic-closure known-method-tyvars fundeps :test #'tc:ty=)
+                                    :test #'tc:ty=)
                    :do (tc-error "Ambiguous method"
                                   (tc-note method
                                            "the method is ambiguous"))

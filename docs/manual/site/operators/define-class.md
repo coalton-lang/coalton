@@ -29,7 +29,7 @@ weight: 80
 - **Functional dependencies**: Each `(⟨from-var⟩+ -> ⟨to-var⟩+)` clause declares that the types bound to `⟨from-var⟩+` uniquely determine `⟨to-var⟩+`. The compiler uses functional dependencies to improve types during inference and rejects instances that violate determinism. A class's functional dependencies cannot be changed by redefinition.
   - A superclass can determine a type that is not a parameter of the subclass. For example, if `A :x :y` declares `(:x -> :y)`, two subclasses requiring `A :x :y` agree on `:y` whenever they are used with the same `:x`. Neither subclass needs to expose `:y` as a parameter.
 - **Methods**: Each `(⟨method-name⟩ ⟨docstring⟩? ⟨qualified-type⟩)` declares a generic function in the current package whose full type adds `(⟨class-name⟩ ⟨type-var⟩+)` to the front of `⟨qualified-type⟩`'s constraint context.
-  - Every class type parameter must be reachable from each method's type (directly or via functional dependencies).
+  - Every class type parameter must be reachable from each method's type. A chain of functional dependencies can use both the class's own dependencies and those of its superclasses.
   - Method types may introduce additional type variables, additional constraints, keyword parameters ([`&key`](/manual/operators/keyword-tail/)), and explicit [`forall`](/manual/operators/forall/) binders.
   - Explicit `forall` binders in a method declaration are scoped into the corresponding method definition inside [`define-instance`](/manual/operators/define-instance/).
 - **Marker classes**: A class with zero methods is permitted and acts as a type-level predicate that must still be instantiated with `define-instance`.

@@ -504,3 +504,39 @@ error: Instance missing context
 
 (define-class (Parent :p :h => Child :x :p (:x -> :p)))
 (define-instance (Given Unit :p => Child Unit :p))
+
+================================================================================
+125 Method types can determine class parameters through local and inherited dependencies
+================================================================================
+
+(package coalton-unit-test/fundep-method-chain)
+
+(define-class (Parent :b :c (:b -> :c)))
+(define-class (Parent :b :c => Child :a :b :c (:a -> :b))
+  (value (:a -> Integer)))
+
+(define-instance (Parent String Boolean))
+(define-instance (Child Unit String Boolean)
+  (define (value _) 42))
+
+(declare forwarded (Child :a :b :c => :a -> Integer))
+(define (forwarded x) (value x))
+(define result (forwarded Unit))
+
+================================================================================
+126 A dependency chain must cover every method's class parameters
+================================================================================
+
+(package coalton-unit-test/fundep-incomplete-method-chain)
+
+(define-class (Parent :b :c (:b -> :c)))
+(define-class (Parent :b :c => Child :a :b :c :extra (:a -> :b))
+  (value (:a -> Integer)))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous method
+  --> test:5:2
+   |
+ 5 |    (value (:a -> Integer)))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^ the method is ambiguous
