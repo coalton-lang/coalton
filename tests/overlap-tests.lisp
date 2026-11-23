@@ -192,6 +192,30 @@
     (overlap-compile "(overlap) (define-instance (Pick :b) (define (pick _) 1))")
     (is (= 1 (overlap-eval "(client)")))))
 
+(deftest redefinition-validates-compiled-instance-context ()
+  (with-overlap-environment
+    (overlap-compile
+     "(define-type (Wrapper :a) (Wrap :a))
+      (define-class (Needs :a))
+      (define-class (Outer :a) (outer (:a -> String)))
+      (define-instance (Needs Integer))
+      (define-instance (Needs (Wrapper :a) => Outer :a) (define (outer _) \"outer\"))")
+    (overlap-compile
+     "(define-instance (Needs :a => Needs (Wrapper :a)))
+      (define (client) (outer (the Integer 0)))")
+    ;; The optimizer must infer Outer Integer, not Outer (Wrapper Integer),
+    ;; when it reconstructs a predicate from the nested dictionary calls.
+    (let* ((env entry:*global-environment*)
+           (wanted (tc:make-ty-predicate :class (intern "OUTER") :types (list tc:*integer-type*)))
+           (dict (coalton-impl/codegen/resolve-instance:resolve-static-dict wanted nil env)))
+      (is (tc:type-predicate= wanted
+                              (coalton-impl/codegen/optimizer::resolve-compount-superclass dict env))))
+    ;; The same source now builds a different one-argument constructor.
+    (signals tc:stale-instance-selection-error
+      (overlap-compile
+       "(define-instance (Needs (Wrapper :b) => Outer :b) (define (outer _) \"new\"))"))
+    (is (equal "outer" (overlap-eval "(client)")))))
+
 (deftest overlap-specialization-preserves-dictionary-arguments ()
   (with-overlap-environment
     (overlap-compile

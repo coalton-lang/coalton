@@ -90,13 +90,22 @@ must not collapse distinct variables or specialize one to a concrete type.
            (type tc:environment env)
            (values tc:ty-class-instance-list tc:environment))
 
-  (values 
-   (loop :for instance :in instances
-         :collect (multiple-value-bind (instance env_)
-                      (define-instance-in-environment instance env)
-                    (setf env env_)
-                    instance))
-   env))
+  (let ((entries
+          (loop :for instance :in instances
+                :collect (multiple-value-bind (instance env_)
+                             (define-instance-in-environment instance env)
+                           (setf env env_)
+                           instance))))
+    (tc:finalize-instance-signatures entries env)
+    (dolist (entry entries)
+      (let ((name (tc:ty-class-instance-codegen-sym entry))
+            (context (cdr (tc:instance-dictionary-signature entry))))
+        (cond (context
+               (setf env (tc:set-function env name (tc:make-function-env-entry
+                                                    :name name :arity (length context) :inline-p nil))))
+              ((tc:lookup-function env name :no-error t)
+               (setf env (tc:unset-function env name))))))
+    (values entries env)))
 
 (defun toplevel-typecheck-instance (instances unparsed-instances env)
   (declare (type tc:ty-class-instance-list instances)
@@ -192,19 +201,12 @@ must not collapse distinct variables or specialize one to a concrete type.
                 :overlap-p (parser:toplevel-define-instance-overlap-p instance)
                 :constraints context
                 :predicate pred
+                :dictionary-signature (cons pred context)
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
                 :method-codegen-inline-p method-codegen-inline-p
                 :docstring (source:docstring instance)
                 :location (parser:toplevel-define-instance-head-location instance))))
-
-        (cond (context
-               (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry
-                                                                    :name instance-codegen-sym
-                                                                    :arity (length context)
-                                                                    :inline-p nil))))
-              ((tc:lookup-function env instance-codegen-sym :no-error t)
-               (setf env (tc:unset-function env instance-codegen-sym))))
 
         (when (consp (tc:ty-class-fundeps class))
           (handler-case
@@ -276,7 +278,7 @@ must not collapse distinct variables or specialize one to a concrete type.
 
   (let* ((pred (tc:ty-class-instance-predicate instance))
 
-         (context (tc:ty-class-instance-constraints-expanded instance env))
+         (context (cdr (tc:instance-dictionary-signature instance)))
 
          (class-name (tc:ty-predicate-class pred))
 
@@ -344,17 +346,8 @@ must not collapse distinct variables or specialize one to a concrete type.
                                        (tc-location head-location
                                                     "No instance for ~A"
                                                     (type-object-string superclass env)))))
-                       (superclass-instance-pred
-                         (tc:fresh-pred (tc:ty-class-instance-predicate superclass-instance)))
-                       (fresh-subs
-                         (tc:predicate-match (tc:ty-class-instance-predicate superclass-instance)
-                                             superclass-instance-pred))
                        (additional-context
-                         (tc:apply-substitution
-                          (tc:predicate-match superclass-instance-pred superclass)
-                          (tc:apply-substitution
-                           fresh-subs
-                           (tc:ty-class-instance-constraints-expanded superclass-instance env)))))
+                         (tc:instantiate-instance-context superclass-instance superclass)))
                   (loop :for pred :in additional-context
                         :do (unless (tc:entail env context pred)
                               (tc-error "Instance missing context"

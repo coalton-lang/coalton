@@ -627,7 +627,7 @@ their order and multiplicity: their construction can evaluate method values."
                        ;; Do not simplify duplicates or superclasses here:
                        ;; that can discard effectful dictionary construction.
                        :unless (and instance
-                                    (null (tc:ty-class-instance-constraints-expanded instance env)))
+                                    (null (cdr (tc:instance-dictionary-signature instance))))
                          :collect position)))
           (when (< (length positions) (length preds))
             (setf (gethash (tc:node-variable-name name) retained-positions)
