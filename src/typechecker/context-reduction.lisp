@@ -57,10 +57,10 @@ Returns (PREDS FOUNDP)"
   (declare (type environment env)
            (type ty-predicate pred)
            (values ty-predicate-list boolean))
-  (multiple-value-bind (inst subs) (lookup-class-instance env pred :no-error t)
+  (let ((inst (lookup-class-instance env pred :no-error t)))
     (when inst
       (return-from by-inst
-        (values (apply-substitution subs (ty-class-instance-constraints-expanded inst env)) t))))
+        (values (instantiate-instance-context inst pred) t))))
   (multiple-value-bind (preds foundp)
       (synthesized-class-instance-constraints pred)
     (when foundp

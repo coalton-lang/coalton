@@ -70,7 +70,10 @@ A class header can also include multiple functional dependency clauses, and each
 
 Functional dependencies are enforced whenever instances are defined:
 
-1. **Consistency across instances**: If `(C String Integer)` is defined, it is invalid to also define `(C String Char)`, because the same `:a` (`String`) would map to two different types for `:b` (`Integer` and `Char`).
+1. **Consistency across instances**: Instances that match the same determining arguments must agree on the determined types, even if their other arguments differ. For example, `C` cannot have both `(C String Integer)` and `(C String Char)`.
+
+   Agreement may follow from functional dependencies declared by the prerequisites or their superclasses, but not from which instances happen to be defined. Where the determining arguments match, the determined types in the instance heads must also have the same structure, up to renaming variables not fixed by those arguments.
+
 2. **Consistency with an instance's own context**: An instance may not contradict its own prerequisites. For example, the instance
 
    ```lisp

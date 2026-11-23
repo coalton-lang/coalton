@@ -103,3 +103,37 @@
             (is (not (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))))
 
             t))))))
+
+#+sbcl
+(deftest test-compiled-instance-interface ()
+  (let* ((provider (asdf:system-relative-pathname "coalton" "tests/instance-interface/provider.lisp"))
+         (client (asdf:system-relative-pathname "coalton" "tests/instance-interface/client.lisp"))
+         (fasl-type (pathname-type (compile-file-pathname provider)))
+         ;; Use the same checkouts and dependencies in the fresh Lisp, without
+         ;; relying on the user's init file or a particular Quicklisp install.
+         (directories (remove-duplicates
+                       (loop :for name :in (asdf:already-loaded-systems)
+                             :for path := (asdf:system-source-file name)
+                             :when path :collect (uiop:pathname-directory-pathname path))
+                       :test #'equal)))
+    (uiop:with-temporary-file (:pathname provider-fasl :type fasl-type)
+      (let ((entry:*global-environment* entry:*global-environment*))
+        (is (not (nth-value 2 (compile-file provider :output-file provider-fasl)))))
+      (uiop:with-temporary-file (:pathname client-fasl :type fasl-type)
+        (uiop:with-temporary-file (:stream out :pathname script :type "lisp")
+          (with-standard-io-syntax
+            (dolist (form `((require :asdf)
+                            (asdf:initialize-source-registry
+                             '(:source-registry ,@(loop :for dir :in directories :collect `(:directory ,dir))
+                               :ignore-inherited-configuration))
+                            ,@(when (coalton-impl/settings:coalton-release-p)
+                                '((pushnew :coalton-release *features*)))
+                            (asdf:load-system "coalton")
+                            (load ,provider-fasl)
+                            (assert (not (nth-value 2 (compile-file ,client :output-file ,client-fasl))))
+                            (load ,client-fasl)))
+              (print form out)))
+          :close-stream
+          (uiop:run-program (list (namestring sb-ext:*runtime-pathname*) "--noinform" "--no-userinit"
+                                  "--no-sysinit" "--script" (namestring script))
+                            :output *standard-output* :error-output *error-output*))))))

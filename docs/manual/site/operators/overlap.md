@@ -175,23 +175,19 @@ each method call.
 
 ### Separate compilation
 
-Compiled units record the instance choices used during checking and code
-generation. Loading a unit validates those choices against the current instance
-environment before installing its definitions. Adding or redefining instances
-also validates previously recorded choices. A new instance that would change a
-compiled choice causes an error in either load order.
+When a call selects an instance at compile time, both the choice of instance
+and the types and order of its prerequisite dictionaries are fixed. Later
+instances may supply those dictionaries to new callers. If an instance
+definition would change a compiled choice or its requirements, Coalton rejects
+the combination regardless of load order.
 
 For example, after compiling a concrete call to the general `Label :a` instance
 at `Integer`, adding `Label Integer` requires rebuilding the affected code.
 A generic `describe-label` that retains its `Label :a` dictionary parameter can accept
 the new instance without recompilation.
 
-To rebuild after an incompatible extension, use a fresh Lisp/compiler environment,
-load the complete instance set, and then recompile its clients. Validation is
-conservative and may retain assumptions from compiler constraint solving as well
-as emitted calls. There is no operation to unload compiled assumptions selectively
-or silently retarget already compiled calls. The checks apply to both Coalton
-source files and `coalton-toplevel`/`coalton` forms compiled into Lisp FASLs.
-Use a clean rebuild when updating the compiler: every participating compiled
-unit must carry its instance assumptions.
+After an incompatible change, load the complete instance set in a fresh Lisp
+environment and recompile the affected clients. This applies to Coalton source
+files and to `coalton-toplevel` or `coalton` forms compiled into Lisp FASLs.
+Use a clean build when updating the compiler.
 

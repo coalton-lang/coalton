@@ -4,8 +4,6 @@
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate)
-  (:local-nicknames
-   (#:util #:coalton-impl/util))
   (:export
    #:unification-error                  ; CONDITION
    #:infinite-type-unification-error    ; CONDITION
@@ -225,37 +223,17 @@
              :reader fundep-conflict-old-pred
              :type ty-predicate)
    (fundep   :initarg :fundep
-             :reader fundep-conflict-fundep
-             :type t)
-   (class    :initarg :class
-             :reader fundep-conflict-class
-             :type symbol)
-   (class-vars :initarg :class-vars
-               :reader fundep-conflict-class-vars
-               :type util:symbol-list)
-   (class-fundeps :initarg :class-fundeps
-                  :reader fundep-conflict-class-fundeps
-                  :type t)
-   (old-from-tys :initarg :old-from-tys
-                 :reader fundep-conflict-old-from-tys
-                 :type ty-list)
-   (new-from-tys :initarg :new-from-tys
-                 :reader fundep-conflict-new-from-tys
-                 :type ty-list)
-   (old-to-tys :initarg :old-to-tys
-               :reader fundep-conflict-old-to-tys
-               :type ty-list)
-   (new-to-tys :initarg :new-to-tys
-               :reader fundep-conflict-new-to-tys
-               :type ty-list))
+             :reader fundep-conflict-fundep))
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            (*print-readably* nil)
            (*coalton-type-printing-mode* :types))
        (with-pprint-variable-context ()
-         (format s "instance conflicts previous instance ~S"
-                 (fundep-conflict-old-pred c)))))))
+         (format s "cannot guarantee equal outputs for ~S and ~S under ~S when the inputs coincide"
+                 (fundep-conflict-new-pred c)
+                 (fundep-conflict-old-pred c)
+                 (fundep-conflict-fundep c)))))))
 
 (define-condition overlapping-specialization-error (coalton-internal-type-error)
   ((new :initarg :new

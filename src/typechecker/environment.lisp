@@ -118,7 +118,9 @@
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
    #:ty-class-instance-location             ; ACCESSOR
-   #:ty-class-instance-constraints-expanded ; FUNCTION
+   #:finalize-instance-signatures           ; FUNCTION
+   #:instance-dictionary-signature          ; FUNCTION
+   #:instantiate-instance-context           ; FUNCTION
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -845,41 +847,68 @@
   (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list       :read-only t)
   (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list                   :read-only t)
   (docstring               (util:required 'docstring)               :type (or null string)       :read-only t)
-  (location                nil                                      :type (or null source:location) :read-only t))
+  (location                nil                                      :type (or null source:location) :read-only t)
+  ;; (HEAD . ORDERED-DICTIONARY-PARAMETERS). New declarations start with the
+  ;; source context, then finalize it together before the environment is published.
+  ;; NIL means missing metadata, not a nullary constructor (which stores (HEAD)).
+  (dictionary-signature    nil :type ty-predicate-list))
+
+(defun instance-dictionary-signature (instance)
+  "Return the compiled head and ordered parameters, even for a nullary dictionary."
+  (declare (type ty-class-instance instance)
+           (values cons &optional))
+  (let ((signature (and (slot-boundp instance 'dictionary-signature)
+                        (ty-class-instance-dictionary-signature instance))))
+    (unless (consp signature)
+      (error "No compiled dictionary signature for ~S. Recompile its provider and clients."
+             (ty-class-instance-predicate instance)))
+    signature))
+
+(defun instantiate-instance-context (instance pred)
+  "Return the compiled dictionary parameters at the wanted instance head PRED."
+  (let ((signature (instance-dictionary-signature instance)))
+    ;; Context-only variables are local to this use of the instance, too.
+    (when (cdr signature)
+      (destructuring-bind (head . context) (fresh-preds signature)
+        (apply-substitution (predicate-match head pred) context)))))
 
 (defun expand-context (context env)
-  "Traverse constraint predicates by looking up those entailed by
-the base constraint by instances in the environment.  Eliminate
-recursion by comparing these to the base constraint and return a list
-of constraint predicates."
+  "Choose dictionary parameters for a new instance in its defining environment."
   (declare (type ty-predicate-list context)
            (type environment env)
            (values ty-predicate-list &optional))
+  (unless context
+    (return-from expand-context nil))
 
   ;; This was implemented as a hack to make `derive' work on recursive
   ;; types.  Allows you to write an instance with signature
   ;; `(Eq A => Eq A)'.
-  (flet ((expand-constraint (base-constraint)
-           (labels ((f (constraint stack)
-                      (multiple-value-bind (inst subs)
-                          (lookup-class-instance env constraint :no-error t)
-                        (if (null inst)
-                            (list constraint)
-                            (mapcan
-                             (lambda (pred)
-                               (f pred (cons pred stack)))
-                             (set-difference
-                              (apply-substitution subs (ty-class-instance-constraints inst))
-                              stack
-                              :test #'type-predicate=))))))
-             (f base-constraint (list base-constraint)))))
+  (let ((fixed-vars (type-variables context))
+        (sentinel (make-variable)))
+    (labels ((expand (pred stack)
+               (let ((instance (lookup-class-instance env pred :no-error t)))
+                 (unless instance
+                   (return-from expand (list pred)))
+                 ;; Only variables introduced by an instance along this path
+                 ;; can be renamed when testing for a recursive constraint.
+                 (let ((key (quantify (set-difference (type-variables pred) fixed-vars :test #'ty=)
+                                      (qualify (list pred) sentinel))))
+                   (when (member key stack :test #'ty-scheme=)
+                     (return-from expand nil))
+                   (loop :for required :in (instantiate-instance-context instance pred)
+                         :append (expand required (cons key stack)))))))
+      (remove-duplicates (loop :for pred :in context :append (expand pred nil))
+                         :test #'type-predicate=))))
 
-    (remove-duplicates
-     (alexandria:mappend #'expand-constraint context)
-     :test #'type-predicate=)))
-
-(defun ty-class-instance-constraints-expanded (inst env)
-  (expand-context (ty-class-instance-constraints inst) env))
+(defun finalize-instance-signatures (instances env)
+  ;; Expand the whole batch before installing any signature, so forward
+  ;; references and recursive derived instances do not depend on source order.
+  (let ((contexts (loop :for instance :in instances
+                        :collect (expand-context (ty-class-instance-constraints instance) env))))
+    (loop :for instance :in instances
+          :for context :in contexts
+          :do (setf (ty-class-instance-dictionary-signature instance)
+                    (cons (ty-class-instance-predicate instance) context)))))
 
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
@@ -901,15 +930,17 @@ of constraint predicates."
 (defmethod apply-substitution (subst-list (instance ty-class-instance))
   (declare (type substitution-list subst-list)
            (values ty-class-instance &optional))
-  (make-ty-class-instance
-   :overlap-p (ty-class-instance-overlap-p instance)
-   :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
-   :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
-   :codegen-sym (ty-class-instance-codegen-sym instance)
-   :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
-   :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
-   :docstring (ty-class-instance-docstring instance)
-   :location (ty-class-instance-location instance)))
+  (let ((signature (apply-substitution subst-list (instance-dictionary-signature instance))))
+    (make-ty-class-instance
+     :overlap-p (ty-class-instance-overlap-p instance)
+     :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
+     :predicate (car signature)
+     :dictionary-signature signature
+     :codegen-sym (ty-class-instance-codegen-sym instance)
+     :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
+     :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
+     :docstring (ty-class-instance-docstring instance)
+     :location (ty-class-instance-location instance))))
 
 (defstruct instance-environment
   ;; Compiled choices, indexed by class. Kept in the persistent environment so
@@ -1298,9 +1329,10 @@ only once."
                   (scan (ty-class-superclass-dict object)))
                  (ty-class-instance
                   (scan (ty-class-instance-constraints object))
-                  (scan (ty-class-instance-predicate object)))
+                  (scan (instance-dictionary-signature object)))
                  (instance-environment
-                  (scan (instance-environment-instances object)))
+                  (scan (instance-environment-instances object))
+                  (scan (instance-environment-selections object)))
                  (specialization-entry
                   (scan (specialization-entry-to-ty object)))
                  (abi-leaf
@@ -1787,8 +1819,8 @@ predicate containing inference variables through such an instance."
 
 (defun instance-signature= (left right)
   "Compare the ordered dictionary ABI, including variables shared with the head."
-  (let ((left-preds (cons (ty-class-instance-predicate left) (ty-class-instance-constraints left)))
-        (right-preds (cons (ty-class-instance-predicate right) (ty-class-instance-constraints right))))
+  (let ((left-preds (instance-dictionary-signature left))
+        (right-preds (instance-dictionary-signature right)))
     (and (eq (ty-class-instance-overlap-p left) (ty-class-instance-overlap-p right))
          (eq (ty-class-instance-codegen-sym left) (ty-class-instance-codegen-sym right))
          (= (length left-preds) (length right-preds))
@@ -1853,6 +1885,8 @@ predicate containing inference variables through such an instance."
   (declare (type environment env)
            (type symbol class)
            (type ty-class-instance value))
+  ;; Do not guess the ABI of a loaded instance from its source constraints.
+  (instance-dictionary-signature value)
   (lookup-class env class)
   (let ((replacement nil)
         (instances (environment-instance-environment env)))
@@ -2190,6 +2224,53 @@ This function will return the single functional dependency
   (loop :for (from . to) :in (collect-fundeps env preds scope)
         :collect (cons (type-variables from) (type-variables to))))
 
+(defun context-fundep-substitutions (env preds)
+  "Derive equalities from PREDS and their superclasses, without selecting instances."
+  (declare (type environment env)
+           (type ty-predicate-list preds)
+           (values substitution-list &optional))
+  (labels ((expand (pred)
+             (let ((class (lookup-class env (ty-predicate-class pred))))
+               (cons pred (mapcan #'expand (instantiate-superclasses class pred))))))
+    ;; Pairwise improvement only unifies existing variables.
+    (loop :with expanded := (mapcan #'expand preds)
+          :for subs := nil :then new-subs
+          :for new-subs := (improve-predicate-fundeps env expanded subs)
+          :when (equalp subs new-subs) :return subs)))
+
+(defun check-fundep-agreement (env class-vars fundep new old)
+  "Check one dependency of two instances, freshened apart as (head . context)."
+  (declare (type environment env)
+           (type util:symbol-list class-vars)
+           (type fundep fundep)
+           (type ty-predicate-list new old))
+  (flet ((project (keys instance)
+           (project-elements keys class-vars (ty-predicate-types (car instance)))))
+    (let* ((new-from (project (fundep-from fundep) new))
+           (old-from (project (fundep-from fundep) old))
+           (det-subs (handler-case (unify-list nil new-from old-from)
+                       (coalton-internal-type-error () (return-from check-fundep-agreement))))
+           (new-to (apply-substitution det-subs (project (fundep-to fundep) new)))
+           (old-to (apply-substitution det-subs (project (fundep-to fundep) old))))
+      (when (every #'ty= new-to old-to)
+        (return-from check-fundep-agreement))
+      (let* ((inputs (apply-substitution det-subs new-from))
+             (new-row (append inputs new-to))
+             (old-row (append inputs old-to)))
+        (unless (and ;; Improvement uses these rows without their contexts. Neither
+                     ;; row may promise a more specific result than the other.
+                     (match-list-p new-row old-row)
+                     (match-list-p old-row new-row)
+                     ;; Only the prerequisites are givens. Including the heads here
+                     ;; would assume the very dependency we're trying to establish.
+                     (handler-case
+                         (let* ((givens (apply-substitution det-subs (append (cdr new) (cdr old))))
+                                (subs (context-fundep-substitutions env givens)))
+                           (every #'ty= (apply-substitution subs new-to)
+                                        (apply-substitution subs old-to)))
+                       (context-fundep-conflict () nil)))
+          (error 'fundep-conflict :new-pred (car new) :old-pred (car old) :fundep fundep))))))
+
 (define-env-updater update-instance-fundeps (env pred context)
   ;; This function is essential for cases like the following.
   ;;
@@ -2207,7 +2288,14 @@ This function will return the single functional dependency
            (lookup-fundep-environment env (ty-predicate-class pred)))
          (class-variables (ty-class-class-variables class))
          (pred-tys (ty-predicate-types pred))
-         (context-fundeps (collect-fundep-vars env context)))
+         (context-fundeps (collect-fundep-vars env context))
+         (new (fresh-preds (cons pred context)))
+         ;; The improvement index can coalesce identical rows even when the
+         ;; instances have different prerequisites. Check the actual definitions.
+         (others (loop :for inst :in (lookup-class-instances env (ty-class-name class) :no-error t)
+                       :for head := (ty-class-instance-predicate inst)
+                       :unless (same-instance-head-p pred head) ; being replaced, not a neighbor
+                         :collect (fresh-preds (cons head (ty-class-instance-constraints inst))))))
 
     (loop :for fundep :in (ty-class-fundeps class)
           :for i :from 0
@@ -2228,40 +2316,14 @@ This function will return the single functional dependency
                            (generic-closure (type-variables from-tys) context-fundeps :test #'ty=)
                            :test #'ty=)
             :do (error 'fundep-ambiguity)
-          :do (let ((redundant-p nil))
-                ;; Check every intersecting determinant, including pairs where
-                ;; neither side is a one-way instance of the other.
-                (dolist (s state)
-                  (let ((fresh (fresh-fundep-entry s)))
-                    (multiple-value-bind (det-subs overlaps-p)
-                        (handler-case
-                            (values (unify-list nil (fundep-entry-from fresh) from-tys) t)
-                          (coalton-internal-type-error () (values nil nil)))
-                      (when overlaps-p
-                        (unless (handler-case
-                                    (let* ((det-types (apply-substitution det-subs from-tys))
-                                           (all-subs (unify-list det-subs (fundep-entry-to fresh) to-tys)))
-                                      ;; Results must agree throughout the determinant
-                                      ;; intersection, without specializing it further.
-                                      (every #'ty= det-types (apply-substitution all-subs from-tys)))
-                                  (coalton-internal-type-error () nil))
-                          (error-fundep-conflict env class pred fundep
-                                                (fundep-entry-from s) from-tys
-                                                (fundep-entry-to s) to-tys)))
-                      (when (match-list-p (append from-tys to-tys)
-                                          (append (fundep-entry-from fresh) (fundep-entry-to fresh)))
-                        (setf redundant-p t)))))
-
-                ;; A partial overlap does not cover the new relation.
-                (unless redundant-p
-                  (setf env
-                        (insert-fundep-entry%
-                         env
-                         (ty-class-name class)
-                         i
-                         (make-fundep-entry
-                          :from from-tys
-                          :to to-tys)))))))
+          :do (dolist (other others)
+                (check-fundep-agreement env class-variables fundep new other))
+          :unless (loop :with row := (append from-tys to-tys)
+                        :for s :in state
+                        :for fresh := (fresh-fundep-entry s)
+                        :thereis (match-list-p row (append (fundep-entry-from fresh) (fundep-entry-to fresh))))
+            :do (setf env (insert-fundep-entry% env (ty-class-name class) i
+                                                (make-fundep-entry :from from-tys :to to-tys)))))
 
   env)
 
@@ -2285,59 +2347,8 @@ C :a :y."
            (type ty-predicate pred)
            (type ty-predicate-list context)
            (values null &optional))
-  (labels ((expand (pred)
-             (let ((class (lookup-class env (ty-predicate-class pred))))
-               (cons pred
-                     (mapcan #'expand (instantiate-superclasses class pred))))))
-    ;; Improvement only unifies existing variables, so this reaches a
-    ;; fixed point.
-    (loop :with preds := (mapcan #'expand (cons pred context))
-          :for subs := nil :then new-subs
-          :for new-subs := (improve-predicate-fundeps env preds subs)
-          :until (equalp new-subs subs)))
+  (context-fundep-substitutions env (cons pred context))
   nil)
-
-(defun error-fundep-conflict (env class pred fundep old-from-tys new-from-tys old-to-tys new-to-tys)
-  "Finds a conflicting instance and signals an error"
-  (declare (type environment env)
-           (type ty-class class)
-           (type ty-predicate pred)
-           (type fundep fundep)
-           (type ty-list old-from-tys new-from-tys old-to-tys new-to-tys))
-  (let* ((class-name (ty-class-name class))
-
-         (from-tys_ (copy-list new-from-tys))
-
-         (vars
-           (loop :for v :in (ty-class-class-variables class)
-                 :if (find v (fundep-from fundep))
-                   :collect (prog1
-                              (car from-tys_)
-                              (setf from-tys_ (cdr from-tys_)))
-                 :else
-                   :collect (make-variable)))
-
-         (new-pred (make-ty-predicate :class class-name :types vars :location (source:location pred))))
-
-    (dolist (inst (lookup-class-instances env class-name))
-      (handler-case
-          (progn
-            (predicate-mgu new-pred (ty-class-instance-predicate inst))
-            (error 'fundep-conflict
-                   :new-pred pred
-                   :old-pred (ty-class-instance-predicate inst)
-                   :fundep fundep
-                   :class class-name
-                   :class-vars (ty-class-class-variables class)
-                   :class-fundeps (ty-class-fundeps class)
-                   :old-from-tys old-from-tys
-                   :new-from-tys new-from-tys
-                   :old-to-tys old-to-tys
-                   :new-to-tys new-to-tys))
-        (predicate-unification-error () nil)))
-
-    ;; If there was a fundep conflict, one of the instances should have matched
-    (util:unreachable)))
 
 ;;; Instance-head improvement. A unique non-linear instance head, such
 ;;; as `Applicative (Box :r :r)`, can force equalities in a wanted
@@ -2789,9 +2800,7 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                        ;; predicate, we need to create a full fresh set of
                        ;; predicates, rather than just matching the head.
                        :do (let* ((fresh-instance-preds
-                                    (fresh-preds
-                                     (cons (ty-class-instance-predicate instance)
-                                           (ty-class-instance-constraints-expanded instance env))))
+                                    (fresh-preds (instance-dictionary-signature instance)))
                                   (instance-head (car fresh-instance-preds))
                                   (instance-context (cdr fresh-instance-preds))
 
