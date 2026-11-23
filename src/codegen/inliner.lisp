@@ -208,9 +208,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
               (ast:node-abstraction-subexpr fresh-abstraction)
               t)))
       ;; Call operands have an evaluation order; a recursive LET group does not.
-      (loop :with body := (transformations:prune-impossible-match-branches
-                           (tc:apply-substitution new-substitutions new-subexpr)
-                           env)
+      (loop :with body := (transformations:specialize-node new-subexpr new-substitutions env)
             :for (name . expr) :in (reverse bindings)
             :do (setf body (ast:make-node-bind
                            :type (ast:node-type application)

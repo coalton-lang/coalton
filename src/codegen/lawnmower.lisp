@@ -17,7 +17,7 @@ later passes and Lisp compilers see simpler code.")
    #:specialize-match
    #:open-known-constructor
    #:unwrap-known-constructor-branch
-   #:prune-impossible-match-branches
+   #:specialize-node
    #:rename-type-variables)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
@@ -356,11 +356,9 @@ and result types before beta-reducing."
           (setf subs (tc:unify subs
                                (tc:function-return-type (node-type abstraction))
                                (node-type application)))
-          (cond ((null subs) abstraction)
-                (*rewrite-environment*
-                 (prune-impossible-match-branches
-                  (tc:apply-substitution subs abstraction) *rewrite-environment*))
-                (t (tc:apply-substitution subs abstraction))))
+          (if subs
+              (specialize-node abstraction subs *rewrite-environment*)
+              abstraction))
       (tc:coalton-internal-type-error ()
         abstraction))))
 
@@ -541,7 +539,12 @@ Returns a status keyword and a replacement body. Status is one of:
                         (rewrite-known-pattern-match subpattern rand out env)
                       (ecase status
                         (:match (setf out new-out))
-                        (:no-match (return-from rewrite-known-pattern-match (values ':no-match nil)))
+                        (:no-match
+                         ;; A later field's mismatch is not permission to
+                         ;; skip an earlier user comparison. Let the ordered
+                         ;; matcher handle this constructor's fields.
+                         (return-from rewrite-known-pattern-match
+                           (values (if (pattern-has-user-test-p pattern) ':unknown ':no-match) nil)))
                         (:unknown (return-from rewrite-known-pattern-match (values ':unknown nil)))))
                   :finally (return (values ':match out))))))))
 

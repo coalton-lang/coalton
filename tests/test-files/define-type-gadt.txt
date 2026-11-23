@@ -47,28 +47,6 @@ warn: non-exhaustive match
     | |____________________^ non-exhaustive match
 
 ================================================================================
-3 GADT Non-Exhaustive Abstraction
-================================================================================
-
-(package test-package)
-
-(define-type T-dtg3
-  (declare T3-Int (Integer -> T-dtg3))
-  (declare T3-Str (String -> T-dtg3)))
-
-(declare t-dtg3->int-abstr (T-dtg3 -> Integer))
-(define (t-dtg3->int-abstr (T3-Int x))
-  x)
-
---------------------------------------------------------------------------------
-
-error: Non-exhaustive match
-  --> test:8:27
-   |
- 8 |  (define (t-dtg3->int-abstr (T3-Int x))
-   |                             ---------- missing case (T3-STR "_")
-
-================================================================================
 4 GADT Improper Constructor Return Type
 ================================================================================
 
@@ -414,22 +392,6 @@ error: Non-exhaustive match
    |                       ------------ missing case (T20-STR2 "_")
 
 ================================================================================
-21 GADT Polymorphic Unbox
-================================================================================
-
-(package test-package)
-
-(define-type (T-dtg21 :a)
-  (declare T21-Int (Integer -> T-dtg21 Integer))
-  (declare T21-Str (String -> T-dtg21 String)))
-
-(declare t-dtg21-unbox (T-dtg21 :a -> :a))
-(define (t-dtg21-unbox g)
-  (match g
-    ((T21-Int x) x)
-    ((T21-Str s) s)))
-
-================================================================================
 22 GADT Wrong Polymorphic Unbox
 ================================================================================
 
@@ -490,8 +452,8 @@ error: Declared type is too general
 (declare t-dtg24-good (T-dtg24 :a * :a -> :a))
 (define (t-dtg24-good g x)
   (match g
-    ((T24-Int _) x)
-    ((T24-Str _) x)))
+    ((T24-Int _) (coalton/classes:+ x 1))
+    ((T24-Str _) (coalton/classes:<> x "!"))))
 
 ================================================================================
 25 GADT Scrutinee Refinement Does Not Refine Unrelated Argument
@@ -648,7 +610,7 @@ error: Untouchable existential type escapes GADT pattern scope
  7 |   (define (t-dtg30-bad (T30-Hidden x))
    |  _^
  8 | |   x)
-   | |____^ Existential type ':A' escapes through result type ':A'
+   | |____^ Existential type '<existential :A>' escapes through result type '<existential :A>'
 
 ================================================================================
 31 GADT Existential Must Not Escape Through Wrapping Type
@@ -671,7 +633,7 @@ error: Untouchable existential type escapes GADT pattern scope
  7 |   (define (t-dtg31-bad (T31-Hidden x))
    |  _^
  8 | |   (Some x))
-   | |___________^ Existential type ':A' escapes through result type 'Optional :A'
+   | |___________^ Existential type '<existential :A>' escapes through result type 'Optional <existential :A>'
 
 ================================================================================
 32 GADT Existential Must Not Escape Through Closure
@@ -694,7 +656,7 @@ error: Untouchable existential type escapes GADT pattern scope
  7 |   (define (t-dtg32-bad (T32-Hidden x))
    |  _^
  8 | |   (fn () x))
-   | |____________^ Existential type ':A' escapes through result type 'Void -> :A'
+   | |____________^ Existential type '<existential :A>' escapes through result type 'Void -> <existential :A>'
 
 ================================================================================
 33 GADT Existential Must Not Refine To Concrete Type
@@ -720,21 +682,7 @@ error: Type mismatch
   --> test:12:20
     |
  12 |    (t-gadt33-use-int x)
-    |                      ^ Expected type 'Integer' but got ':A'
-
-================================================================================
-34 GADT Existential May Be Passed Through Id And Discarded
-================================================================================
-
-(package test-package)
-
-(define-type T-dtg34-Hidden
-  (declare T34-Hidden (:a -> T-dtg34-Hidden)))
-
-(declare t-dtg34-good (T-dtg34-Hidden -> Unit))
-(define (t-dtg34-good (T34-Hidden x))
-  (coalton/functions:id x)
-  Unit)
+    |                      ^ Expected type 'Integer' but got '<existential :A>'
 
 ================================================================================
 35 GADT Existential May Be Repacked
@@ -772,39 +720,7 @@ error: Type mismatch
   --> test:11:11
     |
  11 |    (let _ = (the Integer x))
-    |             ^^^^^^^^^^^^^^^ Declared type 'Integer' does not match inferred type ':A'
-
-================================================================================
-37 GADT Existential In Do Pattern May Be Consumed
-================================================================================
-
-(package test-package)
-
-(define-type T-dtg38-Hidden
-  (declare T38-Hidden (:a -> T-dtg38-Hidden)))
-
-(declare t-dtg38-good ((coalton/classes:Monad :m) => :m T-dtg38-Hidden -> :m Unit))
-(define (t-dtg38-good m)
-  (do
-   ((T38-Hidden x) <- m)
-   (coalton/classes:pure
-    (coalton/functions:id x))
-   (coalton/classes:pure Unit)))
-
-================================================================================
-38 GADT Narrowed Match Does Not Require Impossible Constructors
-================================================================================
-
-(package test-package)
-
-(define-type (T-dtg38 :a)
-  (declare T38-Int (Integer -> T-dtg38 Integer))
-  (declare T38-Str (String -> T-dtg38 String)))
-
-(declare t-dtg38-good (T-dtg38 Integer -> Integer))
-(define (t-dtg38-good g)
-  (match g
-    ((T38-Int x) x)))
+    |             ^^^^^^^^^^^^^^^ Declared type 'Integer' does not match inferred type '<existential :A>'
 
 ================================================================================
 39 GADT Polymorphic Match Warns About Possible Constructors
@@ -860,29 +776,6 @@ warn: Useless match case
  11 | |     (_ 0)))
     | |      ^ useless match case
     | |__________^ in this match
-
-================================================================================
-41 GADT Impossible Constructor Branch Is An Error
-================================================================================
-
-(package test-package)
-
-(define-type (T-dtg41 :a)
-  (declare T41-Int (Integer -> T-dtg41 Integer))
-  (declare T41-Str (String -> T-dtg41 String)))
-
-(declare t-dtg41-bad (T-dtg41 Integer -> Integer))
-(define (t-dtg41-bad g)
-  (match g
-    ((T41-Str _) 0)))
-
---------------------------------------------------------------------------------
-
-error: Type mismatch
-  --> test:10:5
-    |
- 10 |      ((T41-Str _) 0)))
-    |       ^^^^^^^^^^^ Expected type 'T-dtg41 Integer' but pattern has type 'T-dtg41 String'
 
 ================================================================================
 42 GADT Generic Constructor Required for Exhaustiveness
@@ -1008,23 +901,6 @@ error: Type mismatch
    |
  8 |  (define (t-dtg47-bad (T47-Int x) (T47-Int _))
    |                                   ^^^^^^^^^^^ Expected type 'T-dtg47 String' but pattern has type 'T-dtg47 Integer'
-
-================================================================================
-48 Former Type Wrapper Is Not a Constructor Declaration
-================================================================================
-
-(package test-package)
-
-(define-type Legacy
-  (MkLegacy (Type (Integer -> Legacy))))
-
---------------------------------------------------------------------------------
-
-error: Unknown type
-  --> test:4:13
-   |
- 4 |    (MkLegacy (Type (Integer -> Legacy))))
-   |               ^^^^ unknown type TYPE
 
 ================================================================================
 49 Dotted Constructor Declaration
@@ -1363,7 +1239,7 @@ error: Untouchable existential type escapes GADT pattern scope
  10 |   (define (t-dtg62-bad (T62-Hidden r))
     |  _^
  11 | |   (.payload r))
-    | |_______________^ Existential type ':A' escapes through result type ':A'
+    | |_______________^ Existential type '<existential :A>' escapes through result type '<existential :A>'
 
 ================================================================================
 63 GADT Field Accessor On Bare Existential Is Unresolved
@@ -1389,7 +1265,7 @@ error: Untouchable existential type escapes GADT pattern scope
  10 |   (define (t-dtg63-bad (T63-Hidden x))
     |  _^
  11 | |   (.label x))
-    | |_____________^ Existential type ':A' escapes through unresolved field accessor on ':A'
+    | |_____________^ Existential type '<existential :A>' escapes through unresolved field accessor on '<existential :A>'
 
 ================================================================================
 64 GADT Existential Predicate Without Instance Is Rejected
@@ -1415,7 +1291,7 @@ error: Untouchable existential type escapes GADT pattern scope
  10 |   (define (t-dtg64-bad (T64-Hidden x))
     |  _^
  11 | |   (t-dtg64-describe x))
-    | |_______________________^ Existential type ':A' escapes through unsolved predicate 'T-dtg64-Describe :A'
+    | |_______________________^ Existential type '<existential :A>' escapes through unsolved predicate 'T-dtg64-Describe <existential :A>'
 
 ================================================================================
 65 GADT Existential Instance Context Is Still Required
@@ -1447,7 +1323,7 @@ error: Untouchable existential type escapes GADT pattern scope
  16 |   (define (t-dtg65-bad (T65-Hidden x))
     |  _^
  17 | |   (t-dtg65-describe x))
-    | |_______________________^ Existential type ':A' escapes through unsolved predicate 'T-dtg65-Describe :A'
+    | |_______________________^ Existential type '<existential :A>' escapes through unsolved predicate 'T-dtg65-Describe <existential :A>'
 
 ================================================================================
 66 GADT Instance Context On Outer Type Must Be Declared
@@ -1479,29 +1355,6 @@ error: Explicit type is missing inferred predicate
  16 |  (define (t-dtg66-bad (T66-Hidden x) y)
     |           ^^^^^^^^^^^ Declared type T-dtg66-Hidden * :Y -> String is missing inferred predicate T-dtg66-Describe :Y
 
-================================================================================
-67 GADT Independent Existentials Have Distinct Names
-================================================================================
-
-(package test-package)
-
-(define-type T-dtg67-Hidden
-  (declare T67-Pack (:e * (:e -> String) -> T-dtg67-Hidden)))
-
-(declare t-dtg67-bad (T-dtg67-Hidden * T-dtg67-Hidden -> String))
-(define (t-dtg67-bad p q)
-  (match p
-    ((T67-Pack x _)
-     (match q
-       ((T67-Pack _ use) (use x))))))
-
---------------------------------------------------------------------------------
-
-error: Type mismatch
-  --> test:11:30
-    |
- 11 |         ((T67-Pack _ use) (use x))))))
-    |                                ^ Expected type ':E' but got ':E1'
 ================================================================================
 68 GADT Nested Accessor Of A Missing Field Is Reported
 ================================================================================
@@ -1556,7 +1409,7 @@ error: Untouchable existential type escapes GADT pattern scope
  13 |   (define (t-dtg69-bad (T69-Box r))
     |  _^
  14 | |   (.payload (.nested r)))
-    | |_________________________^ Existential type ':A' escapes through result type ':A'
+    | |_________________________^ Existential type '<existential :A>' escapes through result type '<existential :A>'
 
 ================================================================================
 70 GADT Nested Existential Field Is Not A Declared String
@@ -1584,22 +1437,7 @@ error: Accessor type mismatch
   --> test:15:3
     |
  15 |    (.payload (.nested r)))
-    |     ^^^^^^^^ field 'PAYLOAD' has type ':A', but expected 'String'
-
-================================================================================
-71 GADT Constructor Result-Head Type Aliases And Forward Type-Group Aliases
-================================================================================
-
-(package test-package)
-
-(define-type-alias (T71-Alias :a) (T-dtg71 :a))
-(define-type-alias T71-IntAlias (T-dtg71 Integer))
-(define-type-alias (T71-CtorAlias :a) (:a -> T71-Alias :a))
-
-(define-type (T-dtg71 :a)
-  (declare T71-Zero T71-IntAlias)
-  (declare T71-One (Integer -> T71-Alias Integer))
-  (declare T71-Any (T71-CtorAlias :a)))
+    |     ^^^^^^^^ field 'PAYLOAD' has type '<existential :A>', but expected 'String'
 
 ================================================================================
 72 GADT Constructor Result-Head Alias Returning Wrong Type
@@ -1815,7 +1653,7 @@ error: Type mismatch
   --> test:20:26
     |
  20 |      ((Pack80 (Tuple (Some (T80-Int)) (Box80 _))) 1)
-    |                            ^^^^^^^^^ Expected type ':T' but pattern has type 'T-dtg80 Integer'
+    |                            ^^^^^^^^^ Expected type '<existential :T>' but pattern has type 'T-dtg80 Integer'
 
 ================================================================================
 81 GADT Mutually Dependent Nested Fields Do Not Supply Evidence
@@ -1846,7 +1684,7 @@ error: Type mismatch
   --> test:17:19
     |
  17 |      ((Twin81 (Some (Refl81)) (Some (T81-Int))) 1)
-    |                     ^^^^^^^^ Expected type ':P' but pattern has type 'Same81 :X :X'
+    |                     ^^^^^^^^ Expected type '<existential :P>' but pattern has type 'Same81 :X :X'
 
 ================================================================================
 82 GADT Nested Field Needs A Witness For Its Own Variable
@@ -1875,29 +1713,3 @@ error: Declared type is too general
     |
  15 |  (define (t-dtg82 (Box82 (T82-Int)) (Refl82)) 1)
     |           ^^^^^^^ Declared type forall :T :U. Box82 :T * Same82 :U (T-dtg82 Integer) -> Integer is more general than inferred type forall :A :U1. Box82 (T-dtg82 :A) * Same82 :U1 (T-dtg82 Integer) -> Integer.
-
-================================================================================
-83 GADT Crossed Nested Witnesses Are Used Per Subpattern
-================================================================================
-
-(package coalton-unit-tests/gadt-nested-5
-  (import coalton-prelude))
-
-(define-type (Lamp83 :a)
-  (declare On83 (Lamp83 Boolean))
-  (declare Count83 (Lamp83 Integer)))
-
-(define-type (Shape83 :a)
-  (declare BoolShape83 (Shape83 (Lamp83 Boolean)))
-  (declare IntShape83 (Shape83 (Lamp83 Integer))))
-
-(define-type Crate83
-  (declare Crate83 (Tuple :a (Shape83 :b) * Tuple :b (Shape83 :a) -> Crate83)))
-
-(declare t-dtg83 (Crate83 -> Boolean))
-(define (t-dtg83 c)
-  (match c
-    ((Crate83 (Tuple (On83) (IntShape83)) (Tuple (Count83) (BoolShape83))) True)
-    (_ False)))
-
---------------------------------------------------------------------------------

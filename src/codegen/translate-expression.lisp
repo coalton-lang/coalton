@@ -343,50 +343,6 @@ values."
            (values node &optional))
   (translate-body-elements-into body-nodes (zero-values-node) ctx env))
 
-(defun specialize-qual-type-to-context (qual-ty ctx env)
-  "Specialize QUAL-TY to any uniquely matching predicates in CTX.
-
-This matters for overloaded values that are captured without an
-application site, such as variables passed into `lisp` forms."
-  (declare (type tc:qualified-ty qual-ty)
-           (type pred-context ctx)
-           (type tc:environment env)
-           (values tc:qualified-ty &optional))
-  (let* ((subs nil)
-         (reachable-ctx-preds
-           (loop :for (ctx-pred . nil) :in ctx
-                 :append (tc:superclass-closure env ctx-pred)))
-         (ctx-vars (tc:type-variables reachable-ctx-preds)))
-    (dolist (pred (tc:qualified-ty-predicates qual-ty))
-      (let ((matches
-              (remove-duplicates
-               (loop :for reachable-pred :in reachable-ctx-preds
-                     :for match
-                       := (and (eq (tc:ty-predicate-class pred)
-                                   (tc:ty-predicate-class reachable-pred))
-                               (handler-case
-                                   (tc:predicate-match pred reachable-pred subs)
-                                 (tc:predicate-unification-error ()
-                                   nil)
-                                 (tc:coalton-internal-type-error ()
-                                   nil)))
-                     :when (and match
-                                (every (lambda (v)
-                                         (tc:ty= v (tc:apply-substitution match v)))
-                                       ctx-vars))
-                       :collect (cons (tc:apply-substitution match pred)
-                                      match))
-               :test #'tc:type-predicate=
-               :key #'car)))
-        (when (= 1 (length matches))
-          (setf subs
-                (tc:compose-substitution-lists
-                 (cdar matches)
-                 subs)))))
-    (if subs
-        (tc:apply-substitution subs qual-ty)
-        qual-ty)))
-
 (defun binding-eta-argument-types (binding qual-ty)
   "Return extra positional argument types needed to eta-expand BINDING.
 
@@ -441,7 +397,7 @@ needs to synthesize those trailing parameters explicitly."
             (or eta-rands eta-keyword-rands))
        (make-qualified-variable-application
         binding-value
-        (specialize-qual-type-to-context (tc:node-type binding-value) ctx env)
+        (tc:node-type binding-value)
         (tc:function-return-type (tc:qualified-ty-type qual-ty))
         eta-rands
         eta-keyword-rands
@@ -505,6 +461,7 @@ needs to synthesize those trailing parameters explicitly."
                           (tc:node-abstraction-params last-node))))
          (inputs (tc:function-type-arguments (tc:qualified-ty-type qual-ty)))
          (pattern-params (positional-pattern-bindings params inputs))
+         (vars (append (mapcar #'cdr ctx) (mapcar #'first pattern-params)))
          (incoming-ctx (append ctx extra-context))
          (full-ctx (pattern-predicate-context params inputs incoming-ctx env))
          (eta-arg-types (binding-eta-argument-types binding qual-ty))
@@ -537,50 +494,48 @@ needs to synthesize those trailing parameters explicitly."
           ((and (null (tc:binding-parameters binding))
                 (tc:binding-restricted-p binding)
                 (typep last-node 'tc:node-abstraction))
-           (let ((vars (append (mapcar #'cdr ctx) (mapcar #'first pattern-params))))
-             (make-node-abstraction
-              :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
-              :vars vars
-              :keyword-params (translate-keyword-params
-                               (tc:node-abstraction-keyword-params last-node))
-              :subexpr (wrap-qualified-nullary-result
-                        (wrap-with-pattern-params
-                         pattern-params
-                         (translate-expression
-                          (tc:node-abstraction-body last-node)
-                          full-ctx
-                          env)
-                         full-ctx incoming-ctx env)
-                        vars
-                        (translate-keyword-params
-                         (tc:node-abstraction-keyword-params last-node))))))
+           (make-node-abstraction
+            :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+            :vars vars
+            :keyword-params (translate-keyword-params
+                             (tc:node-abstraction-keyword-params last-node))
+            :subexpr (wrap-qualified-nullary-result
+                      (wrap-with-pattern-params
+                       pattern-params
+                       (translate-expression
+                        (tc:node-abstraction-body last-node)
+                        full-ctx
+                        env)
+                       full-ctx incoming-ctx env)
+                      vars
+                      (translate-keyword-params
+                       (tc:node-abstraction-keyword-params last-node)))))
 
           ;; Function-syntax bindings and constrained bindings need an outer lambda.
           ((or (tc:binding-parameters binding) preds (tc:binding-restricted-p binding))
-           (let ((vars (append (mapcar #'cdr ctx) (mapcar #'first pattern-params))))
-             (make-node-abstraction
-              :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
-              :vars (append vars eta-vars)
-              :keyword-params (append (translate-keyword-params
-                                       (tc:binding-keyword-parameters binding))
-                                      eta-keyword-params)
-              :subexpr (wrap-qualified-nullary-result
-                        (wrap-with-pattern-params
-                         pattern-params
-                         (maybe-eta-expand-binding-body
-                          binding
-                          qual-ty
-                          (translate-expression (tc:binding-value binding) full-ctx env)
-                          eta-vars
-                          eta-arg-types
-                          eta-keyword-rands
-                          full-ctx
-                          env)
-                         full-ctx incoming-ctx env)
-                        (append vars eta-vars)
-                        (append (translate-keyword-params
-                                 (tc:binding-keyword-parameters binding))
-                                eta-keyword-params)))))
+           (make-node-abstraction
+            :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+            :vars (append vars eta-vars)
+            :keyword-params (append (translate-keyword-params
+                                     (tc:binding-keyword-parameters binding))
+                                    eta-keyword-params)
+            :subexpr (wrap-qualified-nullary-result
+                      (wrap-with-pattern-params
+                       pattern-params
+                       (maybe-eta-expand-binding-body
+                        binding
+                        qual-ty
+                        (translate-expression (tc:binding-value binding) full-ctx env)
+                        eta-vars
+                        eta-arg-types
+                        eta-keyword-rands
+                        full-ctx
+                        env)
+                       full-ctx incoming-ctx env)
+                      (append vars eta-vars)
+                      (append (translate-keyword-params
+                               (tc:binding-keyword-parameters binding))
+                              eta-keyword-params))))
 
           (t
            (translate-expression (tc:binding-value binding) full-ctx env)))))))
@@ -600,10 +555,7 @@ direct-call shape needed by later tail-call and direct-application passes."
            (type pred-context ctx)
            (type tc:environment env)
            (values node &optional))
-  (let* ((qual-ty (specialize-qual-type-to-context
-                   (tc:node-type expr)
-                   ctx
-                   env))
+  (let* ((qual-ty (tc:node-type expr))
          (translated-rands
            (mapcar
             (lambda (rand)
@@ -936,7 +888,7 @@ Returns a `node'.")
                                    (or eta-rands eta-keyword-rands))
                               (make-qualified-variable-application
                                last-node
-                               (specialize-qual-type-to-context (tc:node-type last-node) ctx env)
+                               (tc:node-type last-node)
                                (tc:function-return-type visible-type)
                                eta-rands
                                eta-keyword-rands
@@ -1669,7 +1621,7 @@ dictionaries applied."
   (when (typep expr 'tc:node-abstraction)
     (return-from apply-dicts
       (translate-expression expr ctx env)))
-  (let* ((qual-ty (specialize-qual-type-to-context (tc:node-type expr) ctx env))
+  (let* ((qual-ty (tc:node-type expr))
 
          (dicts (mapcar
                  (lambda (pred)

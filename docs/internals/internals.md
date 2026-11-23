@@ -121,6 +121,39 @@ Type checking relies mainly on:
 
 There are other modules to handle more specific things, but the bulk of the "type calculus" is defined above.
 
+### GADT result proofs
+
+A constructor's index equations are local to its arm. When a named match
+result has not yet acquired its final type, an enclosing explicit binding can
+retain result-dependent predicate obligations and the arm's equations.
+Checking an expression against an expected `forall` owns a separate proof
+scope: its obligations are discharged and its typed arms normalized before
+the quantified variables are relaxed or its dictionaries abstracted.
+An unresolved obligation independent of those quantified variables can remain
+with an enclosing result check, retaining its arm evidence but not the inner
+quantified dictionaries, provided this does not cross a local generalization
+boundary.
+Retention supplies neither an equation nor a dictionary: the completed result
+must justify each obligation, and unresolved existential variables cannot escape.
+An independently synthesized local function keeps its own result predicates
+for generalization; an enclosing declaration does not make its result contextual.
+
+Before dictionary elaboration, the typed arm is normalized with the same local
+equations used to discharge its obligations. Each typed branch has a stable
+identity preserved by substitution and traversal; diagnostic locations cannot
+identify branches because synthetic arms can share a location.
+Ordinary result unification can rename an index even in a fallback arm with no
+new evidence. Transport saved equations on both sides to that representative;
+do not infer constructor equalities from the absence of earlier patterns.
+Contradictory arms remain subject to the normal pattern-compatibility and
+declaration-generality diagnostics, not an incidental equation-transport error.
+
+Dictionary elaboration uses the typed predicate, not a same-class guess from
+the lexical context. A polymorphic `lisp` capture may instantiate fresh lookup
+variables from an unambiguous supplied predicate, but cannot equate existing
+lexical variables. An unresolved fresh capture predicate is ambiguous, not a
+request for defaulting. Settled predicates still undergo ordinary checking.
+
 ### Environment
 
 File: `src/typechecker/environment.lisp`

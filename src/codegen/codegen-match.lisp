@@ -7,8 +7,7 @@
    (#:util #:coalton-impl/util)
    (#:rt #:coalton-impl/runtime)
    (#:ast #:coalton-impl/codegen/ast)
-   (#:pattern #:coalton-impl/codegen/pattern)
-   (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern))
+   (#:pattern #:coalton-impl/codegen/pattern))
   (:export
    #:match-emit-jumptable-p             ; FUNCTION
    #:match-emit-fallback-p              ; FUNCTION
@@ -16,6 +15,8 @@
    #:match-emit-if-p                    ; FUNCTION
    #:codegen-match-branch               ; FUNCTION
    #:codegen-match                      ; FUNCTION
+   #:codegen-pattern                    ; FUNCTION
+   #:codegen-pattern-test               ; FUNCTION
    #:order-pattern-tests                ; FUNCTION
    #:lower-parameter-row                ; FUNCTION
    ))
@@ -137,7 +138,7 @@ When true, returns two `ast:node' objects representing then/else branches."
 
 (defstruct (constructor-specialization (:copier nil))
   (fields nil :type list :read-only t)
-  (accessors nil :type list :read-only t)
+  (readers nil :type list :read-only t)
   (type-arguments nil :type tc:ty-list :read-only t)
   (substitutions nil :type tc:substitution-list :read-only t))
 
@@ -209,27 +210,49 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
     ((or pattern:pattern-constructor pattern:pattern-literal)
      (values pat bindings))))
 
-(defun constructor-test-form (ctor-name ctor-entry type-entry col-var)
-  (declare (type symbol ctor-name col-var)
+(defun constructor-test-form (ctor-name ctor-entry type-entry operand)
+  (declare (type symbol ctor-name)
            (type tc:constructor-entry ctor-entry)
            (type tc:type-entry type-entry))
   (cond
     ((tc:type-entry-enum-repr type-entry)
-     `(eql ',(tc:constructor-entry-compressed-repr ctor-entry) ,col-var))
+     `(eql ',(tc:constructor-entry-compressed-repr ctor-entry) ,operand))
     ((eql ctor-name 'coalton:Cons)
-     `(cl:consp ,col-var))
+     `(cl:consp ,operand))
     ((eql ctor-name 'coalton:Nil)
-     `(null ,col-var))
+     `(null ,operand))
     ((eql ctor-name 'coalton:Some)
-     `(rt:cl-some-p ,col-var))
+     `(rt:cl-some-p ,operand))
     ((eql ctor-name 'coalton:None)
-     `(rt:cl-none-p ,col-var))
+     `(rt:cl-none-p ,operand))
     (t
-     `(typep ,col-var ',(tc:constructor-entry-classname ctor-entry)))))
+     `(typep ,operand ',(tc:constructor-entry-classname ctor-entry)))))
 
 (defun column-type-name (column)
   (let ((head (tc:base-type (match-column-type column))))
     (and (tc:tycon-p head) (tc:tycon-name head))))
+
+(defun constructor-field-readers (ctor fields type-entry env)
+  "Field readers for this proven constructor instance. NIL denotes identity."
+  (let ((name (tc:constructor-entry-name ctor)))
+    (cond
+      ((null fields) nil)
+      ((tc:type-entry-newtype type-entry) (list nil))
+      ((eq name 'coalton:Cons) '(car cdr))
+      ((eq name 'coalton:Some)
+       ;; An Optional holds its value directly unless it is itself represented
+       ;; by CL-OPTIONAL. Only use the field type justified on this edge.
+       (let ((inner (tc:lisp-type (first fields) env)))
+         (list (unless (and (not (eq inner t))
+                            (subtypep inner '(not coalton-impl/runtime/optional::cl-optional)))
+                 'rt:unwrap-cl-some))))
+      (t
+       (loop :with class := (tc:constructor-entry-classname ctor)
+             :for i :below (tc:constructor-entry-arity ctor)
+             :collect (alexandria:format-symbol (symbol-package class) "~A-_~D" class i))))))
+
+(defun project-field (reader operand)
+  (if reader (list reader operand) operand))
 
 (defun specialize-constructor (column ctor-entry env table)
   "Instantiate the constructor once per incoming column, not per row. Its
@@ -247,23 +270,15 @@ NIL means the constructor cannot inhabit these indices."
           (tc:try-unify nil (tc:function-return-type ctor) (match-column-type column) :all)
         (setf (gethash key table)
               (when possible
-                (make-constructor-specialization
-                 :type-arguments (tc:apply-substitution subs binders)
-                 :substitutions (let ((vars (tc:type-variables (match-column-type column))))
-                                  (remove-if-not (lambda (s) (member (tc:substitution-from s) vars :test #'tc:ty=))
-                                                 subs))
-                 :fields (loop :for ft :in (tc:function-type-arguments ctor)
-                               :collect (make-match-column :var (gensym "MATCH-FIELD-")
-                                                           :type (tc:apply-substitution subs ft)))
-                 :accessors
-                 (let ((var (match-column-var column)))
-                   (cond ((tc:type-entry-newtype (tc:lookup-type env (column-type-name column))) (list var))
-                         ((eq name 'coalton:Cons) (list `(car ,var) `(cdr ,var)))
-                         ((eq name 'coalton:Some) (list `(rt:unwrap-cl-some ,var)))
-                         (t (loop :with class := (tc:constructor-entry-classname ctor-entry)
-                                  :for i :below (tc:constructor-entry-arity ctor-entry)
-                                  :collect `(,(alexandria:format-symbol (symbol-package class) "~A-_~D" class i)
-                                             ,var))))))))))))
+                (let ((fields (tc:apply-substitution subs (tc:function-type-arguments ctor))))
+                  (make-constructor-specialization
+                   :type-arguments (tc:apply-substitution subs binders)
+                   :substitutions (let ((vars (tc:type-variables (match-column-type column))))
+                                    (remove-if-not (lambda (s) (member (tc:substitution-from s) vars :test #'tc:ty=))
+                                                   subs))
+                   :fields (loop :for ft :in fields :collect (make-match-column :var (gensym "MATCH-FIELD-") :type ft))
+                   :readers (constructor-field-readers ctor-entry fields (tc:lookup-type env (column-type-name column))
+                                                       env)))))))))
 
 (defun open-pattern-binders (pat spec existing)
   "Give this row's existential binders the names of this column's opening.
@@ -274,17 +289,18 @@ Never use the row's refined child types as evidence about shared columns."
         :finally (return (append new existing))))
 
 (defun row-evidence (row givens)
+  "Return GIVENS composed with ROW's openings, reusing either list unchanged
+when the other is empty."
   (let ((openings (match-row-openings row)))
     (cond ((null openings) givens)
           ((null givens) openings)
           (t (tc:compose-substitution-lists givens openings)))))
 
-(defun refine-columns (columns subs)
-  (loop :for column :in columns
-        :for type := (tc:apply-substitution subs (match-column-type column))
-        :collect (if (tc:ty= type (match-column-type column))
-                     column
-                     (make-match-column :var (match-column-var column) :type type))))
+(defun row-with-patterns (row patterns)
+  (make-match-row :patterns patterns
+                  :bindings (match-row-bindings row)
+                  :openings (match-row-openings row)
+                  :action-index (match-row-action-index row)))
 
 (defun replace-nth-with-list (list index replacement)
   (declare (type list list replacement)
@@ -320,12 +336,8 @@ Never use the row's refined child types as evidence about shared columns."
                :collect (nth i columns))
          (loop :for row :in rows
                :for pats := (match-row-patterns row)
-               :collect (make-match-row
-                         :patterns (loop :for i :in active-indices
-                                         :collect (nth i pats))
-                         :bindings (match-row-bindings row)
-                         :openings (match-row-openings row)
-                         :action-index (match-row-action-index row)))))))
+               :collect (row-with-patterns row (loop :for i :in active-indices
+                                                     :collect (nth i pats))))))))
 
 (defun specialize-rows-for-constructor (rows col-idx ctor-name spec)
   (declare (type list rows)
@@ -340,44 +352,30 @@ Never use the row's refined child types as evidence about shared columns."
           :for pat := (nth col-idx (match-row-patterns row))
           :when (and (pattern:pattern-constructor-p pat)
                      (eq (pattern:pattern-constructor-name pat) ctor-name))
-            :collect (let ((bindings (match-row-bindings row))
-                           (peeled-subpats nil))
-                       (loop :for subpat :in (pattern:pattern-constructor-patterns pat)
-                             :for fc :in field-columns
-                             :do (multiple-value-bind (core-pat new-bindings)
-                                     (peel-pattern subpat
-                                                   (match-column-var fc)
-                                                   bindings)
-                                   (push core-pat peeled-subpats)
-                                   (setf bindings new-bindings)))
+            :collect (let* ((bindings (match-row-bindings row))
+                            (fields (loop :for subpat :in (pattern:pattern-constructor-patterns pat)
+                                          :for fc :in field-columns
+                                          :collect (multiple-value-bind (core-pat new-bindings)
+                                                       (peel-pattern subpat (match-column-var fc) bindings)
+                                                     (setf bindings new-bindings)
+                                                     core-pat))))
                        (make-match-row
-                        :patterns (replace-nth-with-list (match-row-patterns row)
-                                                         col-idx
-                                                         (nreverse peeled-subpats))
+                        :patterns (replace-nth-with-list (match-row-patterns row) col-idx fields)
                         :bindings bindings
                         :openings (open-pattern-binders pat spec (match-row-openings row))
                         :action-index (match-row-action-index row)))
           :when (pattern:pattern-wildcard-p pat)
-            :collect (make-match-row
-                      :patterns (replace-nth-with-list (match-row-patterns row)
-                                                       col-idx
-                                                       wildcard-fields)
-                      :bindings (match-row-bindings row)
-                      :openings (match-row-openings row)
-                      :action-index (match-row-action-index row)))))
+            :collect (row-with-patterns row (replace-nth-with-list (match-row-patterns row)
+                                                                   col-idx
+                                                                   wildcard-fields)))))
 
 (defun default-rows-for-column (rows col-idx)
   (declare (type list rows)
            (type fixnum col-idx)
            (values list &optional))
   (loop :for row :in rows
-        :for pat := (nth col-idx (match-row-patterns row))
-        :when (pattern:pattern-wildcard-p pat)
-          :collect (make-match-row
-                    :patterns (remove-nth (match-row-patterns row) col-idx)
-                    :bindings (match-row-bindings row)
-                    :openings (match-row-openings row)
-                    :action-index (match-row-action-index row))))
+        :when (pattern:pattern-wildcard-p (nth col-idx (match-row-patterns row)))
+          :collect (row-with-patterns row (remove-nth (match-row-patterns row) col-idx))))
 
 (defun matrix-memo-key (columns rows failure givens)
   (declare (type list columns rows))
@@ -436,17 +434,20 @@ constructor name is not evidence about its own operand."
                         patterns (mapcar #'match-column-type columns)))
     best))
 
-(defun user-comparison-p (pat)
-  (etypecase pat
-    (pattern:pattern-literal (pattern:pattern-literal-test pat))
-    (pattern:pattern-constructor (some #'user-comparison-p (pattern:pattern-constructor-patterns pat)))
-    (pattern:pattern-binding (user-comparison-p (pattern:pattern-binding-pattern pat)))
-    ((or pattern:pattern-wildcard pattern:pattern-var) nil)))
-
 (defun specialized-columns (columns idx spec givens)
+  "Replace column IDX by SPEC's fields, refining the other columns with the
+equations SPEC establishes. Return the new columns and evidence. Without
+equations, the other columns are reused untouched."
   (let ((new (constructor-specialization-substitutions spec)))
-    (values (replace-nth-with-list (if new (refine-columns columns new) columns) idx
-                                   (constructor-specialization-fields spec))
+    (values (replace-nth-with-list
+             (if (null new)
+                 columns
+                 (loop :for column :in columns
+                       :for type := (tc:apply-substitution new (match-column-type column))
+                       :collect (if (tc:ty= type (match-column-type column))
+                                    column
+                                    (make-match-column :var (match-column-var column) :type type))))
+             idx (constructor-specialization-fields spec))
             (if new (tc:compose-substitution-lists new givens) givens))))
 
 (defun walk-pattern-row (patterns columns env dictionary-equalities visit)
@@ -481,9 +482,49 @@ test. Return bindings and final evidence only on the success path."
                          (specialized-columns columns idx spec (open-pattern-binders p spec givens))))))))
       (values bindings givens t))))
 
+(defgeneric codegen-pattern-test (test expr env)
+  (:documentation "Emit a literal's translated comparison against Lisp EXPR."))
+
+(defun codegen-pattern (pat expr expr-type env)
+  "Emit a handler predicate, bindings usable on success, their Lisp types,
+and whether success is possible. Use the same incoming column types as
+MATCH: checking a class tag establishes its accessor, not its erased type
+arguments. Record access paths rather than temporaries because the branch
+body may bind its variables *after* unwinding."
+  (let* ((root (make-match-column :var (gensym "PAYLOAD-") :type expr-type))
+         (paths (make-hash-table :test #'eq))
+         (tests nil))
+    (setf (gethash (match-column-var root) paths) expr)
+    (multiple-value-bind (bindings givens possible)
+        (walk-pattern-row
+         (list pat) (list root) env nil
+         (lambda (p col spec givens)
+           (declare (ignore givens))
+           (let ((operand (gethash (match-column-var col) paths)))
+             (etypecase p
+               (pattern:pattern-literal
+                (push (literal-pattern-test-form p operand env) tests))
+               (pattern:pattern-constructor
+                (let* ((name (pattern:pattern-constructor-name p))
+                       (entry (tc:lookup-constructor env name))
+                       (type (tc:lookup-type env (column-type-name col))))
+                  (unless (tc:type-entry-newtype type)
+                    (push (constructor-test-form name entry type operand) tests))
+                  (loop :for field :in (constructor-specialization-fields spec)
+                        :for reader :in (constructor-specialization-readers spec)
+                        :do (setf (gethash (match-column-var field) paths)
+                                  (project-field reader operand)))))))))
+      (unless possible (push nil tests))
+      (values (cond ((null tests) t)
+                    ((null (cdr tests)) (car tests))
+                    (t `(and ,@(nreverse tests))))
+              (loop :for b :in bindings :collect (list (match-binding-var b) (gethash (match-binding-source b) paths)))
+              (loop :for b :in bindings :collect (tc:lisp-type (tc:apply-substitution givens (match-binding-type b)) env))
+              possible))))
+
 (defun order-pattern-tests (pat type env dictionary-equalities)
   "Fix observable test order before specializing or inlining a copy."
-  (unless (and (user-comparison-p pat)
+  (unless (and (pattern:pattern-has-user-test-p pat)
                (coalton-impl/codegen/transformations:pattern-contains-gadt-p pat env))
     (return-from order-pattern-tests pat))
   (let ((order (make-hash-table :test #'eq)))
@@ -543,7 +584,7 @@ the next witness. Their scrutinees have *incoming*, not branch-final, types."
 observable comparison in this row by factoring a different column first."
   (let* ((patterns (match-row-patterns row))
          (pat (nth col-idx patterns)))
-    (and (or (not (some #'user-comparison-p patterns))
+    (and (or (not (some #'pattern:pattern-has-user-test-p patterns))
              (eql col-idx (next-match-column patterns columns (row-evidence row givens) env)))
          (or (pattern:pattern-wildcard-p pat)
              (etypecase head
@@ -613,7 +654,8 @@ matches, compiled with the evidence available before these rows were tried."
                                           :ctor-name name
                                           :ctor-entry ctor
                                           :field-columns fields
-                                          :field-accessors (constructor-specialization-accessors spec)
+                                          :field-accessors (loop :for reader :in (constructor-specialization-readers spec)
+                                                                 :collect (project-field reader (match-column-var col)))
                                           :subtree (build next-cols
                                                           (specialize-rows-for-constructor prefix idx name spec)
                                                           fallback next-givens))))))
@@ -631,10 +673,7 @@ matches, compiled with the evidence available before these rows were tried."
                                              (pattern:pattern-literal-value head)))))
              (let ((then (loop :for row :in prefix :for p := (nth idx (match-row-patterns row))
                                :when (or (pattern:pattern-wildcard-p p) (same-value-p p))
-                                 :collect (make-match-row :patterns (remove-nth (match-row-patterns row) idx)
-                                                          :bindings (match-row-bindings row)
-                                                          :openings (match-row-openings row)
-                                                          :action-index (match-row-action-index row))))
+                                 :collect (row-with-patterns row (remove-nth (match-row-patterns row) idx))))
                    (else (remove-if (lambda (row) (same-value-p (nth idx (match-row-patterns row)))) prefix)))
                (make-dtree-literal-if :column col :pattern head
                                       :then (build (remove-nth columns idx) then fallback)
@@ -784,15 +823,15 @@ In particular, don't expand a shared row-failure continuation at each edge."
            (type tc:environment env)
            (values t &optional))
 
-  (multiple-value-bind (pred bindings types)
-      (codegen-pattern:codegen-pattern pattern match-var match-expr-type env)
+  (multiple-value-bind (pred bindings types possible)
+      (codegen-pattern pattern match-var match-expr-type env)
 
     `(,pred
-      ,(if (endp bindings)
-           code
-           `(let ,bindings
-              ,(codegen-binding-types bindings types)
-              ,code)))))
+      ,(cond ((not possible) nil)
+             ((endp bindings) code)
+             (t `(let ,bindings
+                   ,(codegen-binding-types bindings types)
+                   ,code))))))
 
 (defun codegen-case-match-branch (code pattern match-var match-expr-type env)
   "Generate code for a `cl:case' branch."
@@ -804,7 +843,7 @@ In particular, don't expand a shared row-failure continuation at each edge."
            (values t &optional))
 
   (multiple-value-bind (pred bindings types)
-      (codegen-pattern:codegen-pattern pattern match-var match-expr-type env)
+      (codegen-pattern pattern match-var match-expr-type env)
     (declare (ignore pred))
 
     (cond
@@ -855,18 +894,17 @@ compiling self-calls in the other branches as tail calls."
       (append (butlast branches)
               (list (cons catch-all-key (rest (car (last branches))))))))
 
-(defun literal-pattern-test-form (pat col-var env)
+(defun literal-pattern-test-form (pat operand env)
   (declare (type pattern:pattern-literal pat)
-           (type symbol col-var)
            (type tc:environment env))
   (let ((val (pattern:pattern-literal-value pat)))
     (cond
       ((pattern:pattern-literal-test pat)
-       (codegen-pattern:codegen-pattern-test (pattern:pattern-literal-test pat) col-var env))
+       (codegen-pattern-test (pattern:pattern-literal-test pat) operand env))
       ((stringp val)
-       `(string= ,val ,col-var))
+       `(string= ,val ,operand))
       (t
-       `(eql ,val ,col-var)))))
+       `(eql ,val ,operand)))))
 
 (defun emit-dtree (tree branch-patterns branch-codes arm-fn-table node-join-table free-vars env &key ignore-join-root)
   "Emit Common Lisp code for decision DAG TREE."

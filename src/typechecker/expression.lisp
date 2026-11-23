@@ -94,6 +94,7 @@
    #:make-node-match-branch             ; CONSTRUCTOR
    #:node-match-branch-pattern          ; ACCESSOR
    #:node-match-branch-body             ; ACCESSOR
+   #:node-match-branch-id               ; ACCESSOR
    #:node-match-branch-list             ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
@@ -355,6 +356,7 @@
 
 (defstruct (node-match-branch
             (:copier nil))
+  (id       (gensym "BRANCH-")       :type symbol          :read-only t)
   (pattern  (util:required 'pattern)  :type pattern         :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
@@ -690,6 +692,7 @@
   (declare (type tc:substitution-list subs)
            (values node-match-branch))
   (make-node-match-branch
+   :id (node-match-branch-id node)
    :pattern (tc:apply-substitution subs (node-match-branch-pattern node))
    :body (tc:apply-substitution subs (node-match-branch-body node))
    :location (source:location node)))

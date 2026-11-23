@@ -36,7 +36,6 @@
    #:constructor-signature                       ; ACCESSOR
    #:constructor-fields                          ; ACCESSOR
    #:constructor-list                            ; TYPE
-   #:constructor-gadt-p                          ; FUNCTION
    #:toplevel-define-type                        ; STRUCT
    #:make-toplevel-define-type                   ; CONSTRUCTOR
    #:toplevel-define-type-name                   ; ACCESSOR
@@ -47,8 +46,6 @@
    #:toplevel-define-type-head-location          ; ACCESSOR
    #:toplevel-define-type-exception-p            ; ACCESSOR
    #:toplevel-define-type-resumption-p           ; ACCESSOR
-   #:toplevel-define-type-p                      ; FUNCTION
-   #:toplevel-define-type-gadt-p                 ; FUNCTION
    #:toplevel-define-type-list                   ; TYPE
    #:toplevel-define-type-alias                  ; STRUCT
    #:make-toplevel-define-type-alias             ; CONSTRUCTOR
@@ -282,12 +279,6 @@
   (docstring (util:required 'docstring) :type (or null string)       :read-only t)
   (location  (util:required 'location)  :type source:location        :read-only t))
 
-(defun constructor-gadt-p (constr)
-  (declare (type constructor constr)
-           (values boolean))
-  (when (constructor-signature constr)
-    t))
-
 (defmethod source:location ((self constructor))
   (constructor-location self))
 
@@ -318,13 +309,6 @@
   (head-location (util:required 'head-location) :type source:location            :read-only t)
   (exception-p   (util:required 'exception-p)   :type boolean                    :read-only t)
   (resumption-p  (util:required 'resumption-p)  :type boolean                    :read-only t))
-
-(defun toplevel-define-type-gadt-p (type)
-  (declare (type toplevel-define-type type)
-           (values boolean))
-  (dolist (ctor (toplevel-define-type-ctors type))
-    (when (constructor-gadt-p ctor)
-      (return t))))
 
 (util:define-list-type toplevel-define-type-list toplevel-define-type-p :compile-toplevel t)
 
@@ -1370,43 +1354,41 @@ consume all attributes")))
      :vars (reverse variables)
      :docstring docstring
      :ctors
-     (let ((has-adt-ctor nil)
-           (has-gadt-ctor nil))
-       (loop
-         :for constructors_
-           := (cst:nthrest (if docstring 3 2) form)
-             :then (cst:rest constructors_)
-         :with ctors := nil
-         :while (cst:consp constructors_)
+     (let ((ctors
+             (loop
+               :for constructors_
+                 := (cst:nthrest (if docstring 3 2) form)
+                   :then (cst:rest constructors_)
+               :with ctors := nil
+               :while (cst:consp constructors_)
 
-         ;; check for duplicate docstrings
-         :when (and (cst:atom (cst:first constructors_))
-                    (stringp (cst:raw (cst:first constructors_)))
-                    (not (cst:null (cst:rest constructors_)))
-                    (cst:atom (cst:second constructors_))
-                    (stringp (cst:raw (cst:second constructors_))))
-           :do (parse-error (format nil "Malformed ~a definition" definition-category)
-                            (note source
-                                  (cst:second constructors_)
-                                  "only one docstring allowed per constructor"))
+               ;; check for duplicate docstrings
+               :when (and (cst:atom (cst:first constructors_))
+                          (stringp (cst:raw (cst:first constructors_)))
+                          (not (cst:null (cst:rest constructors_)))
+                          (cst:atom (cst:second constructors_))
+                          (stringp (cst:raw (cst:second constructors_))))
+                 :do (parse-error (format nil "Malformed ~a definition" definition-category)
+                                  (note source
+                                        (cst:second constructors_)
+                                        "only one docstring allowed per constructor"))
 
-         ;; collect constructors with docstrings if they follow
-         :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
-                                            (cst:atom (cst:second constructors_))
-                                            (stringp (cst:raw (cst:second constructors_))))
-                                       (cst:raw (cst:second constructors_))
-                                       nil)))
-               (unless (stringp (cst:raw (cst:first constructors_)))
-                 (let ((ctor (parse-constructor (cst:first constructors_) form name ctor-docstring source)))
-                   (if (constructor-gadt-p ctor)
-                       (setf has-gadt-ctor t)
-                       (setf has-adt-ctor t))
-                   (push ctor ctors))))
-         :finally (progn
-                    (when (and has-adt-ctor has-gadt-ctor)
-                      (parse-error (format nil "Malformed ~a definition" definition-category)
-                                   (note source form "cannot mix constructor declarations with ordinary constructors")))
-                    (return ctors))))
+               ;; collect constructors with docstrings if they follow
+               :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
+                                                  (cst:atom (cst:second constructors_))
+                                                  (stringp (cst:raw (cst:second constructors_))))
+                                             (cst:raw (cst:second constructors_))
+                                             nil)))
+                     (unless (stringp (cst:raw (cst:first constructors_)))
+                       (push
+                        (parse-constructor (cst:first constructors_) form name ctor-docstring source)
+                        ctors)))
+               :finally (return ctors))))
+       (when (and (some #'constructor-signature ctors)
+                  (notevery #'constructor-signature ctors))
+         (parse-error (format nil "Malformed ~a definition" definition-category)
+                      (note source form "cannot mix constructor declarations with ordinary constructors")))
+       ctors)
      :repr nil
      :derive nil
      :location (form-location source form)
@@ -2039,10 +2021,11 @@ consume all attributes")))
       (parse-declaration-signature form source)
     (let* ((signature-form (cst:third form))
            (type (qualified-ty-type signature))
-           (result-head (if (typep type 'function-ty)
-                            (function-ty-return-tycon-head type)
-                            (ty-tycon-head type))))
-      (unless result-head
+           (result (if (typep type 'function-ty)
+                       (let ((outputs (function-ty-output-types type)))
+                         (and (alexandria:length= 1 outputs) (first outputs)))
+                       type)))
+      (unless (and result (tycon-p (first (flatten-type result))))
         (parse-error "Malformed GADT constructor"
                      (note source signature-form "GADT constructor must return ~S" (identifier-src-name type-name))
                      (secondary-note source (cst:second form) "constructor declared here")))

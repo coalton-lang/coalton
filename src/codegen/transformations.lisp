@@ -11,6 +11,7 @@
   (:export
    #:rename-type-variables
    #:prune-impossible-match-branches
+   #:specialize-node
    #:specialize-match
    #:open-known-constructor
    #:unwrap-known-constructor-branch
@@ -37,43 +38,37 @@
          (some (lambda (child) (pattern-contains-gadt-p child env))
                (pattern-constructor-patterns pat))))))
 
-(defun specialized-pattern-substitutions (pattern scrutinee env &optional subs)
-  ;; This is a feasibility test on copied, already well-typed code. A variable
-  ;; in the scrutinee can still take any index; only inconsistent constructors
-  ;; justify dropping a branch. Thread their equations through sibling fields.
-  (declare (type pattern pattern)
-           (type tc:ty scrutinee)
-           (type tc:environment env)
-           (type tc:substitution-list subs)
-           (values tc:substitution-list boolean &optional))
-  (labels ((walk (pat expected)
-             (typecase pat
-               (pattern-binding (walk (pattern-binding-pattern pat) expected))
-               (pattern-constructor
-                (let ((ctor (tc:qualified-ty-type
-                             (tc:fresh-inst (tc:lookup-value-type env (pattern-constructor-name pat))))))
-                  (multiple-value-bind (new-subs possible-p)
-                      (tc:try-unify subs (tc:function-return-type ctor) expected :all)
-                    (when possible-p
-                      (setf subs new-subs)
-                      (every #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))
-               (t t))))
-    (let ((possible-p (walk pattern scrutinee)))
-      (values subs possible-p))))
-
 (defun specialized-branch-substitutions (branch scrutinee env subs)
+  "Return the equations that hold if this already-typed row matches, or NIL
+as the second value if they contradict each other. These facts describe the
+success edge; they are not evidence for reordering tests within the row."
   (declare (type match-branch branch)
            (type tc:ty scrutinee)
            (type tc:environment env)
            (type tc:substitution-list subs)
            (values tc:substitution-list boolean &optional))
-  (loop :for (left right) :on (match-branch-index-equalities branch) :by #'cddr
-        :do (multiple-value-bind (new-subs possible-p)
-                (tc:try-unify subs left right :all)
-              (unless possible-p
-                (return-from specialized-branch-substitutions (values subs nil)))
-              (setf subs new-subs)))
-  (specialized-pattern-substitutions (match-branch-pattern branch) scrutinee env subs))
+  (labels ((equate (left right)
+             (handler-case (setf subs (tc:unify-given subs left right :all))
+               (tc:coalton-internal-type-error ()
+                 (return-from specialized-branch-substitutions (values nil nil)))))
+           (walk (pat expected)
+             (typecase pat
+               (pattern-binding (walk (pattern-binding-pattern pat) expected))
+               (pattern-constructor
+                (let* ((scheme (tc:lookup-value-type env (pattern-constructor-name pat)))
+                       (args (tc:ty-scheme-instantiation-types scheme)))
+                  ;; Use this occurrence's names for the opened arguments.
+                  ;; Otherwise a concrete result index constrains only a
+                  ;; throwaway fresh variable, not the field used by the body.
+                  (loop :for (index . var) :in (pattern-constructor-openings pat)
+                        :do (setf (nth index args) var))
+                  (let ((ctor (tc:qualified-ty-type (tc:fresh-inst scheme args))))
+                    (equate (tc:function-return-type ctor) expected)
+                    (mapc #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))))
+    (loop :for (left right) :on (match-branch-index-equalities branch) :by #'cddr
+          :do (equate left right))
+    (walk (match-branch-pattern branch) scrutinee)
+    (values subs t)))
 
 (defun specialize-match (match expr env)
   "Move the alternatives of MATCH to EXPR, retaining only feasible cases."
@@ -85,9 +80,8 @@
     ;; sinking into a GADT alternative can expose Integer where the parent
     ;; returned :A. Transport the patterns, their dictionaries and the body
     ;; together; the literal's type isn't evidence about its operand.
-    (unless (tc:ty= from to)
-      (setf moved (tc:apply-substitution (tc:unify-given nil from to :all) moved)))
-    (if env (prune-impossible-match-branches moved env) moved)))
+    (let ((subs (unless (tc:ty= from to) (tc:unify-given nil from to :all))))
+      (specialize-node moved subs env))))
 
 (defun open-known-constructor (pattern fields body env)
   "For a known constructor application, open PATTERN using its producer's
@@ -110,7 +104,11 @@ operand types don't identify the binders (e.g. a lowered forall), keep the match
                            :for sub := (find formal subs :key #'tc:substitution-from :test #'tc:ty=)
                            :unless sub :do (return-from open-known-constructor (values nil nil nil))
                            :collect (tc:make-substitution :from var :to (tc:substitution-to sub)))))
-      (values (tc:apply-substitution bindings children) (tc:apply-substitution bindings body) t bindings))))
+      (values (loop :for child :in children
+                    :collect (map-pattern child
+                                          :type-function (lambda (ty) (tc:apply-substitution bindings ty))
+                                          :test-function (lambda (test) (specialize-node test bindings env))))
+              (specialize-node body bindings env) t bindings))))
 
 (defun unwrap-known-constructor-branch (branch fields env)
   (multiple-value-bind (children body opened bindings)
@@ -119,8 +117,8 @@ operand types don't identify the binders (e.g. a lowered forall), keep the match
       (make-match-branch :index-equalities (tc:apply-substitution bindings (match-branch-index-equalities branch))
                          :pattern (first children) :body body))))
 
-(defun prune-impossible-match-branches (node env)
-  "Remove GADT branches ruled out by specializing a copy of NODE."
+(defun prune-impossible-match-branches (node env &optional givens)
+  "Remove match bodies ruled out by GIVENS, keeping any observable tests."
   (traverse
    node
    (list
@@ -134,14 +132,25 @@ operand types don't identify the binders (e.g. a lowered forall), keep the match
                :append
                (multiple-value-bind (branch-subs possible-p)
                    (specialized-branch-substitutions branch (node-type expr) env subs)
-                 (when possible-p
+                 ;; Even an impossible row can run a comparison to the left
+                 ;; of its refuting witness. Keep its tests, not its body.
+                 (when (or possible-p (pattern-has-user-test-p (match-branch-pattern branch)))
                    (list (make-match-branch
                           :pattern (map-pattern
                                     (match-branch-pattern branch)
-                                    :test-function (lambda (test) (funcall *traverse* test branch-subs)))
+                                    :test-function (lambda (test) (funcall *traverse* test subs)))
                           :index-equalities (match-branch-index-equalities branch)
-                          :body (funcall *traverse* (match-branch-body branch) branch-subs))))))))))
-   nil))
+                          :body (if possible-p
+                                    (funcall *traverse* (match-branch-body branch) branch-subs)
+                                    (make-node-lisp :type (node-type match) :vars nil
+                                                    :form '((error "Reached an impossible match alternative.")))))))))))))
+   givens))
+
+(defun specialize-node (node subs env)
+  "Copy NODE at SUBS without retyping operations in impossible alternatives.
+Without ENV, alternatives cannot be checked and are all kept."
+  (let ((live (if env (prune-impossible-match-branches node env subs) node)))
+    (if subs (tc:apply-substitution subs live) live)))
 
 (defmethod tc:apply-substitution (subs (node node))
   "Substitute type variables in the tree of `node` with other types

@@ -41,6 +41,7 @@ weight: 75
 - **Inlining rules**:
   - Only saturated positional applications of functions with known bodies (and without keyword parameters) are inlined.
   - Arguments are bound sequentially left-to-right before the inlined body executes, preserving call-by-value evaluation order.
+  - If a call fixes a GADT index, the compiler can omit impossible match bodies in that copy. A pattern comparison that would run before the mismatching constructor still runs.
   - Recursive functions are unrolled up to `*inliner-max-unroll*` (default `3`) and total inlining depth is bounded by `*inliner-max-depth*` (default `16`).
 
 ## Examples

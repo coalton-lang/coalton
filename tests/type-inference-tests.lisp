@@ -475,6 +475,539 @@
                                  (source:extract-source-text (source:location-source location)
                                                              (source:location-span location))))))))))
 
+(deftest test-gadt-result-predicates-use-refined-givens ()
+  (dolist (fundep '("" "(:a -> :b)" "(:b -> :a)"))
+    (dolist (instances
+              '(""
+                "(define-instance (Convert Integer String)
+                   (define (convert-value x) (into x)))
+                 (define-instance (Convert String Integer)
+                   (define (convert-value x) (into (coalton/string:length x))))"))
+      (check-coalton-types
+       (format nil
+               "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+                (define-type (Same :a :b) (declare Refl (Same :x :x)))
+                (define-class (Convert :a :b ~A) (convert-value (:a -> :b)))
+                ~A
+                (declare direct (Convert :a :b => Tag :a * :a -> :b))
+                (define (direct _ x) (convert-value x))
+                (declare tagged (Convert :a :b => Tag :a * :a -> :b))
+                (define (tagged tag x)
+                  (match tag ((Whole) (convert-value x)) ((Text) (convert-value x))))
+                (declare named (Convert :a :b => Tag :a * :a -> :b))
+                (define (named tag x)
+                  (let ((result (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                    result))
+                (declare closure (Convert :a :b => Tag :a * :a -> :b))
+                (define (closure tag x)
+                  (let ((result (fn (_)
+                                  (let ((r (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                                    r))))
+                    (result Unit)))
+                (declare independent
+                         (Convert :a :b => Tag :a * :a ->
+                           Tuple (Tuple :b (Optional String)) (Tuple :b (Optional Integer))))
+                (define (independent tag x)
+                  (let ((result (match tag
+                                  ((Whole) (Tuple (convert-value x) None))
+                                  ((Text) (Tuple (convert-value x) None)))))
+                    (Tuple result result)))
+                (declare reversed (Convert :a :b => Tag :a * :a -> :b))
+                (define (reversed tag x)
+                  (match tag ((Text) (convert-value x)) ((Whole) (convert-value x))))
+                (declare left-to-right (Convert :a :b => Same :a :c * :c -> :b))
+                (define (left-to-right w x) (match w ((Refl) (convert-value x))))
+                (declare right-to-left (Convert :c :b => Same :a :c * :a -> :b))
+                (define (right-to-left w x) (match w ((Refl) (convert-value x))))
+                (declare named-left-to-right (Convert :a :b => Same :a :c * :c -> :b))
+                (define (named-left-to-right w x)
+                  (let ((result (match w ((Refl) (convert-value x))))) result))
+                (declare named-right-to-left (Convert :c :b => Same :a :c * :a -> :b))
+                (define (named-right-to-left w x)
+                  (let ((result (match w ((Refl) (convert-value x))))) result))
+                (declare parameter-pattern (Convert :c :b => Same :a :c * :a -> :b))
+                (define (parameter-pattern (Refl) x) (convert-value x))
+                (define-class (Convert :a :b => Via :a :b))
+                (declare via-superclass (Via :a :b => Tag :a * :a -> :b))
+                (define (via-superclass tag x)
+                  (match tag ((Whole) (convert-value x)) ((Text) (convert-value x))))"
+               fundep instances)
+       '("tagged" . "(Convert :a :b => Tag :a * :a -> :b)")
+       '("named" . "(Convert :a :b => Tag :a * :a -> :b)")
+       '("reversed" . "(Convert :a :b => Tag :a * :a -> :b)")
+       '("left-to-right" . "(Convert :a :b => Same :a :c * :c -> :b)")
+       '("right-to-left" . "(Convert :c :b => Same :a :c * :a -> :b)"))))
+  (check-coalton-types
+   "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+    (define-class (Convert :a :b) (convert-value (:a -> :b)))
+    (define (keep w x) (match w ((Refl) (convert-value x))))"
+   '("keep" . "(Convert :a :b => Same :c :d * :a -> :b)"))
+  (check-coalton-types
+   "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+    (define-class (Convert :a :b) (convert-value (:a -> :b)))
+    (define-instance (Convert Integer Integer) (define (convert-value x) x))
+    (define-instance (Convert String Integer)
+      (define (convert-value x) (into (coalton/string:length x))))
+    (declare concrete (Convert :a :b => Tag :a * :a * :b -> Integer))
+    (define (concrete tag x _)
+      (let ((result (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+        (+ 1 (the Integer result))))"))
+
+(deftest test-gadt-result-predicates-do-not-invent-evidence ()
+  (dolist (fundep '("" "(:a -> :b)" "(:b -> :a)"))
+    (dolist (program
+              '("(declare bad (Convert :a :b => Tag :a * :a -> :c))
+                 (define (bad tag x)
+                   (match tag ((Whole) (convert-value x)) ((Text) (convert-value x))))"
+                "(declare bad (Tag :a * :a -> :b))
+                 (define (bad tag x)
+                   (match tag ((Whole) (convert-value x)) ((Text) (convert-value x))))"
+                "(declare bad (Convert :a :b => Same :a :c * :c * :d -> :b))
+                 (define (bad w x y) (match w ((Refl) (convert-value y))))"
+                "(declare bad (Convert :a :b => Same :a :c * :c -> :b))
+                 (define (bad w x)
+                   (match w ((Refl) (convert-value x)))
+                   (convert-value x))"
+                "(define-type Hidden (declare Pack (:x -> Hidden)))
+                 (declare bad (Convert :a :b => Hidden -> :b))
+                 (define (bad h) (match h ((Pack x) (convert-value x))))"
+                "(declare bad (Convert :a :b => Tag :a * :a * :b -> Tuple String Integer))
+                 (define (bad tag x _)
+                   (let ((result (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                     (Tuple (the String result) (the Integer result))))"
+                "(declare bad (Convert :a :b => Tag :a * :a -> Tuple :b (Tuple String Integer)))
+                 (define (bad tag x)
+                   (let ((result (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                     (Tuple result (Tuple (the String result) (the Integer result)))))"
+                "(declare bad (Convert :a :b => Tag :a * :a -> Tuple :b (Tuple String Integer)))
+                 (define (bad tag x)
+                   (let ((result (fn (_)
+                                   (match tag ((Whole) (convert-value x)) ((Text) (convert-value x))))))
+                     (Tuple (result Unit)
+                            (Tuple (the String (result Unit)) (the Integer (result Unit))))))"
+                "(declare bad (Convert :a :b => Tag :a * :a * :b -> Tuple String Integer))
+                 (define (bad tag x _)
+                   (let ((result (fn (_)
+                                   (let ((r (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                                     r))))
+                     (Tuple (the String (result Unit)) (the Integer (result Unit)))))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil
+                 "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+                  (define-type (Same :a :b) (declare Refl (Same :x :x)))
+                  (define-class (Convert :a :b ~A) (convert-value (:a -> :b)))
+                  ~A" fundep program)))))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+      (define-class (Convert :a :b) (convert-value (:a -> :b)))
+      (declare ambiguous ((Convert :a :b) (Convert :a :c) => Tag :a * :a * :c -> String))
+      (define (ambiguous tag x _)
+        (let ((result (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+          result))"))
+  (check-coalton-types
+   "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+    (define-class (Convert :a :b) (convert-value (:a -> :b)))
+    (declare selected (forall (:a :b :c)
+                        ((Convert :a :b) (Convert :a :c) => Tag :a * :a * :c -> :b)))
+    (define (selected tag x _)
+      (let ((result (match tag
+                      ((Whole) (the :b (convert-value x)))
+                      ((Text) (the :b (convert-value x))))))
+        result))"))
+
+(deftest test-gadt-result-predicates-retain-enclosing-existential-scopes ()
+  (dolist (fundep '("" "(:a -> :b)"))
+    (dolist (body '("(progn
+                      (coalton/list:length
+                       [(match tag ((Whole) (convert-value x)) ((Text) (convert-value x))) y])
+                      Unit)"
+                    "(let ((r (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                       (progn (coalton/list:length [r y]) Unit))"
+                    "(progn
+                       (Cons (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))
+                             (Cons y Nil))
+                       Unit)"
+                    "(let ((r (match tag ((Whole) (convert-value x)) ((Text) (convert-value x)))))
+                       (progn (Cons r (Cons y Nil)) Unit))"))
+      (dolist (definition
+                '("(define (bad tag x _b h) (match h ((Pack y) ~A)))"
+                  "(define (bad tag x _b (Pack y)) ~A)"))
+        (handler-case
+            (progn
+              (check-coalton-types
+               (format nil
+                       "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+                        (define-type Hidden (declare Pack (:x -> Hidden)))
+                        (define-class (Convert :a :b ~A) (convert-value (:a -> :b)))
+                        (define-instance (Convert Integer Integer) (define (convert-value x) x))
+                        (define-instance (Convert String Integer)
+                          (define (convert-value x) (into (coalton/string:length x))))
+                        (declare bad (Convert :a :b => Tag :a * :a * :b * Hidden -> Unit))
+                        ~A" fundep (format nil definition body)))
+              (is nil "A retained predicate must not escape an enclosing existential scope."))
+          (tc:tc-error (condition)
+            (is (member (source:message condition)
+                        '("Untouchable existential type escapes GADT pattern scope" "Type mismatch")
+                        :test #'string=))))))))
+
+(deftest test-gadt-result-proofs-specialize-the-elaborated-arm ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(repr :transparent)
+      (define-type (Sentinel :kind) (Sentinel Integer))
+      (define-type (Tag :a)
+        (declare TI (Tag (Sentinel Integer))) (declare TS (Tag (Sentinel String))))
+      (define-class (Def :a) (def :a))
+      (define-instance (Def (Sentinel Integer)) (define def (Sentinel 42)))
+      (define-instance (Def (Sentinel Boolean)) (define def (Sentinel 99)))
+      (define-instance (Eq (Sentinel :kind))
+        (define (== (Sentinel a) (Sentinel b)) (== a b)))
+      (define-instance (Num (Sentinel Integer))
+        (define (+ (Sentinel a) (Sentinel b)) (Sentinel (+ a b)))
+        (define (- (Sentinel a) (Sentinel b)) (Sentinel (- a b)))
+        (define (* (Sentinel a) (Sentinel b)) (Sentinel (* a b)))
+        (define (fromInt n) (Sentinel n)))
+      (define-instance (Num (Sentinel Boolean))
+        (define (+ (Sentinel a) (Sentinel b)) (Sentinel (+ 1000 (+ a b))))
+        (define (- (Sentinel a) (Sentinel b)) (Sentinel (- a b)))
+        (define (* (Sentinel a) (Sentinel b)) (Sentinel (* a b)))
+        (define (fromInt n) (Sentinel (+ 100 n))))
+      (declare sentinel-value (Sentinel :kind -> Integer))
+      (define (sentinel-value (Sentinel n)) n)
+      (declare default-result (Def :b => Tag :a * :b * :a -> Optional :a))
+      (define (default-result tag _b x)
+        (let r = (match tag ((TI) (Some def)) ((TS) (Some x))))
+        r)
+      (declare numeric-result (Num :b => Tag :a * :b * :a -> :a))
+      (define (numeric-result tag _b x)
+        (let r = (match tag ((TI) (let ((g (fn (_) (+ (fromInt 2) 3)))) (g Unit)))
+                           ((TS) x)))
+        r)")
+    ;; An unrelated supplied dictionary must not replace the concrete
+    ;; instance justified by TI, including inside a generalized closure.
+    ;; All sentinels erase to Integer, so wrong dispatch fails safely.
+    (is (eql 42 (codegen-test-eval
+                 "(match (default-result TI (the (Sentinel Boolean) (Sentinel 0)) (Sentinel 0))
+                    ((Some (Sentinel n)) n) ((None) -1))")))
+    (is (eql 71 (codegen-test-eval
+                 "(match (default-result TS (the (Sentinel Boolean) (Sentinel 0)) (Sentinel 71))
+                    ((Some (Sentinel n)) n) ((None) -1))")))
+    (is (eql 5 (codegen-test-eval
+                "(sentinel-value
+                   (numeric-result TI (the (Sentinel Boolean) (Sentinel 0)) (Sentinel 0)))")))
+    (is (eql 73 (codegen-test-eval
+                 "(sentinel-value
+                    (numeric-result TS (the (Sentinel Boolean) (Sentinel 0)) (Sentinel 73)))")))))
+
+(deftest test-gadt-result-proofs-ignore-diagnostic-location-identity ()
+  (with-codegen-test-environment
+    (let ((source
+            (source:make-source-string
+             "(repr :transparent)
+              (define-type (Sentinel :kind) (Sentinel Integer))
+              (define-type (Tag :a)
+                (declare TI (Tag (Sentinel Integer))) (declare TS (Tag (Sentinel String))))
+              (define-class (Def :a) (def :a))
+              (define-instance (Def (Sentinel Integer)) (define def (Sentinel 42)))
+              (define-instance (Def (Sentinel String)) (define def (Sentinel 17)))
+              (define-instance (Def (Sentinel Boolean)) (define def (Sentinel 99)))
+              (declare sentinel-value (Sentinel :kind -> Integer))
+              (define (sentinel-value (Sentinel n)) n)
+              (declare f (Def :b => Tag :a * :b -> :a))
+              (define (f tag _b)
+                (let ((r (match tag ((TI) def) ((TS) def)))) r))")))
+      (with-open-stream (stream (source:source-stream source))
+        (let* ((program (parser:with-reader-context stream (parser:read-program stream source)))
+               (f (find (intern "F") (parser:program-defines program)
+                        :key (lambda (d) (parser:node-variable-name (parser:toplevel-define-name d)))))
+               (binding (first (parser:node-let-bindings (parser:binding-last-node f))))
+               (branches (parser:node-match-branches (parser:binding-value binding)))
+               (location (source:location (first branches))))
+          ;; Macro-generated branches can share a source location. Alter
+          ;; only that input metadata; assert results, not branch IDs or IR.
+          (setf (second branches)
+                (parser:make-node-match-branch
+                 :pattern (parser:node-match-branch-pattern (second branches))
+                 :body (parser:node-match-branch-body (second branches))
+                 :location location))
+          (eval (entry:compile-coalton-toplevel program)))))
+    (is (eql 42 (codegen-test-eval
+                 "(sentinel-value (f TI (the (Sentinel Boolean) (Sentinel 0))))")))
+    (is (eql 17 (codegen-test-eval
+                 "(sentinel-value (f TS (the (Sentinel Boolean) (Sentinel 0))))")))))
+
+(deftest test-gadt-result-proofs-use-genuine-supplied-dictionaries ()
+  (with-codegen-test-environment
+    ;; No global Chosen instances exist while these functions are compiled.
+    ;; Both ordinary and higher-rank arms must use the caller's dictionary.
+    (codegen-test-compile
+     "(define-type (Tag :a) (declare TI (Tag Integer)) (declare TS (Tag String)))
+      (define-class (Chosen :a) (chosen :a))
+      (declare supplied (Chosen :a => Tag :a -> :a))
+      (define (supplied tag)
+        (let r = (match tag ((TI) chosen) ((TS) chosen)))
+        r)
+      (declare apply-supplied
+               (Chosen :a => Tag :a * (forall (:b) (Chosen :b => Tag :b -> :b)) -> :a))
+      (define (apply-supplied tag f) (f tag))
+      (declare rank-supplied (Chosen :a => Tag :a -> :a))
+      (define (rank-supplied tag)
+        (apply-supplied tag
+         (fn (tag) (let r = (match tag ((TI) chosen) ((TS) chosen))) r)))")
+    (codegen-test-compile
+     "(define-instance (Chosen Integer) (define chosen 37))
+      (define-instance (Chosen String) (define chosen \"supplied\"))")
+    (is (eql 37 (codegen-test-eval "(supplied TI)")))
+    (is (string= "supplied" (codegen-test-eval "(supplied TS)")))
+    (is (codegen-test-eval
+         "(== (Tuple (rank-supplied TI) (rank-supplied TS)) (Tuple 37 \"supplied\"))"))))
+
+(deftest test-gadt-independent-existentials-have-distinct-diagnostic-names ()
+  (handler-case
+      (progn
+        (check-coalton-types
+         "(define-type Hidden (declare Pack (:e * (:e -> String) -> Hidden)))
+          (declare bad (Hidden * Hidden -> String))
+          (define (bad p q)
+            (match p ((Pack x _) (match q ((Pack _ use) (use x))))))")
+        (is nil "Different packages must not share an existential type."))
+    (tc:tc-error (condition)
+      (let* ((message (source:message (first (source:notes condition))))
+             (names (loop :for start := (search "<existential " message)
+                            :then (search "<existential " message :start2 (1+ start))
+                          :while start
+                          :collect (subseq message start (1+ (position #\> message :start start))))))
+        (is (string= "Type mismatch" (source:message condition)))
+        (is (= 2 (length names)))
+        (is (= 2 (length (remove-duplicates names :test #'string=))))))))
+
+(deftest test-gadt-result-proof-scopes-do-not-supply-missing-evidence ()
+  (dolist (rank '(nil t))
+    (dolist (body '("(let ((r (match tag (_ def)))) r)"
+                    "(let ((r (match tag ((Left) def) (_ def)))) r)"
+                    "(let ((r (match tag ((Left) def) (_ unrelated)))) r)"
+                    "(match hidden ((Pack y) (let ((r (match tag ((Left) def) (_ y)))) r)))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil
+                 "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+                  (define-type Hidden (declare Pack (:x -> Hidden)))
+                  (define-class (Def :a) (def :a))
+                  (define-instance (Def Integer) (define def 42))
+                  ~A
+                  ~A"
+                 (if rank
+                     "(declare use-proof ((forall (:a :b :c) (Def :b => Tag :a * :b * :c * Hidden -> :a)) -> Unit))
+                      (define (use-proof _f) Unit)"
+                     "")
+                 (if rank
+                     (format nil "(declare test (Unit -> Unit))
+                                  (define (test _) (use-proof (fn (tag _b unrelated hidden) ~A)))" body)
+                     (format nil "(declare test (forall (:a :b :c) (Def :b => Tag :a * :b * :c * Hidden -> :a)))
+                                  (define (test tag _b unrelated hidden) ~A)" body)))))))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+      (define-class (Def :a) (def :a))
+      (define-instance (Def Integer) (define def 42))
+      (declare use-proof ((forall (:a :b) (Def :b => Tag :a * :b * :a -> :a)) -> Unit))
+      (define (use-proof _f) Unit)
+      (define (test y)
+        (use-proof (fn (tag _b _x) (let ((r (match tag ((Left) def) (_ y)))) r))))")))
+
+(deftest test-rank-result-proofs-can-belong-to-the-enclosing-result ()
+  (dolist (wrapper '("~A" "(let ((r ~A)) r)"))
+    (check-coalton-types
+     (format nil
+             "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+              (define-class (Def :a) (def :a))
+              (define-instance (Def Integer) (define def 42))
+              (define-instance (Def String) (define def \"s\"))
+              (declare call-it ((forall (:b) (:b -> :r)) -> :r))
+              (define (call-it f) (f Unit))
+              (declare test (Tag :a -> :a))
+              (define (test tag)
+                (let ((y (call-it (fn (_) ~A)))) y))"
+             (format nil wrapper "(match tag ((Left) def) ((Right) def))"))))
+  (dolist (given '("" "Def :a =>"))
+    (let ((text
+            (format nil
+                    "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+                     (define-class (Def :a) (def :a))
+                     (declare call-it ((forall (:b) (Def :b => :b -> :r)) -> :r))
+                     (define (call-it _f) (error \"unused\"))
+                     (declare test (~A Tag :a -> :a))
+                     (define (test tag)
+                       (let ((y (call-it (fn (_) (match tag ((Left) def) ((Right) def)))))) y))"
+                    given)))
+      (cond
+        ((string= given "") (signals tc:tc-error (check-coalton-types text)))
+        (t (check-coalton-types text))))))
+
+(deftest test-rank-result-proof-forwarding-respects-local-generalization ()
+  (dolist (wrapper '("~A" "(let ((r ~A)) r)"))
+    (check-coalton-types
+     (format nil
+             "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+              (define-class (Def :a) (def :a))
+              (define-instance (Def Integer) (define def 42))
+              (define-instance (Def String) (define def \"s\"))
+              (declare call-it ((forall (:b) (:b -> :r)) -> :r))
+              (define (call-it f) (f Unit))
+              (declare test (Tag :a -> Tuple Integer String))
+              (define (test tag)
+                (let ((g (fn (_u) (call-it (fn (_) ~A)))))
+                  (Tuple (g Unit) (g Unit))))"
+             (format nil wrapper "(match tag ((Left) def) ((Right) def))")))))
+
+(deftest test-result-proof-transport-preserves-existing-diagnostics ()
+  (dolist (case
+            '(("Incompatible match pattern"
+               "(declare any-tag (Unit -> Tag :a))
+                (define (any-tag _) (error \"no\"))
+                (declare f (Unit -> Integer))
+                (define (f _)
+                  (let ((tag (any-tag Unit)))
+                    (let ((r (match tag ((Left) def) ((Right) def))))
+                      (let ((_x (the (Tag Integer) tag))) r))))")
+              ("Declared type is too general"
+               "(declare f (Tag :a * :a -> :a))
+                (define (f tag x)
+                  (let ((r (match tag ((Left) def) (_ \"s\")))) r))")))
+    (handler-case
+        (progn
+          (check-coalton-types
+           (format nil
+                   "(define-type (Tag :a) (declare Left (Tag Integer)) (declare Right (Tag String)))
+                    (define-class (Def :a) (def :a))
+                    (define-instance (Def Integer) (define def 42))
+                    (define-instance (Def String) (define def \"s\"))
+                    ~A" (second case)))
+          (is nil "Contradictory result evidence must still reject."))
+      (tc:tc-error (condition)
+        (is (string= (first case) (source:message condition)))
+        (is (source:location (first (source:notes condition))))))))
+
+(deftest test-lisp-captures-check-and-preserve-their-predicates ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-class (FirstValue :a) (first-value :a))
+      (define-class (SecondValue :a) (second-value :a))
+      (define-instance (FirstValue Integer) (define first-value 42))
+      (define-instance (SecondValue String) (define second-value \"second\"))
+      (declare f ((FirstValue :a) (SecondValue :b) => :a * :b -> :a * :b))
+      (define (f _a _b)
+        (lisp (-> :a * :b) ((one first-value) (two second-value)) (cl:values one two)))")
+    (is (equal '(42 "second") (multiple-value-list (codegen-test-eval "(f 0 \"\")")))))
+  (dolist (context '("FirstValue :a" "(FirstValue :a) (FirstValue :b)"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil
+               "(define-class (FirstValue :a) (first-value :a))
+                (define-class (SecondValue :a) (second-value :a))
+                (declare f (~A => :a * :b -> Unit))
+                (define (f _a _b)
+                  (lisp (-> Unit) ((value ~A)) coalton:Unit))"
+               context (if (string= context "FirstValue :a") "second-value" "first-value")))))
+  (check-coalton-types
+   "(declare f (Num :a => :a -> :a))
+    (define (f x)
+      (let ((c (fn (z) (+ z 1))))
+        (lisp (-> :a) (c x) (cl:funcall c x))))")
+  (dolist (program
+            '("(declare f ((Num :a) (Num :b) => :a * :b -> :a))
+               (define (f x _y)
+                 (let ((c (fn (z) (+ z 1))))
+                   (lisp (-> :a) (c x) (cl:funcall c x))))"
+              "(define (h x)
+                 (let ((c (fn (z) (+ z 1))))
+                   (lisp (-> Integer) (c x) (cl:funcall c x))))"))
+    (signals tc:tc-error (check-coalton-types program))))
+
+(deftest test-gadt-local-functions-with-independent-results-still-generalize ()
+  (dolist (wrapper '("~A" "(the (Tag :e -> :r) ~A)"))
+    (dolist (result '("(Tuple (the Integer (g t)) (the W (g u)))"
+                     "(Tuple (the Integer (g TI)) (the W (g TS)))"
+                     "(Tuple 1 (W 3))"))
+      (check-coalton-types
+       (format nil
+               "(define-type (Tag :a) (declare TI (Tag Integer)) (declare TS (Tag String)))
+                (repr :transparent) (define-type W (W Integer))
+                (define-class (Def :a) (def :a))
+                (define-instance (Def Integer) (define def 42))
+                (define-instance (Def String) (define def \"s\"))
+                (define-instance (Def W) (define def (W 3)))
+                (declare f (Tag :a * Tag :b -> Tuple Integer W))
+                (define (f t u) (let ((g ~A)) ~A))"
+               (format nil wrapper "(fn (x) (match x ((TI) def) ((TS) def)))") result)))))
+
+(deftest test-return-bare-result-index-retains-its-declared-context ()
+  (dolist (body '("(match tag ((TI) 1) ((TS) \"s\"))"
+                 "(return (match tag ((TI) 1) ((TS) \"s\")))"
+                 "(return (let ((r (match tag ((TI) 1) ((TS) \"s\")))) r))"
+                 "(return (the :a (match tag ((TI) (fromInt 1)) ((TS) \"s\"))))"))
+    (check-coalton-types
+     (format nil
+             "(define-type (Tag :a) (declare TI (Tag Integer)) (declare TS (Tag String)))
+              (declare f (forall (:a) (Tag :a -> :a)))
+              (define (f tag) ~A)" body)
+     '("f" . "(Tag :a -> :a)")))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare TI (Tag Integer)) (declare TS (Tag String)))
+      (declare bad (Tag :a * :b -> :a))
+      (define (bad tag x) (return (match tag ((TI) x) ((TS) x))))")))
+
+(deftest test-ground-missing-predicate-is-not-ambiguous ()
+  (dolist (program
+            '("(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+               (define (read-unknown tag) (match tag ((Whole) 0) ((Text) \"text\")))"
+              "(define-type (Tag :a) (declare Whole (Tag Integer)) (declare Text (Tag String)))
+               (define (read-unknown tag x)
+                 (match tag ((Whole) (+ x 1)) ((Text) (<> x \"!\"))))"
+              "(declare bad (Void -> String)) (define (bad) 1)"))
+    (handler-case
+        (progn (check-coalton-types program) (is nil "Missing numeric evidence must be rejected."))
+      (tc:tc-error (condition)
+        (is (string= "Unknown instance" (source:message condition)))
+        (is (search "Num String" (source:message (first (source:notes condition))))))))
+  (handler-case
+      (progn
+        (check-coalton-types
+         "(define-class (Unchosen :a) (unchosen (:a -> Unit)))
+          (define (bad) (unchosen (undefined Unit)))")
+        (is nil "A genuinely ambiguous predicate must be rejected."))
+    (tc:tc-error (condition)
+      (is (string= "Ambiguous predicate" (source:message condition))))))
+
+(deftest test-gadt-existentials-are-labelled-in-mismatches ()
+  (dolist (variable '(":a" ":b"))
+    (handler-case
+        (progn
+          (check-coalton-types
+           (format nil
+                   "(define-type (PolyAt :a)
+                      (declare MkPolyAt ((forall (:y) (:y * :a -> :y)) -> PolyAt Integer)))
+                    (declare inspect-it (PolyAt ~A * ~A -> String))
+                    (define (inspect-it p x)
+                      (match p ((MkPolyAt f) (f \"fixed\" (+ x 1)))))" variable variable))
+          (is nil "The constructor existential must not unify with the outer index."))
+      (tc:tc-error (condition)
+        (is (string= "Type mismatch" (source:message condition)))
+        (is (search "<existential :A>" (source:message (first (source:notes condition)))))
+        (is (search "Integer" (source:message (first (source:notes condition))))))))
+  (handler-case
+      (progn
+        (check-coalton-types
+         "(declare ordinary (forall (:a) (:a -> :a)))
+          (define (ordinary x) (the :a \"wrong\"))")
+        (is nil "A lexical type variable must remain general."))
+    (tc:tc-error (condition)
+      (is (not (search "existential" (source:message (first (source:notes condition))))))
+      (is (search ":A" (source:message (first (source:notes condition))))))))
+
 (deftest test-hidden-ascription-generality-diagnostic ()
   (handler-case
       (progn
@@ -487,7 +1020,7 @@
     (tc:tc-error (condition)
       (let ((message (princ-to-string condition)))
         (is (search "Declared type too general" message))
-        (is (search "Declared type ':B' is more general than inferred type ':A'" message))))))
+        (is (search "Declared type ':B' is more general than inferred type '<existential :A>'" message))))))
 
 (deftest test-matching-preserves-target-variables ()
   (let* ((a (tc:make-variable))

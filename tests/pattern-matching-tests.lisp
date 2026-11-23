@@ -538,6 +538,67 @@
     (dolist (field '("(Tuple Boolean (Same Integer Integer))" "Integer" "Recursive"))
       (signals tc:tc-error (check-coalton-types (packet field))))))
 
+(deftest gadt-coverage-refutes-empty-field-sums ()
+  ;; Restricted needs an Envelope, and every Envelope alternative needs a
+  ;; Proof, which exists only at Integer. The ordinary Wide fields before it
+  ;; must not use up the search budget for that contradiction.
+  (flet ((visit (index alternatives &optional (rest ""))
+          (format nil
+                  "(define-type (Proof :i) (declare Affirm (Proof Integer)))
+                   (define-type Wide (W1 Integer) (W2 String) (W3 Boolean))
+                   (define-type (Envelope :i) (Thin (Proof :i)) (Thick Wide (Proof :i)) ~A)
+                   (define-type (Visit :i) Everywhere (Restricted Wide Wide Wide (Envelope :i)))
+                   (define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+                   (define-type Route (declare Road (Visit :i * Lane :i -> Route)))
+                   (declare examine (Visit ~A -> Boolean))
+                   (define (examine (Everywhere)) True)
+                   (declare route (Route -> Integer))
+                   (define (route r)
+                     (match r
+                       ((Road (Everywhere) _) 1)~A))"
+                  alternatives index rest)))
+    (check-coalton-types (visit "String" ""))
+    ;; A real Restricted value, or an Envelope cycle that the bounded search
+    ;; leaves unresolved.
+    (dolist (case '(("Integer" "") ("String" "(Extra Wide)") ("String" "(Wrapped (Envelope :i))")))
+      (signals tc:tc-error (check-coalton-types (apply #'visit case))))
+    ;; A Restricted visit exists only with a West lane.
+    (multiple-value-bind (useless missing)
+       (match-analysis-report (visit "String" "" "
+                       ((Road _ (West)) 2)"))
+      (is (null useless))
+      (is (null missing)))
+    (let ((program (visit "String" "" "
+                        ((Road _ (West)) 2)
+                        ((Road (Restricted _ _ _ _) (East)) 3)")))
+      (multiple-value-bind (useless missing) (match-analysis-report program)
+        (is (equal (arm-lines program "((Road (Restricted") useless))
+        (is (null missing))))
+    (let ((missing (nth-value 1 (match-analysis-report (visit "String" "")))))
+      (is (= 1 (length missing)))
+      (is (search "(RESTRICTED" (first missing)))
+      (is (not (search "(EAST)" (first missing)))))))
+
+(deftest gadt-coverage-keeps-independent-refutations ()
+  ;; Exploring the trees in a Crate needs more than the search budget. That
+  ;; must not hide the contradiction in an independent Proof field, nor in an
+  ;; Envelope whose every alternative needs a Proof, in either field order.
+  (flet ((visit (index field crate-first)
+           (with-output-to-string (s)
+             (write-line "(define-type (Proof :i) (declare Affirm (Proof Integer)))" s)
+             (write-line "(define-type (Envelope :i) (Thin (Proof :i)) (Thick (Proof :i)))" s)
+             (write-line "(define-type Tree0 Leaf Seed)" s)
+             (loop :for i :from 1 :to 6
+                   :do (format s "(define-type Tree~D (Bud~D Tree~D Tree~D) (Fork~D Tree~D Tree~D))~%"
+                               i i (1- i) (1- i) i (1- i) (1- i)))
+             (write-line "(define-type Crate (Boxed Tree6))" s)
+             (format s "(define-type (Visit :i) Plain (Loaded ~:[~A Crate~;Crate ~A~]))~%" crate-first field)
+             (format s "(declare plain-only (Visit ~A -> Boolean))~%(define (plain-only (Plain)) True)" index))))
+    (dolist (field '("(Proof :i)" "(Envelope :i)"))
+      (dolist (crate-first '(nil t))
+        (check-coalton-types (visit "String" field crate-first))
+        (signals tc:tc-error (check-coalton-types (visit "Integer" field crate-first)))))))
+
 (defun match-analysis-report (program)
   "Compile PROGRAM, returning the source lines of the useless match cases and
 the text of each non-exhaustive match warning."
@@ -640,6 +701,130 @@ the text of each non-exhaustive match warning."
            '("((Tuple _ (Amount _)) 1)" "((Tuple (True) (Zero)) 2)" "((Tuple (True) 5) 3)")
            '("((Tuple (True) 5) 3)")
            "missing case (TUPLE (FALSE) (ZERO))")))
+
+(deftest gadt-coverage-checks-unexpanded-fields ()
+  ;; A Door's index is fixed only through its fields: Metered holds a Permit,
+  ;; which exists only for Integer. With a Lane sharing the index, the only
+  ;; values are Free/East, Free/West and Metered/West. Every sequence of up
+  ;; to three distinct rows, in both field orders and with Door both as a
+  ;; GADT and as an ordinary type, is checked against direct first-match
+  ;; enumeration of those values, including the displayed missing case.
+  (let* ((crossings '((free east) (free west) (metered west)))
+         (rows '((free _) (_ west) (metered _) (_ east) (free west) (_ _)))
+         (door-patterns '((free . "(Free)") (metered . "(Metered _)") (_ . "_")))
+         (lane-patterns '((east . "(East)") (west . "(West)") (_ . "_")))
+         ;; Each displayable missing pattern, with the values it denotes.
+         (door-witnesses '(("(FREE)" free) ("(METERED \"_\")" metered)
+                           ("(METERED (NUMPASS))" metered) ("\"_\"" free metered)))
+         (lane-witnesses '(("(EAST)" east) ("(WEST)" west) ("\"_\"" east west)))
+         (sequences nil))
+    (labels ((matches-p (row value)
+               (every (lambda (pattern part) (or (eq pattern '_) (eq pattern part))) row value))
+             (selections (pool n)
+               (if (zerop n)
+                   (list nil)
+                   (loop :for row :in pool
+                         :append (mapcar (lambda (rest) (cons row rest))
+                                         (selections (remove row pool) (1- n)))))))
+      (dotimes (n 3)
+        (setf sequences (append sequences (selections rows (1+ n)))))
+      (dolist (door '("(declare Free (Door :i)) (declare Metered (Permit :i -> Door :i))"
+                      "Free (Metered (Permit :i))"))
+        (dolist (door-first '(t nil))
+          (dolist (sequence sequences)
+            (let* ((arms (loop :for (door-pattern lane-pattern) :in sequence
+                               :for n :from 1
+                               :for door-text := (cdr (assoc door-pattern door-patterns))
+                               :for lane-text := (cdr (assoc lane-pattern lane-patterns))
+                               :collect (if door-first
+                                            (format nil "((Road ~A ~A) ~D)" door-text lane-text n)
+                                            (format nil "((Road ~A ~A) ~D)" lane-text door-text n))))
+                   (program
+                     (format nil "(define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+(define-type (Permit :i) (declare NumPass (Permit Integer)))
+(define-type (Door :i) ~A)
+(define-type Crossing (declare Road (~A -> Crossing)))
+(declare classify (Crossing -> Integer))
+(define (classify c)
+  (match c~{~%    ~A~}))"
+                             door (if door-first "Door :i * Lane :i" "Lane :i * Door :i") arms))
+                   (expected-useless
+                     (loop :for row :in sequence
+                           :for arm :in arms
+                           :for k :from 0
+                           :unless (some (lambda (value)
+                                           (and (matches-p row value)
+                                                (notany (lambda (earlier) (matches-p earlier value))
+                                                        (subseq sequence 0 k))))
+                                         crossings)
+                             :collect arm))
+                   (unmatched (remove-if (lambda (value)
+                                           (some (lambda (row) (matches-p row value)) sequence))
+                                         crossings)))
+              (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+                (is (equal (apply #'arm-lines program expected-useless) useless-lines)
+                    "Useless rows ~S in ~S" useless-lines arms)
+                (cond
+                  ((null unmatched)
+                   (is (null warnings) "Spurious missing case for ~S" arms))
+                  (t
+                   (is (= 1 (length warnings)) "No missing case for ~S" arms)
+                   ;; The witness must denote some value that no row matches.
+                   (is (loop :for (door-text . doors) :in door-witnesses
+                             :thereis (loop :for (lane-text . lanes) :in lane-witnesses
+                                            :thereis (and (search (if door-first
+                                                                      (format nil "missing case (ROAD ~A ~A)" door-text lane-text)
+                                                                      (format nil "missing case (ROAD ~A ~A)" lane-text door-text))
+                                                                  (first warnings))
+                                                          (some (lambda (value)
+                                                                  (and (member (first value) doors)
+                                                                       (member (second value) lanes)))
+                                                                unmatched))))
+                       "Missing case for ~S does not denote ~S: ~A" arms unmatched (first warnings))))))))))))
+
+(deftest gadt-coverage-independent-column-growth-is-bounded ()
+  ;; Proving a Metered door's Lane impossible must not make the unrelated
+  ;; Selector columns before it retry their other constructors, which would
+  ;; repeat the Door/Lane search once per combination of selectors. Measure
+  ;; work rather than elapsed time, allowing linear growth instead of
+  ;; requiring an exact traversal count.
+  (let* ((searcher 'coalton-impl/analysis/pattern-exhaustiveness::search-column-cases)
+         (original (symbol-function searcher))
+         (lane-searches 0))
+    (flet ((lane-searches (selectors)
+             (setf lane-searches 0)
+             (let ((warnings
+                     (nth-value 1 (match-analysis-report
+                                   (format nil "(define-type Selector Chosen LeftOver RightOver)
+(define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+(define-type (Permit :i) (declare NumPass (Permit Integer)))
+(define-type (Door :i) Free (Metered (Permit :i)))
+(define-type Route (declare Road (~{~A * ~}Door :i * Lane :i -> Route)))
+(declare classify (Route -> Integer))
+(define (classify x)
+  (match x~{~%    ((Road ~{~A ~}_ _) 1)~}
+    ((Road ~{~A ~}(Free) _) 2)
+    ((Road ~:*~{~A ~}_ (West)) 3)))"
+                                           (make-list selectors :initial-element "Selector")
+                                           (loop :for j :below selectors
+                                                 :collect (loop :for k :below selectors
+                                                                :collect (if (= j k) "(Chosen)" "_")))
+                                           (make-list selectors :initial-element "_"))))))
+               (is (null warnings))
+               lane-searches)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function searcher)
+                   (lambda (matrix column-types &rest args)
+                     (let ((head (tc:base-type (first column-types))))
+                       (when (and (tc:tycon-p head)
+                                  (string= "LANE" (symbol-name (tc:tycon-name head))))
+                         (incf lane-searches)))
+                     (apply original matrix column-types args)))
+             (let ((alone (lane-searches 0)))
+               (is (plusp alone))
+               (is (<= (lane-searches 4) (* 5 alone)))))
+        (setf (symbol-function searcher) original)))))
 
 (deftest test-deep-constructor-pattern-analysis ()
   (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)

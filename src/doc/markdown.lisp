@@ -289,22 +289,7 @@ the link and its label."
           (render)))))
 
 (defmethod to-markdown ((ctor tc:constructor-entry))
-  (let* ((ctor-name (tc:constructor-entry-name ctor))
-         (ctor-source-name (lookup-constructor-source-name ctor-name))
-         (ctor-type (tc:lookup-value-type entry:*global-environment* ctor-name)))
-    (tc:with-pprint-variable-context ()
-      (cond
-        ((tc:constructor-entry-gadt-p ctor)
-         (format nil "~A :: ~A"
-                 (html-entities:encode-entities ctor-source-name)
-                 (to-markdown ctor-type)))
-        (t
-         (let ((args (type-constructor-args nil ctor-type)))
-           (if args
-               (format nil "(~A~{ ~A~})"
-                       (html-entities:encode-entities ctor-source-name)
-                       (mapcar #'to-markdown args))
-               (html-entities:encode-entities ctor-source-name))))))))
+  (constructor-signature-string ctor #'html-entities:encode-entities #'to-markdown))
 
 (defmethod to-markdown ((object tc:ty))
   (markdown-type-object object))

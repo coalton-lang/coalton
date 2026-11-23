@@ -35,6 +35,7 @@
    #:pattern-constructor-openings       ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
+   #:pattern-has-user-test-p            ; FUNCTION
    #:patterns-exhaustive-p              ; FUNCTION
    #:map-pattern                       ; FUNCTION
    ))
@@ -94,6 +95,14 @@
 
 (defun pattern-variables (pattern)
   (delete-duplicates (pattern-variables-generic% pattern) :test #'eq))
+
+(defun pattern-has-user-test-p (pat)
+  "Does matching PAT potentially call a user-defined comparison?"
+  (etypecase pat
+    (pattern-literal (pattern-literal-test pat))
+    (pattern-constructor (some #'pattern-has-user-test-p (pattern-constructor-patterns pat)))
+    (pattern-binding (pattern-has-user-test-p (pattern-binding-pattern pat)))
+    ((or pattern-wildcard pattern-var) nil)))
 
 (defgeneric pattern-variables-generic% (pattern)
   (:method ((pattern pattern-var))

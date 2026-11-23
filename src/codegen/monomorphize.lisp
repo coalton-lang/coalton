@@ -44,7 +44,7 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:action
-   #:prune-impossible-match-branches
+   #:specialize-node
    #:traverse-with-binding-list
    #:node-free-p)
   (:import-from
@@ -237,12 +237,10 @@ recompilation, and also maintains a stack of uncompiled candidates."
             (cond
               ;; Candidate is fully applied
               ((= (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
-               (tc:apply-substitution
-                subs
-                (make-node-abstraction
-                 :type (tc:prepend-function-input-types arg-tys new-type)
-                 :vars new-vars
-                 :subexpr subexpr)))
+               (make-node-abstraction
+                :type (tc:prepend-function-input-types arg-tys new-type)
+                :vars new-vars
+                :subexpr subexpr))
 
               ;; Overapplication
               ((> (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
@@ -263,24 +261,16 @@ recompilation, and also maintains a stack of uncompiled candidates."
                  (unless (every (lambda (x) (eq x '@@unpropagated)) remaining-args)
                    (util:coalton-bug "something has gone terribly wrong"))
 
-                 (tc:apply-substitution
-                  subs
-                  (make-node-abstraction
-                   :type (tc:merge-function-input-types
-                          arg-tys
-                          new-type)
-                   :vars (append new-vars remaining-names)
-                   :subexpr (make-node-application
-                             :type (tc:function-remove-arguments
-                                    new-type
-                                    num-remaining)
-                             :properties '()
-                             :rator subexpr
-                             :rands (loop :for name :in remaining-names
-                                          :for ty :in remaining-types
-                                          :collect (make-node-local-variable
-                                                    :type ty
-                                                    :value name)))))))
+                 (make-node-abstraction
+                  :type (tc:merge-function-input-types arg-tys new-type)
+                  :vars (append new-vars remaining-names)
+                  :subexpr (make-node-application
+                            :type (tc:function-remove-arguments new-type num-remaining)
+                            :properties '()
+                            :rator subexpr
+                            :rands (loop :for name :in remaining-names
+                                         :for ty :in remaining-types
+                                         :collect (make-node-local-variable :type ty :value name))))))
               ;; Underapplication
               ((< (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
                (let* ((remaining-parameters (util:drop (length (compile-candidate-args candidate)) (node-abstraction-vars node))))
@@ -290,18 +280,16 @@ recompilation, and also maintains a stack of uncompiled candidates."
                                    :vars remaining-parameters
                                    :subexpr subexpr)))
                    (if (null new-vars)
-                       (tc:apply-substitution subs inner-abs)
-                        (tc:apply-substitution
-                         subs
-                         (make-node-abstraction
-                          :vars new-vars
-                         :type (tc:prepend-function-input-types arg-tys new-type)
-                          :subexpr inner-abs))))))
+                       inner-abs
+                       (make-node-abstraction
+                        :vars new-vars
+                        :type (tc:prepend-function-input-types arg-tys new-type)
+                        :subexpr inner-abs)))))
 
               (t
                (util:unreachable)))))
 
-      (setf new-node (prune-impossible-match-branches new-node env))
+      (setf new-node (specialize-node new-node subs env))
       (typecheck-node new-node env)
       new-node)))
 

@@ -1166,7 +1166,8 @@ spine node types to TARGET-TYPE."
                   (unless failed?
                     (setf reduced-bodies (nreverse reduced-bodies)
                           catch-branches (nreverse catch-branches))
-                    (let ((first-catch (find-if #'identity catch-branches)))
+                    (let ((first-catch (find-if #'identity catch-branches))
+                          (scrutinee (node-type (node-match-expr node))))
                       (cond
                         ;; Every constructor hit the same wildcard branch.
                         ((and first-catch
@@ -1180,16 +1181,14 @@ spine node types to TARGET-TYPE."
                           :expr (copy-node tag-var tc:*boolean-type*)
                           :branches
                           (list (make-match-branch
-                                 :index-equalities (constructor-index-equalities
-                                                    (first distinct-ctors) (node-type (node-match-expr node)) env)
+                                 :index-equalities (constructor-index-equalities (first distinct-ctors) scrutinee env)
                                  :pattern (make-pattern-constructor
                                            :type tc:*boolean-type*
                                            :name 'coalton:True
                                            :patterns nil)
                                  :body (first reduced-bodies))
                                 (make-match-branch
-                                 :index-equalities (constructor-index-equalities
-                                                    (second distinct-ctors) (node-type (node-match-expr node)) env)
+                                 :index-equalities (constructor-index-equalities (second distinct-ctors) scrutinee env)
                                  :pattern (make-pattern-constructor
                                            :type tc:*boolean-type*
                                            :name 'coalton:False
@@ -1214,8 +1213,7 @@ spine node types to TARGET-TYPE."
                                    :for index :from 0
                                    :unless catch-j
                                      :collect (make-match-branch
-                                               :index-equalities (constructor-index-equalities
-                                                                  ctor (node-type (node-match-expr node)) env)
+                                               :index-equalities (constructor-index-equalities ctor scrutinee env)
                                                :pattern (make-pattern-literal
                                                          :type tc:*ufix-type*
                                                          :value index)
@@ -1235,15 +1233,13 @@ spine node types to TARGET-TYPE."
                                  :for ctor :in distinct-ctors
                                  :for index :from 0
                                  :collect (make-match-branch
-                                           :index-equalities (constructor-index-equalities
-                                                              ctor (node-type (node-match-expr node)) env)
+                                           :index-equalities (constructor-index-equalities ctor scrutinee env)
                                            :pattern (make-pattern-literal
                                                      :type tc:*ufix-type*
                                                      :value index)
                                            :body body-j))
                            (list (make-match-branch
-                                  :index-equalities (constructor-index-equalities
-                                                     (car (last distinct-ctors)) (node-type (node-match-expr node)) env)
+                                  :index-equalities (constructor-index-equalities (car (last distinct-ctors)) scrutinee env)
                                   :pattern (make-pattern-wildcard :type tc:*ufix-type*)
                                   :body (car (last reduced-bodies)))))))))))))))))
     (when (node-free-p body (list name))

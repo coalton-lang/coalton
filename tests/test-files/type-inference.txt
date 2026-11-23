@@ -142,11 +142,11 @@ error: Kind mismatch
 
 --------------------------------------------------------------------------------
 
-error: Ambiguous predicate
+error: Unknown instance
   --> test:9:14
    |
  9 |      ((Just 5) 5)
-   |                ^ Ambiguous predicate Num String
+   |                ^ Unknown instance Num String
 
 ================================================================================
 108 Match branches must match on constructors

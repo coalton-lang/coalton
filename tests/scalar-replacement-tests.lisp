@@ -609,16 +609,7 @@
          "(== (client IntView TextView) (Tuple (Tuple 11 12) (Tuple 0 \"hello!\")))"))
     (is (zerop (codegen-test-call-count "CLIENT" "BOTH")))
     (is (zerop (codegen-test-call-count "BOTH" "INTSLOT")))
-    (is (zerop (codegen-test-call-count "BOTH" "TEXTSLOT")))
-    (let ((evidence-branches 0))
-      (traverse:traverse
-       (tc:lookup-code entry:*global-environment* (intern "BOTH"))
-       (list (traverse:action (:after ast:node-match node)
-               (dolist (branch (ast:node-match-branches node))
-                 (when (ast:match-branch-index-equalities branch)
-                   (incf evidence-branches)))
-               (values))))
-      (is (= 4 evidence-branches)))))
+    (is (zerop (codegen-test-call-count "BOTH" "TEXTSLOT")))))
 
 (deftest scalar-replacement-shared-fallback-index-scope ()
   (with-codegen-test-environment

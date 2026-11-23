@@ -1,118 +1,6 @@
 (in-package #:coalton-native-tests)
 
 ;;;
-;;; Concrete Type with Unary Constructor
-;;;
-
-(coalton-toplevel
-
-  (define-type Gadt1
-    (declare Gadt1-1 Gadt1))
-
-  (declare gadt1-test-func (Gadt1 -> Boolean))
-  (define (gadt1-test-func (Gadt1-1))
-    True))
-
-(define-test test-gadt1-match ()
-  (let result =
-    (match Gadt1-1
-      ((Gadt1-1) True)))
-  (is result))
-
-(define-test test-gadt1-let ()
-  (let (Gadt1-1) = Gadt1-1)
-  (is True))
-
-(define-test test-gadt1-do ()
-  (let result =
-    (coalton/monad/identity:run-identity
-     (do
-      ((Gadt1-1) <- (pure Gadt1-1))
-      (let (Gadt1-1) = Gadt1-1)
-      (pure True))))
-  (is result))
-
-(define-test test-gadt1-func ()
-  (is (gadt1-test-func Gadt1-1)))
-
-;;;
-;;; Concrete Type w/ Single, Single-Arg Concrete Constructor
-;;;
-
-(coalton-toplevel
-
-  (define-type Gadt2
-    (declare Gadt2-1 (String -> Gadt2)))
-
-  (declare gadt2-equals-str (Gadt2 * String -> Boolean))
-  (define (gadt2-equals-str (Gadt2-1 a) b)
-    (== a b)))
-
-(define-test test-gadt2-match ()
-  (let result =
-    (match (Gadt2-1 "test")
-      ((Gadt2-1 s) s)))
-  (is (== result "test")))
-
-(define-test test-gadt2-let ()
-  (let (Gadt2-1 s) = (Gadt2-1 "test"))
-  (is (== s "test")))
-
-(define-test test-gadt2-do ()
-  (let (Tuple s1 s2) =
-    (coalton/monad/identity:run-identity
-     (do
-      ((Gadt2-1 s1) <- (pure (Gadt2-1 "test1")))
-      (let (Gadt2-1 s2) = (Gadt2-1 "test2"))
-      (pure (Tuple s1 s2)))))
-  (is (== "test1" s1))
-  (is (== "test2" s2)))
-
-(define-test test-gadt2-func ()
-  (is (gadt2-equals-str (Gadt2-1 "test") "test")))
-
-;;;
-;;; Concrete Type w/ Single, Single-Arg Generic Constructor
-;;;
-
-(coalton-toplevel
-
-  (define-type Gadt3
-    (declare Gadt3-1 (:a -> Gadt3)))
-
-  (declare gadt3-test-func (Gadt3 -> Boolean))
-  (define (gadt3-test-func (Gadt3-1 a))
-    (id a)
-    True))
-
-(define-test test-gadt3-match ()
-  (let result =
-    (match (Gadt3-1 "test")
-      ((Gadt3-1 s)
-       (id s)
-       True)))
-  (is result))
-
-(define-test test-gadt3-let ()
-  (let (Gadt3-1 s) = (Gadt3-1 "test"))
-  (id s)
-  (is True))
-
-(define-test test-gadt3-do ()
-  (let result =
-    (coalton/monad/identity:run-identity
-     (do
-      ((Gadt3-1 s1) <- (pure (Gadt3-1 "test1")))
-      (pure (id s1))
-      (let (Gadt3-1 s2) = (Gadt3-1 "test2"))
-      (pure (id s2))
-      (pure True))))
-  (is result))
-
-(define-test test-gadt3-func ()
-  (is (gadt3-test-func (Gadt3-1 "test"))))
-
-;;;
 ;;; Type with One Arg w/ Single, Single-Arg Concrete Constructor
 ;;;
 
@@ -245,29 +133,6 @@
 (define-test test-gadt6-match-multiple-inline ()
   (is (== 10 (inline (gadt6->int (Gadt6-Int 10)))))
   (is (== 5 (inline (gadt6->int (Gadt6-Str "12345"))))))
-
-;;;
-;;; Type with Arg w/ One, Single-Arg, Generic Constructor
-;;;
-
-(coalton-toplevel
-  (define-type (Gadt7 :a)
-    (declare Gadt7 (:a -> Gadt7 :a)))
-
-  (declare gadt7-unwrap-int-match (Gadt7 Integer -> Integer))
-  (define (gadt7-unwrap-int-match g)
-    (match g
-      ((Gadt7 x) x)))
-
-  (declare gadt7-unwrap-int-abstr (Gadt7 Integer -> Integer))
-  (define (gadt7-unwrap-int-abstr (Gadt7 x))
-    x))
-
-(define-test test-gadt7-unwrap-match ()
-  (is (== 10 (gadt7-unwrap-int-match (Gadt7 10)))))
-
-(define-test test-gadt7-unwrap-abstr ()
-  (is (== 10 (gadt7-unwrap-int-abstr (Gadt7 10)))))
 
 ;;;
 ;;; Type with Arg w/ Multiple Single-Arg Constructors, including one non-concrete
@@ -428,6 +293,91 @@
   (define-type (ValueTag :a)
     (declare IntegerTag (ValueTag Integer))
     (declare StringTag (ValueTag String)))
+
+  (repr :transparent)
+  (define-type ProofLeft (ProofLeft Integer))
+  (repr :transparent)
+  (define-type ProofRight (ProofRight Integer))
+  (define-type (ProofTag :a)
+    (declare LeftProof (ProofTag ProofLeft))
+    (declare RightProof (ProofTag ProofRight)))
+  (define-class (ProofValue :a) (proof-value :a))
+  (define-instance (ProofValue ProofLeft) (define proof-value (ProofLeft 42)))
+  (define-instance (ProofValue ProofRight) (define proof-value (ProofRight 17)))
+  (declare named-proof (ProofValue :b => ProofTag :a * :b * :a -> Optional :a))
+  (define (named-proof tag _ x)
+    (let ((result (match tag
+                    ((LeftProof) (Some proof-value))
+                    ((RightProof) (Some x)))))
+      result))
+  (declare local-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (local-proof tag y x)
+    (let ((declare inner (ProofValue :b => ProofTag :a * :b * :a -> :a))
+          (inner (fn (tag _ x)
+                   (let ((r (match tag ((LeftProof) proof-value) ((RightProof) x)))) r))))
+      (inner tag y x)))
+  (declare closure-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (closure-proof tag _ x)
+    (let ((result
+            (match tag
+              ((LeftProof) (let ((get (fn (_) proof-value))) (get Unit)))
+              ((RightProof) x))))
+      result))
+  (declare wildcard-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (wildcard-proof tag _ x)
+    (let ((result (match tag ((LeftProof) proof-value) (_ x))))
+      result))
+  (declare use-rank-proof
+    ((forall (:a :b) (ProofValue :b => ProofTag :a * :b * :a -> :a)) -> ProofLeft))
+  (define (use-rank-proof f)
+    (f LeftProof (ProofRight 0) (ProofLeft 0)))
+  (declare rank-named-proof (Unit -> ProofLeft))
+  (define (rank-named-proof _)
+    (use-rank-proof
+     (fn (tag _b x)
+       (let ((result (match tag ((LeftProof) proof-value) ((RightProof) x))))
+         result))))
+  (declare rank-wildcard-proof (Unit -> ProofLeft))
+  (define (rank-wildcard-proof _)
+    (use-rank-proof
+     (fn (tag _b x)
+       (let ((result (match tag ((LeftProof) proof-value) (_ x))))
+         result))))
+  (declare bare-index-return (ValueTag :a -> :a))
+  (define (bare-index-return tag)
+    (return (match tag ((IntegerTag) 1) ((StringTag) "s"))))
+
+  (define-class (ConvertIndex :a :b)
+    (convert-index (:a -> :b)))
+  (define-instance (ConvertIndex Integer String)
+    (define (convert-index x) (into x)))
+  (define-instance (ConvertIndex String Integer)
+    (define (convert-index x) (into (coalton/string:length x))))
+  (define-instance (ConvertIndex Integer Boolean)
+    (define (convert-index x) (== x 42)))
+
+  (define-class (ConvertIndexFd :a :b (:a -> :b))
+    (convert-index-fd (:a -> :b)))
+  (define-instance (ConvertIndexFd Integer String)
+    (define (convert-index-fd x) (into x)))
+  (define-instance (ConvertIndexFd String Integer)
+    (define (convert-index-fd x) (into (coalton/string:length x))))
+
+  (declare convert-tagged (ConvertIndex :a :b => ValueTag :a * :a -> :b))
+  (define (convert-tagged tag x)
+    (let ((result (match tag ((IntegerTag) (convert-index x)) ((StringTag) (convert-index x)))))
+      result))
+  (declare convert-tagged-fd (ConvertIndexFd :a :b => ValueTag :a * :a -> :b))
+  (define (convert-tagged-fd tag x)
+    (let ((result (match tag ((StringTag) (convert-index-fd x)) ((IntegerTag) (convert-index-fd x)))))
+      result))
+  (declare convert-witness (ConvertIndex :c :b => SameIndex :a :c * :a -> :b))
+  (define (convert-witness w x)
+    (match w ((SameRefl) (convert-index x))))
+  (declare convert-witness-fd (ConvertIndexFd :a :b => SameIndex :a :c * :c -> :b))
+  (define (convert-witness-fd w x)
+    (match w ((SameRefl) (convert-index-fd x))))
+
   (define-type TaggedValue
     (declare PackTagged (ValueTag :a * :a -> TaggedValue)))
 
@@ -652,6 +602,45 @@
                        None)))
     (match (inner) ((Some (SameRefl)) 1) ((None) 0))))
 
+(define-test gadt-result-proofs-do-not-use-an-unrelated-dictionary ()
+  (is (match (noinline (named-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((Some (ProofLeft n)) (== n 42)) (_ False)))
+  (is (match (noinline (named-proof RightProof (ProofLeft 0) (ProofRight 23)))
+        ((Some (ProofRight n)) (== n 23)) (_ False)))
+  (is (match (noinline (local-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (noinline (closure-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (named-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((Some (ProofLeft n)) (== n 42)) (_ False)))
+  (is (match (local-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((ProofLeft n) (== n 42))))
+  (is (match (closure-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((ProofLeft n) (== n 42))))
+  (is (== 1 (noinline (bare-index-return IntegerTag))))
+  (is (== "s" (noinline (bare-index-return StringTag)))))
+
+(define-test gadt-result-constraints-use-the-supplied-dictionary ()
+  (is (== "42" (noinline (convert-tagged IntegerTag (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-tagged StringTag "abc"))))
+  (is (noinline (convert-tagged IntegerTag (the Integer 42))))
+  (is (== "42" (noinline (convert-tagged-fd IntegerTag (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-tagged-fd StringTag "abc"))))
+  (is (== "42" (noinline (convert-witness SameRefl (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-witness SameRefl "abc"))))
+  (is (== "42" (noinline (convert-witness-fd SameRefl (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-witness-fd SameRefl "abc")))))
+
+(define-test gadt-result-proofs-stay-in-their-rank-and-pattern-scopes ()
+  (is (match (noinline (rank-named-proof Unit)) ((ProofLeft n) (== n 42))))
+  (is (match (noinline (rank-wildcard-proof Unit)) ((ProofLeft n) (== n 42))))
+  (is (match (rank-named-proof Unit) ((ProofLeft n) (== n 42))))
+  (is (match (rank-wildcard-proof Unit) ((ProofLeft n) (== n 42))))
+  (is (match (noinline (wildcard-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (noinline (wildcard-proof RightProof (ProofLeft 0) (ProofRight 23)))
+        ((ProofRight n) (== n 23)))))
+
 (define-test gadt-nonlocal-return-checks-its-own-result ()
   (is (match (noinline (return-optional-witness True (the (SameIndex String String) SameRefl)))
         ((Some (SameRefl)) True) ((None) False)))
@@ -719,6 +708,21 @@
       (pick box)))
 
   (define-type PackedConsumer (declare WithConsumer (:a * (:a -> String) -> PackedConsumer)))
+
+  (declare consume-packed (PackedConsumer -> String))
+  (define (consume-packed (WithConsumer x f)) (f x))
+
+  (declare consume-packed-let (PackedConsumer -> String))
+  (define (consume-packed-let p)
+    (let (WithConsumer x f) = p)
+    (f x))
+
+  (declare consume-packed-do (Monad :m => :m PackedConsumer -> :m String))
+  (define (consume-packed-do input)
+    (do
+      ((WithConsumer x f) <- input)
+      (pure (<> (f x) (f x)))))
+
   (abi :unpacked)
   (declare open-twice (Boolean -> String))
   (define (open-twice choose-int)
@@ -737,6 +741,18 @@
 (define-test gadt-existential-allocation-join ()
   (is (== "ii" (noinline (open-twice True))))
   (is (== "ff" (noinline (open-twice False)))))
+
+(define-test gadt-existential-consumers-across-binders ()
+  (let integer = (WithConsumer (the Integer 41) (fn (n) (into (+ n 1)))))
+  (let boolean = (WithConsumer False (fn (b) (if b "yes" "no"))))
+  (is (== "42" (noinline (consume-packed integer))))
+  (is (== "no" (noinline (consume-packed boolean))))
+  (is (== "42" (noinline (consume-packed-let integer))))
+  (is (== "no" (noinline (consume-packed-let boolean))))
+  (is (== (Some "4242") (noinline (consume-packed-do (Some integer)))))
+  (is (== (Some "nono") (noinline (consume-packed-do (Some boolean)))))
+  (is (== (the (List String) ["4242" "nono"])
+          (noinline (consume-packed-do [integer boolean])))))
 
 (coalton-toplevel
   (define-type (AppTerm :r)

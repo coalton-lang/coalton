@@ -116,7 +116,6 @@
                              (:file "resolve-instance-synthesized")
                              (:file "typecheck-node")
                              (:file "hoister")
-                             (:file "codegen-pattern")
                              (:file "codegen-match")
                              (:file "translate-expression")
                              (:file "translate-instance")

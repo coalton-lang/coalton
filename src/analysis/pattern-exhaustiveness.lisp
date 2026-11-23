@@ -75,6 +75,10 @@
 ;;;
 ;;;
 
+(defvar *obligation-refutations* 0
+  "Count of emptiness proofs in the current analysis that relied on
+obligations. See \"Field obligations\" and SEARCH-COLUMN-CASES.")
+
 (defun make-wildcard-for-type (type)
   (declare (type tc:ty type)
            (values tc:pattern-wildcard &optional))
@@ -93,13 +97,14 @@ for GADTs, because ADTs have the same return type for every constructor."
            (type tc:environment env)
            (type tc:ty column-type)
            (values boolean))
-  (not
-   (useful-pattern-clause-p
-    (mapcar #'list patterns)
-    (list (tc:make-pattern-wildcard
-           :type (tc:qualify nil (tc:make-variable))))
-    (list column-type)
-    env)))
+  (let ((*obligation-refutations* 0))
+    (not
+     (useful-pattern-clause-p
+      (mapcar #'list patterns)
+      (list (tc:make-pattern-wildcard
+             :type (tc:qualify nil (tc:make-variable))))
+      (list column-type)
+      env))))
 
 (defun useful-pattern-p (patterns pattern env column-type)
   "Is PATTERN useful within list PATTERNS for COLUMN-TYPE? PATTERN must EQ one element
@@ -109,13 +114,14 @@ of PATTERNS."
            (type tc:environment env)
            (type tc:ty column-type)
            (values boolean))
-  (useful-pattern-clause-p
-   (loop :for p :in patterns
-         :while (not (eq p pattern))
-         :collect (list p))
-   (list pattern)
-   (list column-type)
-   env))
+  (let ((*obligation-refutations* 0))
+    (useful-pattern-clause-p
+     (loop :for p :in patterns
+           :while (not (eq p pattern))
+           :collect (list p))
+     (list pattern)
+     (list column-type)
+     env)))
 
 (defun pattern-matrix-p (x)
   (and (alexandria:proper-list-p x)
@@ -147,22 +153,17 @@ PATTERN-CONSTRUCTOR whose subpatterns are typed wildcards. Otherwise return NIL.
            (values (or null tc:pattern-constructor)))
   (let ((scheme (tc:lookup-value-type env constructor-name :no-error t)))
     (when scheme
-      (let* ((fresh-qual-ty (tc:fresh-inst scheme))
-             (constructor-ty (tc:qualified-ty-type fresh-qual-ty))
-             (return-ty (tc:function-return-type constructor-ty)))
-        (handler-case
-            (let* (;; Unify, don't match. COLUMN-TYPE may itself contain
-                   ;; type variables, and a GADT constructor may unify them.
-                   (subs (tc:unify-pattern-result nil return-ty column-type :all))
-                   (constructor-ty (tc:apply-substitution subs constructor-ty))
-                   (return-ty (tc:apply-substitution subs return-ty))
-                   (argument-tys (tc:function-type-arguments constructor-ty)))
-              (tc:make-pattern-constructor :type (tc:qualify nil return-ty)
+      (let ((constructor-ty (tc:qualified-ty-type (tc:fresh-inst scheme))))
+        ;; Unify, don't match. COLUMN-TYPE may itself contain type
+        ;; variables, and a GADT constructor may unify them.
+        (multiple-value-bind (subs possible-p)
+            (tc:try-unify nil (tc:function-return-type constructor-ty) column-type :all)
+          (when possible-p
+            (let ((constructor-ty (tc:apply-substitution subs constructor-ty)))
+              (tc:make-pattern-constructor :type (tc:qualify nil (tc:function-return-type constructor-ty))
                                            :name constructor-name
-                                           :patterns (loop :for arg-ty :in argument-tys
-                                                           :collect (make-wildcard-for-type arg-ty))))
-          (tc:coalton-internal-type-error ()
-            nil))))))
+                                           :patterns (mapcar #'make-wildcard-for-type
+                                                             (tc:function-type-arguments constructor-ty))))))))))
 
 (defun type-entry-for-seen-constructor-patterns (patterns env)
   "Return the TYPE-ENTRY implied by constructor patterns in PATTERNS, if any.
@@ -207,74 +208,64 @@ recover the constructor signature from the matrix itself."
                 :collect pattern)
         nil)))
 
-(defun first-column-patterns (pattern-matrix)
-  (declare (type pattern-matrix pattern-matrix)
-           (values tc:pattern-list))
-  (loop :for row :in pattern-matrix
-        :for elem := (first row)
-        :when (or (tc:pattern-literal-p elem)
-                  (tc:pattern-constructor-p elem))
-          :collect elem))
+;;; Field obligations
+;;; -----------------
+;;;
+;;;   When a wildcard column is decided by a constructor C that no row
+;;;   inspects, the search drops the column without adding columns for
+;;;   C's fields, which could be recursive. The value it describes still
+;;;   needs fields of those types, and they can share type variables with
+;;;   later columns. With Permit :i inhabited only at Integer, the fields
+;;;   of Metered :: Permit :i -> Door :i exist only when :i is Integer,
+;;;   which excludes a later Lane :i value whose constructor fixes :i to
+;;;   String. This holds whether Door is a GADT or an ordinary type.
+;;;
+;;;   Such field types are carried down the search as OBLIGATIONS. They
+;;;   are never split, but every substitution applied to the columns is
+;;;   applied to them as well, and every proof that the columns have no
+;;;   value includes them. A missing case or a useful clause therefore
+;;;   is found only for a tail that the chosen constructor's fields admit.
+;;;
+;;;   Obligations only remove values through EMPTY-INDEXED-COLUMN-P,
+;;;   which refutes nothing it cannot prove: cycles, opaque types and an
+;;;   exhausted budget leave them inhabited. Each such proof is counted
+;;;   in *OBLIGATION-REFUTATIONS*, which tells SEARCH-COLUMN-CASES that
+;;;   one constructor's failure no longer decides its siblings.
 
-(defun constructor-pattern-names (patterns)
-  (declare (type tc:pattern-list patterns)
-           (values util:symbol-list))
-  (loop :for pattern :in patterns
-        :when (tc:pattern-constructor-p pattern)
-          :collect (tc:pattern-constructor-name pattern)))
+(defun columns-empty-p (column-types obligations env)
+  "Can we prove that no values inhabit COLUMN-TYPES together with OBLIGATIONS?"
+  (declare (type tc:ty-list column-types obligations)
+           (type tc:environment env)
+           (values boolean))
+  (let ((empty (empty-indexed-column-p (append column-types obligations) env)))
+    (when (and empty obligations)
+      (incf *obligation-refutations*))
+    empty))
 
-(defun specialize-column-types (column-types pattern)
-  "Update COLUMN-TYPES after specializing the first column by PATTERN.
+(defun refine-column-types (column-types pattern obligations)
+  "Unify the type of PATTERN with the first of COLUMN-TYPES.
 
-For a constructor C with fields T1 ... Tn, the first column is replaced with
-T1 ... Tn. The unification substitution is also applied to the remaining
-columns, which preserves GADT equalities between nested fields."
-  (declare (type tc:ty-list column-types)
+Returns whether they unify, and then, refined by the unifier, the remaining
+column types, the types of PATTERN's fields (none for a literal) and
+OBLIGATIONS. Specializing the first column by PATTERN replaces it with the
+fields. Choosing a constructor for a wildcard column drops it, keeping the
+fields only as obligations, since the wildcard does not inspect them; see
+\"Field obligations\". Refining the other columns and the obligations
+preserves GADT equalities between nested fields."
+  (declare (type tc:ty-list column-types obligations)
            (type (or tc:pattern-literal tc:pattern-constructor) pattern)
-           (values tc:ty-list boolean))
-  (let ((current-column-type (first column-types)))
-    (handler-case
-        (let* ((subs (tc:unify-pattern-result nil (pattern-bare-type pattern) current-column-type :all))
-               (new-column-types (etypecase pattern
-                                   (tc:pattern-literal (rest column-types))
-                                   (tc:pattern-constructor
-                                    (append (mapcar #'pattern-bare-type
-                                                    (tc:pattern-constructor-patterns pattern))
-                                            (rest column-types))))))
-          (values (tc:apply-substitution subs new-column-types) t))
-      (tc:coalton-internal-type-error ()
-        (values nil nil)))))
-
-(defun default-column-types-for-constructor (column-types constructor-pattern)
-  "Drop the first column after choosing CONSTRUCTOR-PATTERN for a wildcard
-column. Unlike SPECIALIZE-COLUMN-TYPES, this does not add constructor argument
-types, because the wildcard does not inspect constructor fields.
-
-It only applies the GADT refinement induced by the constructor return type to
-the remaining columns."
-  (declare (type tc:ty-list column-types)
-           (type tc:pattern-constructor constructor-pattern)
-           (values tc:ty-list boolean))
-  (let ((current-column-type (first column-types)))
-    (handler-case
-        (let ((subs (tc:unify-pattern-result nil (pattern-bare-type constructor-pattern)
-                                             current-column-type :all)))
-          (values (tc:apply-substitution subs (rest column-types)) t))
-      (tc:coalton-internal-type-error ()
-        (values nil nil)))))
-
-(defun missing-constructor-patterns (seen-patterns possible-ctors)
-  "Return possible constructors for COLUMN-TYPE that are not named in SEEN-PATTERNS."
-  (declare (type tc:pattern-list seen-patterns)
-           (type tc:pattern-list possible-ctors)
-           (values tc:pattern-list))
-  (let ((seen-names (constructor-pattern-names seen-patterns)))
-    (remove-if
-     (lambda (constructor-pattern)
-       (member (tc:pattern-constructor-name constructor-pattern)
-               seen-names
-               :test #'eq))
-     possible-ctors)))
+           (values boolean tc:ty-list tc:ty-list tc:ty-list))
+  (multiple-value-bind (subs possible-p)
+      (tc:try-unify nil (pattern-bare-type pattern) (first column-types) :all)
+    (if possible-p
+        (values t
+                (tc:apply-substitution subs (rest column-types))
+                (and (tc:pattern-constructor-p pattern)
+                     (tc:apply-substitution
+                      subs
+                      (mapcar #'pattern-bare-type (tc:pattern-constructor-patterns pattern))))
+                (tc:apply-substitution subs obligations))
+        (values nil nil nil nil))))
 
 (defun empty-indexed-column-p (columns env)
   "Can we prove that no list of values inhabits COLUMNS?
@@ -284,23 +275,40 @@ variables, so the constructor that inhabits one column may fix an index that
 leaves no constructor for another."
   ;; Refute only what we can prove. A cycle, an opaque type or exhaustion
   ;; of the search budget is not evidence that a value cannot exist.
-  (let ((fuel 64))
-    (labels ((refutable-entry (type)
+  ;;
+  ;; An ordinary type with several constructors cannot fix an index by
+  ;; itself, but it is empty when each of its alternatives has a field that
+  ;; is. Expanding such sums can spend the whole budget on alternatives that
+  ;; are irrelevant to a contradiction elsewhere, so they get a second search
+  ;; with its own budget, run only when the first one, which leaves sums
+  ;; unexpanded, fails to refute COLUMNS and skipped some sum.
+  (let ((fuel 0)
+        (expand-sums nil)
+        (sums-skipped nil)
+        (out-of-fuel (list 'out-of-fuel)))
+    (labels ((expandable-entry (type indexed-only)
                (let* ((entry (type-entry-for-column-type type env))
                       (ctors (and entry (tc:type-entry-constructors entry))))
                  (and ctors
-                      (or (tc:type-entry-gadt-p entry) (null (rest ctors)))
+                      (or (not indexed-only)
+                          (tc:type-entry-gadt-p entry)
+                          (null (rest ctors)))
                       entry)))
              (inhabited-p (items)
                ;; Each item is (TYPE . SEEN), where SEEN lists the type entries
                ;; expanded on the path to TYPE. An item whose type does not yet
-               ;; have a refutable head may get one from a sibling's constructor.
-               (let ((item (find-if (lambda (item) (refutable-entry (car item))) items)))
+               ;; have a known head may get one from a sibling's constructor.
+               (let ((item (or (find-if (lambda (item) (expandable-entry (car item) t)) items)
+                               (let ((sum (find-if (lambda (item) (expandable-entry (car item) nil))
+                                                   items)))
+                                 (when sum
+                                   (setf sums-skipped t))
+                                 (and expand-sums sum)))))
                  (if (null item)
                      t
                      (let* ((type (car item))
                             (seen (cdr item))
-                            (entry (refutable-entry type))
+                            (entry (expandable-entry type nil))
                             (others (remove item items :count 1 :test #'eq))
                             (shared-p (intersection (tc:type-variables type)
                                                     (tc:type-variables (mapcar #'car others))
@@ -308,76 +316,122 @@ leaves no constructor for another."
                        (cond
                          ((member entry seen)
                           (inhabited-p others))
+                         ;; A nullary constructor of an ordinary type fits
+                         ;; every instance of it without constraining others.
+                         ((and (not (tc:type-entry-gadt-p entry))
+                               (some (lambda (name)
+                                       (let ((ctor (tc:lookup-constructor env name :no-error t)))
+                                         (and ctor (zerop (tc:constructor-entry-arity ctor)))))
+                                     (tc:type-entry-constructors entry)))
+                          (inhabited-p others))
                          (shared-p
-                          (some (lambda (name) (constructor-inhabited-p name type entry seen others))
-                                (tc:type-entry-constructors entry)))
+                          (constructed-p type entry seen others))
+                         ;; Independent items can be refuted in either order.
+                         ;; When sums are expanded, refute the siblings first,
+                         ;; so that a sum inside this item cannot use up the
+                         ;; budget before a contradiction among them is found.
+                         (expand-sums
+                          (and (inhabited-p others)
+                               (constructed-p type entry seen nil)))
                          (t
-                          (and (some (lambda (name) (constructor-inhabited-p name type entry seen nil))
-                                     (tc:type-entry-constructors entry))
+                          (and (constructed-p type entry seen nil)
                                (inhabited-p others))))))))
-             (constructor-inhabited-p (name type entry seen others)
-               (let ((scheme (tc:lookup-value-type env name :no-error t)))
-                 (unless (and scheme (plusp fuel))
-                   (return-from empty-indexed-column-p nil))
-                 (decf fuel)
-                 (let* ((ctor-ty (tc:qualified-ty-type (tc:fresh-inst scheme)))
-                        (subs (handler-case
-                                  (tc:unify-pattern-result nil (tc:function-return-type ctor-ty) type :all)
-                                (tc:coalton-internal-type-error ()
-                                  (return-from constructor-inhabited-p nil)))))
-                   (inhabited-p
-                    (append (loop :for field :in (tc:function-type-arguments
-                                                  (tc:apply-substitution subs ctor-ty))
-                                  :collect (cons field (cons entry seen)))
-                            (loop :for (other-type . other-seen) :in others
-                                  :collect (cons (tc:apply-substitution subs other-type)
-                                                 other-seen))))))))
-      (not (inhabited-p (mapcar #'list columns))))))
+             (constructed-p (type entry seen others)
+               ;; Does a constructor of ENTRY build a TYPE whose fields are
+               ;; inhabited together with OTHERS?
+               (some (lambda (name)
+                       (let ((scheme (tc:lookup-value-type env name :no-error t)))
+                         (unless (and scheme (plusp fuel))
+                           (throw out-of-fuel nil))
+                         (decf fuel)
+                         (let ((ctor-ty (tc:qualified-ty-type (tc:fresh-inst scheme))))
+                           (multiple-value-bind (subs possible-p)
+                               (tc:try-unify nil (tc:function-return-type ctor-ty) type :all)
+                             (and possible-p
+                                  (inhabited-p
+                                   (append (loop :for field :in (tc:function-type-arguments
+                                                                 (tc:apply-substitution subs ctor-ty))
+                                                 :collect (cons field (cons entry seen)))
+                                           (loop :for (other-type . other-seen) :in others
+                                                 :collect (cons (tc:apply-substitution subs other-type)
+                                                                other-seen)))))))))
+                     (tc:type-entry-constructors entry))))
+      (flet ((refuted-p (sums)
+               (setf fuel 64
+                     expand-sums sums)
+               (catch out-of-fuel
+                 (not (inhabited-p (mapcar #'list columns))))))
+        (or (refuted-p nil)
+            (and sums-skipped (refuted-p t)))))))
 
-(defun search-column-cases (matrix column-types env default specialize)
+(defun search-column-cases (matrix column-types obligations env default specialize)
   "Search the cases of a wildcard column, returning the first non-NIL result.
-Both usefulness and witness generation must propagate the same index equalities."
-  (let* ((seen (first-column-patterns matrix))
+Both usefulness and witness generation must propagate the same index equalities.
+
+DEFAULT is called with a missing constructor (or NIL when the column's
+constructors are unknown), the remaining column types and the obligations
+for that choice. SPECIALIZE is called with a seen constructor, the
+specialized column types and the obligations."
+  (let* ((seen (loop :for row :in matrix
+                     :when (tc:pattern-constructor-p (first row))
+                       :collect (first row)))
          (candidates (possible-constructor-patterns (first column-types) env seen))
-         ;; A constructor is a case only if its fields and the remaining
-         ;; columns, as refined by its result type, have a value together. A
-         ;; field and a later column can each be inhabited while sharing an
-         ;; index that no value of both can satisfy.
-         (possible (remove-if (lambda (ctor)
-                                (multiple-value-bind (tail-types possible-p)
-                                    (default-column-types-for-constructor column-types ctor)
-                                  (or (not possible-p)
-                                      (empty-indexed-column-p
-                                       (append (mapcar #'pattern-bare-type
-                                                       (tc:pattern-constructor-patterns ctor))
-                                               tail-types)
-                                       env))))
-                              candidates))
-         (missing (missing-constructor-patterns seen possible))
-         (tail (rest column-types)))
-    (unless possible
+         ;; A constructor is a case only if its fields, the remaining columns
+         ;; and the obligations, as refined by its result type, have a value
+         ;; together. A field and a later column can each be inhabited while
+         ;; sharing an index that no value of both can satisfy. Each case is
+         ;; (CTOR TAIL-TYPES FIELDS OBLIGATIONS); see REFINE-COLUMN-TYPES.
+         (cases (loop :for ctor :in candidates
+                      :for (possible-p types fields outer)
+                        := (multiple-value-list (refine-column-types column-types ctor obligations))
+                      :when (and possible-p
+                                 (not (columns-empty-p (append fields types) outer env)))
+                        :collect (list ctor types fields outer)))
+         (missing (remove-if (lambda (entry)
+                               (find (tc:pattern-constructor-name (first entry)) seen
+                                     :key #'tc:pattern-constructor-name))
+                             cases))
+         (tail (rest column-types))
+         (refutations *obligation-refutations*))
+    (unless cases
       (return-from search-column-cases
         (unless (or candidates (empty-indexed-column-p (list (first column-types)) env))
-          (funcall default nil tail))))
-    (let ((correlated (and missing tail
+          (funcall default nil tail obligations))))
+    ;; Without shared indices, every missing constructor leaves the same
+    ;; remaining columns and default rows, so the first one decides them all
+    ;; and any hole under a seen constructor is also one under it. A missing
+    ;; constructor whose fields share type variables with the remaining
+    ;; columns or obligations can still fail because its fields admit only
+    ;; some remaining values. That shows up as a refutation using
+    ;; obligations, and then the other constructors must be tried as well.
+    ;; Constructors whose fields share nothing cannot change the answer, so
+    ;; a refutation deeper in the search does not make them retry.
+    (let ((correlated (and missing
+                           (or tail obligations)
                            (tc:constructor-entry-gadt-p
-                            (tc:lookup-constructor env (tc:pattern-constructor-name (first possible))))
+                            (tc:lookup-constructor env (tc:pattern-constructor-name (first (first cases)))))
                            (intersection (tc:type-variables (first column-types))
-                                         (tc:type-variables tail) :test #'tc:ty=))))
-      ;; Missing constructors use only default rows; do not expand their fields
-      ;; (which could be recursive). Without shared indices, one suffices.
-      (or (loop :for ctor :in (if correlated missing (and missing (list (first missing))))
-                :thereis (multiple-value-bind (types possible-p)
-                             (default-column-types-for-constructor column-types ctor)
-                           (and possible-p (funcall default ctor types))))
-          ;; Defaults can cover every missing constructor but still leave a hole
-          ;; under a seen one if the other columns have different refinements.
-          (and (or (null missing) correlated)
-               (loop :for ctor :in possible
-                     :thereis (and (not (member ctor missing))
-                                   (multiple-value-bind (types possible-p)
-                                       (specialize-column-types column-types ctor)
-                                     (and possible-p (funcall specialize ctor types))))))))))
+                                         (tc:type-variables (append tail obligations))
+                                         :test #'tc:ty=)))
+          (fields-shared (loop :for (nil types fields outer) :in missing
+                                 :thereis (and fields
+                                               (intersection (tc:type-variables fields)
+                                                             (tc:type-variables (append types outer))
+                                                             :test #'tc:ty=)))))
+      (flet ((refuted-p ()
+               (and fields-shared (> *obligation-refutations* refutations))))
+        ;; Missing constructors use only default rows; do not expand their fields
+        ;; (which could be recursive), but keep them as obligations.
+        (or (loop :for (ctor types fields outer) :in missing
+                  :for first := t :then nil
+                  :while (or first correlated (refuted-p))
+                  :thereis (funcall default ctor types (append fields outer)))
+            ;; Defaults can cover every missing constructor but still leave a hole
+            ;; under a seen one if the other columns have different refinements.
+            (and (or (null missing) correlated (refuted-p))
+                 (loop :for (ctor types fields outer) :in cases
+                       :thereis (and (not (member ctor missing :key #'first))
+                                     (funcall specialize ctor (append fields types) outer)))))))))
 
 (defun open-column-type-p (type)
   "Is the head of TYPE a type variable, leaving its constructors unknown?"
@@ -424,15 +478,20 @@ equation's alternatives allow."
       list
       (append (subseq list 1 (1+ k)) (list (first list)) (nthcdr (1+ k) list))))
 
-(defun useful-pattern-clause-p (pattern-matrix clause column-types env)
+(defun wildcard-pattern-p (pattern)
+  (or (tc:pattern-wildcard-p pattern)
+      (tc:pattern-var-p pattern)))
+
+(defun useful-pattern-clause-p (pattern-matrix clause column-types env &optional obligations)
   "Is CLAUSE useful with respect to PATTERN-MATRIX?
 
 PATTERN-MATRIX is a list of lists representing a pattern matrix in row-major format.
 CLAUSE is a list representing a row-vector of patterns. COLUMN-TYPES is the current
-type of each matrix column."
+type of each matrix column. OBLIGATIONS are types that must be inhabited together
+with the columns; see \"Field obligations\"."
   (declare (type pattern-matrix pattern-matrix)
            (type tc:pattern-list clause)
-           (type tc:ty-list column-types)
+           (type tc:ty-list column-types obligations)
            (type tc:environment env)
            (values boolean &optional))
 
@@ -447,11 +506,15 @@ type of each matrix column."
       ;; Check our base cases
       ;;
 
-      ;; If there are no rows then the pattern is useful.
-      ((zerop (length pattern-matrix))
-       (not (empty-indexed-column-p column-types env)))
+      ;; If there are no rows then a clause of wildcards is useful when a
+      ;; value exists. A clause that still has constructor or literal
+      ;; patterns is decomposed below: those patterns may admit no value
+      ;; of an inhabited column type, such as (Metered _) at Door String.
+      ((and (zerop (length pattern-matrix))
+            (every #'wildcard-pattern-p clause))
+       (not (columns-empty-p column-types obligations env)))
       ;; If both PATTERN-MATRIX and CLAUSE have no columns then the pattern is not useful.
-      ((zerop (length (first pattern-matrix)))
+      ((and pattern-matrix (zerop (length (first pattern-matrix))))
        nil)
 
       ;;
@@ -472,35 +535,35 @@ type of each matrix column."
                                            :type (tc:pattern-type (first clause)))
                                           (rest clause))
                                     (tc:apply-substitution subs column-types)
-                                    env))))
+                                    env
+                                    (tc:apply-substitution subs obligations)))))
 
       ;; Sub-case 1b: The first member of CLAUSE is a constructor (or literal).
       ((or (tc:pattern-literal-p (first clause))
            (tc:pattern-constructor-p (first clause)))
-       (multiple-value-bind (specialized-column-types possible-p)
-           (specialize-column-types column-types (first clause))
+       (multiple-value-bind (possible-p tail-types fields specialized-obligations)
+           (refine-column-types column-types (first clause) obligations)
          (when possible-p
            (let ((specialized-matrix (specialize-matrix pattern-matrix (first clause)))
                  (specialized-clause (specialize-matrix (list clause) (first clause))))
              (and specialized-clause
                   (useful-pattern-clause-p specialized-matrix
                                            (first specialized-clause)
-                                           specialized-column-types
-                                           env))))))
+                                           (append fields tail-types)
+                                           env
+                                           specialized-obligations))))))
 
       ;; Sub-case 2: The first member of CLAUSE is a wildcard (or variable)
-      ((or (tc:pattern-wildcard-p (first clause))
-           (tc:pattern-var-p (first clause)))
-
+      ((wildcard-pattern-p (first clause))
        (search-column-cases
-        pattern-matrix column-types env
-        (lambda (ctor types)
+        pattern-matrix column-types obligations env
+        (lambda (ctor types obligations)
           (declare (ignore ctor))
-          (useful-pattern-clause-p (default-matrix pattern-matrix) (rest clause) types env))
-        (lambda (ctor types)
+          (useful-pattern-clause-p (default-matrix pattern-matrix) (rest clause) types env obligations))
+        (lambda (ctor types obligations)
           (useful-pattern-clause-p (specialize-matrix pattern-matrix ctor)
                                    (first (specialize-matrix (list clause) ctor))
-                                   types env))))
+                                   types env obligations))))
 
       (t
        (util:coalton-bug "Not reachable.")))))
@@ -671,10 +734,21 @@ COLUMN-TYPES is the current type of each pattern-matrix column."
   (declare (type pattern-matrix pattern-matrix)
            (type tc:ty-list column-types)
            (type tc:environment env))
+  (let ((*obligation-refutations* 0))
+    (search-non-matching-value pattern-matrix column-types nil env)))
+
+(defun search-non-matching-value (pattern-matrix column-types obligations env)
+  "Like FIND-NON-MATCHING-VALUE. The value returned must also leave
+OBLIGATIONS inhabited; see \"Field obligations\". A missing constructor in
+the result stands for a value whose fields satisfy the obligations
+together with the rest of the result."
+  (declare (type pattern-matrix pattern-matrix)
+           (type tc:ty-list column-types obligations)
+           (type tc:environment env))
   (cond
     ;; An empty pattern matrix misses one wildcard value for each current column.
     ((zerop (length pattern-matrix))
-     (if (empty-indexed-column-p column-types env)
+     (if (columns-empty-p column-types obligations env)
          t
          (mapcar #'make-wildcard-for-type column-types)))
 
@@ -689,19 +763,21 @@ COLUMN-TYPES is the current type of each pattern-matrix column."
     (t
      (let ((k (split-column-index pattern-matrix nil column-types)))
        (if (plusp k)
-           (let ((value (find-non-matching-value
+           (let ((value (search-non-matching-value
                          (mapcar (lambda (row) (move-to-front row k)) pattern-matrix)
                          (move-to-front column-types k)
+                         obligations
                          env)))
              (if (eq value t) t (move-from-front value k)))
            (or (search-column-cases
-                pattern-matrix column-types env
-                (lambda (ctor types)
-                  (let ((tail (find-non-matching-value (default-matrix pattern-matrix) types env)))
+                pattern-matrix column-types obligations env
+                (lambda (ctor types obligations)
+                  (let ((tail (search-non-matching-value (default-matrix pattern-matrix) types obligations env)))
                     (unless (eq tail t)
                       (cons (or ctor (make-wildcard-for-type (first column-types))) tail))))
-                (lambda (ctor types)
-                  (let ((value (find-non-matching-value (specialize-matrix pattern-matrix ctor) types env))
+                (lambda (ctor types obligations)
+                  (let ((value (search-non-matching-value (specialize-matrix pattern-matrix ctor)
+                                                          types obligations env))
                         (arity (length (tc:pattern-constructor-patterns ctor))))
                     (unless (eq value t)
                       (cons (tc:make-pattern-constructor :type (tc:pattern-type ctor)

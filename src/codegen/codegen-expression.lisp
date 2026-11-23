@@ -5,10 +5,6 @@
    #:coalton-impl/codegen/ast
    #:coalton-impl/codegen/codegen-match)
   (:import-from
-   #:coalton-impl/codegen/codegen-pattern
-   #:codegen-pattern
-   #:codegen-pattern-test)
-  (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
   (:import-from
@@ -268,8 +264,9 @@ after unwinding to the `catch` form, in the dynamic environment of the
     (loop :for branch :in (node-catch-branches node)
           :for index :from 0
           :for pattern := (catch-branch-pattern branch)
-          :do (multiple-value-bind (predicate bindings)
+          :do (multiple-value-bind (predicate bindings binding-types possible)
                   (codegen-pattern pattern condition-var (pattern-type pattern) env)
+                (declare (ignore binding-types))
                 (push `(,(catch-branch-handler-type branch env)
                         (lambda (,condition-var)
                           (declare (ignorable ,condition-var))
@@ -277,11 +274,12 @@ after unwinding to the `catch` form, in the dynamic environment of the
                             (return-from ,dispatch-exit
                               (values ,index ,condition-var)))))
                       handlers)
-                (push `(,index
-                        (let ,bindings
-                          (declare (ignorable ,@(mapcar #'car bindings)))
-                          ,(codegen-expression (catch-branch-body branch) env)))
-                      bodies)))
+                (when possible
+                  (push `(,index
+                          (let ,bindings
+                            (declare (ignorable ,@(mapcar #'car bindings)))
+                            ,(codegen-expression (catch-branch-body branch) env)))
+                        bodies))))
     `(block ,normal-exit
        (multiple-value-bind (,index-var ,condition-var)
            (block ,dispatch-exit
@@ -306,19 +304,19 @@ value is returned from the `handle` form."
        (handler-bind
            ,(loop :for branch :in (node-catch-branches node)
                   :for pattern := (catch-branch-pattern branch)
-                  :collect (multiple-value-bind (predicate bindings)
+                  :collect (multiple-value-bind (predicate bindings binding-types possible)
                                (codegen-pattern pattern condition-var (pattern-type pattern) env)
+                             (declare (ignore binding-types))
                              `(,(catch-branch-handler-type branch env)
                                (lambda (,condition-var)
                                  (declare (ignorable ,condition-var))
-                                 (when ,predicate
-                                   (let ,bindings
-                                     (declare (ignorable ,@(mapcar #'car bindings)))
-                                     ;; If the body transfers control, e.g. by
-                                     ;; invoking a resumption, it does so before
-                                     ;; this exit.
-                                     (return-from ,block-label
-                                       ,(codegen-expression (catch-branch-body branch) env))))))))
+                                 ,(if possible
+                                      `(when ,predicate
+                                         (let ,bindings
+                                           (declare (ignorable ,@(mapcar #'car bindings)))
+                                           (return-from ,block-label
+                                             ,(codegen-expression (catch-branch-body branch) env))))
+                                      predicate)))))
          ,(codegen-expression (node-catch-expr node) env)))))
 
 (defun constant-constructor-compressed-repr (name env)
@@ -649,17 +647,19 @@ return (VALUES COMPRESSED-REPR T)."
                               (let ((group (list name arity nil)))
                                 (push group groups)
                                 group))
-            :do (multiple-value-bind (predicate bindings)
+            :do (multiple-value-bind (predicate bindings binding-types possible)
                     (codegen-pattern pattern payload-var (pattern-type pattern) env)
+                  (declare (ignore binding-types))
                   (push `(,(if (zerop arity) t predicate)
                           (return-from ,dispatch-exit
                             (values ,index ,(if (zerop arity) nil payload-var))))
                         (third group))
-                  (push `(,index
-                          (let ,bindings
-                            (declare (ignorable ,@(mapcar #'car bindings)))
-                            ,(codegen-expression (resumable-branch-body branch) env)))
-                        bodies)))
+                  (when possible
+                    (push `(,index
+                            (let ,bindings
+                              (declare (ignorable ,@(mapcar #'car bindings)))
+                              ,(codegen-expression (resumable-branch-body branch) env)))
+                          bodies))))
       (let ((restarts
               (loop :for (name arity tests) :in (nreverse groups)
                     :for outer := (gensym "OUTER-RESTART-")
