@@ -32,7 +32,7 @@ error: Instance fundep conflict
   --> test:7:17
    |
  7 |  (define-instance (C Integer Unit))
-   |                   ^^^^^^^^^^^^^^^^ instance conflicts previous instance C INTEGER STRING
+   |                   ^^^^^^^^^^^^^^^^ cannot guarantee equal outputs for C INTEGER UNIT and C INTEGER STRING under (:A -> :B) when the inputs coincide
 
 ================================================================================
 102 Instances with unequal generality should conflict in either definition order
@@ -52,7 +52,7 @@ error: Instance fundep conflict
   --> test:7:17
    |
  7 |  (define-instance (C (List Integer) Unit))
-   |                   ^^^^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST :A) STRING
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^ cannot guarantee equal outputs for C (LIST INTEGER) UNIT and C (LIST :A) STRING under (:A -> :B) when the inputs coincide
 
 ================================================================================
 103 Instances with unequal generality should conflict in either definition order
@@ -72,7 +72,7 @@ error: Instance fundep conflict
   --> test:7:17
    |
  7 |  (define-instance (C (List :a) String))
-   |                   ^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST INTEGER) UNIT
+   |                   ^^^^^^^^^^^^^^^^^^^^ cannot guarantee equal outputs for C (LIST :A) STRING and C (LIST INTEGER) UNIT under (:A -> :B) when the inputs coincide
 
 ================================================================================
 104 Fundeps improve type checking

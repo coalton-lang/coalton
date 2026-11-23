@@ -315,6 +315,50 @@
 
     (define-instance (C String Integer))"))
 
+(deftest fundep-tagged-instances-must-agree ()
+  (let ((classes "(package coalton-unit-test/tagged-key)
+                  (define-class (LKey :k :v (:k -> :v)))
+                  (define-class (RKey :k :v (:k -> :v)))
+                  (define-class (TaggedKey :k :v :tag (:k -> :v)))")
+        (left "(define-instance (LKey Unit :v => TaggedKey Unit :v Boolean))")
+        (right "(define-instance (RKey Unit :v => TaggedKey Unit :v Char))"))
+    (dolist (prefix '("(define-instance (LKey Unit Integer))
+                      (define-instance (RKey Unit String))"
+                     ;; New instances could satisfy the two prerequisites later.
+                     ""
+                     ;; This instance agrees with either neighbor, but all three
+                     ;; share an improvement entry. Still compare the neighbors.
+                     "(define-instance ((LKey Unit :v) (RKey Unit :v) => TaggedKey Unit :v Unit))"))
+      (dolist (order (list (list left right) (list right left)))
+        (let ((error (collect-compiler-error (format nil "~A~%~A~%~{~A~%~}" classes prefix order))))
+          (is (search "Instance fundep conflict" error))
+          (is (search "equal outputs" error)))))))
+
+(deftest fundep-tagged-instances-can-use-a-shared-prerequisite ()
+  (let ((classes "(define-class (Key :k :v (:k -> :v)) (get-key (:k -> :v)))
+                  (define-class (TaggedKey :k :v :tag (:k -> :v)) (get-tagged (:k * :tag -> :v)))
+                  (define-instance (Key Unit Integer) (define (get-key _) 42))")
+        (left "(define-instance (Key :k :v => TaggedKey :k :v Boolean)
+                 (define (get-tagged k _) (get-key k)))
+               (define via-boolean (get-tagged Unit True))")
+        (right "(define-instance (Key :k :out => TaggedKey :k :out Char)
+                  (define (get-tagged k _) (get-key k)))
+                (define via-char (get-tagged Unit #\\c))"))
+    (check-coalton-types (concatenate 'string classes left) '("via-boolean" . "Integer"))
+    (check-coalton-types (concatenate 'string classes left right)
+                         '("via-boolean" . "Integer") '("via-char" . "Integer"))))
+
+(deftest fundep-tagged-instances-preserve-improvement ()
+  ;; If both prerequisites hold, their outputs agree. But the first row
+  ;; would improve the output to List even where only the second holds.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (Key :k :v (:k -> :v)))
+      (define-class (TaggedKey :k :v :tag (:k -> :v)))
+      (define-instance (Key Unit Integer))
+      (define-instance (Key :k (List :v) => TaggedKey :k (List :v) Boolean))
+      (define-instance (Key :k :v => TaggedKey :k :v Char))")))
+
 ;; Check that fundep declarations are used to improve type checking 
 (deftest fundep-improve-types ()
   (check-coalton-types

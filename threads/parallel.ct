@@ -269,7 +269,7 @@ For example, to sum a function over a range with an unboxed accumulator in each 
   (define-class (ParallelFoldable :f :a (:f -> :a))
     "Collections whose elements `for-each!`, `map-reduce` and `fold-map` can process in parallel. These operations divide the indices of the elements of a collection into chunks, as `for-chunks!` does, and process each chunk with `fold-elements`.
 
-Every `RandomAccess` collection, such as `Vector` or `LispArray`, is an instance, and so is `Seq`. Since the instance for `RandomAccess` collections overlaps with every other instance, other instances must be marked with `(overlap)`."
+A `RandomAccess` collection of type `(:f :a)` with element type `:a`, such as `(Vector :a)` or `(LispArray :a)`, is an instance, and so is `(Seq :a)`. Instances that overlap with this general instance must be marked with `(overlap)`."
     (element-count
      "The number of elements of a collection."
      (:f -> UFix))
@@ -278,7 +278,7 @@ Every `RandomAccess` collection, such as `Vector` or `LispArray`, is an instance
      ((:b * :a -> :b) * :b * :f * UFix * UFix -> :b)))
 
   (overlap)
-  (define-instance (ram:RandomAccess :f :a => ParallelFoldable :f :a)
+  (define-instance (ram:RandomAccess (:f :a) :a => ParallelFoldable (:f :a) :a)
     (inline)
     (define (element-count storage)
       (ram:length storage))
