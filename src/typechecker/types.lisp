@@ -37,6 +37,7 @@
    #:keyword-ty-entry-list              ; TYPE
    #:function-ty                        ; STRUCT
    #:make-function-ty                   ; CONSTRUCTOR
+   #:function-ty-p                      ; FUNCTION
    #:function-ty-positional-input-types ; ACCESSOR
    #:function-ty-keyword-input-types    ; ACCESSOR
    #:function-ty-keyword-open-p         ; ACCESSOR
@@ -46,6 +47,7 @@
    #:function-ty-output-types           ; ACCESSOR
    #:result-ty                          ; STRUCT
    #:make-result-ty                     ; CONSTRUCTOR
+   #:result-ty-p                        ; FUNCTION
    #:result-ty-output-types             ; ACCESSOR
    #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR

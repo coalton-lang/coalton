@@ -199,6 +199,7 @@ must not collapse distinct variables or specialize one to a concrete type.
              (instance-entry
                (tc:make-ty-class-instance
                 :overlap-p (parser:toplevel-define-instance-overlap-p instance)
+                :derived-p (parser:toplevel-define-instance-compiler-generated instance)
                 :constraints context
                 :predicate pred
                 :dictionary-signature (cons pred context)
@@ -337,24 +338,37 @@ must not collapse distinct variables or specialize one to a concrete type.
                                  (mapcar (lambda (p) (type-object-string p env)) required-superclasses))))))
 
     ;; Check for superclasses and check the context of superinstances
-    (loop :for superclass :in superclasses
-          :unless (tc:entail env context superclass)
+    (let ((initial-stack (list (cons instance (tc:apply-substitution instance-subs pred)))))
+      (loop :for superclass :in superclasses
+            :unless (tc:entail env context superclass
+                               :initial-stack initial-stack
+                               :check-superclasses-p t)
 
-            :do (let* ((superclass-instance
-                         (or (tc:lookup-class-instance env superclass :no-error t)
-                             (tc-error "Instance missing context"
-                                       (tc-location head-location
-                                                    "No instance for ~A"
-                                                    (type-object-string superclass env)))))
-                       (additional-context
-                         (tc:instantiate-instance-context superclass-instance superclass)))
-                  (loop :for pred :in additional-context
-                        :do (unless (tc:entail env context pred)
-                              (tc-error "Instance missing context"
-                                        (tc-location head-location
-                                                     "No instance for ~A arising from constraints of superclasses ~A"
-                                                     (type-object-string pred env)
-                                                     (type-object-string superclass env)))))))
+              :do (let* ((superclass-instance
+                           (or (tc:lookup-class-instance env superclass :no-error t)
+                               (tc-error "Instance missing context"
+                                         (tc-location head-location
+                                                      "No instance for ~A"
+                                                      (type-object-string superclass env)))))
+                         (additional-context
+                           (tc:instantiate-instance-context superclass-instance superclass))
+                         (super-stack
+                           (acons superclass-instance superclass initial-stack)))
+                    (loop :for pred :in additional-context
+                          :do (unless (tc:entail env context pred
+                                                 :initial-stack super-stack
+                                                 :check-superclasses-p t)
+                                (tc-error "Instance missing context"
+                                          (tc-location head-location
+                                                       "No instance for ~A arising from constraints of superclasses ~A"
+                                                       (type-object-string pred env)
+                                                       (type-object-string superclass env)))))
+                    ;; Also reject when additional-context is empty because an
+                    ;; indirect superclass cycle made a neighbor look nullary.
+                    (tc-error "Instance missing context"
+                              (tc-location head-location
+                                           "No instance for ~A"
+                                           (type-object-string superclass env))))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)

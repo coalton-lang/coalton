@@ -1051,3 +1051,348 @@ must be distinguished even though the predicate-only variables are ambiguous."
                       "")
                   (tc:tc-error (e)
                     (princ-to-string e)))))))
+
+(deftest circular-and-growing-instance-prerequisites ()
+  (labels ((call-in-temp-env (fn)
+             (let ((*package* (make-package (gensym "CYCLE-TEST-") :use '("COALTON" "COALTON-PRELUDE")))
+                   (entry:*global-environment* entry:*global-environment*))
+               (unwind-protect (funcall fn)
+                 (delete-package *package*))))
+           (pred (class-name &rest types)
+             (tc:make-ty-predicate :class (if (stringp class-name)
+                                              (intern class-name *package*)
+                                              class-name)
+                                   :types types))
+           (dict-params (class-name)
+             (cdr (tc:instance-dictionary-signature
+                   (first (tc:lookup-class-instances
+                           entry:*global-environment*
+                           (intern class-name *package*))))))
+           (assert-unprovable (witness-name)
+             (dolist (ty '("Integer" "String"))
+               (signals tc:tc-error
+                 (overlap-compile
+                  (format nil "(declare prove-goal (Void -> ~A))
+                               (define (prove-goal) (~A Unit))"
+                          ty witness-name))))))
+    ;; 1. Self-circular prerequisite does not manufacture a nullary dictionary.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-class (Rel :key :out (:key -> :out)))
+         (define-instance (Rel Unit :v => Rel Unit :v))
+         (declare witness (Rel :key :out => :key -> :out))
+         (define (witness _) (error \"unreachable\"))")
+       (let ((env entry:*global-environment*)
+             (params (dict-params "REL"))
+             (int-pred (pred "REL" tc:*unit-type* tc:*integer-type*))
+             (str-pred (pred "REL" tc:*unit-type* tc:*string-type*)))
+         (is (= 1 (length params)))
+         (is (eq (intern "REL" *package*) (tc:ty-predicate-class (first params))))
+         (is (not (tc:entail env nil int-pred)))
+         (is (not (tc:entail env nil str-pred)))
+         (is (tc:entail env (list int-pred) int-pred))
+         (assert-unprovable "witness"))))
+
+    ;; 2. Mutual circular prerequisites (same batch and separate batches).
+    (dolist (separate-p '(nil t))
+      (call-in-temp-env
+       (lambda ()
+         (let ((part1 "(define-class (Rel1 :key :out (:key -> :out)))
+                       (define-class (Rel2 :key :out (:key -> :out)))
+                       (define-instance (Rel2 Unit :v => Rel1 Unit :v))")
+               (part2 "(define-instance (Rel1 Unit :v => Rel2 Unit :v))"))
+           (if separate-p
+               (progn (overlap-compile part1) (overlap-compile part2))
+               (overlap-compile (concatenate 'string part1 part2))))
+         (overlap-compile
+          "(declare witness1 (Rel1 :key :out => :key -> :out))
+           (define (witness1 _) (error \"unreachable\"))")
+         (let ((env entry:*global-environment*)
+               (int-pred1 (pred "REL1" tc:*unit-type* tc:*integer-type*))
+               (str-pred1 (pred "REL1" tc:*unit-type* tc:*string-type*))
+               (int-pred2 (pred "REL2" tc:*unit-type* tc:*integer-type*))
+               (str-pred2 (pred "REL2" tc:*unit-type* tc:*string-type*)))
+           (is (= 1 (length (dict-params "REL1"))))
+           (is (= 1 (length (dict-params "REL2"))))
+           (dolist (p (list int-pred1 str-pred1 int-pred2 str-pred2))
+             (is (not (tc:entail env nil p))))
+           (is (tc:entail env (list int-pred2) int-pred1))
+           (assert-unprovable "witness1")))))
+
+    ;; 3. Acyclic control with Other Unit :v => Rel Unit :v.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-class (Rel :key :out (:key -> :out)))
+         (define-class (Other :key :out (:key -> :out)))
+         (define-instance (Other Unit :v => Rel Unit :v))
+         (declare witness (Rel :key :out => :key -> :out))
+         (define (witness _) (error \"unreachable\"))")
+       (let ((int-pred (pred "REL" tc:*unit-type* tc:*integer-type*))
+             (str-pred (pred "REL" tc:*unit-type* tc:*string-type*)))
+         (is (not (tc:entail entry:*global-environment* nil int-pred)))
+         (is (not (tc:entail entry:*global-environment* nil str-pred)))
+         (assert-unprovable "witness")
+         (overlap-compile "(define-instance (Other Unit Integer))")
+         (is (tc:entail entry:*global-environment* nil int-pred))
+         (is (not (tc:entail entry:*global-environment* nil str-pred)))
+         (overlap-compile "(declare prove-int (Void -> Integer))
+                           (define (prove-int) (witness Unit))")
+         (signals tc:tc-error
+           (overlap-compile "(declare prove-str (Void -> String))
+                             (define (prove-str) (witness Unit))")))))
+
+    ;; 4. Strictly growing prerequisites terminate and retain their obligation.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-class (Growing :a))
+         (define-instance (Growing (List :a) => Growing :a))
+         (define-class (GrowingA :a))
+         (define-class (GrowingB :a))
+         (define-instance (GrowingB (List :a) => GrowingA :a))
+         (define-instance (GrowingA (List :a) => GrowingB :a))
+         (declare need-growing (Growing :a => :a -> Unit))
+         (define (need-growing _) Unit)")
+       (let ((env entry:*global-environment*)
+             (params (dict-params "GROWING"))
+             (int-pred (pred "GROWING" tc:*integer-type*))
+             (list-int-pred (pred "GROWING" (tc:apply-type-argument tc:*list-type* tc:*integer-type*))))
+         (is (= 1 (length params)))
+         (is (eq (intern "GROWING" *package*) (tc:ty-predicate-class (first params))))
+         (is (= 1 (length (dict-params "GROWINGA"))))
+         (is (= 1 (length (dict-params "GROWINGB"))))
+         (is (not (tc:entail env nil int-pred)))
+         (is (not (tc:entail env nil list-int-pred)))
+         (is (tc:entail env (list list-int-pred) int-pred))
+         (is (not (tc:entail env nil (pred "GROWINGA" tc:*integer-type*))))
+         (is (not (tc:entail env nil (pred "GROWINGB" tc:*integer-type*))))
+         (signals tc:tc-error
+           (overlap-compile "(define bad (need-growing (the Integer 1)))")))))
+
+    ;; 5. Decreasing counterpart resolves nested lists of Integer.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-class (Growing :a)
+           (nesting-depth (:a -> Integer)))
+         (define-instance (Growing Integer)
+           (define (nesting-depth _) 0))
+         (define-instance (Growing :a => Growing (List :a))
+           (define (nesting-depth xs)
+             (match xs
+               ((Nil) 1)
+               ((Cons x _) (+ 1 (nesting-depth x))))))")
+       (let ((env entry:*global-environment*)
+             (nested-int (tc:apply-type-argument
+                          tc:*list-type*
+                          (tc:apply-type-argument
+                           tc:*list-type*
+                           (tc:apply-type-argument tc:*list-type* tc:*integer-type*))))
+             (nested-str (tc:apply-type-argument
+                          tc:*list-type*
+                          (tc:apply-type-argument tc:*list-type* tc:*string-type*))))
+         (is (tc:entail env nil (pred "GROWING" nested-int)))
+         (is (not (tc:entail env nil (pred "GROWING" nested-str))))
+         (is (= 3 (overlap-eval "(nesting-depth (Cons (Cons (Cons (the Integer 7) Nil) Nil) Nil))")))
+         (signals tc:tc-error
+           (overlap-compile "(define bad (nesting-depth (Cons (Cons \"no\" Nil) Nil)))")))))
+
+    ;; 6. Parameterized mutually recursive derive drops only the datatype cycle.
+    (let ((mut-types "(define-type UnEq UnEq)
+                      (derive Eq)
+                      (define-type (MutA :a) MutA0 (MutAn :a (MutB :a)))
+                      (derive Eq)
+                      (define-type (MutB :a) MutB0 (MutBn (MutA :a)))"))
+      (check-coalton-types
+       (concatenate 'string mut-types
+                    "(declare same-mut (Eq :a => MutA :a * MutA :a -> Boolean))
+                     (define (same-mut x y) (== x y))
+                     (define ok-mut (== (MutAn (the Integer 1) (MutBn MutA0))
+                                        (MutAn (the Integer 1) (MutBn MutA0))))")
+       '("same-mut" . "(Eq :a => MutA :a * MutA :a -> Boolean)")
+       '("ok-mut" . "Boolean"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (concatenate 'string mut-types
+                      "(define bad-mut (== (MutAn UnEq MutB0) (MutAn UnEq MutB0)))"))))
+
+    ;; 7. Direct and indirect superclass back-edges cannot manufacture nullary dictionaries.
+    (dolist (program
+              '("(define-class (R :key :out (:key -> :out)))
+                 (define-class (R :key :out => S :key :out))
+                 (define-instance (S Unit :v => R Unit :v))
+                 (define-instance (S Unit :v))"
+                "(define-class (R :key :out (:key -> :out)))
+                 (define-class (R :key :out => S :key :out))
+                 (define-instance (S Unit :v))
+                 (define-instance (S Unit :v => R Unit :v))"
+                "(define-class (B :a))
+                 (define-class (B :a => A :a))
+                 (define-class (C :a))
+                 (define-class (C :a => D :a))
+                 (define-instance (A Unit))
+                 (define-instance (D Unit))
+                 (define-instance (D Unit => B Unit))
+                 (define-instance (A Unit => C Unit))"))
+      (signals tc:tc-error
+        (check-coalton-types program)))
+
+    ;; 8. Non-structural user cycle through a derived type is not discharged.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-type (Phantom :a) Phantom)
+         (derive Eq)
+         (define-type Victim (Victim (Phantom Unit)))
+         (define-instance (Eq Victim => Eq (Phantom Unit))
+           (define (== _ _) True))")
+       (let* ((env entry:*global-environment*)
+              (victim-ty (tc:type-entry-type (tc:lookup-type env (intern "VICTIM" *package*))))
+              (victim-pred (pred 'coalton/classes:Eq victim-ty))
+              (inst (tc:lookup-class-instance env victim-pred)))
+         (is (= 1 (length (cdr (tc:instance-dictionary-signature inst)))))
+         (is (not (tc:entail env nil victim-pred)))
+         (signals tc:tc-error
+           (overlap-compile "(define bad (== (Victim Phantom) (Victim Phantom)))")))))
+
+    ;; 9. Recursive derive through non-shrinking user container wrappers.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-type (MySeq :a) (MySeq (List :a)))
+         (define-instance (Eq (List :a) => Eq (MySeq :a))
+           (define (== (MySeq xs) (MySeq ys)) (== xs ys)))
+         (define-type (MyOuterSeq :a) (MyOuterSeq (MySeq :a)))
+         (define-instance (Eq (MySeq :a) => Eq (MyOuterSeq :a))
+           (define (== (MyOuterSeq xs) (MyOuterSeq ys)) (== xs ys)))
+         (derive Eq)
+         (define-type (SeqTree :a) (SeqNode :a (MyOuterSeq (SeqTree :a))))")
+       (is (overlap-eval
+            "(== (SeqNode (the Integer 1) (MyOuterSeq (MySeq Nil)))
+                 (SeqNode (the Integer 1) (MyOuterSeq (MySeq Nil))))"))))
+
+    ;; 10. Finite concrete recursive field instantiations in derive (direct and List-wrapped).
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(derive Eq)
+         (define-type (AuditNest :a)
+           AuditLeaf
+           (AuditSmall (AuditNest Integer))
+           (AuditLarge (AuditNest (List Integer))))
+         (derive Eq)
+         (define-type (AuditNestList :a)
+           AuditListLeaf
+           (AuditListSmall (List (AuditNestList Integer)))
+           (AuditListLarge (List (AuditNestList (List Integer)))))")
+       (is (overlap-eval "(== (the (AuditNest Integer) AuditLeaf) AuditLeaf)"))
+       (is (overlap-eval "(== (the (AuditNest String) (AuditSmall (AuditLarge AuditLeaf)))
+                              (AuditSmall (AuditLarge AuditLeaf)))"))
+       (is (overlap-eval "(== (the (AuditNestList String) AuditListLeaf) AuditListLeaf)"))
+       (is (overlap-eval "(== (the (AuditNestList String)
+                                   (AuditListSmall (Cons (AuditListLarge (Cons AuditListLeaf Nil)) Nil)))
+                              (AuditListSmall (Cons (AuditListLarge (Cons AuditListLeaf Nil)) Nil)))"))))
+
+    ;; 11. Multi-step growing proofs toward givens and overlapping base instances,
+    ;;     plus function, forall, and deep DAG types.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-class (G :a) (g-val (:a -> Integer)))
+         (overlap)
+         (define-instance (G (List :a) => G :a) (define (g-val x) (g-val (Cons x Nil))))
+         (overlap)
+         (define-instance (G (List (List Integer))) (define (g-val _) 42))
+         (declare from-two-lists-g (G (List (List String)) => String -> Integer))
+         (define (from-two-lists-g x) (g-val x))
+         (define-class (GPoly :a) (gpoly-val (:a -> Integer)))
+         (overlap)
+         (define-instance (GPoly (List :a) => GPoly :a) (define (gpoly-val x) (gpoly-val (Cons x Nil))))
+         (overlap)
+         (define-instance (GPoly (List (List :a))) (define (gpoly-val _) 99))
+         (define-class (GDup :a) (gdup-val (:a -> Integer)))
+         (overlap)
+         (define-instance (GDup (List (Tuple :a :a)) => GDup :a)
+           (define (gdup-val x) (gdup-val (Cons (Tuple x x) Nil))))
+         (overlap)
+         (define-instance (GDup (List (Tuple (List :a) :b))) (define (gdup-val _) 77))
+         (define-class (G2 :a) (g2-val (:a -> Integer)))
+         (define-instance (G2 (List :a) => G2 :a) (define (g2-val x) (g2-val (Cons x Nil))))
+         (declare from-two-lists (G2 (List (List :a)) => :a -> Integer))
+         (define (from-two-lists x) (g2-val x))
+         (define-class (Self :a) (self-val (:a -> Integer)))
+         (define-instance (Self :a => Self :a) (define (self-val x) (self-val x)))
+         (declare pass-self (Self :a => :a -> Integer))
+         (define (pass-self x) (self-val x))")
+       (is (= 42 (overlap-eval "(g-val (the Integer 0))")))
+       (is (= 99 (overlap-eval "(gpoly-val (Tuple (the Integer 1) (the Integer 2)))")))
+       (is (= 77 (overlap-eval "(gdup-val (Tuple (the Integer 1) (the Integer 2)))")))
+       (signals tc:tc-error
+         (overlap-compile "(define bad-g (g-val \"no\"))"))
+       (let* ((env entry:*global-environment*)
+              (g2-int (pred "G2" tc:*integer-type*))
+              (g2-list2-int (pred "G2" (tc:apply-type-argument
+                                        tc:*list-type*
+                                        (tc:apply-type-argument tc:*list-type* tc:*integer-type*))))
+              (fn-ty (tc:make-function-type* (list tc:*integer-type*) tc:*integer-type*))
+              (b (tc:make-variable))
+              (forall-ty (tc:make-forall-ty
+                          :binders (list b)
+                          :type (tc:qualify nil (tc:make-function-type* (list b) b))))
+              (higher-fn-ty (tc:make-function-type* (list forall-ty) tc:*integer-type*))
+              (dag-ty (loop :for ty := tc:*integer-type*
+                              :then (tc:make-function-type* (list ty) ty)
+                            :repeat 66
+                            :finally (return ty)))
+              (dag-pred (pred "SELF" dag-ty)))
+         (is (tc:entail env (list g2-list2-int) g2-int))
+         (is (not (tc:entail env nil g2-int)))
+         (is (not (tc:entail env nil (pred "SELF" fn-ty))))
+         (is (not (tc:entail env nil (pred "SELF" higher-fn-ty))))
+         (is (= 67 (tc:predicate-height dag-pred)))
+         (is (tc:predicate-embeds-p dag-pred dag-pred nil)))))
+
+    ;; 12. Hand-written recursive contexts and non-regular derived types retain obligations.
+    (call-in-temp-env
+     (lambda ()
+       (overlap-compile
+        "(define-type (UT :a) UL (UN :a (List (UT :a))))
+         (define-instance ((Eq :a) (Eq (List (UT :a))) => Eq (UT :a))
+           (define (== x y)
+             (match (Tuple x y)
+               ((Tuple (UL) (UL)) True)
+               ((Tuple (UN a xs) (UN b ys)) (and (== a b) (== xs ys)))
+               (_ False))))
+         (derive Eq)
+         (define-type (Nst :a) NNil (NCons :a (Nst (List :a))))")
+       (signals tc:tc-error
+         (overlap-compile "(define bad-ut (== (the (UT Integer) UL) UL))"))
+       (signals tc:tc-error
+         (overlap-compile "(define bad-nst (== (the (Nst Integer) NNil) NNil))"))))
+
+    ;; 13. FASL round-trip preserves retained circular/growing dictionary signatures.
+    (call-in-temp-env
+     (lambda ()
+       (uiop:with-temporary-file (:stream out :pathname src :type "lisp")
+         (format out "(in-package ~S)~%~
+                      (coalton-toplevel~%~
+                        (define-class (Rel :key :out (:key -> :out)))~%~
+                        (define-instance (Rel Unit :v => Rel Unit :v))~%~
+                        (define-class (Growing :a))~%~
+                        (define-instance (Growing (List :a) => Growing :a)))~%"
+                 (package-name *package*))
+         :close-stream
+         (uiop:with-temporary-file (:pathname fasl :type (pathname-type (compile-file-pathname src)))
+           (let ((base entry:*global-environment*))
+             (is (not (nth-value 2 (compile-file src :output-file fasl :verbose nil :print nil))))
+             (setf entry:*global-environment* base)
+             (load fasl :verbose nil)
+             (let ((env entry:*global-environment*))
+               (is (= 1 (length (dict-params "REL"))))
+               (is (= 1 (length (dict-params "GROWING"))))
+               (is (not (tc:entail env nil (pred "REL" tc:*unit-type* tc:*integer-type*))))
+               (is (not (tc:entail env nil (pred "REL" tc:*unit-type* tc:*string-type*))))
+               (is (not (tc:entail env nil (pred "GROWING" tc:*integer-type*))))))))))))
+

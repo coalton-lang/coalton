@@ -57,6 +57,15 @@
       (when foundp
         (return (values dict t))))))
 
+(defvar *static-dict-resolution-stack* nil
+  "Active (INSTANCE . PRED) pairs during static dictionary construction.")
+
+(defvar *static-dict-fixed-vars* nil
+  "Type variables fixed by the root dictionary request and its given context.")
+
+(defvar *static-dict-max-given-height* 0
+  "Maximum predicate height in the root dictionary request and its given context.")
+
 (defun resolve-static-dict (pred context env)
   "Attempt to resolve PRED from static instances"
   (declare (type tc:ty-predicate pred)
@@ -64,11 +73,26 @@
            (values node &optional))
 
   ;; Lookup the predicate as a static instance
-  (let ((instance (tc:lookup-class-instance env pred :no-error t)))
+  (let* ((context-preds (when (null *static-dict-resolution-stack*)
+                          (loop :for (ctx-pred . nil) :in context
+                                :append (tc:superclass-closure env ctx-pred))))
+         (fixed-vars (if *static-dict-resolution-stack*
+                         *static-dict-fixed-vars*
+                         (tc:type-variables (cons pred context-preds))))
+         (max-given-height (if *static-dict-resolution-stack*
+                               *static-dict-max-given-height*
+                               (loop :for p :in (cons pred context-preds)
+                                     :maximize (tc:predicate-height p))))
+         (*static-dict-fixed-vars* fixed-vars)
+         (*static-dict-max-given-height* max-given-height)
+         (instance (tc:lookup-class-instance env pred :no-error t)))
     (cond
-      (instance
+      ((and instance
+            (not (tc:instance-recursion-blocked-p
+                  env instance pred *static-dict-resolution-stack* fixed-vars max-given-height)))
        ;; The provider fixes the parameters; the caller supplies evidence.
-       (let* ((constraints (tc:instantiate-instance-context instance pred))
+       (let* ((*static-dict-resolution-stack* (acons instance pred *static-dict-resolution-stack*))
+              (constraints (tc:instantiate-instance-context instance pred))
               (subs (nth-value 1 (tc:solve-fundeps env constraints nil)))
               (parameters (tc:apply-substitution subs constraints)))
          (if (null parameters)

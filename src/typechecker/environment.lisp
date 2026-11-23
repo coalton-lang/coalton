@@ -108,6 +108,7 @@
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-overlap-p            ; ACCESSOR
+   #:ty-class-instance-derived-p            ; ACCESSOR
    #:lookup-class-instance-by-head         ; FUNCTION
    #:class-has-overlap-p                    ; FUNCTION
    #:*instance-selection-hook*             ; VARIABLE
@@ -121,6 +122,13 @@
    #:finalize-instance-signatures           ; FUNCTION
    #:instance-dictionary-signature          ; FUNCTION
    #:instantiate-instance-context           ; FUNCTION
+   #:instantiate-superclasses               ; FUNCTION
+   #:superclass-closure                     ; FUNCTION
+   #:instance-superclass-obligations        ; FUNCTION
+   #:predicate-height                       ; FUNCTION
+   #:max-class-instance-head-height         ; FUNCTION
+   #:predicate-embeds-p                     ; FUNCTION
+   #:instance-recursion-blocked-p           ; FUNCTION
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -841,6 +849,7 @@
 
 (defstruct ty-class-instance
   (overlap-p               nil                                      :type boolean              :read-only t)
+  (derived-p               nil                                      :type boolean              :read-only t)
   (constraints             (util:required 'constraints)             :type ty-predicate-list      :read-only t)
   (predicate               (util:required 'predicate)               :type ty-predicate           :read-only t)
   (codegen-sym             (util:required 'codegen-sym)             :type symbol                 :read-only t)
@@ -872,39 +881,370 @@
       (destructuring-bind (head . context) (fresh-preds signature)
         (apply-substitution (predicate-match head pred) context)))))
 
-(defun expand-context (context env)
+(defun type-children (ty)
+  "Return the immediate child types of TY."
+  (declare (type ty ty)
+           (values ty-list &optional))
+  (typecase ty
+    (tapp
+     (list (tapp-from ty) (tapp-to ty)))
+    (function-ty
+     (append (function-ty-positional-input-types ty)
+             (mapcar #'keyword-ty-entry-type (function-ty-keyword-input-types ty))
+             (function-ty-output-types ty)))
+    (result-ty
+     (result-ty-output-types ty))
+    (forall-ty
+     (append (mapcan (lambda (pred) (copy-list (ty-predicate-types pred)))
+                     (forall-ty-predicates ty))
+             (list (forall-ty-body ty))))
+    (otherwise nil)))
+
+(defun binder-captures-p (ty container)
+  (declare (type ty ty container)
+           (values boolean &optional))
+  (and (forall-ty-p container)
+       (not (null (intersection (type-variables ty)
+                                (forall-ty-binders container)
+                                :test #'ty=)))))
+
+(defun type-height (ty &optional cache)
+  (declare (type ty ty)
+           (type (or null hash-table) cache)
+           (values fixnum &optional))
+  (let ((children (type-children ty)))
+    (unless children
+      (return-from type-height 1))
+    (when cache
+      (multiple-value-bind (cached foundp)
+          (gethash ty cache)
+        (when foundp
+          (return-from type-height cached))))
+    (let* ((cache (or cache (make-hash-table :test #'eq)))
+           (height (1+ (loop :for child :in children
+                             :maximize (type-height child cache)))))
+      (setf (gethash ty cache) height)
+      height)))
+
+(defun predicate-height (pred &optional cache)
+  (declare (type ty-predicate pred)
+           (type (or null hash-table) cache)
+           (values fixnum &optional))
+  (let ((cache (or cache (make-hash-table :test #'eq))))
+    (loop :for ty :in (ty-predicate-types pred)
+          :maximize (type-height ty cache))))
+
+(defun max-class-instance-head-height (env class)
+  (declare (type environment env)
+           (type symbol class)
+           (values fixnum &optional))
+  (loop :for inst :in (lookup-class-instances env class :no-error t)
+        :maximize (predicate-height (ty-class-instance-predicate inst))))
+
+(defun type-proper-subterm-p (needle haystack &optional height-cache)
+  "Does NEEDLE occur as a proper subterm of HAYSTACK?"
+  (declare (type ty needle haystack)
+           (type (or null hash-table) height-cache)
+           (values boolean &optional))
+  (let ((height-cache (or height-cache (make-hash-table :test #'eq))))
+    (and (< (type-height needle height-cache) (type-height haystack height-cache))
+         (not (binder-captures-p needle haystack))
+         (some (lambda (child)
+                 (or (ty= needle child)
+                     (type-proper-subterm-p needle child height-cache)))
+               (type-children haystack)))))
+
+(defun predicate-arguments-proper-subterms-p (derived-pred container-pred)
+  "Is every type argument of DERIVED-PRED a proper subterm of an argument of CONTAINER-PRED?"
+  (declare (type ty-predicate derived-pred container-pred)
+           (values boolean &optional))
+  (let ((height-cache (make-hash-table :test #'eq)))
+    (and (consp (ty-predicate-types derived-pred))
+         (every (lambda (derived-arg)
+                  (some (lambda (container-arg)
+                          (type-proper-subterm-p derived-arg container-arg height-cache))
+                        (ty-predicate-types container-pred)))
+                (ty-predicate-types derived-pred)))))
+
+(defun type-embeds-p (earlier later fixed-vars &optional height-cache)
+  "Does EARLIER homeomorphically embed into LATER with FIXED-VARS kept distinct?"
+  (declare (type ty earlier later)
+           (type tyvar-list fixed-vars)
+           (type (or null hash-table) height-cache)
+           (values boolean &optional))
+  (let ((memo (make-hash-table :test #'equal))
+        (height-cache (or height-cache (make-hash-table :test #'eq))))
+    (labels ((embeds-p (earlier later)
+               (let ((key (cons earlier later)))
+                 (multiple-value-bind (cached foundp)
+                     (gethash key memo)
+                   (when foundp
+                     (return-from embeds-p cached))
+                   (let ((earlier-height (type-height earlier height-cache))
+                         (later-height (type-height later height-cache)))
+                     (when (> earlier-height later-height)
+                       (return-from embeds-p (setf (gethash key memo) nil)))
+                     (setf (gethash key memo)
+                           (or
+                            ;; Diving: EARLIER embeds into an immediate child of LATER.
+                            (and (not (binder-captures-p earlier later))
+                                 (some (lambda (child) (embeds-p earlier child))
+                                       (type-children later)))
+                            ;; Coupling / leaf match at the root.
+                            (typecase earlier
+                              (tyvar
+                               (and (tyvar-p later)
+                                    (if (member earlier fixed-vars :test #'ty=)
+                                        (ty= earlier later)
+                                        (not (member later fixed-vars :test #'ty=)))))
+                              ((or tycon tgen)
+                               (ty= earlier later))
+                              (tapp
+                               (and (tapp-p later)
+                                    (embeds-p (tapp-from earlier) (tapp-from later))
+                                    (embeds-p (tapp-to earlier) (tapp-to later))))
+                              (function-ty
+                               (and (function-ty-p later)
+                                    (eq (function-ty-keyword-open-p earlier)
+                                        (function-ty-keyword-open-p later))
+                                    (= (length (function-ty-positional-input-types earlier))
+                                       (length (function-ty-positional-input-types later)))
+                                    (= (length (function-ty-output-types earlier))
+                                       (length (function-ty-output-types later)))
+                                    (equal (mapcar #'keyword-ty-entry-keyword
+                                                   (function-ty-keyword-input-types earlier))
+                                           (mapcar #'keyword-ty-entry-keyword
+                                                   (function-ty-keyword-input-types later)))
+                                    (every #'embeds-p
+                                           (type-children earlier)
+                                           (type-children later))))
+                              (result-ty
+                               (and (result-ty-p later)
+                                    (= (length (result-ty-output-types earlier))
+                                       (length (result-ty-output-types later)))
+                                    (every #'embeds-p
+                                           (result-ty-output-types earlier)
+                                           (result-ty-output-types later))))
+                              (forall-ty
+                               (and (forall-ty-p later)
+                                    (= (length (forall-ty-predicates earlier))
+                                       (length (forall-ty-predicates later)))
+                                    (call-with-aligned-forall-binders
+                                     earlier later
+                                     (lambda (qual1 qual2)
+                                       (and (every (lambda (p1 p2)
+                                                     (predicate-embeds-p p1 p2 fixed-vars height-cache))
+                                                   (qualified-ty-predicates qual1)
+                                                   (qualified-ty-predicates qual2))
+                                            (embeds-p (qualified-ty-type qual1)
+                                                      (qualified-ty-type qual2)))))))))))))))
+      (embeds-p earlier later))))
+
+(defun predicate-embeds-p (earlier later fixed-vars &optional height-cache)
+  "Does EARLIER homeomorphically embed into LATER with FIXED-VARS kept distinct?"
+  (declare (type ty-predicate earlier later)
+           (type tyvar-list fixed-vars)
+           (type (or null hash-table) height-cache)
+           (values boolean &optional))
+  (let ((height-cache (or height-cache (make-hash-table :test #'eq))))
+    (and (eq (ty-predicate-class earlier)
+             (ty-predicate-class later))
+         (= (length (ty-predicate-types earlier))
+            (length (ty-predicate-types later)))
+         (every (lambda (a b) (type-embeds-p a b fixed-vars height-cache))
+                (ty-predicate-types earlier)
+                (ty-predicate-types later)))))
+
+(defun predicate-key (pred fixed-vars sentinel)
+  "Quantify variables in PRED not in FIXED-VARS to test equivalence up to renaming."
+  (declare (type ty-predicate pred)
+           (type tyvar-list fixed-vars)
+           (type tyvar sentinel)
+           (values ty-scheme &optional))
+  (quantify (set-difference (type-variables pred) fixed-vars :test #'ty=)
+            (qualify (list pred) sentinel)))
+
+(defun superclass-closure (env pred)
+  "Recursively get all superclasses of PRED. Requires acyclic superclasses."
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (values ty-predicate-list))
+  (let ((class (lookup-class env (ty-predicate-class pred))))
+    (cons pred
+          (loop :for super :in (context-superclasses class pred)
+                :append (superclass-closure env super)))))
+
+(defun instance-superclass-obligations (env pred instance-context)
+  "Instantiate and fundep-improve the direct superclass obligations of PRED."
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (type ty-predicate-list instance-context)
+           (values ty-predicate-list &optional))
+  (let* ((raw-supers (instantiate-superclasses
+                      (lookup-class env (ty-predicate-class pred))
+                      pred))
+         (super-subs (when raw-supers
+                       (handler-case
+                           (nth-value 1 (solve-fundeps env (append raw-supers instance-context) nil))
+                         (coalton-internal-type-error () nil)))))
+    (apply-substitution super-subs raw-supers)))
+
+(defun instance-recursion-blocked-p (env instance pred stack fixed-vars max-given-height
+                                     &optional height-cache)
+  "Return T when selecting INSTANCE for PRED repeats an identical goal or exceeds the growth bound."
+  (declare (type environment env)
+           (type (or ty-class-instance symbol) instance)
+           (type ty-predicate pred)
+           (type list stack)
+           (type tyvar-list fixed-vars)
+           (type fixnum max-given-height)
+           (type (or null hash-table) height-cache)
+           (values boolean &optional))
+  (let* ((height-cache (or height-cache (make-hash-table :test #'eq)))
+         (sentinel (make-variable))
+         (key (predicate-key pred fixed-vars sentinel))
+         (height (predicate-height pred height-cache))
+         (max-target-height (+ max-given-height
+                               (if (symbolp instance)
+                                   0
+                                   (max-class-instance-head-height
+                                    env
+                                    (ty-predicate-class pred))))))
+    (loop :for (prev-inst . prev-pred) :in stack
+          :thereis (and (eq instance prev-inst)
+                        (or (ty-scheme= key (predicate-key prev-pred fixed-vars sentinel))
+                            (and (> height (max max-target-height
+                                                (predicate-height prev-pred height-cache)))
+                                 (predicate-embeds-p prev-pred pred fixed-vars height-cache)))))))
+
+(defstruct expansion-frame
+  (depth            0                         :type fixnum            :read-only t)
+  (pred             (util:required 'pred)     :type ty-predicate      :read-only t)
+  (key              (util:required 'key)      :type ty-scheme         :read-only t)
+  (instance         (util:required 'instance) :type ty-class-instance :read-only t)
+  (constraint-index nil                       :type (or null fixnum)  :read-only t))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type expansion-frame))
+
+(defun valid-derived-cycle-p (prior pred key stack)
+  "Return T when revisiting PRIOR at PRED closes a structural cycle of derived datatype instances."
+  (declare (type expansion-frame prior)
+           (type ty-predicate pred)
+           (type ty-scheme key)
+           (type list stack)
+           (values boolean &optional))
+  (flet ((derived-frame-p (frame)
+           (ty-class-instance-derived-p (expansion-frame-instance frame))))
+    (when (ty-scheme= key (expansion-frame-key prior))
+      (let* ((cycle-frames (ldiff stack (cdr (member prior stack :test #'eq))))
+             (last-derived (find-if #'derived-frame-p cycle-frames :from-end t))
+             (initial-derived-pred (and last-derived
+                                        (if (eq last-derived prior)
+                                            pred
+                                            (expansion-frame-pred last-derived)))))
+        (when initial-derived-pred
+          (loop :with target-derived-pred := initial-derived-pred
+                :for frame :in cycle-frames
+                :do (cond
+                      ((derived-frame-p frame)
+                       (setf target-derived-pred (expansion-frame-pred frame)))
+                      ((not (predicate-arguments-proper-subterms-p
+                             target-derived-pred
+                             (expansion-frame-pred frame)))
+                       (return nil)))
+                :finally (return t)))))))
+
+(defun expand-context (context env &optional root-instance)
   "Choose dictionary parameters for a new instance in its defining environment."
   (declare (type ty-predicate-list context)
            (type environment env)
+           (type (or null ty-class-instance) root-instance)
            (values ty-predicate-list &optional))
   (unless context
     (return-from expand-context nil))
 
-  ;; This was implemented as a hack to make `derive' work on recursive
-  ;; types.  Allows you to write an instance with signature
-  ;; `(Eq A => Eq A)'.
-  (let ((fixed-vars (type-variables context))
-        (sentinel (make-variable)))
-    (labels ((expand (pred stack)
+  ;; Derived instances on recursive datatypes synthesize field constraints that
+  ;; cycle back to the derived heads. User-written circular or growing
+  ;; prerequisites are not evidence and must remain obligations.
+  (let* ((root-pred (and root-instance (ty-class-instance-predicate root-instance)))
+         (fixed-vars (type-variables (if root-pred
+                                         (cons root-pred context)
+                                         context)))
+         (sentinel (make-variable)))
+    (labels ((find-matching-frame (instance constraint-index pred key stack)
+               (or (find-if (lambda (frame)
+                              (and (eq instance (expansion-frame-instance frame))
+                                   (ty-scheme= key (expansion-frame-key frame))))
+                            stack)
+                   (find-if (lambda (frame)
+                              (and (eq instance (expansion-frame-instance frame))
+                                   (or (null (expansion-frame-constraint-index frame))
+                                       (null constraint-index)
+                                       (= constraint-index (expansion-frame-constraint-index frame)))
+                                   (predicate-embeds-p (expansion-frame-pred frame) pred fixed-vars)))
+                            stack)))
+             (expand (pred stack depth constraint-index)
                (let ((instance (lookup-class-instance env pred :no-error t)))
                  (unless instance
                    (return-from expand (list pred)))
-                 ;; Only variables introduced by an instance along this path
-                 ;; can be renamed when testing for a recursive constraint.
-                 (let ((key (quantify (set-difference (type-variables pred) fixed-vars :test #'ty=)
-                                      (qualify (list pred) sentinel))))
-                   (when (member key stack :test #'ty-scheme=)
-                     (return-from expand nil))
-                   (loop :for required :in (instantiate-instance-context instance pred)
-                         :append (expand required (cons key stack)))))))
-      (remove-duplicates (loop :for pred :in context :append (expand pred nil))
-                         :test #'type-predicate=))))
+                 (let* ((key (predicate-key pred fixed-vars sentinel))
+                        (prior (find-matching-frame instance constraint-index pred key stack)))
+                   (when prior
+                     (when (valid-derived-cycle-p prior pred key stack)
+                       (return-from expand nil))
+                     (let ((retain-depth (max 1 (expansion-frame-depth prior))))
+                       (if (= depth retain-depth)
+                           (return-from expand (list pred))
+                           (throw (find retain-depth stack :key #'expansion-frame-depth :test #'=)
+                                  nil))))
+                   (let* ((frame (make-expansion-frame
+                                  :depth depth
+                                  :pred pred
+                                  :key key
+                                  :instance instance
+                                  :constraint-index constraint-index))
+                          (next-stack (cons frame stack))
+                          (required-preds (instantiate-instance-context instance pred))
+                          (super-preds (instance-superclass-obligations env pred required-preds))
+                          (given-supers (when super-preds
+                                          (mapcan (lambda (p) (superclass-closure env p))
+                                                  required-preds))))
+                     (catch frame
+                       ;; A candidate instance cannot discharge PRED if building its
+                       ;; own superclass dictionaries cycles back into STACK.
+                       (dolist (super super-preds)
+                         (unless (member super given-supers :test #'type-predicate=)
+                           (expand super next-stack (1+ depth) nil)))
+                       (return-from expand
+                         (loop :for required :in required-preds
+                               :for child-index :from 0
+                               :for next-index := (if (ty-class-instance-derived-p instance)
+                                                      child-index
+                                                      (or constraint-index child-index))
+                               :append (expand required next-stack (1+ depth) next-index))))
+                     (list pred))))))
+      (let ((initial-stack
+              (when root-instance
+                (list (make-expansion-frame
+                       :depth 0
+                       :pred root-pred
+                       :key (predicate-key root-pred fixed-vars sentinel)
+                       :instance root-instance
+                       :constraint-index nil)))))
+        (remove-duplicates
+         (loop :for pred :in context
+               :for top-index :from 0
+               :append (expand pred initial-stack 1 top-index))
+         :test #'type-predicate=)))))
 
 (defun finalize-instance-signatures (instances env)
   ;; Expand the whole batch before installing any signature, so forward
   ;; references and recursive derived instances do not depend on source order.
   (let ((contexts (loop :for instance :in instances
-                        :collect (expand-context (ty-class-instance-constraints instance) env))))
+                        :collect (expand-context (ty-class-instance-constraints instance)
+                                                 env
+                                                 instance))))
     (loop :for instance :in instances
           :for context :in contexts
           :do (setf (ty-class-instance-dictionary-signature instance)
@@ -933,6 +1273,7 @@
   (let ((signature (apply-substitution subst-list (instance-dictionary-signature instance))))
     (make-ty-class-instance
      :overlap-p (ty-class-instance-overlap-p instance)
+     :derived-p (ty-class-instance-derived-p instance)
      :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
      :predicate (car signature)
      :dictionary-signature signature
@@ -1822,6 +2163,7 @@ predicate containing inference variables through such an instance."
   (let ((left-preds (instance-dictionary-signature left))
         (right-preds (instance-dictionary-signature right)))
     (and (eq (ty-class-instance-overlap-p left) (ty-class-instance-overlap-p right))
+         (eq (ty-class-instance-derived-p left) (ty-class-instance-derived-p right))
          (eq (ty-class-instance-codegen-sym left) (ty-class-instance-codegen-sym right))
          (= (length left-preds) (length right-preds))
          (every (lambda (a b)
@@ -2759,100 +3101,120 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
       ;; This block is meant to simplify PREDS if instances exist in the
       ;; environment which constrain them by functional dependencies or by
       ;; repeated variables in an instance head.
-      (loop :with new-subs := nil
-            :with preds-generated := nil
-            ;; The caller's predicates under SUBS at the start of each of
-            ;; the last two quarters of the rounds, most recent first.
-            :with snapshots := nil
-            :for i :below +fundep-max-depth+
-            :do
-               (when (or (= i (floor +fundep-max-depth+ 2))
-                         (= i (floor (* 3 +fundep-max-depth+) 4)))
-                 (push (apply-substitution subs input-preds) snapshots))
+      (let ((pred-histories (make-hash-table :test #'eq)))
+        (labels ((substitute-preds (preds subs)
+                   (loop :for pred :in preds
+                         :for applied := (apply-substitution subs pred)
+                         :do (unless (eq applied pred)
+                               (setf (gethash applied pred-histories)
+                                     (gethash pred pred-histories)))
+                         :collect applied)))
+          (loop :with new-subs := nil
+                :with preds-generated := nil
+                ;; The caller's predicates under SUBS at the start of each of
+                ;; the last two quarters of the rounds, most recent first.
+                :with snapshots := nil
+                :for i :below +fundep-max-depth+
+                :do
+                   (when (or (= i (floor +fundep-max-depth+ 2))
+                             (= i (floor (* 3 +fundep-max-depth+) 4)))
+                     (push (apply-substitution subs input-preds) snapshots))
 
-               ;; Repeat pairwise improvement after instance improvement too:
-               ;; either may expose equal determinants for the next pass.
-               (setf new-subs (improve-predicate-fundeps env preds subs))
-               (setf preds (apply-substitution new-subs preds))
+                   ;; Repeat pairwise improvement after instance improvement too:
+                   ;; either may expose equal determinants for the next pass.
+                   (setf new-subs (improve-predicate-fundeps env preds subs))
+                   (setf preds (substitute-preds preds new-subs))
 
-               (loop :for pred :in preds
-                     :for class-name := (ty-predicate-class pred)
-                     :for class := (class-for class-name)
-                     :for index := (instance-index-for class-name)
-                     :for instance-candidates := (indexed-instance-candidates-for-match
-                                                  index
-                                                  pred)
-                     ;; If there are super-predicates then add those
-                     ;; predicates into the list of preds and remove
-                     ;; this predicate from the list since it will give
-                     ;; us no new type information. The new predicates
-                     ;; are examined in the next round, so every round
-                     ;; reduces each predicate that an instance matches
-                     ;; and rounds measure the depth of the reductions.
-                     :for instance := (lookup-class-instance-in-list
-                                       pred
-                                       instance-candidates
-                                       :no-error t)
+                   (loop :with fixed-vars := (type-variables (apply-substitution new-subs input-preds))
+                         :for pred :in preds
+                         :for class-name := (ty-predicate-class pred)
+                         :for class := (class-for class-name)
+                         :for index := (instance-index-for class-name)
+                         :for instance-candidates := (indexed-instance-candidates-for-match
+                                                      index
+                                                      pred)
+                         ;; If there are super-predicates then add those
+                         ;; predicates into the list of preds and remove
+                         ;; this predicate from the list since it will give
+                         ;; us no new type information. The new predicates
+                         ;; are examined in the next round, so every round
+                         ;; reduces each predicate that an instance matches
+                         ;; and rounds measure the depth of the reductions.
+                         :for instance := (lookup-class-instance-in-list
+                                           pred
+                                           instance-candidates
+                                           :no-error t)
+                         :for applied-pred := (apply-substitution new-subs pred)
+                         :for history := (gethash pred pred-histories)
+                         :for blocked-p := (and instance
+                                                (loop :for (prev-inst . prev-pred) :in history
+                                                      :thereis (and (eq instance prev-inst)
+                                                                    (predicate-embeds-p
+                                                                     (apply-substitution new-subs prev-pred)
+                                                                     applied-pred
+                                                                     fixed-vars))))
 
-                     :if instance
-                       ;; Since we allow for type variables in the
-                       ;; constraints which do not appear in the
-                       ;; predicate, we need to create a full fresh set of
-                       ;; predicates, rather than just matching the head.
-                       :do (let* ((fresh-instance-preds
-                                    (fresh-preds (instance-dictionary-signature instance)))
-                                  (instance-head (car fresh-instance-preds))
-                                  (instance-context (cdr fresh-instance-preds))
+                         :if (and instance (not blocked-p))
+                           ;; Since we allow for type variables in the
+                           ;; constraints which do not appear in the
+                           ;; predicate, we need to create a full fresh set of
+                           ;; predicates, rather than just matching the head.
+                           :do (let* ((next-history (acons instance applied-pred history))
+                                      (fresh-instance-preds
+                                        (fresh-preds (instance-dictionary-signature instance)))
+                                      (instance-head (car fresh-instance-preds))
+                                      (instance-context (cdr fresh-instance-preds))
 
-                                  (instance-subs (predicate-match
-                                                  instance-head
-                                                  (apply-substitution new-subs pred))))
-                             (loop :for new-pred :in instance-context :do
-                               (push (make-ty-predicate
-                                      :class (ty-predicate-class new-pred)
-                                      :types (apply-substitution instance-subs (ty-predicate-types new-pred))
-                                      :location (source:location pred))
-                                     preds))
+                                      (instance-subs (predicate-match
+                                                      instance-head
+                                                      applied-pred)))
+                                 (loop :for new-pred :in instance-context
+                                       :for child := (make-ty-predicate
+                                                      :class (ty-predicate-class new-pred)
+                                                      :types (apply-substitution instance-subs (ty-predicate-types new-pred))
+                                                      :location (source:location pred))
+                                       :do (setf (gethash child pred-histories) next-history)
+                                           (push child preds))
 
-                             (setf preds (remove pred preds :test #'eq))
-                             (setf preds-generated t))
+                                 (setf preds (remove pred preds :test #'eq))
+                                 (setf preds-generated t))
 
-                     :else
-                       :do (multiple-value-bind (improved-subs improvedp)
-                               (improve-predicate-with-index pred new-subs index)
-                             (when improvedp
-                               (setf new-subs improved-subs)
-                               (return)))
-                           (when (ty-class-fundeps class)
-                             (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs))))
-               (if (and (not preds-generated)
-                        (or (equalp new-subs subs)
-                            (null preds)))
-                   (return-from solve-fundeps (values preds subs))
-                   (setf subs new-subs))
-               (setf preds-generated nil)
-               (setf preds (apply-substitution subs preds))
-            :finally
-               ;; Running out of rounds alone does not show that improvement
-               ;; diverged: reductions through instances can recur without
-               ;; improving anything, and improvement can rename variables
-               ;; without constraining them. Improvement that does not
-               ;; terminate keeps specializing the caller's predicates, which
-               ;; no finite solution allows.
-               (let ((growing
-                       (loop :for input-pred :in input-preds
-                             :for earlier :in (second snapshots)
-                             :for later :in (first snapshots)
-                             :for final :in (apply-substitution subs input-preds)
-                             :unless (or (predicate-subsumes-p later earlier)
-                                         (predicate-subsumes-p final later))
-                               :collect (apply-substitution input-subs input-pred))))
-                 (unless growing
-                   (util:coalton-bug "Fundep solving failed to fixpoint"))
-                 (error 'fundep-nontermination
-                        :preds (remove-duplicates growing
-                                                  :test #'type-predicate=
-                                                  :from-end t)))))))
+                         :else
+                           :do (multiple-value-bind (improved-subs improvedp)
+                                   (improve-predicate-with-index pred new-subs index)
+                                 (when improvedp
+                                   (setf new-subs improved-subs)
+                                   (return)))
+                               (when (ty-class-fundeps class)
+                                 (setf new-subs (generate-fundep-subs% env applied-pred new-subs))))
+                   (if (and (not preds-generated)
+                            (or (equalp new-subs subs)
+                                (null preds)))
+                       (return-from solve-fundeps (values preds subs))
+                       (setf subs new-subs))
+                   (setf preds-generated nil)
+                   (setf preds (substitute-preds preds subs))
+                :finally
+                   ;; Running out of rounds alone does not show that improvement
+                   ;; diverged: reductions through instances can recur without
+                   ;; improving anything, and improvement can rename variables
+                   ;; without constraining them. Improvement that does not
+                   ;; terminate keeps specializing the caller's predicates, which
+                   ;; no finite solution allows.
+                   (let ((growing
+                           (loop :for input-pred :in input-preds
+                                 :for earlier :in (second snapshots)
+                                 :for later :in (first snapshots)
+                                 :for final :in (apply-substitution subs input-preds)
+                                 :unless (or (predicate-subsumes-p later earlier)
+                                             (predicate-subsumes-p final later))
+                                   :collect (apply-substitution input-subs input-pred))))
+                     (unless growing
+                       (util:coalton-bug "Fundep solving failed to fixpoint"))
+                     (error 'fundep-nontermination
+                            :preds (remove-duplicates growing
+                                                      :test #'type-predicate=
+                                                      :from-end t)))))))))
 
 
 (defun generate-fundep-subs% (env pred subs)
