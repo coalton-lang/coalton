@@ -25,6 +25,7 @@ weight: 260
 
 - A `do` block requires at least one form and must end with a `⟨final-expr⟩` (it cannot end with a [`<-`](/manual/operators/do-bind/) bind or a shorthand [`let`](/manual/operators/let/)).
 - The entire `do` expression has type `(:m :result)` for some type constructor `:m` implementing `Monad :m`, where `(:m :result)` is the type of `⟨final-expr⟩`.
+- A GADT pattern supplies its index equalities to the remaining clauses and final expression, just as it would in the corresponding `match` arm. It does not change the type of the input computation.
 - Clauses before `⟨final-expr⟩` are translated from top to bottom as follows:
   - **Monadic bind `(⟨pattern⟩ <- ⟨monadic-expr⟩)`**:
     `⟨monadic-expr⟩` must have type `(:m :a)` for the same monad `:m`. Desugars to:

@@ -86,11 +86,7 @@
                  :typevar-table typevar-table)))
 
 (defun tc-env-shadow-definition (env name scheme)
-  "Return a copy of ENV where NAME resolves to SCHEME.
-
-This is used when checking an explicitly typed binding so recursive
-references within that binding reuse the same instantiated scoped
-type variables instead of re-instantiating the declared scheme."
+  "Return a copy of ENV where NAME resolves to SCHEME."
   (declare (type tc-env env)
            (type symbol name)
            (type tc:ty-scheme scheme)

@@ -440,6 +440,7 @@
     (values
      (make-node-match
       :expr (rename-variables-generic% (node-match-expr node) ctx)
+      :binding-p (node-match-binding-p node)
       :branches (rename-variables-generic% (node-match-branches node) ctx)
       :location (source:location node))
      ctx))

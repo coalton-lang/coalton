@@ -98,6 +98,7 @@
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
+   #:node-match-binding-p               ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
@@ -367,6 +368,7 @@
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)         :type node                   :read-only t)
+  (binding-p nil                          :type boolean                :read-only t)
   (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
 
 (defstruct (node-progn
@@ -699,6 +701,7 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
+   :binding-p (node-match-binding-p node)
    :branches (tc:apply-substitution subs (node-match-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-catch-branch))

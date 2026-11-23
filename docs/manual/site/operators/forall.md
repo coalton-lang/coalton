@@ -42,6 +42,10 @@ the Unicode alias `∀` for `forall`.
 - `forall` may appear both at the outer level of a [`declare`](/manual/operators/declare/), [`the`](/manual/operators/the/), or class method signature, and in nested type positions such as function arguments, function return types, [`define-type`](/manual/operators/define-type/) constructor fields, [`define-struct`](/manual/operators/define-struct/) fields, and [`define-type-alias`](/manual/operators/define-type-alias/) definitions (*rank-$N$ polymorphism*).
 - Those binder names are then available inside related `the`, `declare`, and
   `lisp` annotations in the corresponding body.
+- A recursive function still calls its declared polymorphic signature: each
+  self-call can instantiate it at a different type. For example, an evaluator
+  declared `(forall (:a) Term :a -> :a)` can call itself on a `Term Boolean`
+  condition and then on a `Term :a` branch.
 - `forall` expressions inside of `define-class` are scoped to their method
   definitions in `define-instance`.
 - Without `forall`, top-level declarations are still implicitly quantified (rank-1),

@@ -23,7 +23,8 @@ weight: 72
 - `(monomorphize)` takes no arguments and must appear immediately before a top-level `declare` or `define` form (and may be combined with [`inline`](/manual/operators/inline/)).
 - It marks `⟨name⟩` as a root for Coalton's call-graph monomorphization pass during optimization.
 - Starting from `⟨name⟩`, the monomorphizer traverses the call graph for applications of known top-level functions (without keyword arguments) that are passed one or more statically known typeclass dictionaries alongside runtime arguments.
-- For each distinct combination of function and static dictionary arguments, the compiler generates a specialized top-level function with those dictionary parameters constant-propagated and removed, then re-runs inlining, specialization, and constant folding on the specialized body.
+- The compiler reuses a specialized function for the same combination of function and static dictionary arguments. The clone omits those dictionary parameters, and its body is optimized again.
+- A recursive call that would require a new dictionary shape on the same call path can stay generic. Each root also has a finite clone budget: when it is exhausted, other calls retain their ordinary dictionary arguments. Neither fallback changes the result.
 - `monomorphize` is most effective on functions declared with a concrete type (or partially known types) whose implementation calls polymorphic, typeclass-constrained helpers (including recursive polymorphic functions that cannot be fully inlined).
 - `monomorphize` does not alter program semantics.
 

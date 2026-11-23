@@ -49,8 +49,9 @@ is true."
           ((res (or (find (node-variable-value node) subs :key #'ast-substitution-from)
                     (find (node-variable-value node) new-subs :key #'ast-substitution-from))))
         (let ((replacement (ast-substitution-to res)))
-          (if (and (node-local-variable-p replacement)
-                   (typep (node-type replacement) 'tc:forall-ty))
+          ;; A local occurrence may have a type refined by its enclosing
+          ;; pattern. Renaming its binding must not erase that proof.
+          (if (node-local-variable-p replacement)
               (make-node-local-variable
                :type (node-type node)
                :value (node-variable-value replacement))

@@ -154,6 +154,7 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
+                     :index-equalities (match-branch-index-equalities branch)
                      :pattern (map-pattern (match-branch-pattern branch)
                                            :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
@@ -466,6 +467,7 @@ bound at the given point."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
+                     :index-equalities (match-branch-index-equalities branch)
                      :pattern (map-pattern (match-branch-pattern branch)
                                            :test-function (lambda (test)
                                                             (funcall *traverse* test bound-variables)))

@@ -144,6 +144,22 @@ Code generation is responsible for both optimization and code generation. The st
 
 The entry point to optimization is `src/codegen/optimizer.lisp`.
 
+Local variable occurrences in typed codegen IR can carry a more specific type
+than their binding, justified by an enclosing indexed constructor pattern.
+Variable substitution and freshening must preserve that occurrence type.
+After moving a match to a more specific scrutinee, match specialization threads
+constructor equalities through sibling patterns and nested matches, without
+sharing an alternative's equalities with its siblings.
+
+Scalar replacement records the original constructor's index equalities in
+`match-branch-index-equalities` when replacing an indexed sum test with a
+Boolean or integer tag test. This list contains adjacent pairs of equal types;
+it is compile-time evidence, not a runtime cast or test. IR copies, type
+substitution, type-variable collection, and stored-code freshening preserve
+this evidence so a later caller can specialize the optimized body. A shared
+fallback covering several constructors carries no single constructor's
+equalities.
+
 Inlining can bring an already optimized function body back through constant
 propagation. For example, scalar replacement can turn a `Cell` into a mutable
 lexical variable. Constant propagation and alias elimination use

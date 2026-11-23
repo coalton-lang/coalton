@@ -67,6 +67,10 @@
                                               (list scrutinee-type)
                                               env)))
                (unless (eq t exhaustive-or-missing)
+                 (when (tc:node-match-binding-p node)
+                   (tc-error "Non-exhaustive match"
+                             (source:secondary-note (first patterns) "missing case ~w"
+                                                    (print-pattern (first exhaustive-or-missing)))))
                  (let ((head-note (source:note node "non-exhaustive match"))
                        (tail-notes (if (first exhaustive-or-missing)
                                        (list (source:secondary-note

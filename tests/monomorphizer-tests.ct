@@ -73,6 +73,28 @@
 
 (in-package #:coalton-tests)
 
+(deftest bound-polymorphic-recursive-specialization ()
+  (dolist (budget '(0 4))
+    (with-codegen-test-environment
+      (let ((coalton-impl/codegen/monomorphize::*max-clones-per-root* budget))
+        (codegen-test-compile
+         "(define-type (Spine :a)
+            (declare LeafS (:a -> Spine :a))
+            (declare UnderS (Spine (Optional :a) -> Spine :a)))
+          (declare spine-depth (Eq :a => Spine :a -> Integer))
+          (define (spine-depth x)
+            (match x ((LeafS y) (if (== y y) 0 100))
+                     ((UnderS child) (1+ (spine-depth child)))))
+          (monomorphize)
+          (declare concrete-depth (Spine Integer -> Integer))
+          (define (concrete-depth x) (spine-depth x))")
+        (is (= 2 (codegen-test-eval "(concrete-depth (UnderS (UnderS (LeafS (Some (Some 4))))))")))
+        (is (= (if (zerop budget) 0 1)
+               (loop :for sym :being :the :present-symbols :of *package*
+                     :count (and (uiop:string-prefix-p "SPINE-DEPTH#" (symbol-name sym))
+                                 (not (find #\% (symbol-name sym)))
+                                 (fboundp sym)))))))))
+
 (defun %count-direct-calls-if (node predicate)
   (declare (type ast:node node)
            (type function predicate)

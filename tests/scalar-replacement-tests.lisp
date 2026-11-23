@@ -326,6 +326,50 @@
             (is (eq t result))
             (is (zerop consed))))))))
 
+(deftest scalar-replacement-transparent-indexed-payload ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(repr :transparent)
+      (define-type (Box :index) (declare BoxInt (Integer -> Box Integer)))
+      (abi :unpacked)
+      (declare score (Box :index * Boolean -> Integer))
+      (define (score box present)
+        (let opt = (if present (Some box) None))
+        (let value = (match opt ((Some (BoxInt n)) n) ((None) 0)))
+        (let weight = (match opt ((Some _) 1) ((None) 2)))
+        (+ value weight))
+      (abi :unpacked)
+      (declare empty-box (Boolean -> Optional (Box String)))
+      (define (empty-box _) None)")
+    (is (= 6 (codegen-test-eval "(score (BoxInt 5) True)")))
+    (is (= 2 (codegen-test-eval "(score (BoxInt 5) False)")))
+    ;; SCORE really split the optional into a tag and an integer slot.
+    (is (codegen-test-tree-contains-p (codegen-test-generated-lisp "SCORE")
+                                      (lambda (form) (eq form 'multiple-value-bind))))
+    ;; Trying an inapplicable constructor when choosing an output ABI must
+    ;; not prevent returning None at an uninhabited index.
+    (is (eq coalton:None (codegen-test-eval "(empty-box True)")))))
+
+(deftest scalar-replacement-transparent-payload-layouts ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(repr :transparent)
+      (define-type (Layer :a) (Layer :a))
+      (repr :transparent)
+      (define-type (Elem :a) (declare MkElem (:x -> Elem (List :x))))
+      (repr :transparent)
+      (define-type (Peel :a) (declare MkPeel (Peel :x -> Peel (List :x))))
+      (define-type (Slots :a)
+        (Slots (Layer (Layer Integer)) (Elem (List Integer)) (Elem :a) (Peel :a)))")
+    (let ((env entry:*global-environment*))
+      (destructuring-bind (nested concrete unknown recursive) (tc:constructor-arguments (intern "SLOTS") env)
+        (flet ((placeholder (type)
+                 (coalton-impl/codegen/scalar-replacement:default-node-for-type type env)))
+          (is (zerop (ast:node-literal-value (placeholder nested))))
+          (is (zerop (ast:node-literal-value (placeholder concrete))))
+          (is (null (placeholder unknown)))
+          (is (null (placeholder recursive))))))))
+
 (deftest scalar-replacement-unboxes-local-cells ()
   (with-codegen-test-environment
     (codegen-test-compile
@@ -537,3 +581,74 @@
       (is (= 2 (length (dynamic-extent-functions "NON-ESCAPING-LOCAL"))))
       (is (= 1 (length (dynamic-extent-functions "ESCAPING-LOCAL"))))
       (is (null (dynamic-extent-functions "CAPTURED-BY-RETURNED-LAMBDA"))))))
+
+(deftest scalar-replacement-preserves-stored-index-evidence ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (View :a) (declare IntView (View Integer)) (declare TextView (View String)))
+      (define-type (Slot :a)
+        (declare IntSlot (Integer -> Slot Integer))
+        (declare TextSlot (String -> Slot String)))
+      (inline) (abi :unpacked)
+      (declare both (forall (:a) View :a -> Tuple Integer :a))
+      (define (both tag)
+        (let p = (the (Slot :a)
+                      (match tag ((IntView) (IntSlot 10)) ((TextView) (TextSlot \"hello\")))))
+        (let n = (match p ((IntSlot x) (+ x 1)) ((TextSlot _) 0)))
+        (let v = (the :a
+                     (match p
+                       ((IntSlot x) (+ x 2))
+                       ((TextSlot s) (noinline (id Unit)) (<> s \"!\")))))
+        (Tuple n v))")
+    ;; This compilation uses stored, already scalar-replaced code twice, with
+    ;; independent instantiations. Neither index may constrain the other call.
+    (codegen-test-compile
+     "(declare client (View Integer * View String -> Tuple (Tuple Integer Integer) (Tuple Integer String)))
+      (define (client ints texts) (Tuple (both ints) (both texts)))")
+    (is (codegen-test-eval
+         "(== (client IntView TextView) (Tuple (Tuple 11 12) (Tuple 0 \"hello!\")))"))
+    (is (zerop (codegen-test-call-count "CLIENT" "BOTH")))
+    (is (zerop (codegen-test-call-count "BOTH" "INTSLOT")))
+    (is (zerop (codegen-test-call-count "BOTH" "TEXTSLOT")))
+    (let ((evidence-branches 0))
+      (traverse:traverse
+       (tc:lookup-code entry:*global-environment* (intern "BOTH"))
+       (list (traverse:action (:after ast:node-match node)
+               (dolist (branch (ast:node-match-branches node))
+                 (when (ast:match-branch-index-equalities branch)
+                   (incf evidence-branches)))
+               (values))))
+      (is (= 4 evidence-branches)))))
+
+(deftest scalar-replacement-shared-fallback-index-scope ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (View :a)
+        (declare IntView (View Integer))
+        (declare TextView (View String))
+        (declare BoolView (View Boolean)))
+      (define-type (Slot :a)
+        (declare IntSlot (Integer -> Slot Integer))
+        (declare TextSlot (String -> Slot String))
+        (declare BoolSlot (Boolean -> Slot Boolean)))
+      (inline) (abi :unpacked)
+      (declare fallback (forall (:a) View :a * :a -> Tuple Integer :a))
+      (define (fallback tag value)
+        (let p = (the (Slot :a)
+                      (match tag
+                        ((IntView) (IntSlot 10))
+                        ((TextView) (TextSlot \"hello\"))
+                        ((BoolView) (BoolSlot True)))))
+        (let n = (match p ((IntSlot x) (+ x 1)) (_ 90)))
+        (Tuple n value))")
+    (codegen-test-compile
+     "(declare client (View Integer * View String * View Boolean
+                      -> Tuple (Tuple Integer Integer) (Tuple (Tuple Integer String) (Tuple Integer Boolean))))
+      (define (client ints texts bools)
+        (Tuple (fallback ints 42) (Tuple (fallback texts \"different\") (fallback bools False))))")
+    (is (codegen-test-eval
+         "(== (client IntView TextView BoolView)
+              (Tuple (Tuple 11 42) (Tuple (Tuple 90 \"different\") (Tuple 90 False))))"))
+    (is (zerop (codegen-test-call-count "CLIENT" "FALLBACK")))
+    (dolist (ctor '("INTSLOT" "TEXTSLOT" "BOOLSLOT"))
+      (is (zerop (codegen-test-call-count "FALLBACK" ctor))))))

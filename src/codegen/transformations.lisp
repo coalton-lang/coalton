@@ -11,6 +11,7 @@
   (:export
    #:rename-type-variables
    #:prune-impossible-match-branches
+   #:specialize-match
    #:pattern-contains-gadt-p
    #:inlined-some-operand
    #:inlined-cons-operands
@@ -34,46 +35,73 @@
          (some (lambda (child) (pattern-contains-gadt-p child env))
                (pattern-constructor-patterns pat))))))
 
-(defun possible-specialized-pattern-p (pattern scrutinee env)
+(defun specialized-pattern-substitutions (pattern scrutinee env &optional subs)
   ;; This is a feasibility test on copied, already well-typed code. A variable
   ;; in the scrutinee can still take any index; only inconsistent constructors
   ;; justify dropping a branch. Thread their equations through sibling fields.
-  (let ((subs nil)
-        (scrutinee (tc:apply-substitution
-                    (loop :for var :in (tc:type-variables scrutinee)
-                          :when (tc:tyvar-rigid-p var)
-                            :collect (tc:make-substitution :from var :to (tc:fresh-type-renamer var)))
-                    scrutinee)))
-    (labels ((walk (pat expected)
-               (typecase pat
-                 (pattern-binding (walk (pattern-binding-pattern pat) expected))
-                 (pattern-constructor
-                  (let ((ctor (tc:qualified-ty-type
-                               (tc:fresh-inst (tc:lookup-value-type env (pattern-constructor-name pat))))))
-                    (multiple-value-bind (new-subs possible-p)
-                        (tc:try-unify subs (tc:function-return-type ctor) expected)
-                      (when possible-p
-                        (setf subs new-subs)
-                        (every #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))
-                 (t t))))
-      (walk pattern scrutinee))))
+  (declare (type pattern pattern)
+           (type tc:ty scrutinee)
+           (type tc:environment env)
+           (type tc:substitution-list subs)
+           (values tc:substitution-list boolean &optional))
+  (labels ((walk (pat expected)
+             (typecase pat
+               (pattern-binding (walk (pattern-binding-pattern pat) expected))
+               (pattern-constructor
+                (let ((ctor (tc:qualified-ty-type
+                             (tc:fresh-inst (tc:lookup-value-type env (pattern-constructor-name pat))))))
+                  (multiple-value-bind (new-subs possible-p)
+                      (tc:try-unify subs (tc:function-return-type ctor) expected :all)
+                    (when possible-p
+                      (setf subs new-subs)
+                      (every #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))
+               (t t))))
+    (let ((possible-p (walk pattern scrutinee)))
+      (values subs possible-p))))
+
+(defun specialized-branch-substitutions (branch scrutinee env subs)
+  (declare (type match-branch branch)
+           (type tc:ty scrutinee)
+           (type tc:environment env)
+           (type tc:substitution-list subs)
+           (values tc:substitution-list boolean &optional))
+  (loop :for (left right) :on (match-branch-index-equalities branch) :by #'cddr
+        :do (multiple-value-bind (new-subs possible-p)
+                (tc:try-unify subs left right :all)
+              (unless possible-p
+                (return-from specialized-branch-substitutions (values subs nil)))
+              (setf subs new-subs)))
+  (specialized-pattern-substitutions (match-branch-pattern branch) scrutinee env subs))
+
+(defun specialize-match (match expr env)
+  "Move the alternatives of MATCH to EXPR, retaining only feasible cases."
+  (let ((moved (make-node-match :type (node-type match) :expr expr
+                               :branches (node-match-branches match))))
+    (if env (prune-impossible-match-branches moved env) moved)))
 
 (defun prune-impossible-match-branches (node env)
   "Remove GADT branches ruled out by specializing a copy of NODE."
-  (traverse node
-            (list (action (:after node-match match)
-                    (let ((branches (node-match-branches match)))
-                      (if (some (lambda (branch) (pattern-contains-gadt-p (match-branch-pattern branch) env))
-                                branches)
-                          (make-node-match
-                           :type (node-type match)
-                           :expr (node-match-expr match)
-                           :branches (remove-if-not
-                                      (lambda (branch)
-                                        (possible-specialized-pattern-p (match-branch-pattern branch)
-                                                                        (node-type (node-match-expr match)) env))
-                                      branches))
-                          match))))))
+  (traverse
+   node
+   (list
+    (action (:traverse node-match match subs)
+      (let ((expr (funcall *traverse* (node-match-expr match) subs)))
+        (make-node-match
+         :type (node-type match)
+         :expr expr
+         :branches
+         (loop :for branch :in (node-match-branches match)
+               :append
+               (multiple-value-bind (branch-subs possible-p)
+                   (specialized-branch-substitutions branch (node-type expr) env subs)
+                 (when possible-p
+                   (list (make-match-branch
+                          :pattern (map-pattern
+                                    (match-branch-pattern branch)
+                                    :test-function (lambda (test) (funcall *traverse* test branch-subs)))
+                          :index-equalities (match-branch-index-equalities branch)
+                          :body (funcall *traverse* (match-branch-body branch) branch-subs))))))))))
+   nil))
 
 (defmethod tc:apply-substitution (subs (node node))
   "Substitute type variables in the tree of `node` with other types
@@ -101,6 +129,7 @@ specified in `subs`."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
+                     :index-equalities (tc:apply-substitution subs (match-branch-index-equalities branch))
                      ;; Embedded tests have already been visited by TRAVERSE.
                      :pattern (map-pattern (match-branch-pattern branch)
                                            :type-function (lambda (type) (tc:apply-substitution subs type)))
@@ -125,7 +154,9 @@ specified in `subs`."
       (action (:after node-match node)
         (dolist (branch (node-match-branches node))
           (alexandria:unionf tyvars
-                             (tc:type-variables (match-branch-pattern branch))))
+                             (tc:type-variables (match-branch-pattern branch)))
+          (alexandria:unionf tyvars
+                             (tc:type-variables (match-branch-index-equalities branch))))
         (values))))
     tyvars))
 

@@ -592,3 +592,108 @@
   (is (== "greeting" (describe-payload StringTag "hello")))
   (is (== "string" (describe-payload StringTag "other")))
   (is (== "int" (describe-payload IntegerTag 2))))
+
+(coalton-toplevel
+  (declare make-indexed-int (Integer -> Gadt9 Integer))
+  (define (make-indexed-int n) (Gadt9-Int n))
+  (declare make-indexed-string (String -> Gadt9 String))
+  (define (make-indexed-string s) (Gadt9-Str s))
+  (declare box-for-tag (ValueTag :a -> Gadt9 :a))
+  (define (box-for-tag tag)
+    (match tag
+      ((IntegerTag) (noinline (make-indexed-int 41)))
+      ((StringTag) (noinline (make-indexed-string "text")))))
+  (declare read-inlined-box (ValueTag :a -> :a))
+  (define (read-inlined-box tag)
+    (match (inline (box-for-tag tag))
+      ((Gadt9-Int n) n) ((Gadt9-Str s) s)))
+
+  (declare read-local-box (Gadt9 String -> String))
+  (define (read-local-box box)
+    (let ((declare pick (Gadt9 :a -> :a))
+          (pick (fn (b) (match b ((Gadt9-Int n) n) ((Gadt9-Str s) s)))))
+      (pick box)))
+
+  (define-type PackedConsumer (declare WithConsumer (:a * (:a -> String) -> PackedConsumer)))
+  (abi :unpacked)
+  (declare open-twice (Boolean -> String))
+  (define (open-twice choose-int)
+    (let p = (if choose-int
+                 (WithConsumer (the Integer 9) (fn (n) (if (== n 9) "i" "?")))
+                 (WithConsumer False (fn (b) (if b "t" "f")))))
+    (let first-use = (match p ((WithConsumer x f) (f x))))
+    (let second-use = (match p ((WithConsumer x f) (f x))))
+    (<> first-use second-use)))
+
+(define-test gadt-specialized-match-rewrites ()
+  (is (== 41 (read-inlined-box IntegerTag)))
+  (is (== "text" (read-inlined-box StringTag)))
+  (is (== "local" (read-local-box (make-indexed-string "local")))))
+
+(define-test gadt-existential-allocation-join ()
+  (is (== "ii" (noinline (open-twice True))))
+  (is (== "ff" (noinline (open-twice False)))))
+
+(coalton-toplevel
+  (define-type (AppTerm :r)
+    (declare TermValue (:r -> AppTerm :r))
+    (declare TermApply (AppTerm (:x -> :r) * AppTerm :x -> AppTerm :r)))
+  (declare interpret-term (forall (:r) AppTerm :r -> :r))
+  (define (interpret-term term)
+    (match term
+      ((TermValue val) (the :r val))
+      ((TermApply f x) ((interpret-term f) (interpret-term x)))))
+
+  (declare scoped-box (forall (:a) ValueTag :a -> Gadt9 :a))
+  (define (scoped-box tag)
+    (the (Gadt9 :a)
+      (progn (match tag ((IntegerTag) (Gadt9-Int 41)) ((StringTag) (Gadt9-Str "box"))))))
+
+  (declare repeat-value (ValueTag :a * :a * Integer -> :a))
+  (define (repeat-value tag value count)
+    (rec again ((n count))
+      (match tag
+        ((IntegerTag) (if (== n 0) value (again (1- n))))
+        ((StringTag) (if (== n 0) value (again (1- n)))))))
+
+  (declare known-int-value (Gadt4 :a -> :a))
+  (define (known-int-value v)
+    (let (Gadt4-1 n) = v)
+    n)
+  (declare known-int-action (Gadt4 :a -> :a))
+  (define (known-int-action v)
+    (coalton/monad/identity:run-identity
+     (id (do ((Gadt4-1 n) <- (pure v))
+             (let (Gadt4-1 m) = (Gadt4-1 n))
+             (pure m)))))
+
+  (declare compare-after-bind (Eq :b => SameIndex :a :b * :a * :b -> Boolean))
+  (define (compare-after-bind proof x y)
+    (let (SameRefl) = proof)
+    (== x y)))
+
+(define-test gadt-polymorphic-self-calls-and-results ()
+  (is (== "yes" (interpret-term (TermApply (TermValue (fn (b) (if b "yes" "no"))) (TermValue True)))))
+  (is (== "box" (gadt9-unbox (scoped-box StringTag))))
+  (is (== 41 (gadt9-unbox (scoped-box IntegerTag))))
+  (is (== 7 (repeat-value IntegerTag 7 4)))
+  (is (== "loop" (repeat-value StringTag "loop" 4))))
+
+(define-test gadt-binder-continuations ()
+  (is (== 17 (known-int-value (Gadt4-1 17))))
+  (is (== 23 (known-int-action (Gadt4-1 23))))
+  (is (compare-after-bind SameRefl "equal" "equal"))
+  (is (not (compare-after-bind SameRefl 1 2))))
+
+(define-test gadt-do-bind-effect-order ()
+  (let trace = (cell:new ""))
+  (let ((visit (fn (action)
+                 (do
+                   ((Gadt4-1 n) <- (progn (cell:update! (fn (s) (<> s "A")) trace) action))
+                   (let (Gadt4-1 m) = (progn (cell:update! (fn (s) (<> s "B")) trace)
+                                             (Gadt4-1 n)))
+                   (pure m)))))
+    (is (== None (visit None)))
+    (is (== "A" (cell:read trace)))
+    (is (== (Some 17) (visit (Some (Gadt4-1 17)))))
+    (is (== "AAB" (cell:read trace)))))

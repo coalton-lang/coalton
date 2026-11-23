@@ -712,6 +712,40 @@
     (is (= 60 (codegen-test-eval "(scale-with-key (Tuple 10 20))")))
     (is (= 90 (codegen-test-eval "(scale-with-key (Tuple 10 20) :factor 3)")))))
 
+(deftest codegen-unpacked-polymorphic-fields ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (Check :a)
+        (declare MkCheck ((forall (:x) (Eq :x => :x * :x * :a -> Boolean)) -> Check :a)))
+      (define-type (CheckPair :a)
+        (MkCheckPair (forall (:x) (Eq :x => :x * :x * :a -> Boolean)) :a))
+      (abi :unpacked)
+      (declare make-check (Integer -> Check Integer))
+      (define (make-check k) (MkCheck (fn (x y n) (and (== x y) (== n k)))))
+      (abi :unpacked)
+      (declare make-pair (Integer -> CheckPair Integer))
+      (define (make-pair k) (MkCheckPair (fn (x y n) (and (== x y) (== n k))) k))")
+    (codegen-test-compile
+     "(abi :unpacked)
+      (declare use-check (Check Integer -> Boolean * Boolean * Boolean))
+      (define (use-check (MkCheck f))
+        (values (f \"one\" \"one\" 8) (f (the Integer 41) 42 8) (f True True 9)))
+      (declare round-trip (Integer -> Boolean * Boolean * Boolean))
+      (define (round-trip k) (use-check (make-check k)))")
+    (is (equal '(t nil nil) (multiple-value-list (codegen-test-eval "(round-trip 8)"))))
+    ;; The Lisp wrapper returns a boxed constructor. Both workers return the
+    ;; same dictionary-passing function as a single field, even in a values pack.
+    (let ((box (funcall (intern "MAKE-CHECK") 8))
+          (single (multiple-value-list (funcall (intern "MAKE-CHECK%UNPACKED") 8)))
+          (pair (multiple-value-list (funcall (intern "MAKE-PAIR%UNPACKED") 8)))
+          (worker (symbol-function (intern "USE-CHECK%UNPACKED"))))
+      (is (equal '(t nil nil) (multiple-value-list (funcall (intern "USE-CHECK") box))))
+      (is (= 1 (length single)))
+      (is (equal '(8) (rest pair)))
+      (dolist (f (list (first single) (first pair)))
+        (is (functionp f))
+        (is (equal '(t nil nil) (multiple-value-list (funcall worker f))))))))
+
 (deftest codegen-calling-convention-redefinition ()
   (with-codegen-test-environment
     ;; 1. Same-type redefinition updates worker and wrapper entrypoints for existing callers
@@ -1118,6 +1152,124 @@
      (+ (count-tree-occurrences target (car form))
         (count-tree-occurrences target (cdr form))))
     (t 0)))
+
+(deftest codegen-refined-variable-substitution ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (SameType :a :b) (declare SameProof (SameType :x :x)))
+      (inline)
+      (declare call-proven (SameType :a (Integer -> String) * :a -> String))
+      (define (call-proven proof f) (match proof ((SameProof) (f 42))))
+      (declare caller (SameType :b (Integer -> String) * :b -> String))
+      (define (caller proof f) (call-proven proof f))
+      (declare call-default (SameType :a (Integer -> String) * :a -> String))
+      (define (call-default proof f) (match proof ((SameProof) (f 42))))
+      (declare default-caller (SameType :b (Integer -> String) * :b -> String))
+      (define (default-caller proof f) (call-default proof f))
+      (declare local-twice (SameType :a (Integer -> Integer) * :a -> Tuple Integer Integer))
+      (define (local-twice w f)
+        (let go = (the (SameType :x (Integer -> Integer) * :x * Integer -> Integer)
+                       (fn (w2 f2 n) (match w2 ((SameProof) (f2 n))))))
+        (Tuple (go w f 1) (go w f 2)))")
+    (is (string= "first" (codegen-test-eval "(caller SameProof (fn (_) \"first\"))")))
+    (is (string= "second" (codegen-test-eval "(caller SameProof (fn (_) \"second\"))")))
+    (is (string= "default" (codegen-test-eval "(default-caller SameProof (fn (_) \"default\"))")))
+    (is (codegen-test-eval
+         "(== (local-twice SameProof (fn (n) (+ n 40))) (Tuple 41 42))"))
+    (is (codegen-test-eval
+         "(== (local-twice SameProof (fn (n) (* n 3))) (Tuple 3 6))"))
+    (is (zerop (codegen-test-call-count "CALLER" "CALL-PROVEN")))
+    (signals source:source-error
+      (codegen-test-compile "(define bad-call (caller SameProof \"not a function\"))"))))
+
+(deftest codegen-unwrapped-indexed-match ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (Tagged :a)
+        (declare IntValue (Integer -> Tagged Integer))
+        (declare StrValue (String -> Tagged String)))
+      (define-type AnyTag (declare HideTag (Tagged :a -> AnyTag)))
+      (declare unwrap-known (Tagged Integer -> Integer))
+      (define (unwrap-known input)
+        (match (HideTag input)
+          ((HideTag (IntValue n)) n)
+          ((HideTag (StrValue _)) 99)))
+      (declare unwrap-unknown (AnyTag -> Integer))
+      (define (unwrap-unknown input)
+        (match input
+          ((HideTag (IntValue n)) n)
+          ((HideTag (StrValue _)) 99)))")
+    (is (= 42 (codegen-test-eval "(unwrap-known (IntValue 42))")))
+    (is (= 17 (codegen-test-eval "(unwrap-unknown (HideTag (IntValue 17)))")))
+    (is (= 99 (codegen-test-eval "(unwrap-unknown (HideTag (StrValue \"text\")))")))
+    (is (zerop (codegen-test-call-count "UNWRAP-KNOWN" "HIDETAG")))))
+
+(deftest codegen-chained-indexed-witnesses ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (SameType :a :b) (declare SameProof (SameType :x :x)))
+      (define-type (View :a) (declare IntView (View Integer)) (declare TextView (View String)))
+      (inline)
+      (declare use-tag (SameType :a :b * View :b * :a -> Integer))
+      (define (use-tag (SameProof) tag x)
+        (match tag ((IntView) (+ x 7)) ((TextView) 0)))
+      (declare string-caller (SameType String :b * View :b -> Integer))
+      (define (string-caller w tag) (use-tag w tag \"hello\"))
+      (declare integer-caller (SameType Integer :b * View :b -> Integer))
+      (define (integer-caller w tag) (use-tag w tag 35))
+      (declare use-default (SameType :a :b * View :b * :a -> Integer))
+      (define (use-default (SameProof) tag x)
+        (match tag ((IntView) (+ x 7)) ((TextView) 0)))
+      (declare default-caller (SameType String :b * View :b -> Integer))
+      (define (default-caller w tag) (use-default w tag \"hello\"))")
+    (is (= 0 (codegen-test-eval "(string-caller SameProof TextView)")))
+    (is (= 42 (codegen-test-eval "(integer-caller SameProof IntView)")))
+    (is (= 0 (codegen-test-eval "(default-caller SameProof TextView)")))
+    (dolist (function '("STRING-CALLER" "INTEGER-CALLER"))
+      (is (zerop (codegen-test-call-count function "USE-TAG"))))))
+
+(deftest codegen-nested-witness-specialization-scope ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (SameType :a :b) (declare SameProof (SameType :x :x)))
+      (define-type (View :a) (declare IntView (View Integer)) (declare TextView (View String)))
+      (declare signature (View :a * SameType :a :b * View :b -> Integer))
+      (define (signature _ _ _) 0)")
+    (destructuring-bind (view-a same-a-b view-b)
+        (tc:function-type-arguments
+         (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type entry:*global-environment*
+                                                                 (intern "SIGNATURE")))))
+      (labels ((var (name type) (ast:make-node-local-variable :type type :value name))
+               (branch (name type body)
+                 (ast:make-match-branch
+                  :pattern (coalton-impl/codegen/pattern:make-pattern-constructor
+                            :type type :name (intern name) :patterns nil)
+                  :body body))
+               (match-node (expr branches)
+                 (ast:make-node-match :type tc:*integer-type* :expr expr :branches branches)))
+        (let* ((inner (match-node
+                       (var 'inner-tag view-b)
+                       (list (branch "INTVIEW" view-b (ast:make-node-literal :type tc:*integer-type* :value 11))
+                             (branch "TEXTVIEW" view-b (ast:make-node-literal :type tc:*integer-type* :value 22)))))
+               (middle (match-node (var 'proof same-a-b) (list (branch "SAMEPROOF" same-a-b inner))))
+               (outer (match-node (var 'outer-tag view-a)
+                                  (list (branch "INTVIEW" view-a middle) (branch "TEXTVIEW" view-a middle))))
+               (pruned (coalton-impl/codegen/transformations:prune-impossible-match-branches
+                        outer entry:*global-environment*)))
+          ;; Neither inner scrutinee is concrete by itself. Each receives its
+          ;; own outer equality composed with SameProof, not its sibling's.
+          (loop :for outer-branch :in (ast:node-match-branches pruned)
+                :for expected :in '("INTVIEW" "TEXTVIEW")
+                :for middle-match := (ast:match-branch-body outer-branch)
+                :for inner-match := (ast:match-branch-body (first (ast:node-match-branches middle-match)))
+                :do (is (= 1 (length (ast:node-match-branches inner-match))))
+                    (is (eq (intern expected)
+                            (coalton-impl/codegen/pattern:pattern-constructor-name
+                             (ast:match-branch-pattern (first (ast:node-match-branches inner-match)))))))
+          (let ((unconstrained (coalton-impl/codegen/transformations:prune-impossible-match-branches
+                                middle entry:*global-environment*)))
+            (is (= 2 (length (ast:node-match-branches
+                              (ast:match-branch-body (first (ast:node-match-branches unconstrained)))))))))))))
 
 (deftest codegen-match-decision-dag ()
   (with-codegen-test-environment

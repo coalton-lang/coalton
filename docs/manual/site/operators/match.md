@@ -37,7 +37,9 @@ weight: 150
 - **Exhaustiveness**: The compiler checks pattern exhaustiveness and emits a warning at compile time if cases are missing. If a non-exhaustive `match` falls through at runtime without matching any branch, it signals an error.
 - **GADT patterns**: Matching a constructor declared inside [`define-type`](/manual/operators/define-type/) can refine the scrutinee's type arguments inside that branch. Coverage starts from the incoming scrutinee type: a constructor returning `Tag String` is not required for a `Tag Integer`, but it cannot be omitted merely because another branch matches `Tag Integer`.
 - Function parameter patterns are checked together. For example, if one parameter matches a witness that `:a` is `Integer`, a second parameter of type `Tag :a` need only cover `Tag Integer`.
+- A constructor can also be ruled out when a required field cannot exist, for example a product containing an equality witness for `Integer` and `String`. This search is bounded: if recursive or abstract types prevent a proof, the checker still requires the case.
 - Within a branch, an equality witness also applies to scoped annotations and existing typeclass constraints. If `Refl` proves that `:a` and `:b` are equal, an `Eq :b` constraint suffices to compare a value of `:a` with one of `:b`. The equality does not hold outside that branch.
+- A shorthand `(let pattern = value)` has the same refinement scope as a one-arm match whose body is the rest of the block. Unlike an explicit `match`, the binding pattern must be exhaustive.
 
 ## Examples
 

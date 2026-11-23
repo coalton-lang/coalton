@@ -277,23 +277,42 @@ the remaining columns."
      possible-ctors)))
 
 (defun empty-indexed-column-p (columns env)
-  ;; A preceding column can make a later argument uninhabited, even when
-  ;; there are no pattern rows left (for example Same String Integer).
-  (some (lambda (type)
-          (let ((entry (type-entry-for-column-type type env)))
-            (and entry (tc:type-entry-gadt-p entry)
-                 (null (possible-constructor-patterns type env nil)))))
-        columns))
+  ;; Refute only what we can prove. A cycle, an opaque type or exhaustion
+  ;; of the search budget is not evidence that a value cannot exist.
+  (let ((fuel 32))
+    (labels ((empty-p (type seen)
+               (let* ((entry (type-entry-for-column-type type env))
+                      (ctors (and entry (tc:type-entry-constructors entry))))
+                 (and ctors
+                      (or (tc:type-entry-gadt-p entry) (null (rest ctors)))
+                      (not (member entry seen))
+                      (every (lambda (name)
+                               (when (and (plusp fuel) (tc:lookup-value-type env name :no-error t))
+                                 (decf fuel)
+                                 (let ((pat (possible-constructor-pattern name type env)))
+                                   (or (null pat)
+                                       (some (lambda (field)
+                                               (empty-p (pattern-bare-type field) (cons entry seen)))
+                                             (tc:pattern-constructor-patterns pat))))))
+                             ctors)))))
+      (some (lambda (type) (empty-p type nil)) columns))))
 
 (defun search-column-cases (matrix column-types env default specialize)
   "Search the cases of a wildcard column, returning the first non-NIL result.
 Both usefulness and witness generation must propagate the same index equalities."
   (let* ((seen (first-column-patterns matrix))
-         (possible (possible-constructor-patterns (first column-types) env seen))
+         (candidates (possible-constructor-patterns (first column-types) env seen))
+         (possible (remove-if (lambda (ctor)
+                                (empty-indexed-column-p (mapcar #'pattern-bare-type
+                                                                (tc:pattern-constructor-patterns ctor))
+                                                        env))
+                              candidates))
          (missing (missing-constructor-patterns seen possible))
          (tail (rest column-types)))
     (unless possible
-      (return-from search-column-cases (funcall default nil tail)))
+      (return-from search-column-cases
+        (unless (or candidates (empty-indexed-column-p (list (first column-types)) env))
+          (funcall default nil tail))))
     (let ((correlated (and missing tail
                            (tc:constructor-entry-gadt-p
                             (tc:lookup-constructor env (tc:pattern-constructor-name (first possible))))

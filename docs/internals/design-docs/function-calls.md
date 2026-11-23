@@ -54,6 +54,11 @@ one or more entrypoints recorded on its `function-env-entry`:
      Lisp return values (`cl:values`), and returns eligible concrete sum
      results (such as `Optional` and `Result`) as `(cl:values tag payload_1 ...)`
      (`Boolean` tag for 2-variant sums, `UFix` tag for 3–8 variant sums).
+   - A higher-rank field occupies one value slot. Its `forall` describes how
+     consumers can instantiate it; the closure in the slot retains its
+     physical parameter list, including any leading typeclass dictionaries.
+     Unpacking a product neither applies those dictionaries nor adds them as
+     separate worker arguments.
 
 3. **`:unboxed` (SBCL Register-Specialized Worker Entrypoint, `f%UNBOXED`)**:
    - Extends the flattened `:unpacked` layout with SBCL's internal register

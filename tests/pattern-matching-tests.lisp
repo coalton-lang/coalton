@@ -365,6 +365,27 @@
       (declare int-only (Tag :a -> Boolean))
       (define (int-only (TagInt)) True)")))
 
+(deftest gadt-binder-evidence-cannot-escape ()
+  (dolist (body '("(let (Pack x) = p) x"
+                  "(coalton/monad/identity:run-identity (do ((Pack x) <- (pure p)) (pure x)))"
+                  "(coalton/monad/identity:run-identity (do (let (Pack x) = p) (pure x)))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define-type Packed (declare Pack (:h -> Packed)))
+                                        (declare leak (Packed -> :a))
+                                        (define (leak p) ~A)" body)))))
+
+(deftest gadt-ascription-must-not-invent-generality ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Witness :a) (declare W (Witness :a)))
+      (declare bad (forall (:a) Witness :a -> :a))
+      (define (bad w) (the :a (match w ((W) \"not every type\"))))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Witness :a) (declare W (Witness :a)))
+      (declare bad (Witness String -> String))
+      (define (bad w) (the (forall (:a) :a) (match w ((W) \"not every type\"))))")))
+
 (deftest gadt-constructor-must-have-a-representable-signature ()
   (dolist (signature '("(Void -> Wrap)" "(Integer -> Void)" "(Integer &key (:tag String) -> Wrap)"))
     (signals parser:parse-error
@@ -396,6 +417,19 @@
             (define (classify p)
               (match p ((Tuple (I (True)) _) True) ((Tuple _ (S)) False)))")))
     (is (and diagnostic (search "missing case (TUPLE (I (FALSE)) (I \"_\"))" diagnostic)))))
+
+(deftest gadt-coverage-refutes-empty-fields ()
+  (flet ((packet (field)
+           (format nil
+                   "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+                    (define-type Recursive (Roll Recursive))
+                    (define-type Packet Here (Other ~A))
+                    (declare get-packet (Packet -> Boolean))
+                    (define (get-packet (Here)) True)" field)))
+    (check-coalton-types (packet "(Tuple Boolean (Same Integer String))"))
+    ;; A real witness, an opaque type, or an unresolved cycle cannot refute Other.
+    (dolist (field '("(Tuple Boolean (Same Integer Integer))" "Integer" "Recursive"))
+      (signals tc:tc-error (check-coalton-types (packet field))))))
 
 (deftest test-deep-constructor-pattern-analysis ()
   (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)

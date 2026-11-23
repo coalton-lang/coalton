@@ -14,6 +14,8 @@ later passes and Lisp compilers see simpler code.")
    #:node-variables
    #:inlined-some-operand
    #:inlined-cons-operands
+   #:specialize-match
+   #:prune-impossible-match-branches
    #:rename-type-variables)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
@@ -32,6 +34,8 @@ later passes and Lisp compilers see simpler code.")
    #:lawnmow))
 
 (in-package #:coalton-impl/codegen/lawnmower)
+
+(defvar *rewrite-environment* nil)
 
 (defvar *mutated-variables* nil
   "Identifiers assigned in the current lawnmower traversal.
@@ -141,10 +145,7 @@ Reading one takes a snapshot, not an immutable alias.")
   (declare (type node-match node)
            (type node expr)
            (values node-match &optional))
-  (make-node-match
-   :type (node-type node)
-   :expr expr
-   :branches (node-match-branches node)))
+  (specialize-match node expr *rewrite-environment*))
 
 (defun match-can-enter-let-p (match let-node)
   "Return true when (match (let BINDINGS X) BRANCHES...) can become
@@ -353,9 +354,11 @@ and result types before beta-reducing."
           (setf subs (tc:unify subs
                                (tc:function-return-type (node-type abstraction))
                                (node-type application)))
-          (if subs
-              (tc:apply-substitution subs abstraction)
-              abstraction))
+          (cond ((null subs) abstraction)
+                (*rewrite-environment*
+                 (prune-impossible-match-branches
+                  (tc:apply-substitution subs abstraction) *rewrite-environment*))
+                (t (tc:apply-substitution subs abstraction))))
       (tc:coalton-internal-type-error ()
         abstraction))))
 
@@ -579,6 +582,7 @@ Returns a status keyword and a replacement body. Status is one of:
                               :for rem-body := (match-branch-body rem-branch)
                               :if (pattern-wildcard-p rem-pat)
                                 :collect (make-match-branch
+                                          :index-equalities (match-branch-index-equalities rem-branch)
                                           :pattern (make-pattern-wildcard
                                                     :type (node-type rand0))
                                           :body rem-body)
@@ -590,16 +594,19 @@ Returns a status keyword and a replacement body. Status is one of:
                                              (eq name (pattern-constructor-name rem-pat))
                                              (= 1 (length (pattern-constructor-patterns rem-pat))))
                                       :collect (make-match-branch
+                                                :index-equalities (match-branch-index-equalities rem-branch)
                                                 :pattern (first (pattern-constructor-patterns rem-pat))
                                                 :body rem-body)
                               :else
                                 :do (return nil))))
                  (when unwrapped
                    (return-from maybe-reduce-known-match
-                     (values (make-node-match
-                              :type (node-type node)
-                              :expr rand0
-                              :branches unwrapped)
+                     (values (specialize-match
+                              (make-node-match
+                               :type (node-type node)
+                               :expr rand0
+                               :branches unwrapped)
+                              rand0 env)
                              t))))))
            (return-from maybe-reduce-known-match
              (values node nil))))))
@@ -651,6 +658,7 @@ Returns a status keyword and a replacement body. Status is one of:
              (loop :for branch :in (node-match-branches expr)
                    :collect
                    (make-match-branch
+                    :index-equalities (match-branch-index-equalities branch)
                     :pattern (match-branch-pattern branch)
                     :body (match-with-expr node (match-branch-body branch)))))
             t)
@@ -1095,6 +1103,7 @@ Returns a status keyword and a replacement body. Status is one of:
                 (loop :for branch :in (node-match-branches rator)
                       :collect
                       (make-match-branch
+                       :index-equalities (match-branch-index-equalities branch)
                        :pattern (match-branch-pattern branch)
                        :body (application-with-rator node (match-branch-body branch)))))
                t)
@@ -1109,6 +1118,7 @@ Returns a status keyword and a replacement body. Status is one of:
            (type (or null tc:environment) env)
            (values node boolean &optional))
   (let ((changed? nil)
+        (*rewrite-environment* env)
         (*mutated-variables* (node-mutated-variables node)))
     (values
      (traverse

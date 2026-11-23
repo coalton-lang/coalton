@@ -291,6 +291,7 @@ FORM must be a renamed parser AST fragment."
            (parser:node-match
             (parser:make-node-match
              :expr (resolve-node (parser:node-match-expr node) ctx)
+             :binding-p (parser:node-match-binding-p node)
              :branches
              (mapcar (lambda (branch)
                        (parser:make-node-match-branch
