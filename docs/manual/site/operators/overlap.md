@@ -181,6 +181,11 @@ environment before installing its definitions. Adding or redefining instances
 also validates previously recorded choices. A new instance that would change a
 compiled choice causes an error in either load order.
 
+A compiled instance also records which dictionaries its constructor takes, in
+order. A later instance can provide one of those dictionaries to a new caller;
+it does not change the provider's parameters. Recompiling the provider with
+different parameters invalidates compiled clients even if the arity is unchanged.
+
 For example, after compiling a concrete call to the general `Label :a` instance
 at `Integer`, adding `Label Integer` requires rebuilding the affected code.
 A generic `describe-label` that retains its `Label :a` dictionary parameter can accept

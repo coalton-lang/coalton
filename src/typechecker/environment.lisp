@@ -118,7 +118,9 @@
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
    #:ty-class-instance-location             ; ACCESSOR
-   #:ty-class-instance-constraints-expanded ; FUNCTION
+   #:finalize-instance-signatures           ; FUNCTION
+   #:instance-dictionary-signature          ; FUNCTION
+   #:instantiate-instance-context           ; FUNCTION
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -845,41 +847,68 @@
   (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list       :read-only t)
   (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list                   :read-only t)
   (docstring               (util:required 'docstring)               :type (or null string)       :read-only t)
-  (location                nil                                      :type (or null source:location) :read-only t))
+  (location                nil                                      :type (or null source:location) :read-only t)
+  ;; (HEAD . ORDERED-DICTIONARY-PARAMETERS). New declarations start with the
+  ;; source context, then finalize it together before the environment is published.
+  ;; NIL means missing metadata, not a nullary constructor (which stores (HEAD)).
+  (dictionary-signature    nil :type ty-predicate-list))
+
+(defun instance-dictionary-signature (instance)
+  "Return the compiled head and ordered parameters, even for a nullary dictionary."
+  (declare (type ty-class-instance instance)
+           (values cons &optional))
+  (let ((signature (and (slot-boundp instance 'dictionary-signature)
+                        (ty-class-instance-dictionary-signature instance))))
+    (unless (consp signature)
+      (error "No compiled dictionary signature for ~S. Recompile its provider and clients."
+             (ty-class-instance-predicate instance)))
+    signature))
+
+(defun instantiate-instance-context (instance pred)
+  "Return the compiled dictionary parameters at the wanted instance head PRED."
+  (let ((signature (instance-dictionary-signature instance)))
+    ;; Context-only variables are local to this use of the instance, too.
+    (when (cdr signature)
+      (destructuring-bind (head . context) (fresh-preds signature)
+        (apply-substitution (predicate-match head pred) context)))))
 
 (defun expand-context (context env)
-  "Traverse constraint predicates by looking up those entailed by
-the base constraint by instances in the environment.  Eliminate
-recursion by comparing these to the base constraint and return a list
-of constraint predicates."
+  "Choose dictionary parameters for a new instance in its defining environment."
   (declare (type ty-predicate-list context)
            (type environment env)
            (values ty-predicate-list &optional))
+  (unless context
+    (return-from expand-context nil))
 
   ;; This was implemented as a hack to make `derive' work on recursive
   ;; types.  Allows you to write an instance with signature
   ;; `(Eq A => Eq A)'.
-  (flet ((expand-constraint (base-constraint)
-           (labels ((f (constraint stack)
-                      (multiple-value-bind (inst subs)
-                          (lookup-class-instance env constraint :no-error t)
-                        (if (null inst)
-                            (list constraint)
-                            (mapcan
-                             (lambda (pred)
-                               (f pred (cons pred stack)))
-                             (set-difference
-                              (apply-substitution subs (ty-class-instance-constraints inst))
-                              stack
-                              :test #'type-predicate=))))))
-             (f base-constraint (list base-constraint)))))
+  (let ((fixed-vars (type-variables context))
+        (sentinel (make-variable)))
+    (labels ((expand (pred stack)
+               (let ((instance (lookup-class-instance env pred :no-error t)))
+                 (unless instance
+                   (return-from expand (list pred)))
+                 ;; Only variables introduced by an instance along this path
+                 ;; can be renamed when testing for a recursive constraint.
+                 (let ((key (quantify (set-difference (type-variables pred) fixed-vars :test #'ty=)
+                                      (qualify (list pred) sentinel))))
+                   (when (member key stack :test #'ty-scheme=)
+                     (return-from expand nil))
+                   (loop :for required :in (instantiate-instance-context instance pred)
+                         :append (expand required (cons key stack)))))))
+      (remove-duplicates (loop :for pred :in context :append (expand pred nil))
+                         :test #'type-predicate=))))
 
-    (remove-duplicates
-     (alexandria:mappend #'expand-constraint context)
-     :test #'type-predicate=)))
-
-(defun ty-class-instance-constraints-expanded (inst env)
-  (expand-context (ty-class-instance-constraints inst) env))
+(defun finalize-instance-signatures (instances env)
+  ;; Expand the whole batch before installing any signature, so forward
+  ;; references and recursive derived instances do not depend on source order.
+  (let ((contexts (loop :for instance :in instances
+                        :collect (expand-context (ty-class-instance-constraints instance) env))))
+    (loop :for instance :in instances
+          :for context :in contexts
+          :do (setf (ty-class-instance-dictionary-signature instance)
+                    (cons (ty-class-instance-predicate instance) context)))))
 
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
@@ -901,15 +930,17 @@ of constraint predicates."
 (defmethod apply-substitution (subst-list (instance ty-class-instance))
   (declare (type substitution-list subst-list)
            (values ty-class-instance &optional))
-  (make-ty-class-instance
-   :overlap-p (ty-class-instance-overlap-p instance)
-   :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
-   :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
-   :codegen-sym (ty-class-instance-codegen-sym instance)
-   :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
-   :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
-   :docstring (ty-class-instance-docstring instance)
-   :location (ty-class-instance-location instance)))
+  (let ((signature (apply-substitution subst-list (instance-dictionary-signature instance))))
+    (make-ty-class-instance
+     :overlap-p (ty-class-instance-overlap-p instance)
+     :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
+     :predicate (car signature)
+     :dictionary-signature signature
+     :codegen-sym (ty-class-instance-codegen-sym instance)
+     :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
+     :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
+     :docstring (ty-class-instance-docstring instance)
+     :location (ty-class-instance-location instance))))
 
 (defstruct instance-environment
   ;; Compiled choices, indexed by class. Kept in the persistent environment so
@@ -1298,9 +1329,10 @@ only once."
                   (scan (ty-class-superclass-dict object)))
                  (ty-class-instance
                   (scan (ty-class-instance-constraints object))
-                  (scan (ty-class-instance-predicate object)))
+                  (scan (instance-dictionary-signature object)))
                  (instance-environment
-                  (scan (instance-environment-instances object)))
+                  (scan (instance-environment-instances object))
+                  (scan (instance-environment-selections object)))
                  (specialization-entry
                   (scan (specialization-entry-to-ty object)))
                  (abi-leaf
@@ -1787,8 +1819,8 @@ predicate containing inference variables through such an instance."
 
 (defun instance-signature= (left right)
   "Compare the ordered dictionary ABI, including variables shared with the head."
-  (let ((left-preds (cons (ty-class-instance-predicate left) (ty-class-instance-constraints left)))
-        (right-preds (cons (ty-class-instance-predicate right) (ty-class-instance-constraints right))))
+  (let ((left-preds (instance-dictionary-signature left))
+        (right-preds (instance-dictionary-signature right)))
     (and (eq (ty-class-instance-overlap-p left) (ty-class-instance-overlap-p right))
          (eq (ty-class-instance-codegen-sym left) (ty-class-instance-codegen-sym right))
          (= (length left-preds) (length right-preds))
@@ -1853,6 +1885,8 @@ predicate containing inference variables through such an instance."
   (declare (type environment env)
            (type symbol class)
            (type ty-class-instance value))
+  ;; Do not guess the ABI of a loaded instance from its source constraints.
+  (instance-dictionary-signature value)
   (lookup-class env class)
   (let ((replacement nil)
         (instances (environment-instance-environment env)))
@@ -2789,9 +2823,7 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                        ;; predicate, we need to create a full fresh set of
                        ;; predicates, rather than just matching the head.
                        :do (let* ((fresh-instance-preds
-                                    (fresh-preds
-                                     (cons (ty-class-instance-predicate instance)
-                                           (ty-class-instance-constraints-expanded instance env))))
+                                    (fresh-preds (instance-dictionary-signature instance)))
                                   (instance-head (car fresh-instance-preds))
                                   (instance-context (cdr fresh-instance-preds))
 

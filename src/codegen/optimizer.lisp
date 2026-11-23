@@ -640,14 +640,10 @@ speaking, the following kinds of transformations happen:
     (let* (;; Lookup the instance
            (instance (tc:lookup-instance-by-codegen-sym env rator))
 
-           ;; Generate a fresh predicate to avoid type variable collisions
-           (pred (tc:fresh-pred (tc:ty-class-instance-predicate instance)))
-
-           ;; Generate subs to match the class's superclasses to PRED
-           (subs (tc:predicate-match (tc:ty-class-instance-predicate instance) pred))
-
-           ;; Find the superclasses of PRED
-           (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints-expanded instance env)))
+           (signature (tc:fresh-preds (tc:instance-dictionary-signature instance)))
+           (pred (car signature))
+           (constraints (cdr signature))
+           (subs nil)
 
            (args
              (loop :for arg :in (node-rands node)

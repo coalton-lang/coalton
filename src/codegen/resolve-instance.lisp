@@ -64,48 +64,27 @@
            (values node &optional))
 
   ;; Lookup the predicate as a static instance
-  (multiple-value-bind (instance subs)
-      (tc:lookup-class-instance env pred :no-error t)
+  (let ((instance (tc:lookup-class-instance env pred :no-error t)))
     (cond
       (instance
-       (let*
-           ;; Apply substitutions to find the superclass constraints
-           ((instance-constraints
-              (tc:apply-substitution
-               subs
-               (tc:ty-class-instance-constraints-expanded instance env)))
-
-            ;; Apply any fundep substitutions
-            (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
-            (instance-constraints
-              (tc:apply-substitution
-               fundep-subs
-               (tc:ty-class-instance-constraints-expanded instance env)))
-
-            ;; Generate dicts from those constraints
-            (subdicts
-              (mapcar
-               (lambda (pred)
-                 (resolve-dict pred context env))
-               instance-constraints))
-
-            ;; Find the types of those dicts
-            (arg-types (mapcar #'node-type subdicts)))
-
-         (if (null subdicts)
-             ;; If the instance has no superclasses return a variable
+       ;; The provider fixes the parameters; the caller supplies evidence.
+       (let* ((constraints (tc:instantiate-instance-context instance pred))
+              (subs (nth-value 1 (tc:solve-fundeps env constraints nil)))
+              (parameters (tc:apply-substitution subs constraints)))
+         (if (null parameters)
              (make-node-global-variable
               :type (pred-type pred env)
               :value (tc:ty-class-instance-codegen-sym instance))
 
-             ;; Otherwise create a new dict at runtime
              (make-node-application
               :type (pred-type pred env)
               :properties '()
               :rator (make-node-global-variable
-                      :type (tc:make-function-type* arg-types (pred-type pred env))
+                      :type (tc:make-function-type*
+                             (mapcar (lambda (p) (pred-type p env)) parameters)
+                             (pred-type pred env))
                       :value (tc:ty-class-instance-codegen-sym instance))
-              :rands subdicts))))
+              :rands (mapcar (lambda (p) (resolve-dict p context env)) parameters)))))
       (t
        ;; No explicit instance matched. Give compiler-registered resolvers a
        ;; chance to synthesize a dictionary for internal type shapes, then
