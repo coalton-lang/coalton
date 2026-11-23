@@ -322,9 +322,9 @@ COLLATZ> (coalton (sorted-steps 20))
 
 `par:map-reduce` and `par:fold-map` are reductions over the elements of
 a collection, and `par:for-each!` calls a function on every element of a
-collection. They work on `Seq`s, and on any collection with an instance
-of the class `RandomAccess`, such as `Vector` or `LispArray`: these are
-the instances of the class `ParallelFoldable`. For example, this finds
+collection. They work on instances of `ParallelFoldable`: `Seq`, and
+`RandomAccess` collections whose last type argument is the element type,
+such as `Vector` or `LispArray`. For example, this finds
 the number in a `Seq` with the longest Collatz sequence:
 
 ```lisp

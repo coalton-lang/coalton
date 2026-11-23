@@ -101,8 +101,9 @@ The main operations are:
   ranges of integers; `for-chunks!` and `map-reduce-chunks` do the same
   a chunk at a time.
 - `for-each!`, `map-reduce` and `fold-map` work on the instances of the
-  class `ParallelFoldable`: `Seq`, and every `RandomAccess` collection,
-  such as `Vector` and `LispArray`. `map-into!` maps one `RandomAccess`
+  class `ParallelFoldable`: `Seq`, and `RandomAccess` collections whose
+  last type argument is the element type, such as `Vector` and `LispArray`.
+  `map-into!` maps one `RandomAccess`
   collection into another. `map`, the method of the class
   `ParallelMap`, maps over a `Vector`, a `List` or a `Seq`, and `sort!`
   and `sort-by!` sort a `Vector` with a stable parallel merge sort.
