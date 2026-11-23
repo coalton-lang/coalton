@@ -38,7 +38,7 @@ weight: 330
 ;     (VALUES))
 ```
 
-## Other Notes
+## Other notes
 
 - For human-readable pretty-printed output without package prefixes on local symbols, use [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/).
 - To include emitted Common Lisp `(declare (type ...))`, `(declaim (ftype ...))`, and `(the (values ...) ...)` annotations, use [`coalton-codegen-types`](/manual/operators/coalton-codegen-types/) or [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/).

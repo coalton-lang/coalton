@@ -1,5 +1,5 @@
 ---
-title: "Advanced Coalton Programming"
+title: "Advanced Coalton programming"
 description: "Guide to advanced Coalton programming."
 hideMeta: true
 weight: 25
@@ -9,7 +9,7 @@ Coalton includes several features for designing expressive abstractions, working
 
 {{<toc>}}
 
-## Functional Dependencies
+## Functional dependencies
 
 Multi-parameter type classes relate two or more types. However, without extra guidance, the type checker treats all parameters of a class as independent, which often leads to ambiguous types.
 
@@ -26,7 +26,7 @@ If `:c` and `:e` are completely independent, a type like `(List Integer)` could 
 
 *Functional dependencies* solve this by declaring that some class parameters uniquely determine others.
 
-### Declaring Functional Dependencies
+### Declaring functional dependencies
 
 A class `C` can be given a functional dependency `(:a -> :b)` in its header:
 
@@ -66,7 +66,7 @@ A class header can also include multiple functional dependency clauses, and each
     (from (:b -> :a))))
 ```
 
-### Instance Consistency Rules
+### Instance consistency rules
 
 Functional dependencies are enforced whenever instances are defined:
 
@@ -79,7 +79,7 @@ Functional dependencies are enforced whenever instances are defined:
 
    is invalid: whenever it provides `C :a (List :b)`, its context also requires `C :a :b`, so the same `:a` would determine both `:b` and `(List :b)`.
 
-## Extending Builder Syntax to User-Defined Types
+## Extending builder syntax to user-defined types
 
 As shown in the Language Guide, square-bracket syntax (`[1 2 3]`, `["a" => 1]`, and comprehensions) defaults to `Seq`, but can build any type that implements Coalton's builder type classes. These classes use functional dependencies to connect the target collection type, the element or entry types, and an intermediate builder state:
 
@@ -119,7 +119,7 @@ The first argument passed to each method is a `types:Proxy` for the target colle
 
 To support `[x :for ...]` comprehensions for `Bag :a`, define a corresponding `FromCollectionComprehension` instance. Association builders work the same way through `FromItemizedAssociation` and `FromAssociationComprehension`.
 
-## Overlapping Instances
+## Overlapping instances
 
 By default, Coalton forbids two instances of the same type class from overlapping—that is, having instance heads that could match the same concrete types. This guarantees that instance resolution is globally unique regardless of where functions are compiled.
 
@@ -142,7 +142,7 @@ In some designs, however, it is useful to provide a general fallback instance wh
 (coalton (label (the Integer 42)))  ; ==> "integer"
 ```
 
-### Specificity and Polymorphic Callers
+### Specificity and polymorphic callers
 
 When resolving an overlapping constraint, Coalton compares only the instance heads:
 
@@ -164,7 +164,7 @@ Because a more specific `(overlap)` instance can be defined later (even in anoth
 
 The standard library uses `(overlap)` for identity conversions (`Into :a :a`) alongside generic container conversions. See [`overlap`](/manual/operators/overlap/) for complete rules and examples.
 
-## Instance Defaulting
+## Instance defaulting
 
 Consider what happens when you evaluate a numeric expression at the REPL without any type annotations:
 
@@ -182,7 +182,7 @@ In Coalton, integer literals like `1` and `2` are polymorphic: they desugar via 
 
 At the top level of a `(coalton ...)` form—or in an implicitly typed `define` or `let` binding—leaving `:a` unresolved would make it impossible to choose a concrete runtime dictionary. Rather than rejecting every unannotated numeric literal as ambiguous, Coalton applies *type defaulting*, similar to [Haskell's type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4).
 
-### How Defaulting Resolves Ambiguity
+### How defaulting resolves ambiguity
 
 When type defaulting is invoked on a set of ambiguous predicates involving a numeric type variable, Coalton tries candidate types in order:
 
@@ -204,7 +204,7 @@ Coalton's defaulting is more permissive than Haskell 98 when an ambiguous numeri
 - **Structured types**: Haskell 98 considers a constraint like `Num (List :a)` ambiguous and refuses to default `:a`. Coalton still tests candidate types for `:a` (so if `Num (List Integer)` were a valid instance, `:a` would default to `Integer`).
 - **Custom type classes**: Haskell 98 only defaults a variable if *all* of its constraints come from a fixed set of standard classes. In Coalton, if `:a` is constrained by `((Num :a) (CustomTypeClass :a))`, Coalton will still default `:a` to `Integer` (or `F64`, or `F32`) if `CustomTypeClass` has a matching instance for that candidate.
 
-## Scoped Type Variables, Higher Kinds, and Result Polymorphism
+## Scoped type variables, higher kinds, and result polymorphism
 
 In ordinary declarations, type variables such as `:a` and `:b` are implicitly quantified at the top of the signature:
 
@@ -217,7 +217,7 @@ In ordinary declarations, type variables such as `:a` and `:b` are implicitly qu
 
 When you want explicit control over quantifier order, lexical scoping of type variables inside a definition body, or kind annotations on type parameters, use [`forall`](/manual/operators/forall/).
 
-### Explicit `forall` and Scoped Type Variables
+### Explicit `forall` and scoped type variables
 
 An explicit `forall` lists its type variables before the qualified type:
 
@@ -273,7 +273,7 @@ Similarly, an inline `lisp` form can return a value typed with a scoped type var
 
 Note that embedded `(coalton ...)` forms inside a raw Lisp body are a separate compilation context and do not inherit lexical type-variable bindings.
 
-### Kind Annotations and Result Polymorphism (`Values`)
+### Kind annotations and result polymorphism (`Values`)
 
 Coalton infers kinds for bare type variables automatically, including higher-kinded variables such as `:f` in `(:f :a)`. When you want to make a binder's kind explicit, write `(:var Kind)` inside `forall`:
 
@@ -295,13 +295,13 @@ Coalton also supports *result polymorphism* using the special kind `Values`. Whi
 
 The same `call-results` function can forward zero, one, or multiple results. In written type annotations, an unannotated variable such as `:r` always has kind `Type` (or a higher constructor kind) and cannot stand for zero or multiple return values; you must annotate it with `Values`. Functions without explicit declarations can still infer result polymorphism automatically. See [`forall`](/manual/operators/forall/) for complete kind syntax and restrictions.
 
-## Higher-Rank Polymorphism
+## Higher-rank polymorphism
 
 In ordinary (rank-1) polymorphic functions, `forall` quantifiers live at the outermost level of a signature, which means the *caller* chooses the concrete types for all type variables at the call site. For example, in `((:a -> :a) * :a -> :a)`, the caller picks a single type `:a`, and the passed function only needs to work on that one type.
 
 Sometimes, however, a function needs to receive a *polymorphic* function as an argument and instantiate it at multiple different types *inside* its own body. Coalton supports this—known as *higher-rank* or *rank-$N$ polymorphism*—by allowing explicit `(forall ...)` types inside function arguments, return types, `define-type` constructors, `define-struct` fields, and `define-type-alias` definitions.
 
-### Rank-2 and Higher-Rank Function Arguments
+### Rank-2 and higher-rank function arguments
 
 Suppose we want a function `apply-both` that applies a polymorphic function `f` to two arguments of different types `:x` and `:y`. Writing `(forall (:a) (:a -> :a))` as the type of `f` requires `f` itself to be polymorphic:
 
@@ -349,7 +349,7 @@ Nested `forall` types can also include type class constraints:
 ;; ==> #.(TUPLE 11 3.5d0)
 ```
 
-### Predicative Polymorphism and Nominal Wrappers
+### Predicative polymorphism and nominal wrappers
 
 Coalton's higher-rank type system is **predicative**: ordinary type variables and type constructors (`List`, `Vector`, `Optional`, `Tuple`) can only be instantiated with *monotypes* (types that do not contain `forall`), never directly with `forall` types.
 
@@ -371,13 +371,13 @@ This keeps type inference predictable and has two main practical consequences:
 
 See [`forall`](/manual/operators/forall/#higher-rank-polymorphism) for complete rules on higher-rank types and predicativity.
 
-## Polymorphism, Mutation, and the Value Restriction
+## Polymorphism, mutation, and the value restriction
 
 In a pure language, any binding whose inferred type contains uninstantiated type variables can be generalized into a polymorphic value. In the presence of mutable state, unrestricted polymorphic bindings would be unsound: a single mutable container could be written at one type and read back at another.
 
 Coalton prevents this by combining an ML-style syntactic *value restriction* with a *relaxed variance check*.
 
-### Non-Expansive vs. Expansive Bindings
+### Non-expansive vs. expansive bindings
 
 When generalizing an implicitly typed `define` or `let` binding, Coalton classifies the right-hand side:
 
@@ -436,7 +436,7 @@ Coalton computes the variance of each type parameter of a `define-type` or `defi
 
 Under the relaxed value restriction, weak type variables are generalized only when all of their occurrences are covariant. Any invariant or contravariant occurrence keeps the variable monomorphic.
 
-### Opaque Native Types
+### Opaque native types
 
 For `define-type` definitions that wrap a host Common Lisp type using `(repr :native ...)` and have no Coalton constructors, Coalton cannot inspect the internal structure of the type. By design, all type parameters of an opaque native type are treated as **invariant**.
 
@@ -458,7 +458,7 @@ For further background on the value restriction and variance:
 - Jacques Garrigue, "Relaxing the Value Restriction".
 - Andrew K. Wright, "Simple Imperative Polymorphism".
 
-## Resumptions and Non-Unwinding Handlers
+## Resumptions and non-unwinding handlers
 
 The [Coalton Language Guide](/manual/topics/language-guide/#error-handling-and-exceptions) covers ordinary exception handling with `define-exception`, `throw`, `catch`, and `protect`. Like exceptions in most languages, `catch` unwinds the call stack to the handler before running the recovery branch.
 
@@ -471,7 +471,7 @@ The four forms involved are:
 - [`handle`](/manual/operators/handle/): Intercepts thrown exceptions *without* unwinding the stack, running its matching branch at the dynamic point of the `throw`.
 - [`resume-to`](/manual/operators/resume-to/): Transfers control from inside a `handle` branch to an active `resumable` block matching the given resumption value.
 
-### Example: Recovering Without Unwinding Outer Loops
+### Example: recovering without unwinding outer loops
 
 Building on the `Egg` and `BadEgg` types from the Language Guide:
 
@@ -545,7 +545,7 @@ make-breakfast-for
 
 Because `make-breakfast-for` uses `handle` rather than `catch`, `make-breakfast-with` is still on the stack when the handler runs, so `(resume-to skip)` can jump to `make-breakfast-with`'s `((SkipEgg) None)` branch. Had `make-breakfast-for` used `catch`, the stack would already have unwound past `make-breakfast-with` before the handler ran.
 
-### Caveats for Exceptions and Resumptions
+### Caveats for exceptions and resumptions
 
 Coalton's exception and resumption system is still evolving. Keep the following caveats in mind:
 
@@ -553,11 +553,11 @@ Coalton's exception and resumption system is still evolving. Keep the following 
 2. `resumable` branches must match a concrete resumption constructor pattern; wildcard and type-assertion patterns are not supported there.
 3. Although the `Exception` and `Resumption` classes classify throwable and resumable types, function signatures do not currently track which exceptions or resumptions a function may signal.
 
-## Function Specialization
+## Function specialization
 
 Type classes make it easy to write generic functions, but polymorphic calls normally pass type class method dictionaries at runtime. When a function is called with known concrete types on a performance-critical path, you can declare type-directed rewrite rules with [`specialize`](/manual/operators/specialize/) to replace generic calls with specialized implementations at compile time.
 
-### Declaring Specializations
+### Declaring specializations
 
 A `specialize` form names the generic function, the specialized replacement function, and the more specific unconstrained type at which the rewrite applies:
 
@@ -590,7 +590,7 @@ int specialized call
 > [!IMPORTANT]
 > The example above uses `trace` only to make the compile-time rewrite visible in the REPL. In real programs, a specialized function **must have the exact same observable behavior** as the generic function. Specialization is an opportunistic optimization and is not guaranteed to fire at every call site.
 
-### When Specialization Does and Does Not Apply
+### When specialization does and does not apply
 
 Specialization only fires when the argument and return types at a call site are statically known to match the specialization signature. Consider a polymorphic wrapper that calls `inc`:
 

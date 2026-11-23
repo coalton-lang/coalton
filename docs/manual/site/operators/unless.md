@@ -34,7 +34,7 @@ weight: 220
     (Some (coalton/math:div a b))))
 ```
 
-## Other Notes
+## Other notes
 
 - Because `unless` returns `Void` (zero values) rather than `Unit`, a function declared `(Foo -> Unit)` that ends with an `unless` form should follow `unless` with `Unit` (or be declared `(Foo -> Void)`).
 - Use [`when`](/manual/operators/when/) for the positive counterpart.

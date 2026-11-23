@@ -48,7 +48,7 @@ Coalton also provides reader shorthand for compact lambdas: [`ƒ`](/manual/opera
 ; => #.(TUPLE #.(TUPLE 6 8) #.(TUPLE 30 40))
 ```
 
-## Other Notes
+## Other notes
 
 - When a `fn` is bound to a local variable in [`let`](/manual/operators/let/) or [`let*`](/manual/operators/let-star/) (or via shorthand `let`) and does not escape its lexical scope (i.e., it is only called directly and never returned, stored in a data structure, or captured by an escaping closure), the compiler emits a Common Lisp `flet`/`labels` binding declared `dynamic-extent` so the host Lisp compiler can stack-allocate the closure. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
 - Macro authors who generate internal `fn` wrappers and want [`return`](/manual/operators/return/) inside the macro's user body to exit the outer enclosing function can write `(fn :transparent-to-return (⟨arg⟩*) ⟨body⟩+)`.

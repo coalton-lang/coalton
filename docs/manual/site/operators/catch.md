@@ -59,7 +59,7 @@ weight: 265
        (throw e)))))
 ```
 
-## Other Notes
+## Other notes
 
 - `catch` compiles to Common Lisp `cl:handler-bind` inside a `cl:block`: the handler tests constructor field patterns before unwinding and, only upon a match, transfers the branch index and condition out of the inner block so the handler body executes after unwinding.
 - See [`handle`](/manual/operators/handle/), [`throw`](/manual/operators/throw/), [`define-exception`](/manual/operators/define-exception/), and [`protect`](/manual/operators/protect/).

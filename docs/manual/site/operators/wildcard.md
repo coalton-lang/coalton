@@ -54,7 +54,7 @@ _
     q))
 ```
 
-## Other Notes
+## Other notes
 
 - A variable name that *begins* with an underscore followed by additional characters, such as `_state` or `_unused`, is an ordinary bound variable (not a wildcard): it can still be referenced in the body, but the compiler suppresses unused-variable warnings if it is never read.
 - See [`match`](/manual/operators/match/), [`let`](/manual/operators/let/), and [`=`](/manual/operators/pattern-bind/).

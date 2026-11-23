@@ -74,7 +74,7 @@ weight: 10
     (map id xs)))
 ```
 
-## Other Notes
+## Other notes
 
 - Every function type `(A -> B)` has kind `Type`, even when its input is `Void` or its output is `Void` or a multi-value pack `B1 * B2`.
 - When Unicode type printing is enabled, Coalton displays `->` as `→` in printed types and kinds, while source code uses `->`.

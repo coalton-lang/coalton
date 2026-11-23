@@ -59,7 +59,7 @@ COALTON-USER> (disassemble #'axpy)
 ; A4:       E00120D4         BRK #15                          ; Invalid argument count trap
 ```
 
-## Other Notes
+## Other notes
 
 - Monomorphized helper clones are deduplicated across all `(monomorphize)` entry points within the same `coalton-toplevel` unit.
 - During monomorphization, any matching [`specialize`](/manual/operators/specialize/) rules are also applied automatically once types become concrete.

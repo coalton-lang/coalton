@@ -29,7 +29,7 @@ weight: 355
     (+ x x)))
 ```
 
-## Other Notes
+## Other notes
 
 - See [`coalton-codegen-ast`](/manual/operators/coalton-codegen-ast/), [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/), and [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/).
 

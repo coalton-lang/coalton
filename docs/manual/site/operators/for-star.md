@@ -42,7 +42,7 @@ weight: 280
 ; => 15
 ```
 
-## Other Notes
+## Other notes
 
 - Contrast the step phase of `for*` with [`for`](/manual/operators/for/): in `(for ((i 0 (+ i 1)) (acc 0 (+ acc i))) ...)`, `(+ acc i)` adds the *old* value of `i` from before the step (`0 + 1 + 2 + 3 + 4 = 10`), whereas in `for*` above, `i` is updated to `(+ i 1)` first and `(+ acc i)` adds the *new* value of `i` (`1 + 2 + 3 + 4 + 5 = 15`).
 - In release mode, a local `coalton/cell:Cell` accumulator created with `cell:new` and mutated or read inside a `for*` loop is unboxed into a typed mutable lexical variable when the `Cell` does not escape its defining function. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

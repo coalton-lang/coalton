@@ -59,7 +59,7 @@ weight: 146
   (the (coalton/hashmap:HashMap String Integer) [=>]))
 ```
 
-## Other Notes
+## Other notes
 
 - Standard library types supporting `[=>]` are `HashMap`, `Hashtable`, `OrdMap`, `List (Tuple :k :v)`, and `Seq (Tuple :k :v)`.
 - User-defined map or association types can opt into `[=>]` syntax by implementing `FromItemizedAssociation` and `FromAssociationComprehension` from `coalton/classes`.

@@ -43,7 +43,7 @@ weight: 95
 ;; A call `(inc (the UFix 10))` is rewritten at compile time to `(inc-ufix 10)`.
 ```
 
-## Other Notes
+## Other notes
 
 - Specialization rules are applied both during initial optimization and after [`monomorphize`](/manual/operators/monomorphize/) or [`inline`](/manual/operators/inline/) exposes concrete types at inner call sites.
 - Use [`print-specializations`](/manual/operators/print-specializations/) at the Common Lisp REPL to list all active specialization rules.

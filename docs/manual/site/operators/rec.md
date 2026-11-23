@@ -56,7 +56,7 @@ weight: 180
              (go rest (+ idx 1))))))))
 ```
 
-## Other Notes
+## Other notes
 
 - By convention, short names such as `%`, `go`, or `loop` are commonly used for `⟨name⟩`.
 - When the types of a `rec` loop are known, typeclass dictionaries supplied by context-free global instances do not become runtime parameters of its local recursive function (`labels`), so numeric loops in `rec` compile to tight loops comparable to [`for`](/manual/operators/for/). Polymorphic loops and contextual dictionary constructors retain their dictionary parameters as needed. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

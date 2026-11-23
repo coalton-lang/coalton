@@ -49,7 +49,7 @@ weight: 76
   (define-tagged-id UserId U64))
 ```
 
-## Other Notes
+## Other notes
 
 - `define-toplevel-macro` records `:toplevel` as the symbol's `:coalton-repl-context` property for editor integration, REPL support, and documentation generation.
 - If a macro is meant to be called directly at the Common Lisp top level (outside `coalton-toplevel`) and expand into `(coalton-toplevel ...)`, define it with `cl:defmacro` instead.

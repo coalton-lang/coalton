@@ -1,4 +1,4 @@
-# Function Application in Coalton
+# Function application in Coalton
 
 Coalton source functions are fixed-arity. A type such as `A * B -> C` denotes
 one function that takes two arguments. A type such as `A -> B -> C` denotes a
@@ -30,7 +30,7 @@ raw Lisp function objects directly and forwards Lisp keyword arguments
 unchanged. Compiler-generated indirect calls use `funcall` or `apply` on raw
 function objects directly.
 
-## Calling Conventions and Multi-Entrypoint Functions
+## Calling conventions and multi-entrypoint functions
 
 Every top-level Coalton function `f` is compiled into a coordinated bundle of
 one or more entrypoints recorded on its `function-env-entry`:
@@ -64,7 +64,7 @@ one or more entrypoints recorded on its `function-env-entry`:
      directly in general-purpose and XMM registers across non-inlined,
      recursive, and cross-file calls without heap boxing.
 
-### Call-Site Selection and Pack/Unpack Cancellation
+### Call-site selection and pack/unpack cancellation
 
 After `direct-application` identifies saturated direct calls (`node-direct-application`),
 `rewrite-callsite-entrypoints` rewrites each eligible direct call to target the
@@ -74,7 +74,7 @@ Subsequent `lawnmow` and `scalar-replace` passes cancel back-to-back pack/unpack
 boundaries across chained calls (`(f (g x))`), `match` scrutinees, and tail
 returns.
 
-### Redefinition Semantics
+### Redefinition semantics
 
 - **Same-Signature Redefinition**: Redefining `f` with the same ABI layout
   updates `f`, `f%UNPACKED`, and `f%UNBOXED` in place so existing callers see

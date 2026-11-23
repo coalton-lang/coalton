@@ -64,7 +64,7 @@ weight: 90
       (== x y))))
 ```
 
-## Other Notes
+## Other notes
 
 - Unconstrained instances compile to static global dictionary values; constrained instances compile to dictionary-constructor functions that accept the prerequisite dictionaries as arguments.
 - Common standard library classes (`Eq`, `Ord`, `Hash`, `Default`, `Show`) can be generated automatically for [`define-type`](/manual/operators/define-type/) and [`define-struct`](/manual/operators/define-struct/) using [`derive`](/manual/operators/derive/).

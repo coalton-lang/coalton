@@ -33,7 +33,7 @@ weight: 300
 ; => "∀ :A. Num :A ⇒ Tuple :A String"
 ```
 
-## Other Notes
+## Other notes
 
 - How `TypeScheme` objects render type aliases is controlled by [`set-type-printing-mode`](/manual/operators/set-type-printing-mode/).
 - For a Common Lisp REPL helper that looks up a global symbol by name and prints its type and aliases directly to `*standard-output*`, see [`describe-type-of`](/manual/operators/describe-type-of/).

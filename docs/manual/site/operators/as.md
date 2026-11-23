@@ -44,7 +44,7 @@ weight: 110
 ; => 4.0d0
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike [`the`](/manual/operators/the/), which only constrains the static type of an expression without changing its runtime value, `as` invokes the `into` method and may allocate or copy data (for example, converting a `String` to a `List Char`).
 - For partial conversions that may fail (`TryInto`), use [`try-as`](/manual/operators/try-as/) or [`unwrap-as`](/manual/operators/unwrap-as/).

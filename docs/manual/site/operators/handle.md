@@ -59,7 +59,7 @@ weight: 267
 ; => #.(TUPLE "cooked fresh" #.NONE)
 ```
 
-## Other Notes
+## Other notes
 
 - Prefer [`catch`](/manual/operators/catch/) unless a handler branch needs to invoke [`resume-to`](/manual/operators/resume-to/) or inspect dynamic state from the throw site.
 - `handle` compiles to Common Lisp `cl:handler-bind` where the handler body runs directly inside the condition handler function and returns from the enclosing `cl:block` if it finishes normally.

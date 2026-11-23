@@ -32,7 +32,7 @@ weight: 260
 ; => ("4" "9" "16" "25")
 ```
 
-## Other Notes
+## Other notes
 
 - `.<` is the point-free counterpart of [`nest`](/manual/operators/nest/), and composes functions in the same right-to-left order as the standard library binary function `compose` (and the opposite order of [`.>`](/manual/operators/compose-left/)).
 - When you need a first-class binary composition function value `(B -> C) * (A -> B) -> (A -> C)`, use `compose` from the standard library.

@@ -1,4 +1,4 @@
-# Testing Your Coalton Code
+# Testing your Coalton code
 
 By now, hopefully, you've read the [Coalton Language Guide](manual/site/topics/language-guide.md) and
 written some non-trivial Coalton code. Now the question is, "how do I know it works?"
@@ -9,7 +9,7 @@ you're worried about whether you've got the logic right, it's time to write a te
 
 You can find an example project containing the code from this document in [examples/coalton-testing-example-project](../examples/coalton-testing-example-project)
 
-## Adding a Test System to Your System Definition
+## Adding a test system to your system definition
 
 For a project `foo`, you should already have a system definition file `foo.asd` located in
 the project's root directory, which looks something like:
@@ -69,7 +69,7 @@ system (in this case, an instance of `asdf:system` which will be equal to
 `(asdf:find-system "foo/test")`.) We don't actually need these arguments, so we'll just
 leave them unused.
 
-## Making Files
+## Making files
 
 Create a subdirectory `test` within your project's root directory. Inside it, create a
 file `test.lisp` to hold your tests. (If you used a different `:pathname` or `:file` in
@@ -114,7 +114,7 @@ package.
 We told ASDF to run our tests by calling the `run-tests` function, so we define
 `run-tests`. It just tells Fiasco to run our test suite.
 
-## Defining Tests
+## Defining tests
 
 Now that all that's done, we can finally get to the good part. Define a test with
 `define-test`, and inside it, make some assertions with `is` or `matches`.

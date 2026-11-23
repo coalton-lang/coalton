@@ -48,7 +48,7 @@ weight: 75
        (* ,tmp ,tmp))))
 ```
 
-## Other Notes
+## Other notes
 
 - `define-expression-macro` records `:expression` as the symbol's `:coalton-repl-context` property so Coalton-aware editors, REPLs, and documentation generators recognize it as an expression macro.
 - For macros that expand into top-level definitions (`define`, `declare`, `define-instance`, etc.), use [`define-toplevel-macro`](/manual/operators/define-toplevel-macro/).

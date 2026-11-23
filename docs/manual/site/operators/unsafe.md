@@ -38,7 +38,7 @@ weight: 100
         (cl:the (cl:unsigned-byte 64) (cl:+ a b))))))
 ```
 
-## Other Notes
+## Other notes
 
 - `unsafe` is intended for low-level standard library primitives and verified hot loops where boundary checks on `lisp` forms have already been established by surrounding invariants.
 - Inspect the effect of `unsafe` on generated declarations with [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/).

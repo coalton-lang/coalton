@@ -51,7 +51,7 @@ weight: 70
     (map .x pts)))
 ```
 
-## Other Notes
+## Other notes
 
 - In release mode, the compiler can eliminate a locally constructed struct used only for `.field` access or [`match`](/manual/operators/match/) destructuring, including across local `if`, `cond`, and `match` branches. Field initializers still evaluate once, in left-to-right order, while the fields are kept in unboxed scalar bindings. See [Performance and Optimization](/manual/topics/performance-and-optimization/).
 - Struct names are conventionally written in `CamelCase`.

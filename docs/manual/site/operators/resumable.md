@@ -51,7 +51,7 @@ weight: 270
       ((BadDigit _) (resume-to (SubstituteDigit 0))))))
 ```
 
-## Other Notes
+## Other notes
 
 - `resumable` compiles to Common Lisp `cl:restart-bind`: each distinct resumption type establishes a restart that tests branch field patterns before unwinding, chains to any outer restart of the same name on mismatch, and unwinds to execute the matching branch body upon selection.
 - See [`define-resumption`](/manual/operators/define-resumption/), [`resume-to`](/manual/operators/resume-to/), and [`handle`](/manual/operators/handle/).

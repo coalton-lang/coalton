@@ -32,7 +32,7 @@ weight: 270
 ; => ("4" "9" "16" "25")
 ```
 
-## Other Notes
+## Other notes
 
 - `.>` is the point-free counterpart of [`pipe`](/manual/operators/pipe/), and composes functions in the opposite order of [`.<`](/manual/operators/compose-right/) and the standard library function `compose`.
 - When you need a first-class binary composition function value `(B -> C) * (A -> B) -> (A -> C)`, use `compose` from the standard library.

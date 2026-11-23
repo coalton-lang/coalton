@@ -1,4 +1,4 @@
-# The Coalton `(package ...)` Form
+# The Coalton `(package ...)` form
 
 In Coalton, the `package` form is used to define a package by
 specifying which symbols to import, and which symbols to
@@ -9,7 +9,7 @@ follow `(package <name>)` will be contained within that package. It
 effectively combines the functions of `defpackage` and `in-package` in
 Common Lisp.
 
-## Defining a Package
+## Defining a package
 
 A package in Coalton is defined using the `package` form. The syntax
 is:
@@ -40,7 +40,7 @@ An example:
   (export sum-even-numbers))
 ```
 
-## Importing Dependencies
+## Importing dependencies
 
 You can import dependencies for your package using the `import` and
 `import-from` forms.
@@ -66,7 +66,7 @@ package should be made available within your package:
   (export sum-even-numbers))
 ```
 
-## Exporting Definitions
+## Exporting definitions
 
 You can export definitions from your package using the `export`
 form. This allows other packages to use these definitions.
@@ -89,7 +89,7 @@ declarations currently signal `coalton:deprecation-warning` and can be
 promoted to errors with Coalton's `:deprecation-warnings-as-errors`
 configuration option.
 
-## Lisp Interoperability
+## Lisp interoperability
 
 Packages defined by `package` are fundamentally structurally compatible
 with Lisp packages, as the import, import-from, and export forms

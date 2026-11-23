@@ -44,7 +44,7 @@ weight: 20
 ; => (3 2)
 ```
 
-## Other Notes
+## Other notes
 
 - `coalton` cannot directly reference surrounding Common Lisp lexical variables. To pass Common Lisp values into Coalton, define a Coalton function with [`coalton-toplevel`](/manual/operators/coalton-toplevel/) and call it from Common Lisp, or read Common Lisp state inside Coalton with [`lisp`](/manual/operators/lisp/).
 - When read with the `coalton:coalton` readtable (or in a `.ct` file), `coalton` preserves exact source character spans for compiler diagnostics.

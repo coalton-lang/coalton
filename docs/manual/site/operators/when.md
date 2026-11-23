@@ -40,7 +40,7 @@ weight: 210
     None))
 ```
 
-## Other Notes
+## Other notes
 
 - Because `when` returns `Void` (zero values) rather than `Unit`, a function declared `(Foo -> Unit)` that ends with a `when` form should follow `when` with `Unit` (or be declared `(Foo -> Void)`).
 - Use [`unless`](/manual/operators/unless/) for the negated test `(when (not test) ...)`.

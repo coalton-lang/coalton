@@ -60,7 +60,7 @@ here](https://github.com/coalton-lang/coalton/commit/96252069c8755f083037d2ac652
 - ccl, ecl, and clasp don't seem to be able to support it, so in these
 `None` is returned.
 
-### Un/Locking packages
+### Un/locking packages
 
 The code in Coalton makes heavy use of un/locking packages under sbcl,
 even in the Lisp code that it produces when compiling Coalton source

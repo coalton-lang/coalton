@@ -36,7 +36,7 @@ weight: 305
 ; => COMMON-LISP:NIL
 ```
 
-## Other Notes
+## Other notes
 
 - In [`forall`](/manual/operators/forall/) binder annotations, kinds are written using `Type`, `Values`, and `->` (for example, `(:f (Type -> Type))`), even though `kind-of` prints `Type` as `*`.
 - To print the kinds of all types in a package, call `(coalton:print-type-db OptionalPackage)` at the Common Lisp REPL.

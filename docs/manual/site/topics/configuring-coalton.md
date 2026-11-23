@@ -7,7 +7,7 @@ weight: 50
 
 Coalton allows a bit of configuration. **For ordinary development, it is not necessary!** There are a few ways Coalton can be configured, but in this document, we will limit our discussion to configuration through the `:coalton-config` keyword.
 
-## Example Configuration Through `:coalton-config`
+## Example configuration through `:coalton-config`
 
 The `:coalton-config` keyword's symbol-plist is inspected just before the Coalton system is compiled. Therefore, the easiest is to add configure Coalton is to add configuration options to your Lisp system's init file (such as SBCL's `.sbclrc`). Here is an example configuration that one might use for day-to-day development:
 
@@ -176,6 +176,6 @@ Allowed options:
 - `t`: Signal Coalton deprecations as errors.
 - `nil`: Signal Coalton deprecations as warnings (default).
 
-## Further Reading
+## Further reading
 
 More details about configuration can be found in the Coalton source code for [settings](https://github.com/coalton-lang/coalton/blob/main/src/settings.lisp).

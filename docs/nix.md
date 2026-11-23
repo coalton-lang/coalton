@@ -1,4 +1,4 @@
-# Using Coalton in a Nix Project
+# Using Coalton in a Nix project
 
 This article explains how to install the latest version of Coalton using a Nix flake and how to use it from SBCL.
 
@@ -12,7 +12,7 @@ For a detailed explanation of Nix, refer to its official website.
 For now, it’s enough to understand that Nix is a convenient package management tool.
 This article focuses on how to install Coalton using Nix.
 
-## Issues with the Quicklisp Version of Coalton
+## Issues with the Quicklisp version of Coalton
 
 Nix provides a huge number of registered packages, including Common Lisp implementations such as SBCL and CCL.
 Quicklisp itself is mirrored, so it’s possible to use libraries from Quicklisp directly through SBCL without having Quicklisp installed.
@@ -26,7 +26,7 @@ Given the sheer number of packages in Nixpkgs and the limited resources for reso
 As a result, the version of Coalton available in Nixpkgs is almost always outdated.
 Since Coalton is currently under active development and it’s recommended to install it directly from the GitHub repository, using the Nixpkgs version is not ideal.
 
-## Solving It with Flakes
+## Solving it with flakes
 
 We can solve this problem by adding a `flake.nix` file to our project repository.
 The Coalton team has made the [github:coalton-lang/coalton](https://github.com/coalton-lang/coalton) repository available as a Nix third-party source.
@@ -34,7 +34,7 @@ This means users can simply add `"github:coalton-lang/coalton"` to their environ
 
 The following section explains how to configure this using a Nix flake.
 
-## Adding the Repository
+## Adding the repository
 
 We’ll define `coalton` as an input to our purely functional package definition.
 However, we’ll also add a directive `inputs.nixpkgs.follows = "nixpkgs"` to make Coalton follow our base repository (Nixpkgs).
@@ -50,7 +50,7 @@ inputs = {
 };
 ```
 
-## Adding an Overlay
+## Adding an overlay
 
 The concept of overlays can be a bit tricky, because it requires understanding the complex relationship between Common Lisp and Nix.
 As you may know, Common Lisp uses ASDF as the de facto standard for managing library dependencies.
@@ -88,7 +88,7 @@ let
   ]);
 ```
 
-## A Simple Example
+## A simple example
 
 Here’s a simple example showing how to use Coalton in SBCL:
 

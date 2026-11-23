@@ -61,7 +61,7 @@ weight: 30
         :while (< i n)))))
 ```
 
-## Other Notes
+## Other notes
 
 - Exported top-level `define` forms without a corresponding `declare` emit a `coalton:deprecation-warning` (planned to become a compile-time error in a future release).
 - Top-level optimization attributes [`inline`](/manual/operators/inline/), [`monomorphize`](/manual/operators/monomorphize/), and [`abi`](/manual/operators/abi/) may be placed immediately before either the `declare` form or the `define` form.

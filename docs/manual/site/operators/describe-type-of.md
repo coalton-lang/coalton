@@ -39,7 +39,7 @@ weight: 310
 ;; prints: macro
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike [`type-of`](/manual/operators/type-of/), which is a Coalton expression form that can inspect arbitrary compound expressions, `describe-type-of` is a Common Lisp function that looks up a single symbol in the global environment and always enables `:types-and-aliases` display.
 - To inspect a type alias symbol itself, use [`describe-type-alias`](/manual/operators/describe-type-alias/). To list all values in a package, use `(coalton:print-value-db OptionalPackage)`.

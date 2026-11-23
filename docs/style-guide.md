@@ -1,4 +1,4 @@
-# The Coalton Standard Library Style Guide
+# The Coalton standard library style guide
 
 Many parts of the Coalton standard library currently violate these guidelines. Please,
 submit PRs bringing them into line!

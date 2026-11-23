@@ -34,7 +34,7 @@ weight: 77
       Unit)))
 ```
 
-## Other Notes
+## Other notes
 
 - Because packages using `#:coalton` do not `:use #:cl`, Common Lisp lambda-list keywords such as `cl:&body`, `cl:&rest`, `cl:&optional`, and `cl:&key` must be `cl:`-qualified in the macro lambda list.
 - To define an ordinary Common Lisp macro (such as a macro called outside `coalton-toplevel` that expands into `(coalton-toplevel ...)`), write `cl:defmacro` explicitly.

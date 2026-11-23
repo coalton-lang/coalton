@@ -72,7 +72,7 @@ weight: 10
         (even-count? (- n 1)))))
 ```
 
-## Other Notes
+## Other notes
 
 - Each compiled `coalton-toplevel` form emits a load-time check verifying that the FASL was compiled in the same compiler mode (`development` vs. `release`) as the running image.
 - Inside library source code when `:coalton-lisp-toplevel` is present in `cl:*features*`, `coalton-toplevel` also accepts `(lisp-toplevel () ⟨lisp-form⟩...)` to splice raw Common Lisp top-level forms into the generated output.

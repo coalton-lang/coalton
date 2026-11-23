@@ -1,6 +1,11 @@
-# A guide to Documentation in Coalton
+# A guide to documentation in Coalton
 
 There are a number of ways to embed documentation in Coalton code, some with more utility than others. This document will explain each documentation feature.
+
+## Heading capitalization
+
+Use sentence case for document titles and headings: capitalize the first word
+and proper nouns, not every word. Preserve the spelling of acronyms and code identifiers.
 
 ## Documentation strings in primary Coalton forms
 
@@ -120,7 +125,7 @@ Coalton's native `package` form also takes a documentation string after the pack
           Dessert))
 ```
 
-## Semicolon Comments
+## Semicolon comments
 
 Finally, we have comments, which carry the least amount of information through the program.
 
@@ -156,7 +161,7 @@ The Coalton development team follows standard lisp comment style conventions, as
 
 ## Appendix
 
-### Accessing Symbol Documentation
+### Accessing symbol documentation
 
 Assuming you are editing Coalton using Emacs with Slime, you can access documentation for a variety of defined symbols using `slime-documentation`, `slime-inspect-presentation-at-point`, or `slime-inspect`. Each of these have 
 

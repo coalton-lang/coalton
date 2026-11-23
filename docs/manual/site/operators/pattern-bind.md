@@ -51,7 +51,7 @@ weight: 50
        other))))
 ```
 
-## Other Notes
+## Other notes
 
 - `=` is purely a syntactic operator in Coalton; for value equality testing, use `==` from the `Eq` type class.
 - See [`match`](/manual/operators/match/), [`let`](/manual/operators/let/), and [`[]`](/manual/operators/collection-builder/).

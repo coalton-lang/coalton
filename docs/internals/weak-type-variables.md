@@ -1,4 +1,4 @@
-# Weak Type Variables in Coalton
+# Weak type variables in Coalton
 
 Coalton implements variance inference and weak type variables, but it does not
 allow unresolved weak variables to appear in inferred top-level types. Coalton
@@ -8,7 +8,7 @@ weak variables improves interactivity and preserves more inferred results.
 In this document, we describe Coalton's behavior and what we could do to
 recover OCaml-style behavior if we choose to.
 
-## Current Coalton Behavior
+## Current Coalton behavior
 
 Coalton implements the value restriction plus relaxed value restriction in the
 typechecker.
@@ -44,7 +44,7 @@ printing a weak variable type, it reports a user-facing error via
 weak-variable candidates internally, but does not
 surface OCaml-style toplevel weak types as inferred results.
 
-## Implementing OCaml's Weak Type Variables
+## Implementing OCaml's weak type variables
 
 OCaml allows toplevel expressions to infer types with weak variables and prints
 them (for example, names like `_weak1`).

@@ -67,7 +67,7 @@ weight: 260
 ; => #.(TUPLE 10 #.NONE)
 ```
 
-## Other Notes
+## Other notes
 
 - To lift an ordinary value into the monad at the end of a `do` block, use `pure` (from `Applicative`), **not** [`return`](/manual/operators/return/) (which performs an early exit from the enclosing function).
 - Because each `(⟨pattern⟩ <- ...)` and non-final `⟨monadic-expr⟩` expands to a callback lambda passed to `>>=`, calls after a monadic bind are inside the callback body rather than in direct tail position of an outer [`rec`](/manual/operators/rec/). For imperative early-return unwrapping on `Result` or `Optional` without callback nesting, see [`need`](/manual/operators/need/).

@@ -50,7 +50,7 @@ weight: 268
     (coalton/list:head rest)))
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike [`do`](/manual/operators/do/) notation (which chains callbacks through `>>=`), `need` compiles to flat conditional branching and an immediate [`return`](/manual/operators/return/), so it works naturally inside [`for`](/manual/operators/for/) loops and preserves tail-call optimization in [`rec`](/manual/operators/rec/) loops.
 - User-defined container types can support `need` by implementing `Fallible` from `coalton/classes`.

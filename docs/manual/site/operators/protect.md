@@ -35,7 +35,7 @@ weight: 269
       (coalton/cell:decrement! active-count))))
 ```
 
-## Other Notes
+## Other notes
 
 - `protect` compiles directly to Common Lisp `cl:unwind-protect`.
 - When a [`handle`](/manual/operators/handle/) branch runs at a [`throw`](/manual/operators/throw/) site inside `⟨protected-expr⟩`, the cleanup forms of `protect` have not yet run while the `handle` branch is executing; they run as soon as the `handle` branch either returns normally (unwinding to `handle`) or invokes [`resume-to`](/manual/operators/resume-to/) to a [`resumable`](/manual/operators/resumable/) outside the `protect`.

@@ -1,5 +1,5 @@
 ---
-title: "Introduction and Getting Started"
+title: "Introduction and getting started"
 hideMeta: true
 weight: 10
 ---
@@ -44,7 +44,7 @@ sbcl --load quicklisp.lisp
 Emacs is available pretty much everywhere, for every operating system, in every
 package manager.
 
-## Download and Load Coalton
+## Download and load Coalton
 
 Coalton should be downloaded into a place Lisp can see it. Quicklisp provides
 a handy place in `~/quicklisp/local-projects/`:
@@ -101,7 +101,7 @@ the `sbcl` path with the correct one on the line with `; ***`.
 
 Save and restart Emacs.
 
-## A First Coalton Program
+## A first Coalton program
 
 Let's make a simple Coalton program.
 

@@ -14,7 +14,7 @@ Click-and-drag a rectangle to zoom. (Note: The UI doesn't display the rectangle 
 
 Press the `Esc` key to quit.
 
-## Instructions for macOS on Apple Silicon
+## Instructions for macOS on Apple silicon
 
 To run this on macOS, you will need to follow a few extra steps. Here's what works as of August 2025.
 

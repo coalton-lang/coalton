@@ -53,7 +53,7 @@ weight: 100
       ((the BadEgg e) (Err e)))))
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike Common Lisp's `cl:the`, which is an unchecked trust declaration in many Lisp compilers, Coalton's `the` is statically verified by unification at compile time.
 - See [`declare`](/manual/operators/declare/), [`forall`](/manual/operators/forall/), [`as`](/manual/operators/as/), and [`catch`](/manual/operators/catch/).

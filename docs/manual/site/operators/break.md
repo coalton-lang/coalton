@@ -58,7 +58,7 @@ weight: 290
 ; => #.(TUPLE 2 3)
 ```
 
-## Other Notes
+## Other notes
 
 - Unlike [`return`](/manual/operators/return/), which exits the entire enclosing function with a supplied value, `break` exits only the target `for` or `for*` loop and always uses that loop's `:returns` clause to produce the loop result.
 - See [`continue`](/manual/operators/continue/), [`for`](/manual/operators/for/), and [`for*`](/manual/operators/for-star/).

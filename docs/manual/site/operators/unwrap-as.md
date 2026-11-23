@@ -38,7 +38,7 @@ weight: 130
 ; => (10 20 30)
 ```
 
-## Other Notes
+## Other notes
 
 - Use `unwrap-as` only when surrounding invariants guarantee that the conversion will succeed. When failure is expected and should be handled without panicking, use [`try-as`](/manual/operators/try-as/).
 - For total conversions that never fail (`Into`), use [`as`](/manual/operators/as/).

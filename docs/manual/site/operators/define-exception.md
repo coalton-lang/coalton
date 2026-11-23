@@ -59,7 +59,7 @@ weight: 52
       ((the DivisionByZero _) None))))
 ```
 
-## Other Notes
+## Other notes
 
 - Coalton-defined exception types compile to Common Lisp condition types inheriting from `cl:error`, with a distinct condition subclass for each constructor.
 - The `coalton/exception` standard library package predefines native exception types for standard Common Lisp conditions (including `LispError` for `cl:error` and `Panic` for Coalton panics).

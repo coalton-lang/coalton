@@ -68,7 +68,7 @@ weight: 190
     (cl:terpri)))
 ```
 
-## Other Notes
+## Other notes
 
 - By default, when host type annotations are emitted, Coalton wraps the `lisp` form in `(cl:the (cl:values ...) ...)` and enables runtime return-type checking (`(sb-c::type-check 1)` on SBCL) so type mismatches at the Lisp boundary are caught immediately. Wrapping the expression in [`unsafe`](/manual/operators/unsafe/) disables this runtime check.
 - To call a first-class Coalton function `f` passed into a `lisp` block, use `(coalton:call-coalton-function f arg...)` or `(cl:funcall f arg...)`.

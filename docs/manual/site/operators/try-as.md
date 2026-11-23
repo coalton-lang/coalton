@@ -40,7 +40,7 @@ weight: 120
 ; => (#.NONE 0 127 255 #.NONE)
 ```
 
-## Other Notes
+## Other notes
 
 - Combine `(try-as ⟨type⟩ ⟨expr⟩)` with [`need`](/manual/operators/need/) or [`do`](/manual/operators/do/) to propagate `None` early from functions returning `Optional`.
 - When conversion failure should panic immediately rather than return `Optional`, use [`unwrap-as`](/manual/operators/unwrap-as/). For total conversions via `Into`, use [`as`](/manual/operators/as/).

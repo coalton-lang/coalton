@@ -57,7 +57,7 @@ weight: 255
     (define b (+ a 5))))
 ```
 
-## Other Notes
+## Other notes
 
 - Implicit `progn` bodies are used throughout Coalton in [`define`](/manual/operators/define/), [`fn`](/manual/operators/fn/), [`let`](/manual/operators/let/), [`let*`](/manual/operators/let-star/), [`when`](/manual/operators/when/), [`unless`](/manual/operators/unless/), [`cond`](/manual/operators/cond/) clauses, [`match`](/manual/operators/match/) / [`catch`](/manual/operators/catch/) / [`handle`](/manual/operators/handle/) / [`resumable`](/manual/operators/resumable/) branches, [`protect`](/manual/operators/protect/) cleanup forms, and [`unsafe`](/manual/operators/unsafe/). An explicit `progn` is needed when grouping multiple expressions into a single-expression slot (such as a branch of [`if`](/manual/operators/if/)) or when using shorthand `(let x = ...)` bindings inside [`coalton`](/manual/operators/coalton/).
 

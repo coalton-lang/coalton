@@ -41,7 +41,7 @@ weight: 200
         (values b a))))
 ```
 
-## Other Notes
+## Other notes
 
 - By Coalton style convention, `if` is used for pure two-way expressions. When branches require multiple statements, local `let` bindings, or side effects, or when chaining multiple tests, prefer [`cond`](/manual/operators/cond/). For one-armed side-effecting conditionals, use [`when`](/manual/operators/when/) or [`unless`](/manual/operators/unless/).
 - In release mode, locally bound data types, structs, and `Cell`s constructed across `if` branches can be scalar-replaced or unboxed without heap allocation. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

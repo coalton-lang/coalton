@@ -34,7 +34,7 @@ weight: 345
       :while (< i n))))
 ```
 
-## Other Notes
+## Other notes
 
 - Use [`pprint-coalton-codegen-types`](/manual/operators/pprint-coalton-codegen-types/) when you also want to inspect the emitted Common Lisp `(declare (type ...))` and `(the (values ...) ...)` annotations.
 - See [Debugging](/manual/topics/debugging/) and [Performance and Optimization](/manual/topics/performance-and-optimization/).

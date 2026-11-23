@@ -30,7 +30,7 @@ weight: 350
     (+ (* x x) (* y y))))
 ```
 
-## Other Notes
+## Other notes
 
 - `pprint-coalton-codegen-types` is the primary tool for verifying that unboxed numeric types, `dynamic-extent` declarations, and [`unsafe`](/manual/operators/unsafe/) type-check elisions are emitted as expected for the host Lisp compiler.
 - See [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/) and [`coalton-codegen-types`](/manual/operators/coalton-codegen-types/).

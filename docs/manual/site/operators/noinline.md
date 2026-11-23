@@ -36,7 +36,7 @@ weight: 80
         (noinline (fallback-hash key)))))
 ```
 
-## Other Notes
+## Other notes
 
 - `noinline` is useful for keeping cold error/fallback paths out of hot inner loops, inspecting call boundaries in [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/) or `cl:disassemble`, and profiling individual calls.
 - See [`inline`](/manual/operators/inline/) and [Performance and Optimization](/manual/topics/performance-and-optimization/).

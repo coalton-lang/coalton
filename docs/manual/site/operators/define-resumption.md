@@ -58,7 +58,7 @@ weight: 54
       ((KeyNotFound _) (resume-to (UseFallback 0))))))
 ```
 
-## Other Notes
+## Other notes
 
 - Under the hood, `define-resumption` compiles to a single-constructor data type together with a `coalton-impl/runtime:invoke-resumption` method that invokes the corresponding Common Lisp restart established by [`resumable`](/manual/operators/resumable/).
 - See [`resumable`](/manual/operators/resumable/), [`resume-to`](/manual/operators/resume-to/), and [`handle`](/manual/operators/handle/).

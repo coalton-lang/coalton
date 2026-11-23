@@ -1,5 +1,5 @@
 ---
-title: "Performance and Optimization"
+title: "Performance and optimization"
 description: "Compiler optimizations, unboxing, stack allocation, and writing allocation-free Coalton code."
 hideMeta: true
 weight: 62
@@ -13,7 +13,7 @@ Note also that while Coalton's own AST rewrites (such as inlining, specializatio
 
 {{<toc>}}
 
-## Development vs. Release Mode
+## Development vs. release mode
 
 By default, Coalton compiles in **development mode**, which prioritizes interactive redefinition at the REPL (for example, compiling algebraic data types as CLOS classes so types and methods can be redefined).
 
@@ -26,7 +26,7 @@ Setting the environment variable `COALTON_ENV=release` before compiling Coalton 
 - Enables **multi-entrypoint calling conventions** (`:unpacked` and `:unboxed`) so direct calls across non-inlined functions pass and return flattened struct/tuple fields, sum tags and payloads, and 64-bit numbers/floats without heap allocation.
 - Enables stack allocation (`dynamic-extent`) of freshly constructed `match` scrutinees whose pattern bindings do not escape.
 
-## Local `Cell` Unboxing
+## Local `Cell` unboxing
 
 Imperative accumulation inside [`for`](/manual/operators/for/) loops and local algorithms often uses `coalton/cell:Cell`. At runtime, an escaping `Cell :a` is a heap-allocated struct whose slot has Lisp type `t` (which requires boxing machine words such as `U64` or `F64`).
 
@@ -58,9 +58,9 @@ In release mode, neither `count` nor `total` allocates a `cell-internal` struct.
 
 A `Cell` is considered non-escaping when it is only accessed through the operations above—including inside `for`/`for*` loops, `match`/`if`/`cond` branches, immediate anonymous lambda applications `((fn (...) ...) ...)`, and non-escaping local helper functions (`let`/`let*`). Non-returning control transfers in initializer branches (`return`, `break`, `continue`, `throw`, or `error`) are also permitted. If a `Cell` is returned, stored in an escaping data structure, passed to an uninlined function, or captured by an escaping closure, it retains its heap-allocated `cell-internal` representation.
 
-## Scalar Replacement of Structs, Tuples, and Algebraic Data Types
+## Scalar replacement of structs, tuples, and algebraic data types
 
-### Structs and Single-Constructor Data Types
+### Structs and single-constructor data types
 
 In release mode, locally constructed immutable structs ([`define-struct`](/manual/operators/define-struct/)) and single-constructor algebraic data types ([`define-type`](/manual/operators/define-type/), such as `Tuple`) that are consumed only through generated field readers (`.field`), irrefutable [`match`](/manual/operators/match/) destructuring (including nested patterns), or inlined helpers (such as `fst`, `snd`, `swap`, and `bimap`) are replaced by typed scalar local bindings for their fields:
 
@@ -77,7 +77,7 @@ In release mode, locally constructed immutable structs ([`define-struct`](/manua
 
 All field initializers still evaluate once, in left-to-right order, before the body runs, without allocating the enclosing `Pair` or `Tuple` instance. This also applies when a single-constructor value is produced across local `if`, `cond`, or `match` branches—the branches return the unboxed field values via `cl:values` into a typed `cl:multiple-value-bind`.
 
-### Branching Sum Types (`Optional`, `Result`, and Custom ADTs)
+### Branching sum types (`Optional`, `Result`, and custom ADTs)
 
 In release mode, when a local binding is initialized across [`if`](/manual/operators/if/), [`cond`](/manual/operators/cond/), or [`match`](/manual/operators/match/) branches by known constructors of a sum type (such as `Optional`, `Result`, `List`, or a user-defined `define-type`) and is only consumed by local `match` expressions, scalar replacement unboxes both the variant tag and the payload fields across multiple passes:
 
@@ -105,7 +105,7 @@ In release mode, when a local binding is initialized across [`if`](/manual/opera
 
 In release mode, `opt`, `tup`, and `res` are all scalar-replaced into unboxed `Boolean` tags and `(unsigned-byte 64)` locals with zero heap allocation.
 
-## Calling Conventions and Multi-Entrypoint Functions
+## Calling conventions and multi-entrypoint functions
 
 Scalar replacement eliminates allocations *within* a single function body, but recursive functions, large functions, and cross-file calls cannot always be inlined. In release mode (or when explicitly annotated with [`(abi ...)`](/manual/operators/abi/)), Coalton compiles eligible top-level functions and instance methods into multiple entrypoints:
 
@@ -156,9 +156,9 @@ In this example:
 - `safe-div%UNBOXED` returns its `Boolean` tag and `U64` quotient in registers, and `div-or-default%UNBOXED` branches directly on the returned tag without allocating an `Optional` wrapper or boxing 64-bit `U64` integers.
 - If a struct or tuple parameter is also used as a whole value inside a function (for example, stored into a data structure, passed to a higher-order function, or captured in the variable list of a [`lisp`](/manual/operators/lisp/) form), it is passed as a single boxed value rather than being unpacked and re-allocated inside the callee.
 
-## Stack Allocation (`dynamic-extent`)
+## Stack allocation (`dynamic-extent`)
 
-### Non-Escaping Local Functions
+### Non-escaping local functions
 
 When a local function ([`fn`](/manual/operators/fn/)) is bound in [`let`](/manual/operators/let/) or [`let*`](/manual/operators/let-star/) and does not escape its lexical scope, Coalton emits `(declare (dynamic-extent #'fn-name ...))` on the generated `flet` or `labels` binding:
 
@@ -178,13 +178,13 @@ When a local function ([`fn`](/manual/operators/fn/)) is bound in [`let`](/manua
 
 Because `step!` is only called directly and never returned or stored, `step!` is declared `dynamic-extent` and `acc` is unboxed into a typed `U64` lexical variable, so the entire function runs without heap allocation. Local functions passed as the callback to `cell:update!` or `cell:update-swap!`, or called only by other non-escaping local functions, also receive `dynamic-extent`.
 
-### `match` Scrutinees and [`rec`](/manual/operators/rec/) Loops
+### `match` scrutinees and [`rec`](/manual/operators/rec/) loops
 
 - **Immediate `match` on constructors**: In release mode, when a `match` expression scrutinizes a freshly constructed algebraic data value and none of the pattern-bound variables escape the branch bodies, the scrutinee is bound with `(declare (dynamic-extent ...))`.
 - **Tail-recursive `rec` loops**: [`rec`](/manual/operators/rec/) compiles to a local `labels` loop and automatically eliminates typeclass dictionary parameters that resolve to context-free global instances once the loop's types are concrete.
 - **Multiple return values**: Returning multiple values with [`values`](/manual/operators/values/) and destructuring them with `(let (values a b) = ...)` uses Common Lisp multiple values (`cl:values` / `cl:multiple-value-bind`) rather than allocating a `Tuple`.
 
-## Directives for Controlling Optimization
+## Directives for controlling optimization
 
 Coalton provides several directives for guiding the optimizer:
 
@@ -196,6 +196,6 @@ Coalton provides several directives for guiding the optimizer:
 - [`likely`](/manual/operators/likely/) and [`unlikely`](/manual/operators/unlikely/): Provide branch probability hints on conditionals.
 - [`unsafe`](/manual/operators/unsafe/): Locally compile a body with `(optimize (safety 0) (sb-c::type-check 0))`.
 
-## Inspecting Generated Code
+## Inspecting generated code
 
 To verify whether a function unboxes its locals or stack-allocates closures, use [`pprint-coalton-codegen`](/manual/operators/pprint-coalton-codegen/) to inspect the generated Common Lisp code, or `cl:disassemble` at the Lisp REPL (see [Debugging Operators](/manual/topics/debugging/)).

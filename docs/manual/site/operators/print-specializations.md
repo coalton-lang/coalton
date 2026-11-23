@@ -42,7 +42,7 @@ weight: 325
 ;;     ADD-ONE-UFIX :: #<FUNCTION-TY UFIX → UFIX>
 ```
 
-## Other Notes
+## Other notes
 
 - Coalton exports four additional global database inspection functions with the same `(&optional ⟨package-designator⟩)` signature:
   - `(coalton:print-value-db)`: prints all global values, functions, constructors, and methods with their type schemes.

@@ -132,7 +132,7 @@ annotated `Type`, cannot stand for zero or multiple values. For example:
 (call-one (fn () (values 42 "answer"))) ; type error
 ```
 
-## Higher-Rank Polymorphism
+## Higher-rank polymorphism
 
 A `forall` type can appear inside function inputs, function outputs, and data
 constructor or struct fields. Higher-rank functions must have an explicit type
@@ -167,7 +167,7 @@ Coalton's higher-rank polymorphism is **predicative**: type variables and type
 constructor arguments only ever instantiate to *monotypes* (types that do not
 contain `forall`), never to *polytypes* (`forall` types).
 
-### Implications of Predicative Polymorphism
+### Implications of predicative polymorphism
 
 Being predicative determines where `forall` types can appear and how they
 interact with generic functions:
@@ -236,7 +236,7 @@ What is not supported:
       (Tuple x xs))))
 ```
 
-## Other Notes
+## Other notes
 
 - Inference can still discover result polymorphism for functions without a type
   declaration. Printed schemes show result binders as `(:r Values)` and show
