@@ -631,13 +631,14 @@
 
 ;; The separate computable-reals backend promises |2^k*x - a| <= 1. Do
 ;; not compare with host doubles, or with BigFloat's own nearest result.
-(cl:defmacro check-real-directed (form reference)
-  `(check-directed-cells
-    (fn () ,form)
-    (lisp (-> (Tuple Fraction Fraction)) ()
-      (cl:let ((a (computable-reals:approx-r ,reference 200))
-               (u (cl:ash 1 200)))
-        (Tuple (cl:/ (cl:1- a) u) (cl:/ (cl:1+ a) u))))))
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro check-real-directed (form reference)
+    `(check-directed-cells
+      (fn () ,form)
+      (lisp (-> (Tuple Fraction Fraction)) ()
+        (cl:let ((a (computable-reals:approx-r ,reference 200))
+                 (u (cl:ash 1 200)))
+          (Tuple (cl:/ (cl:1- a) u) (cl:/ (cl:1+ a) u)))))))
 
 (define-test big-float-directed-elementary ()
   (let x = (stored-dyadic 3/2))
