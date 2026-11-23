@@ -2437,12 +2437,18 @@ all constructors in the pattern."
                 nil))))
     (walk pattern)))
 
-(defun next-evidence-pattern (items subs env)
+(defun next-evidence-pattern (items subs env &optional memo)
   ;; A constructor whose input head is already known can reveal the type
   ;; of another column. Do not demand that other column's head first.
+  ;; Items are (PATTERN . TYPE); MEMO caches the GADT walk per pattern.
   (let ((first-witness nil))
     (dolist (item items (or first-witness (first items)))
-      (when (pattern-contains-gadt-p (car item) env)
+      (when (if memo
+                (multiple-value-bind (known present) (gethash (car item) memo)
+                  (if present
+                      known
+                      (setf (gethash (car item) memo) (pattern-contains-gadt-p (car item) env))))
+                (pattern-contains-gadt-p (car item) env))
         (unless first-witness (setf first-witness item))
         (let ((head (first (tc:flatten-type (tc:apply-substitution subs (cdr item))))))
           (when (tc:tycon-p head)
@@ -2470,7 +2476,8 @@ all constructors in the pattern."
                  (parser:pattern-binding
                   (visit-pattern (parser:pattern-binding-pattern pat) input))
                  (parser:pattern-literal
-                  (require-shape (pattern-literal-type pat) input pat))
+                  (require-shape (pattern-literal-type pat) input pat)
+                  nil)
                  (parser:pattern-constructor
                   (let* ((name (parser:pattern-constructor-name pat))
                          (ctor (tc:lookup-constructor global name :no-error t)))
@@ -2500,35 +2507,189 @@ all constructors in the pattern."
                                                     (type-object-string (tc:apply-substitution local input))
                                                     (type-object-string result)))))))
                           (t (require-shape result input pat)))
-                        (setf pending (append (mapcar #'cons (parser:pattern-constructor-patterns pat)
-                                                      (tc:function-type-arguments ty))
-                                              pending)))))))))
-      ;; Establish witness equations before asking what its sibling fields need.
-      (loop :while pending
-            :for item := (next-evidence-pattern pending local env)
-            :do (setf pending (delete item pending :count 1))
-                (visit-pattern (car item) (cdr item))))
+                        (mapcar #'cons (parser:pattern-constructor-patterns pat)
+                                (tc:function-type-arguments ty)))))))))
+      ;; Establish witness equations before asking what its sibling fields
+      ;; need. Fields take their constructor's place in the queue, as in
+      ;; INFER-PATTERN-ROW.
+      (loop :with memo := (make-hash-table :test #'eq)
+            :while pending
+            :for item := (next-evidence-pattern pending local env memo)
+            :for children := (visit-pattern (car item) (cdr item))
+            :do (let ((tail (member item pending :test #'eq)))
+                  (setf pending (append (ldiff pending tail) children (rest tail))))))
     subs))
 
+(defun open-constructor-pattern (pat expected-type subs env)
+  "Commit PAT's constructor head against EXPECTED-TYPE and seal its local
+variables, without looking at its fields.
+
+Returns (VALUES CTOR-TY PAT-TY CTOR-PREDS EXISTENTIALS SUBS OPENINGS).
+SUBS seals the field types in CTOR-TY. OPENINGS associates this occurrence's
+sealed variables with the constructor's quantified binder positions."
+  (let ((ctor (tc:lookup-constructor (tc-env-env env) (parser:pattern-constructor-name pat) :no-error t)))
+    (unless ctor
+      (tc-error "Unknown constructor"
+                (tc-note pat "constructor is not known")))
+    (let ((arity (tc:constructor-entry-arity ctor))
+          (num-args (length (parser:pattern-constructor-patterns pat))))
+      (unless (= arity num-args)
+        (tc-error "Argument mismatch"
+                  (tc-note pat "Constructor ~A takes ~D arguments but is given ~D"
+                           (parser:pattern-constructor-name pat)
+                           arity
+                           num-args))))
+    (multiple-value-bind (ctor-ty ctor-preds ctor-binders)
+        (tc-env-lookup-value-symbol env (parser:pattern-constructor-name pat) (source:location pat))
+      (let* ((pat-ty (tc:function-return-type ctor-ty))
+             (gadt-p (tc:constructor-entry-gadt-p ctor))
+             (outer-vars (when gadt-p (tc:type-variables (tc:apply-substitution subs expected-type)))))
+        (handler-case
+            (progn
+              (setf subs (tc:unify-pattern-result subs pat-ty expected-type
+                                                  (and gadt-p *refinable-pattern-skolems*)))
+              (setf ctor-ty (tc:apply-substitution subs ctor-ty))
+              (setf pat-ty (tc:function-return-type ctor-ty)))
+          (tc:coalton-internal-type-error ()
+            (with-shared-type-names ()
+              (tc-error "Type mismatch"
+                        (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                 (type-object-string (tc:apply-substitution subs expected-type))
+                                 (type-object-string (tc:apply-substitution subs pat-ty)))))))
+        (let* ((ctor-preds (tc:apply-substitution subs ctor-preds))
+               ;; A variable not named by the incoming indices is local. This
+               ;; includes a component exposed by matching an index like List :x.
+               (seal (when gadt-p
+                       (skolem-renamings
+                        (set-difference
+                         (remove-if #'tc:tyvar-rigid-p (tc:type-variables (list ctor-ty ctor-preds)))
+                         (tc:apply-substitution subs outer-vars) :test #'tc:ty=))))
+               (existentials (mapcar #'tc:substitution-to seal))
+               (subs (tc:compose-substitution-lists seal subs))
+               (openings (when existentials
+                           (loop :for var :in ctor-binders :for i :from 0
+                                 :for opened := (tc:apply-substitution subs var)
+                                 :when (member opened existentials :test #'tc:ty=)
+                                   :collect (cons i opened)))))
+          (values ctor-ty pat-ty ctor-preds existentials subs openings))))))
+
 (defun infer-pattern-row (patterns types subs env)
-  ;; Inference may consult a witness to the right; keep the elaborated
-  ;; patterns in source order for code generation and diagnostics.
-  (let* ((items (mapcar #'cons patterns types))
-         (order (copy-list items))
-         (has-witness (and (rest items) (some (lambda (pat) (pattern-contains-gadt-p pat env)) patterns)))
-         (preds nil)
-         (hidden nil))
-    (loop :while order
-          :for item := (if has-witness (next-evidence-pattern order subs env) (first order))
-          :do (if (eq item (first order)) (pop order) (setf order (delete item order :count 1)))
-              (multiple-value-bind (_ constraints typed new-subs skolems)
-                  (infer-pattern-type (car item) (cdr item) subs env)
-                (declare (ignore _))
-                (setf (cdr item) typed
-                      subs new-subs
-                      preds (nconc preds constraints)
-                      hidden (nconc hidden skolems))))
-    (values (mapcar #'cdr items) subs preds hidden)))
+  "Infer PATTERNS against TYPES as one row.
+
+Every subpattern of the row, at any depth, waits in a single queue. Opening a
+constructor commits only its own head; its fields join the queue in its place.
+So a field whose type is still abstract waits for a sibling witness anywhere
+in the row, while ordinary rows are still visited in source pre-order. Each
+field may refine only the local variables of its enclosing constructors.
+
+Returns (VALUES TYPED-PATTERNS SUBS PREDS HIDDEN TYPES), with the typed
+patterns and their types in source order."
+  (let ((records (make-hash-table :test #'eq))
+        (gadt-memo (make-hash-table :test #'eq))
+        (refinable (make-hash-table :test #'eq))
+        (pending (mapcar #'cons patterns types))
+        (hidden nil)
+        (*type-string-environment* (or *type-string-environment* (%type-string-environment env))))
+    (dolist (item pending)
+      (setf (gethash item refinable) *refinable-pattern-skolems*))
+    (loop :while pending
+          :for item := (next-evidence-pattern pending subs env gadt-memo)
+          :for pat := (car item)
+          :for type := (cdr item)
+          :for children
+            := (let ((*refinable-pattern-skolems* (gethash item refinable)))
+                 (when (and (member pat patterns :test #'eq)
+                            (typep pat '(or parser:pattern-binding parser:pattern-constructor)))
+                   (check-duplicates (parser:pattern-variables pat)
+                                     #'parser:pattern-var-name
+                                     (lambda (first second)
+                                       (tc-error "Duplicate pattern variable"
+                                                 (tc-note first "first definition here")
+                                                 (tc-note second "second definition here")))))
+                 (typecase pat
+                   (parser:pattern-binding
+                    (let ((children (list (cons (parser:pattern-binding-pattern pat) type)
+                                          (cons (parser:pattern-binding-var pat) type))))
+                      (dolist (child children children)
+                        (setf (gethash child refinable) *refinable-pattern-skolems*))))
+                   (parser:pattern-constructor
+                    ;; Opening a constructor is the only point at which its
+                    ;; head and local variables are fixed.
+                    (multiple-value-bind (ctor-ty pat-ty ctor-preds existentials new-subs openings)
+                        (open-constructor-pattern pat type subs env)
+                      (setf subs new-subs
+                            hidden (append hidden existentials)
+                            (gethash pat records) (list pat-ty ctor-preds openings))
+                      (let ((inner (if (eq *refinable-pattern-skolems* :all)
+                                       :all
+                                       (append existentials *refinable-pattern-skolems*))))
+                        (loop :for field :in (parser:pattern-constructor-patterns pat)
+                              :for field-ty :in (tc:function-type-arguments ctor-ty)
+                              :for child := (cons field field-ty)
+                              :do (setf (gethash child refinable) inner)
+                              :collect child))))
+                   (t
+                    (multiple-value-bind (leaf-ty _ typed new-subs)
+                        (infer-pattern-type pat type subs env)
+                      (declare (ignore _))
+                      (setf subs new-subs
+                            (gethash pat records) (cons leaf-ty typed))
+                      nil))))
+          ;; The fields take their constructor's place, keeping source order
+          ;; among patterns that need no evidence.
+          :do (let ((tail (member item pending :test #'eq)))
+                (setf pending (append (ldiff pending tail) children (rest tail)))))
+    (labels ((build (pat)
+               (let ((record (gethash pat records)))
+                 (etypecase pat
+                   (parser:pattern-binding
+                    (multiple-value-bind (bound-ty _ bound) (build (parser:pattern-binding-pattern pat))
+                      (declare (ignore bound-ty _))
+                      (multiple-value-bind (var-ty _ var) (build (parser:pattern-binding-var pat))
+                        (declare (ignore _))
+                        ;; As before, an alias does not report its pattern's
+                        ;; constructor predicates.
+                        (values var-ty nil
+                                (make-pattern-binding :type (tc:qualify nil var-ty)
+                                                      :location (source:location pat)
+                                                      :var var
+                                                      :pattern bound)))))
+                   (parser:pattern-constructor
+                    (destructuring-bind (pat-ty ctor-preds openings) record
+                      (let ((nodes nil)
+                            (child-preds nil))
+                        (dolist (field (parser:pattern-constructor-patterns pat))
+                          (multiple-value-bind (_ ps node) (build field)
+                            (declare (ignore _))
+                            (push node nodes)
+                            (setf child-preds (append child-preds ps))))
+                        (let ((type (tc:apply-substitution subs pat-ty)))
+                          (values type
+                                  (tc:apply-substitution subs (append ctor-preds child-preds))
+                                  (make-pattern-constructor :type (tc:qualify nil type)
+                                                            :location (source:location pat)
+                                                            :name (parser:pattern-constructor-name pat)
+                                                            :openings openings
+                                                            :patterns (nreverse nodes)))))))
+                   (parser:pattern
+                    (values (car record) nil (cdr record)))))))
+      (let ((nodes nil)
+            (types nil)
+            (preds nil))
+        (dolist (pat patterns)
+          (multiple-value-bind (type ps node) (build pat)
+            (push node nodes)
+            (push type types)
+            (setf preds (append preds ps))))
+        (values (nreverse nodes) subs preds hidden (nreverse types))))))
+
+(defun infer-pattern-tree (pat expected-type subs env)
+  "Infer a structured pattern as a one-column row.
+
+Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)"
+  (multiple-value-bind (nodes subs preds hidden types)
+      (infer-pattern-row (list pat) (list expected-type) subs env)
+    (values (first types) preds (first nodes) subs hidden)))
 
 (defun scope-pattern-bindings (nodes last-node env &optional do-location)
   "Turn a GADT binder and its continuation into a single-arm match. For <-
@@ -3223,7 +3384,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (make-node-abstraction :type (tc:qualify nil type)
                                                        :location (source:location node)
                                                        :params (in-body typed-positional-params)
-                                                       :keyword-params (in-body (nreverse typed-keyword-params))
+                                                       ;; The defaults are in TYPED-BODY. These
+                                                       ;; descriptors contain only binding names.
+                                                       :keyword-params (nreverse typed-keyword-params)
                                                        :body (in-body typed-body))
                                 subs))
                     (tc:coalton-internal-type-error ()
@@ -4773,32 +4936,7 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list pattern-binding tc:substitution-list tc:tyvar-list))
-
-    (check-duplicates (parser:pattern-variables pat)
-                      #'parser:pattern-var-name
-                      (lambda (first second)
-                        (tc-error "Duplicate pattern variable"
-                                  (tc-note first "first definition here")
-                                  (tc-note second "second definition here"))))
-
-    (multiple-value-bind (pat-ty preds bound subs existentials)
-        (infer-pattern-type (parser:pattern-binding-pattern pat) expected-type subs env)
-      (declare (ignore preds))
-
-      (multiple-value-bind (pat-ty preds var subs var-existentials)
-          (infer-pattern-type (parser:pattern-binding-var pat) pat-ty subs env)
-        (declare (ignore preds))
-
-        (values
-         pat-ty
-         nil
-         (make-pattern-binding
-          :type (tc:qualify nil pat-ty)
-          :location (source:location pat)
-          :var var
-          :pattern bound)
-         subs
-         (tc:union-tys existentials var-existentials)))))
+    (infer-pattern-tree pat expected-type subs env))
 
   (:method ((pat parser:pattern-var) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -4887,74 +5025,7 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list pattern-constructor tc:substitution-list tc:tyvar-list))
 
-    (let ((ctor (tc:lookup-constructor (tc-env-env env) (parser:pattern-constructor-name pat) :no-error t)))
-
-      (check-duplicates (parser:pattern-variables pat)
-                        #'parser:pattern-var-name
-                        (lambda (first second)
-                          (tc-error "Duplicate pattern variable"
-                                    (tc-note first "first definition here")
-                                    (tc-note second "second definition here"))))
-
-      (unless ctor
-        (tc-error "Unknown constructor"
-                  (tc-note pat "constructor is not known")))
-
-      (let ((arity
-              (tc:constructor-entry-arity ctor))
-            (num-args
-              (length (parser:pattern-constructor-patterns pat))))
-        (unless (= arity num-args)
-          (tc-error "Argument mismatch"
-                    (tc-note pat "Constructor ~A takes ~D arguments but is given ~D"
-                             (parser:pattern-constructor-name pat)
-                             arity
-                             num-args)))
-
-        (multiple-value-bind (ctor-ty ctor-preds)
-            (tc-env-lookup-value-symbol env
-                                        (parser:pattern-constructor-name pat)
-                                        (source:location pat))
-          (let* ((pat-ty (tc:function-return-type ctor-ty))
-                 (gadt-p (tc:constructor-entry-gadt-p ctor))
-                 (outer-vars (when gadt-p (tc:type-variables (tc:apply-substitution subs expected-type)))))
-            (handler-case
-                (progn
-                  (setf subs (tc:unify-pattern-result subs pat-ty expected-type
-                                                      (and gadt-p *refinable-pattern-skolems*)))
-                  (setf ctor-ty (tc:apply-substitution subs ctor-ty))
-                  (setf pat-ty (tc:function-return-type ctor-ty)))
-              (tc:coalton-internal-type-error ()
-                (with-shared-type-names ()
-                  (tc-error "Type mismatch"
-                            (tc-note pat "Expected type '~A' but pattern has type '~A'"
-                                     (type-object-string (tc:apply-substitution subs expected-type))
-                                     (type-object-string (tc:apply-substitution subs pat-ty)))))))
-
-            (let* ((ctor-preds (tc:apply-substitution subs ctor-preds))
-                   ;; A variable not named by the incoming indices is local. This
-                   ;; includes a component exposed by matching an index like List :x.
-                   (seal (when gadt-p
-                           (skolem-renamings
-                            (set-difference
-                             (remove-if #'tc:tyvar-rigid-p (tc:type-variables (list ctor-ty ctor-preds)))
-                             (tc:apply-substitution subs outer-vars) :test #'tc:ty=))))
-                   (existentials (mapcar #'tc:substitution-to seal))
-                   (subs (tc:compose-substitution-lists seal subs))
-                   (*refinable-pattern-skolems*
-                     (if (eq *refinable-pattern-skolems* :all) :all
-                         (append existentials *refinable-pattern-skolems*))))
-              (multiple-value-bind (pattern-nodes subs child-preds hidden)
-                  (infer-pattern-row (parser:pattern-constructor-patterns pat)
-                                     (tc:function-type-arguments ctor-ty) subs env)
-                (let ((type (tc:apply-substitution subs pat-ty))
-                      (final-preds (tc:apply-substitution subs (nconc ctor-preds child-preds))))
-                  (values type final-preds
-                          (make-pattern-constructor :type (tc:qualify nil type)
-                                                    :location (source:location pat)
-                                                    :name (parser:pattern-constructor-name pat)
-                                                    :patterns pattern-nodes)
-                          subs (nconc existentials hidden)))))))))))
+    (infer-pattern-tree pat expected-type subs env)))
 
 ;;;
 ;;; Binding Group Type Inference

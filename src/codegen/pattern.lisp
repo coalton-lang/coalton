@@ -32,6 +32,7 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-openings       ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    #:patterns-exhaustive-p              ; FUNCTION
@@ -88,7 +89,8 @@
             (:include pattern)
             (:copier nil))
   (name     (util:required 'name)     :type symbol       :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list :read-only t))
+  (patterns (util:required 'patterns) :type pattern-list :read-only t)
+  (openings nil :type list :read-only t))
 
 (defun pattern-variables (pattern)
   (delete-duplicates (pattern-variables-generic% pattern) :test #'eq))
@@ -125,7 +127,7 @@
 ;;;
 
 (defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity)
-                                 (order-function #'pattern-test-order))
+                                 (order-function #'pattern-test-order) (binder-function #'identity))
   "Copy PATTERN, mapping its types and embedded literal tests."
   (labels ((walk (pat)
              (let ((type (funcall type-function (pattern-type pat))))
@@ -143,6 +145,8 @@
                  (pattern-constructor
                   (make-pattern-constructor :type type :name (pattern-constructor-name pat)
                                             :test-order (funcall order-function pat)
+                                            :openings (loop :for (index . var) :in (pattern-constructor-openings pat)
+                                                            :collect (cons index (funcall binder-function var)))
                                             :patterns (mapcar #'walk (pattern-constructor-patterns pat))))))))
     (walk pattern)))
 
@@ -183,6 +187,7 @@
   (make-pattern-constructor
    :type (tc:apply-substitution subs (pattern-type pattern))
    :name (pattern-constructor-name pattern)
+   :openings (pattern-constructor-openings pattern)
    :test-order (pattern-test-order pattern)
    :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))))
 
@@ -202,9 +207,10 @@
   (tc:type-variables (pattern-type pattern)))
 
 (defmethod tc:type-variables ((pattern pattern-constructor))
-  (remove-duplicates (alexandria:mappend #'tc:type-variables
-                                         (cons (pattern-type pattern)
-                                               (pattern-constructor-patterns pattern)))))
+  (union (mapcar #'cdr (pattern-constructor-openings pattern))
+         (alexandria:mappend #'tc:type-variables (cons (pattern-type pattern)
+                                                       (pattern-constructor-patterns pattern)))
+         :test #'tc:ty=))
 
 (defun codegen-pattern->typechecker-pattern (pattern)
   "Convert codegen PATTERN into a typechecker pattern."

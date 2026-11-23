@@ -77,6 +77,10 @@
                                  (parser:program-type-aliases program)
                                  env)
 
+      (unless (settings:coalton-release-p)
+        (tc:validate-gadt-redefinitions *global-environment* env
+                                        (mapcar #'tc:type-definition-name type-definitions)))
+
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
                                     env)
@@ -272,13 +276,18 @@ contexts mention variables determined only by functional dependencies."
 
 (defun make-environment-updater (update-log)
   "Produce source form of the contents of an environment UPDATE-LOG (i.e., calls to functions in typechecker/environment)."
-  (let ((updates (remove-duplicates (coerce update-log 'list) :test #'code-update-eql)))
+  (let* ((updates (remove-duplicates (coerce update-log 'list) :test #'code-update-eql))
+         (type-names (unless (settings:coalton-release-p)
+                       (loop :for (fn name) :in updates
+                             :when (eq fn 'tc:set-type) :collect name))))
     `(let ((env *global-environment*)
            (tc:*defer-instance-validation* t)
            (tc:*changed-instance-classes* nil))
        ,@(loop :for (fn . args) :in updates
                :collect `(setf env (,fn env ,@(mapcar #'util:runtime-quote args))))
        (dolist (class tc:*changed-instance-classes*) (tc:validate-instance-selections env class))
+       ,@(when type-names
+           `((tc:validate-gadt-redefinitions *global-environment* env ',type-names)))
        (setf *global-environment* env)
        (tc:synchronize-type-variable-counter env))))
 

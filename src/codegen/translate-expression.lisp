@@ -478,6 +478,12 @@ needs to synthesize those trailing parameters explicitly."
                             ctx))))))
   ctx)
 
+(defun positional-pattern-bindings (params inputs)
+  "Pair each formal with its incoming type, before any parameter pattern has matched."
+  (assert (<= (length params) (length inputs)))
+  (loop :for p :in params :for ty :in inputs
+        :collect (list (if (tc:pattern-var-p p) (tc:pattern-var-name p) (gensym "ARG-")) ty p)))
+
 (defun translate-toplevel (binding env name &key extra-context)
   (declare (type tc:binding-type binding)
            (type tc:environment env)
@@ -493,14 +499,14 @@ needs to synthesize those trailing parameters explicitly."
            (loop :for pred :in preds
                  :collect (cons pred (gensym "DICT"))))
 
-         (pattern-params nil)
          (last-node (tc:binding-last-node binding))
-         (full-ctx (pattern-predicate-context
-                    (or (tc:binding-parameters binding)
-                        (and (tc:binding-restricted-p binding) (typep last-node 'tc:node-abstraction)
-                             (tc:node-abstraction-params last-node)))
-                    (tc:function-type-arguments (tc:qualified-ty-type qual-ty))
-                    (append ctx extra-context) env))
+         (params (or (tc:binding-parameters binding)
+                     (and (tc:binding-restricted-p binding) (typep last-node 'tc:node-abstraction)
+                          (tc:node-abstraction-params last-node))))
+         (inputs (tc:function-type-arguments (tc:qualified-ty-type qual-ty)))
+         (pattern-params (positional-pattern-bindings params inputs))
+         (incoming-ctx (append ctx extra-context))
+         (full-ctx (pattern-predicate-context params inputs incoming-ctx env))
          (eta-arg-types (binding-eta-argument-types binding qual-ty))
          (eta-vars (loop :repeat (length eta-arg-types)
                          :collect (gensym "ARG"))))
@@ -531,18 +537,7 @@ needs to synthesize those trailing parameters explicitly."
           ((and (null (tc:binding-parameters binding))
                 (tc:binding-restricted-p binding)
                 (typep last-node 'tc:node-abstraction))
-           (let ((vars (append
-                        (loop :for (pred . name) :in ctx
-                              :collect name)
-                        (loop :for param :in (tc:node-abstraction-params last-node)
-                              :if (tc:pattern-var-p param)
-                                :collect (tc:pattern-var-name param)
-                              :else :if (tc:pattern-wildcard-p param)
-                                      :collect (gensym "_")
-                              :else
-                                :collect (let ((name (gensym)))
-                                           (push (cons name param) pattern-params)
-                                           name)))))
+           (let ((vars (append (mapcar #'cdr ctx) (mapcar #'first pattern-params))))
              (make-node-abstraction
               :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
               :vars vars
@@ -555,25 +550,14 @@ needs to synthesize those trailing parameters explicitly."
                           (tc:node-abstraction-body last-node)
                           full-ctx
                           env)
-                         full-ctx env)
+                         full-ctx incoming-ctx env)
                         vars
                         (translate-keyword-params
                          (tc:node-abstraction-keyword-params last-node))))))
 
           ;; Function-syntax bindings and constrained bindings need an outer lambda.
           ((or (tc:binding-parameters binding) preds (tc:binding-restricted-p binding))
-           (let ((vars (append
-                        (loop :for (pred . name) :in ctx
-                              :collect name)
-                        (loop :for param :in (tc:binding-parameters binding)
-                              :if (tc:pattern-var-p param)
-                                :collect (tc:pattern-var-name param)
-                              :else :if (tc:pattern-wildcard-p param)
-                                      :collect (gensym "_")
-                              :else
-                                :collect (let ((name (gensym)))
-                                           (push (cons name param) pattern-params)
-                                           name)))))
+           (let ((vars (append (mapcar #'cdr ctx) (mapcar #'first pattern-params))))
              (make-node-abstraction
               :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
               :vars (append vars eta-vars)
@@ -592,7 +576,7 @@ needs to synthesize those trailing parameters explicitly."
                           eta-keyword-rands
                           full-ctx
                           env)
-                         full-ctx env)
+                         full-ctx incoming-ctx env)
                         (append vars eta-vars)
                         (append (translate-keyword-params
                                  (tc:binding-keyword-parameters binding))
@@ -899,27 +883,15 @@ Returns a `node'.")
                        :collect (cons pred name))
                  ctx))
 
-           (pattern-params nil)
-
-           (vars (append
-                  dict-var-names
-                  (loop :for param :in (tc:node-abstraction-params expr)
-                        :for qual-ty := (tc:pattern-type param)
-
-                        :do (assert (null (tc:qualified-ty-predicates qual-ty)))
-
-                        :if (tc:pattern-var-p param)
-                          :collect (tc:pattern-var-name param)
-                        :else
-                          :collect (let ((name (gensym)))
-                                     (push (cons name param) pattern-params)
-                                     name)))))
+           (inputs (tc:function-type-arguments (tc:qualified-ty-type qual-ty)))
+           (pattern-params (positional-pattern-bindings (tc:node-abstraction-params expr) inputs))
+           (vars (append dict-var-names (mapcar #'first pattern-params))))
 
       (assert (not (some #'tc:static-predicate-p preds)))
 
       (let* ((visible-type (tc:qualified-ty-type qual-ty))
-             (ctx (pattern-predicate-context (tc:node-abstraction-params expr)
-                                             (tc:function-type-arguments visible-type) ctx env))
+             (incoming-ctx ctx)
+             (ctx (pattern-predicate-context (tc:node-abstraction-params expr) inputs ctx env))
              (translated-keyword-params
                (mapcar (lambda (param)
                          (make-keyword-param
@@ -932,19 +904,9 @@ Returns a `node'.")
                 (prepend-codegen-hidden-input-types
                  dict-types
                  visible-type))))
-        (let ((inner (translate-expression (tc:node-abstraction-body expr) ctx env)))
-          (loop :for (name . pattern) :in (reverse pattern-params)
-                :do (setf inner
-                          (make-node-match
-                           :type (node-type inner)
-                           :expr (make-node-local-variable
-                                  :type (tc:qualified-ty-type (tc:pattern-type pattern))
-                                  :value name)
-                           :branches
-                           (list
-                           (make-match-branch
-                            :pattern (translate-pattern pattern ctx env)
-                            :body inner)))))
+        (let ((inner (wrap-with-pattern-params pattern-params
+                                               (translate-expression (tc:node-abstraction-body expr) ctx env)
+                                               ctx incoming-ctx env)))
           (when (and dict-var-names
                      (null (tc:node-abstraction-params expr))
                      (null translated-keyword-params)
@@ -1693,6 +1655,7 @@ dictionary for one abstract index may be used to compare another."
       (make-pattern-constructor
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-constructor-name pat)
+       :openings (tc:pattern-constructor-openings pat)
        :patterns (mapcar (lambda (child) (translate-pattern child ctx env)) (tc:pattern-constructor-patterns pat))))))
 
 (defun apply-dicts (expr ctx env)
@@ -1760,25 +1723,26 @@ dictionaries applied."
         :rands dicts
         :keyword-rands nil)))))
 
-(defun wrap-with-pattern-params (pattern-params inner ctx env)
-  "Wrap INNER in nested `NODE-MATCH' expressions to pattern match on PATTERN-PARAMS"
-  (declare (type list pattern-params)
-           (type node inner)
-           (values node))
-  (loop :for (name . pattern) :in (reverse pattern-params)
-
-        :do (setf inner (make-node-match
-                         :type (node-type inner)
-                         :expr (make-node-local-variable
-                                :type (tc:qualified-ty-type (tc:pattern-type pattern))
-                                :value name)
-                         :branches
-                         (list
-                          (make-match-branch
-                           :pattern (translate-pattern pattern ctx env)
-                           :body inner))))
-
-        :finally (return inner)))
+(defun wrap-with-pattern-params (params inner ctx incoming-ctx env)
+  (let* ((items (remove-if (lambda (p) (typep p '(or tc:pattern-var tc:pattern-wildcard)))
+                           params :key #'third))
+         (patterns (loop :for item :in items :collect (translate-pattern (third item) ctx env)))
+         (dicts (unless (eq ctx incoming-ctx)
+                  (lambda (test) (literal-dictionary-equalities test incoming-ctx env)))))
+    (cond
+      ((and (rest items)
+            (some (lambda (p) (coalton-impl/codegen/transformations:pattern-contains-gadt-p p env)) patterns))
+       (coalton-impl/codegen/codegen-match:lower-parameter-row
+        patterns (mapcar #'first items) (mapcar #'second items) inner env dicts))
+      (t
+       (loop :for (name type) :in items :for p :in patterns
+             :do (setf inner (make-node-match
+                              :type (node-type inner)
+                              :expr (make-node-local-variable :type type :value name)
+                              :branches (list (make-match-branch
+                                               :pattern (coalton-impl/codegen/codegen-match:order-pattern-tests p type env dicts)
+                                               :body inner)))))
+       inner))))
 
 (defun block-return-target-used-p (inner target)
   "Return true when INNER contains a return targeting TARGET outside a matching block."

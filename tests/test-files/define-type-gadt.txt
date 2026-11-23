@@ -1740,3 +1740,164 @@ error: Unknown type variable
    |
  4 |    (declare T78-Bad (forall (:b) (:b -> T-dtg78 :a))))
    |                                                 ^^ Unknown type variable :A
+
+================================================================================
+79 GADT Nested Field Waits For Sibling Witness In Every Position
+================================================================================
+
+(package coalton-unit-tests/gadt-nested-1
+  (import coalton-prelude))
+
+(define-type (T-dtg79 :a)
+  (declare T79-Int (T-dtg79 Integer))
+  (declare T79-Str (T-dtg79 String)))
+
+(define-type (Same79 :a :b)
+  (declare Refl79 (Same79 :x :x)))
+
+(define-type (Box79 :a)
+  (Box79 :a))
+
+(define-type Pack79
+  (declare Pack79 ((Tuple (Optional :t) (Box79 (Same79 :t (T-dtg79 Integer)))) -> Pack79)))
+
+(declare t-dtg79-default (T-dtg79 :a -> :a))
+(define (t-dtg79-default t)
+  (match t
+    ((T79-Int) 1)
+    ((T79-Str) "one")))
+
+(declare t-dtg79-match (Pack79 -> Integer))
+(define (t-dtg79-match p)
+  (match p
+    ((Pack79 (Tuple (Some (= tag (T79-Int))) (Box79 (Refl79)))) (t-dtg79-default tag))
+    (_ 0)))
+
+(declare t-dtg79-params (Box79 :t * Same79 :t (T-dtg79 Integer) -> Integer))
+(define (t-dtg79-params (Box79 (T79-Int)) (Refl79)) 1)
+
+(declare t-dtg79-fn (Box79 :t * Same79 (Box79 :t) (Box79 (T-dtg79 String)) -> String))
+(define t-dtg79-fn
+  (fn ((Box79 (= tag (T79-Str))) (Refl79))
+    (t-dtg79-default tag)))
+
+--------------------------------------------------------------------------------
+
+================================================================================
+80 GADT Nested Field Without Sibling Witness Stays Abstract
+================================================================================
+
+(package coalton-unit-tests/gadt-nested-2
+  (import coalton-prelude))
+
+(define-type (T-dtg80 :a)
+  (declare T80-Int (T-dtg80 Integer))
+  (declare T80-Str (T-dtg80 String)))
+
+(define-type (Same80 :a :b)
+  (declare Refl80 (Same80 :x :x)))
+
+(define-type (Box80 :a)
+  (Box80 :a))
+
+(define-type Pack80
+  (declare Pack80 ((Tuple (Optional :t) (Box80 (Same80 :t (T-dtg80 Integer)))) -> Pack80)))
+
+(declare t-dtg80 (Pack80 -> Integer))
+(define (t-dtg80 p)
+  (match p
+    ((Pack80 (Tuple (Some (T80-Int)) (Box80 _))) 1)
+    (_ 0)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:20:26
+    |
+ 20 |      ((Pack80 (Tuple (Some (T80-Int)) (Box80 _))) 1)
+    |                            ^^^^^^^^^ Expected type ':T' but pattern has type 'T-dtg80 Integer'
+
+================================================================================
+81 GADT Mutually Dependent Nested Fields Do Not Supply Evidence
+================================================================================
+
+(package coalton-unit-tests/gadt-nested-3
+  (import coalton-prelude))
+
+(define-type (T-dtg81 :a)
+  (declare T81-Int (T-dtg81 Integer))
+  (declare T81-Str (T-dtg81 String)))
+
+(define-type (Same81 :a :b)
+  (declare Refl81 (Same81 :x :x)))
+
+(define-type Twin81
+  (declare Twin81 (Optional :p * Optional :q -> Twin81)))
+
+(declare t-dtg81 (Twin81 -> Integer))
+(define (t-dtg81 p)
+  (match p
+    ((Twin81 (Some (Refl81)) (Some (T81-Int))) 1)
+    (_ 0)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:17:19
+    |
+ 17 |      ((Twin81 (Some (Refl81)) (Some (T81-Int))) 1)
+    |                     ^^^^^^^^ Expected type ':P' but pattern has type 'Same81 :X :X'
+
+================================================================================
+82 GADT Nested Field Needs A Witness For Its Own Variable
+================================================================================
+
+(package coalton-unit-tests/gadt-nested-4
+  (import coalton-prelude))
+
+(define-type (T-dtg82 :a)
+  (declare T82-Int (T-dtg82 Integer))
+  (declare T82-Str (T-dtg82 String)))
+
+(define-type (Same82 :a :b)
+  (declare Refl82 (Same82 :x :x)))
+
+(define-type (Box82 :a)
+  (Box82 :a))
+
+(declare t-dtg82 (Box82 :t * Same82 :u (T-dtg82 Integer) -> Integer))
+(define (t-dtg82 (Box82 (T82-Int)) (Refl82)) 1)
+
+--------------------------------------------------------------------------------
+
+error: Declared type is too general
+  --> test:15:9
+    |
+ 15 |  (define (t-dtg82 (Box82 (T82-Int)) (Refl82)) 1)
+    |           ^^^^^^^ Declared type forall :T :U. Box82 :T * Same82 :U (T-dtg82 Integer) -> Integer is more general than inferred type forall :A :U1. Box82 (T-dtg82 :A) * Same82 :U1 (T-dtg82 Integer) -> Integer.
+
+================================================================================
+83 GADT Crossed Nested Witnesses Are Used Per Subpattern
+================================================================================
+
+(package coalton-unit-tests/gadt-nested-5
+  (import coalton-prelude))
+
+(define-type (Lamp83 :a)
+  (declare On83 (Lamp83 Boolean))
+  (declare Count83 (Lamp83 Integer)))
+
+(define-type (Shape83 :a)
+  (declare BoolShape83 (Shape83 (Lamp83 Boolean)))
+  (declare IntShape83 (Shape83 (Lamp83 Integer))))
+
+(define-type Crate83
+  (declare Crate83 (Tuple :a (Shape83 :b) * Tuple :b (Shape83 :a) -> Crate83)))
+
+(declare t-dtg83 (Crate83 -> Boolean))
+(define (t-dtg83 c)
+  (match c
+    ((Crate83 (Tuple (On83) (IntShape83)) (Tuple (Count83) (BoolShape83))) True)
+    (_ False)))
+
+--------------------------------------------------------------------------------

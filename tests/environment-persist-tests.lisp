@@ -45,6 +45,80 @@
       (env::update-environment updated)
       (is (= 1 (length updates))))))
 
+(deftest gadt-evidence-redefinition ()
+  ;; Inspect compiler environments only. In particular, never call code
+  ;; compiled against one version after accepting an incompatible version.
+  (with-codegen-test-environment
+    (let* ((base entry:*global-environment*)
+           (original
+             "(repr :enum)
+              (define-type (Tag :a :b)
+                (declare Same (Tag :x :x)) (declare MixedTag (Tag Integer String)))")
+           (changed
+             "(repr :enum)
+              (define-type (Tag :a :b)
+                (declare Same (Tag :x :y)) (declare MixedTag (Tag Integer String)))"))
+      (codegen-test-inspect original)
+      (codegen-test-inspect
+       "(declare cast-tagged (Tag :a :b * :a -> Optional :b))
+        (define (cast-tagged tag x) (match tag ((Same) (Some x)) ((MixedTag) None)))")
+      (codegen-test-inspect
+       "(define-type-alias TextIndex String)
+        (repr :enum)
+        (define-type (Tag :left :right)
+          (declare MixedTag (Tag Integer TextIndex)) (declare Same (Tag :same :same)))")
+      (unless (coalton-impl/settings:coalton-release-p)
+        (let ((old entry:*global-environment*))
+          (dolist (invalid
+                    (list changed
+                          "(define-type Other (Same String))"
+                          "(repr :enum) (define-type (Tag :a :b) (declare Same (Tag :x :x)))"
+                          "(repr :enum) (define-type (Tag :a :b) (declare Same (Tag :x :x))
+                             (declare MixedTag (Tag Integer String)) (declare BothTag (Tag Integer Integer)))"))
+            (signals coalton-impl/redef-detection:incompatible-gadt-redefinition
+              (codegen-test-inspect invalid)))
+          (is (eq :aborted
+                  (restart-case
+                      (handler-bind ((coalton-impl/redef-detection:incompatible-redefinition
+                                       (lambda (c)
+                                         (invoke-restart (find-restart
+                                                          'coalton-impl/redef-detection:abort-redefinition c)))))
+                        (codegen-test-inspect changed))
+                    (abort () :aborted))))
+          (is (eq old entry:*global-environment*))
+          (finishes (codegen-test-inspect
+                     "(declare still-same (Tag String String)) (define still-same Same)"))
+          ;; Replay updates compiled in a different environment. Do not eval
+          ;; any program forms: the updater alone must enforce the contract.
+          (let ((updater
+                  (entry::with-environment-updates log
+                    (let ((entry:*global-environment* base)) (codegen-test-inspect changed))
+                    (entry::make-environment-updater log))))
+            (signals coalton-impl/redef-detection:incompatible-gadt-redefinition (eval updater))
+            (let ((warned nil)
+                  (coalton-impl/settings:*auto-continue-redefinition* t))
+              (handler-bind ((warning (lambda (c) (setf warned t) (muffle-warning c))))
+                (eval updater))
+              (is warned)
+              (finishes (codegen-test-inspect
+                         "(declare now-unrelated (Tag String Integer)) (define now-unrelated Same)"))))))
+      (codegen-test-inspect "(define-type (Boxed :a) (declare Pack (:x -> Boxed :x)))")
+      (unless (coalton-impl/settings:coalton-release-p)
+        (signals coalton-impl/redef-detection:incompatible-gadt-redefinition
+          (codegen-test-inspect
+           "(repr :transparent) (define-type (Boxed :a) (declare Pack (:x -> Boxed :x)))"))
+        (handler-bind ((coalton-impl/redef-detection:incompatible-gadt-redefinition
+                         (lambda (c)
+                           (invoke-restart (find-restart 'coalton-impl/redef-detection:continue-anyway c))))
+                       (warning #'muffle-warning))
+          (codegen-test-inspect
+           "(define-type (Boxed :a) (declare Pack (:hidden -> Boxed Integer)))"))
+        (finishes (codegen-test-inspect
+                   "(declare pack-string (String -> Boxed Integer)) (define (pack-string s) (Pack s))")))
+      ;; Ordinary ADTs have no GADT evidence contract to invalidate.
+      (codegen-test-inspect "(define-type Plain (Item Integer))")
+      (finishes (codegen-test-inspect "(define-type Plain (Item String))")))))
+
 (deftest test-persist-value ()
   "Test that the value environment persists across loads and fasl loads"
   (let ((test-expr

@@ -219,16 +219,18 @@
   (declare (type tc-env env)
            (type symbol sym)
            (type (or source:location null) loc)
-           (values tc:ty tc:ty-predicate-list))
+           (values tc:ty tc:ty-predicate-list tc:tyvar-list))
 
   (let* ((scheme (or (gethash sym (tc-env-ty-table env))
                      (tc:lookup-value-type (tc-env-env env) sym :no-error t))))
     (unless scheme
       (util:coalton-bug "Unknown variable ~a" sym))
-    (let ((q (tc:fresh-inst scheme)))
+    (let* ((binders (tc:ty-scheme-instantiation-types scheme))
+           (q (tc:fresh-inst scheme binders)))
       (values (tc:qualified-ty-type q)
               (loop :for pred in (tc:qualified-ty-predicates q)
                     :collect (tc:make-ty-predicate
                               :class (tc:ty-predicate-class pred)
                               :types (tc:ty-predicate-types pred)
-                              :location loc))))))
+                              :location loc))
+              binders))))

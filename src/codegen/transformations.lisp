@@ -12,6 +12,8 @@
    #:rename-type-variables
    #:prune-impossible-match-branches
    #:specialize-match
+   #:open-known-constructor
+   #:unwrap-known-constructor-branch
    #:pattern-contains-gadt-p
    #:inlined-some-operand
    #:inlined-cons-operands
@@ -87,6 +89,36 @@
       (setf moved (tc:apply-substitution (tc:unify-given nil from to :all) moved)))
     (if env (prune-impossible-match-branches moved env) moved)))
 
+(defun open-known-constructor (pattern fields body env)
+  "For a known constructor application, open PATTERN using its producer's
+operand types. Return (VALUES SUBPATTERNS BODY SUCCESS BINDINGS). If physical
+operand types don't identify the binders (e.g. a lowered forall), keep the match."
+  (let ((openings (pattern-constructor-openings pattern))
+        (children (pattern-constructor-patterns pattern)))
+    (unless openings (return-from open-known-constructor (values children body t)))
+    (unless env (return-from open-known-constructor (values nil nil nil)))
+    (let* ((scheme (tc:lookup-value-type env (pattern-constructor-name pattern)))
+           (args (tc:ty-scheme-instantiation-types scheme))
+           (ctor (tc:fresh-inst scheme args))
+           (subs (handler-case
+                     (tc:match-list (mapcar #'node-type fields)
+                                    (tc:function-type-arguments (tc:qualified-ty-type ctor)))
+                   (tc:coalton-internal-type-error ()
+                     (return-from open-known-constructor (values nil nil nil)))))
+           (bindings (loop :for (index . var) :in openings
+                           :for formal := (nth index args)
+                           :for sub := (find formal subs :key #'tc:substitution-from :test #'tc:ty=)
+                           :unless sub :do (return-from open-known-constructor (values nil nil nil))
+                           :collect (tc:make-substitution :from var :to (tc:substitution-to sub)))))
+      (values (tc:apply-substitution bindings children) (tc:apply-substitution bindings body) t bindings))))
+
+(defun unwrap-known-constructor-branch (branch fields env)
+  (multiple-value-bind (children body opened bindings)
+      (open-known-constructor (match-branch-pattern branch) fields (match-branch-body branch) env)
+    (when opened
+      (make-match-branch :index-equalities (tc:apply-substitution bindings (match-branch-index-equalities branch))
+                         :pattern (first children) :body body))))
+
 (defun prune-impossible-match-branches (node env)
   "Remove GADT branches ruled out by specializing a copy of NODE."
   (traverse
@@ -116,6 +148,10 @@
 specified in `subs`."
   (declare (type tc:substitution-list subs)
            (values node &optional))
+  (substitute-node-types node subs #'identity))
+
+(defun substitute-node-types (node subs binder-function)
+  ;; Only an alpha-renaming rewrites a constructor's existential binders.
   (traverse
    node
    (list
@@ -140,6 +176,7 @@ specified in `subs`."
                      :index-equalities (tc:apply-substitution subs (match-branch-index-equalities branch))
                      ;; Embedded tests have already been visited by TRAVERSE.
                      :pattern (map-pattern (match-branch-pattern branch)
+                                           :binder-function binder-function
                                            :type-function (lambda (type) (tc:apply-substitution subs type)))
                      :body (match-branch-body branch)))
                   (node-match-branches node)))))))
@@ -175,13 +212,9 @@ function `renamer`, returning the new node tree."
            (type function renamer)
            (values node &optional))
   (alexandria:if-let ((old-type-variables (tc:type-variables node)))
-    (tc:apply-substitution
-     (mapcar (lambda (tyvar)
-               (tc:make-substitution
-                :from tyvar
-                :to (funcall renamer tyvar)))
-             old-type-variables)
-     node)
+    (let ((subs (loop :for var :in old-type-variables
+                      :collect (tc:make-substitution :from var :to (funcall renamer var)))))
+      (substitute-node-types node subs (lambda (var) (tc:apply-substitution subs var))))
     node))
 
 (defun inlined-some-operand (node)

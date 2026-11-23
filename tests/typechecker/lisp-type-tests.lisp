@@ -153,6 +153,71 @@
                      (render-type (coalton-type-of 'coalton-native-tests::pretty-keyword-fn)))
       )))
 
+(deftest open-array-constructor-slot ()
+  (dolist (annotations '(nil t))
+    (with-codegen-test-environment
+      (let* ((coalton-impl/settings:*emit-type-annotations* annotations)
+             (form (codegen-test-inspect
+                    "(define-type Storage
+                       (declare Hold (coalton/lisparray:LispArray (:f F64) -> Storage)))
+                     (declare hide (coalton/lisparray:LispArray (Complex F64) -> Storage))
+                     (define (hide a) (Hold a))"))
+             (slot (intern "_0"))
+             (bound '(simple-array * (*)))
+             (sample (make-array 2 :element-type '(complex double-float)
+                                   :initial-element #c(0d0 1d0))))
+        (is (typep sample (tc:lisp-type (first (tc:constructor-arguments (intern "HOLD")
+                                                                         entry:*global-environment*))
+                                       entry:*global-environment*)))
+        ;; The class/struct slot is present regardless of optional annotations.
+        (is (plusp (count-tree-occurrences
+                    (if (coalton-impl/settings:coalton-release-p)
+                        `(,slot nil :type ,bound :read-only t)
+                        `(,slot :type ,bound :initarg ,slot))
+                    form)))
+        (is (zerop (count-tree-occurrences '(simple-array t (*)) form)))))))
+
+(deftest transparent-constructor-representations ()
+  (with-codegen-test-environment
+    (flet ((repr (text)
+             (let* ((source (source:make-source-string text))
+                    (env entry:*global-environment*))
+               (with-open-stream (stream (source:source-stream source))
+                 (tc:lisp-type
+                  (tc:parse-ty-scheme
+                   (parser:parse-qualified-type
+                    (parser:with-reader-context stream (eclector.concrete-syntax-tree:read stream))
+                    source)
+                   env)
+                  env)))))
+      (codegen-test-inspect
+       "(define-type-alias (ArrayOf :v) (coalton/lisparray:LispArray :v))
+        (repr :transparent)
+        (define-type (Deck :stamp :index)
+          (declare Bundle (ArrayOf :v -> Deck Boolean (List :v))))
+        (repr :transparent)
+        (define-type (Wrap :a) (Wrap :a))
+        (repr :transparent)
+        (define-type Hidden (declare Hide ((:f F64) -> Hidden)))
+        (repr :transparent)
+        (define-type (Grow :a) (Grow (ArrayOf (Grow (List :a)))))")
+      (let ((sample (make-array 2 :element-type 'double-float :initial-element 1d0))
+            (general (make-array 2 :element-type t :initial-element 1d0)))
+        (is (typep sample (repr "(Deck Boolean (List F64))")))
+        (is (equal '(simple-array double-float (*)) (repr "(Wrap (Wrap (Deck Boolean (List F64))))")))
+        (is (equal '(simple-array * (*)) (repr "(Deck Boolean :unknown)")))
+        ;; Wrap has one erased RuntimeRepr even when its value type is closed.
+        (is (typep general (repr "(ArrayOf (Wrap F64))")))
+        (is (typep sample (repr "(ArrayOf (Wrap F64))")))
+        (is (typep (make-array 1 :element-type t :displaced-to general) (repr "Hidden")))
+        (is (equal '(simple-array * (*)) (repr "(Grow F64)")))
+        (is (equal '(simple-array * (*))
+                   (tc:type-entry-runtime-type (tc:lookup-type entry:*global-environment*
+                                                               (intern "GROW")))))
+        ;; Adding an unrelated value in a separate unit cannot change Deck.
+        (codegen-test-inspect "(declare Deck (String -> String)) (define (Deck s) s)")
+        (is (equal '(simple-array double-float (*)) (repr "(Deck Boolean (List F64))")))))))
+
 (deftest test-documentation-anchors-include-package-name ()
   (let* ((env coalton-impl/entry:*global-environment*)
          (hashmap-count

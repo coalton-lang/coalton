@@ -1175,3 +1175,57 @@
   (is (== "pair inferred" (hidden-pair-describe-inferred (HiddenValueBox Unit) "inferred")))
   (is (== 42 (hidden-tagged-bump (HiddenTagged HiddenIntTag 41))))
   (is (== "same" (hidden-tagged-bump (HiddenTagged HiddenStringTag "same")))))
+
+;;;
+;;; Nested subpatterns that need evidence from a later sibling
+;;;
+
+(coalton-toplevel
+
+  (define-type (NestUnit :a)
+    (declare NestMeters (NestUnit Integer))
+    (declare NestLabel (NestUnit String)))
+
+  (define-type (NestEq :a :b)
+    (declare NestRefl (NestEq :x :x)))
+
+  (define-type (NestCell :a)
+    (NestCell :a))
+
+  ;; The unit tag sits inside a cell in the first field; only the second
+  ;; field says which index it has.
+  (define-type NestReading
+    (declare NestReading (NestCell (NestUnit :t) * :t * NestEq :t Integer -> NestReading)))
+
+  (declare nest-reading-total (NestReading -> Integer))
+  (define (nest-reading-total r)
+    (match r
+      ((NestReading (NestCell (NestMeters)) n (NestRefl)) (+ n 1000))))
+
+  (declare nest-cell-value (NestCell (NestUnit :t) * :t * NestEq :t String -> String))
+  (define (nest-cell-value (NestCell (NestLabel)) s (NestRefl))
+    s)
+
+  (define-type (NestLamp :a)
+    (declare NestOn (NestLamp Boolean))
+    (declare NestCount (NestLamp Integer)))
+
+  (define-type (NestShape :a)
+    (declare NestBoolShape (NestShape (NestLamp Boolean)))
+    (declare NestIntShape (NestShape (NestLamp Integer))))
+
+  ;; Each field holds the proof for the other field's lamp.
+  (define-type NestCrate
+    (declare NestCrate (Tuple :a (NestShape :b) * Tuple :b (NestShape :a) -> NestCrate)))
+
+  (declare nest-crate-tag (NestCrate -> String))
+  (define (nest-crate-tag c)
+    (match c
+      ((NestCrate (Tuple (NestOn) (NestIntShape)) (Tuple (NestCount) (NestBoolShape))) "crossed")
+      (_ "other"))))
+
+(define-test gadt-nested-subpattern-evidence ()
+  (is (== 1042 (nest-reading-total (NestReading (NestCell NestMeters) 42 NestRefl))))
+  (is (== "kept" (nest-cell-value (NestCell NestLabel) "kept" NestRefl)))
+  (is (== "crossed" (nest-crate-tag (NestCrate (Tuple NestOn NestIntShape) (Tuple NestCount NestBoolShape)))))
+  (is (== "other" (nest-crate-tag (NestCrate (Tuple NestCount NestBoolShape) (Tuple NestOn NestIntShape))))))

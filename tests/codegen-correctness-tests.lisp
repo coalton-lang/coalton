@@ -17,6 +17,15 @@
       (eval (entry:compile-coalton-toplevel
              (parser:with-reader-context stream (parser:read-program stream source)))))))
 
+(defun codegen-test-inspect (text)
+  "Advance the test environment and return the generated Lisp without loading it."
+  (let ((source (source:make-source-string text)))
+    (with-open-stream (stream (source:source-stream source))
+      (multiple-value-bind (form env)
+          (entry:entry-point (parser:with-reader-context stream (parser:read-program stream source)))
+        (setf entry:*global-environment* env)
+        form))))
+
 (defun codegen-test-eval (text)
   (eval (list 'coalton:coalton (read-from-string text))))
 
@@ -1399,6 +1408,106 @@
     (is (codegen-test-eval "(zero-after? IntTag 1)"))
     (is (not (codegen-test-eval "(zero-after? FixTag 0)")))
     (is (codegen-test-eval "(zero-after? FixTag -1)"))))
+
+(deftest codegen-correlated-positional-patterns ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(define-type (ValueTag :a)
+        (declare IntValue (Integer -> ValueTag Integer))
+        (declare StrValue (String -> ValueTag String)))
+      (define-type (EqualTo :a :b) (declare Here (EqualTo :t :t)))
+      (define-type (Shell :a) (Enclose :a))
+      (abi :unpacked)
+      (declare last-proof (Shell :t * EqualTo :t (ValueTag Integer) -> Integer))
+      (define (last-proof (Enclose (IntValue n)) (Here)) n)
+      (declare first-proof (EqualTo :t (ValueTag Integer) * Shell :t &key (:delta Integer) -> Integer))
+      (define (first-proof (Here) (Enclose (IntValue n)) &key (delta n)) (+ delta n))
+      (declare last-lambda (Integer -> (Shell :t * EqualTo (Shell :t) (Shell (ValueTag Integer)) -> Integer)))
+      (define (last-lambda k) (fn ((Enclose (IntValue n)) (Here)) (+ n k)))
+      (declare first-lambda (Integer -> (EqualTo :t (ValueTag String) * Shell :t -> Tuple Integer String)))
+      (define (first-lambda k) (fn ((Here) (Enclose (StrValue s))) (Tuple k s)))
+      (declare crossed (Tuple :a (EqualTo :b (ValueTag String)) *
+                        Tuple :b (EqualTo :a (ValueTag Integer)) -> Tuple Integer String))
+      (define (crossed (Tuple (IntValue n) (Here)) (Tuple (StrValue s) (Here))) (Tuple n s))")
+    (is (fboundp (intern "LAST-PROOF%UNPACKED")))
+    (is (= 31 (codegen-test-eval "(last-proof (Enclose (IntValue 31)) Here)")))
+    (is (= 62 (codegen-test-eval "(first-proof Here (Enclose (IntValue 31)))")))
+    (is (= 35 (codegen-test-eval "(first-proof (progn (observe 1) Here)
+                                   (progn (observe 2) (Enclose (IntValue 31))) :delta (observe 4))")))
+    (is (equal '(1 2 4) (reverse *codegen-events*)))
+    (is (= 8 (codegen-test-eval "((last-lambda 5) (Enclose (IntValue 3)) Here)")))
+    (is (codegen-test-eval "(== ((first-lambda 4) Here (Enclose (StrValue \"s\"))) (Tuple 4 \"s\"))"))
+    ;; Neither whole parameter can be matched before the other.
+    (is (codegen-test-eval "(== (crossed (Tuple (IntValue 7) Here) (Tuple (StrValue \"t\") Here))
+                                (Tuple 7 \"t\"))"))
+    ;; The backend must not license a projection solely from the constructor
+    ;; in the row. Giving another parameter the requested head isn't enough.
+    (let* ((env entry:*global-environment*) (a (tc:make-variable)) (b (tc:make-variable))
+           (ctor (intern "INTVALUE"))
+           (tag (tc:function-return-type (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type env ctor)))))
+           (pat (coalton-impl/codegen/pattern:make-pattern-constructor
+                 :name ctor :type tag
+                 :patterns (list (coalton-impl/codegen/pattern:make-pattern-wildcard :type tc:*integer-type*))))
+           (col (coalton-impl/codegen/codegen-match::make-match-column :var 'payload :type a)))
+      (is (null (coalton-impl/codegen/codegen-match::match-test-state
+                 pat col (list (tc:make-substitution :from b :to tag)) env nil))))
+    (signals tc:tc-error
+      (codegen-test-compile
+       "(declare unrelated (Shell :a * EqualTo :b (ValueTag Integer) -> Integer))
+        (define (unrelated (Enclose (IntValue n)) (Here)) n)"))))
+
+(deftest codegen-match-opens-existential-literal-operands ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type (Scale :unit) (Scale Integer))
+      (define-instance (Eq (Scale :u)) (define (== (Scale x) (Scale y)) (== x y)))
+      (define-instance (Num (Scale :u))
+        (define (+ (Scale x) (Scale y)) (Scale (+ x y)))
+        (define (- (Scale x) (Scale y)) (Scale (- x y)))
+        (define (* (Scale x) (Scale y)) (Scale (* x y)))
+        (define (fromInt n) (Scale n)))
+      (define-type Reading (declare Scan (Scale :hidden -> Reading)))
+      (inline)
+      (declare is-two (Reading -> Boolean))
+      (define (is-two r) (match r ((Scan 2) True) (_ False)))
+      (declare both (Reading * Reading -> Boolean))
+      (define (both a b) (and (is-two a) (is-two b)))
+      (define-type (Kind :u) (declare Count (Kind Integer)) (declare Text (Kind String)))
+      (define-type Sample (declare Meter (Scale :u * Kind :u * :u -> Sample)))
+      (declare classify (Tuple Sample Sample -> Integer))
+      (define (classify p)
+        (match p
+          ((Tuple (Meter 2 (Count) n) (Meter 3 (Text) _)) n)
+          ((Tuple (Meter 2 (Text) _) (Meter 3 (Count) m)) m)
+          (_ 0)))")
+    (is (codegen-test-eval "(both (Scan (the (Scale Boolean) 2)) (Scan (the (Scale String) 2)))"))
+    (is (not (codegen-test-eval "(both (Scan (the (Scale Boolean) 2)) (Scan (the (Scale String) 3)))")))
+    (is (zerop (codegen-test-call-count "BOTH" "IS-TWO")))
+    ;; Each occurrence of Meter opens a different package even on one path.
+    (is (= 43 (codegen-test-eval "(classify (Tuple (Meter 2 Count 43) (Meter 3 Text \"ok\")))")))
+    (is (= 51 (codegen-test-eval "(classify (Tuple (Meter 2 Text \"ok\") (Meter 3 Count 51)))")))
+    (is (= 0 (codegen-test-eval "(classify (Tuple (Meter 2 Count 43) (Meter 3 Count 51)))")))
+    ;; An unrelated opening has exactly the same shape. Merely making the
+    ;; full types unifiable would authorize both tests below.
+    (let* ((env entry:*global-environment*)
+           (scale (tc:type-entry-type (tc:lookup-type env (intern "SCALE"))))
+           (skolem (tc:make-skolem))
+           (a (tc:make-variable)) (b (tc:make-variable))
+           (given (list (tc:make-substitution :from skolem :to a)))
+           (lit (coalton-impl/codegen/pattern:make-pattern-literal
+                 :value 2 :type (tc:make-tapp :from scale :to skolem))))
+      (flet ((state (var)
+               (coalton-impl/codegen/codegen-match::match-test-state
+                lit (coalton-impl/codegen/codegen-match::make-match-column
+                     :var 'sample :type (tc:make-tapp :from scale :to var))
+                given env nil)))
+        (is (eq :ready (state a)))
+        (is (null (state b)))))
+    (signals tc:tc-error
+      (codegen-test-compile
+       "(declare wrong (Tuple Sample Sample -> Integer))
+        (define (wrong p) (match p ((Tuple (Meter 2 (Count) _) (Meter 3 _ y)) y) (_ 0)))"))))
 
 (deftest codegen-match-ordered-comparisons ()
   (with-codegen-test-environment

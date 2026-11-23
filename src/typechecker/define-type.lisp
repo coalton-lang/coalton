@@ -10,6 +10,7 @@
    #:check-duplicates)
   (:local-nicknames
    (#:source #:coalton-impl/source)
+   (#:redef #:coalton-impl/redef-detection)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
@@ -18,6 +19,7 @@
    (#:pt #:coalton-impl/typechecker/parse-type))
   (:export
    #:toplevel-define-type               ; FUNCTION
+   #:validate-gadt-redefinitions        ; FUNCTION
    #:type-definition                    ; STRUCT
    #:make-type-definition               ; CONSTRUCTOR
    #:type-definition-name               ; ACCESSOR
@@ -468,6 +470,46 @@ itself without passing through a nominal type."
                               :finally (return type-definitions)))))
      instances
      env)))
+
+(defun datatype-evidence-contract (entry env)
+  (cons (cond ((tc:type-entry-enum-repr entry) :enum)
+              ((tc:type-entry-newtype entry) (list :transparent (tc:type-entry-runtime-type entry)))
+              ((consp (tc:type-entry-explicit-repr entry)) (tc:type-entry-explicit-repr entry))
+              ((tc:type-entry-exception-p entry) :exception)
+              (t :boxed))
+        (loop :for name :in (tc:type-entry-constructors entry)
+              :collect (list name (tc:lookup-value-type env name)))))
+
+(defun same-datatype-representation-p (a b)
+  (or (equal a b)
+      (and (consp a) (consp b) (eq (first a) (first b))
+           (subtypep (second a) (second b))
+           (subtypep (second b) (second a)))))
+
+(defun validate-gadt-redefinitions (before after names)
+  "Compare whole datatype declarations, before installing AFTER or its code.
+Use both environments: an environment update log can replay in an image
+different from the one in which the declarations were compiled."
+  (let ((affected-types names))
+    ;; A differently named declaration can also replace one of an existing
+    ;; datatype's constructors in the value and constructor environments.
+    (dolist (name names)
+      (dolist (ctor (tc:type-entry-constructors (tc:lookup-type after name)))
+        (let ((prior (tc:lookup-constructor before ctor :no-error t)))
+          (when (and prior (not (eq (tc:constructor-entry-constructs prior) name)))
+            (pushnew (tc:constructor-entry-constructs prior) affected-types)))))
+    (dolist (name affected-types)
+      (let ((old (tc:lookup-type before name :no-error t))
+            (new (tc:lookup-type after name)))
+        (when (and old (or (tc:type-entry-gadt-p old) (tc:type-entry-gadt-p new)))
+          (let ((a (datatype-evidence-contract old before))
+                (b (datatype-evidence-contract new after)))
+            (unless (and (same-datatype-representation-p (car a) (car b))
+                         (= (length (cdr a)) (length (cdr b)))
+                         (loop :for (ctor old-scheme) :in (cdr a)
+                               :for next := (assoc ctor (cdr b))
+                               :always (and next (redef:types-compatible-p old-scheme (second next)))))
+              (redef:raise-gadt-redefinition-error name a b before))))))))
 
 (defun update-env-for-type-definition (type tyvars variances parsed-type env)
   (declare (type type-definition type)
@@ -932,7 +974,10 @@ signaled with the expectation that they may be ignored."
                                    (tc:function-type-from
                                     (tc:qualified-ty-type
                                      (tc:fresh-inst (first constructor-types))))
-                                   (partial-type-env-env env)))
+                                   (partial-type-env-env env)
+                                   (mapcar (alexandria:compose #'parser:identifier-src-name
+                                                               #'parser:type-definition-name)
+                                           types)))
                                  ((eq repr-type :native)
                                   repr-arg)
                                  ((eq repr-type :enum)

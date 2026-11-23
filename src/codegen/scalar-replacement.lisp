@@ -29,6 +29,8 @@ calling conventions.")
   (:import-from
    #:coalton-impl/codegen/transformations
    #:specialize-match
+   #:open-known-constructor
+   #:unwrap-known-constructor-branch
    #:inlined-some-operand
    #:inlined-cons-operands
    #:node-abstraction-bound-variables
@@ -771,8 +773,10 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                       (every (lambda (subpat)
                                (irrefutable-pattern-p subpat env))
                              (pattern-constructor-patterns pat)))
-                 (let ((out (copy-node branch-body (node-type match-node))))
-                   (loop :for subpat :in (reverse (pattern-constructor-patterns pat))
+                 (multiple-value-bind (children out opened)
+                     (open-known-constructor pat fields (copy-node branch-body (node-type match-node)) env)
+                   (unless opened (return (values nil nil)))
+                   (loop :for subpat :in (reverse children)
                          :for field :in (reverse fields)
                          :do (setf out (bind-irrefutable-pattern subpat field out)))
                    (return (values out nil))))
@@ -782,7 +786,7 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                       (eq ctor-name (pattern-constructor-name pat))
                       (= 1 (length (pattern-constructor-patterns pat))))
                  (let* ((field (first fields))
-                        (field-ty (pattern-type (first (pattern-constructor-patterns pat))))
+                        (field-ty (node-type field))
                         (unwrapped-branches
                           (loop :for rem-branch :in rest-branches
                                 :for rem-pat := (match-branch-pattern rem-branch)
@@ -809,10 +813,8 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                                                (eq ctor-name
                                                    (pattern-constructor-name rem-pat))
                                                (= 1 (length (pattern-constructor-patterns rem-pat))))
-                                        :collect (make-match-branch
-                                                  :index-equalities (match-branch-index-equalities rem-branch)
-                                                  :pattern (first (pattern-constructor-patterns rem-pat))
-                                                  :body rem-body)
+                                        :collect (or (unwrap-known-constructor-branch rem-branch fields env)
+                                                     (return nil))
                                 :else
                                   :do (return nil))))
                    (when unwrapped-branches

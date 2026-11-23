@@ -15,6 +15,8 @@ later passes and Lisp compilers see simpler code.")
    #:inlined-some-operand
    #:inlined-cons-operands
    #:specialize-match
+   #:open-known-constructor
+   #:unwrap-known-constructor-branch
    #:prune-impossible-match-branches
    #:rename-type-variables)
   (:import-from
@@ -531,21 +533,17 @@ Returns a status keyword and a replacement body. Status is one of:
           (values ':unknown nil))
 
          (t
-          (loop :with out := body
-                :for subpattern :in (reverse (pattern-constructor-patterns pattern))
-                :for rand :in (reverse rands) :do
-                  (multiple-value-bind (status new-out)
-                      (rewrite-known-pattern-match subpattern rand out env)
-                    (ecase status
-                      (:match
-                       (setf out new-out))
-                      (:no-match
-                       (return-from rewrite-known-pattern-match
-                         (values ':no-match nil)))
-                      (:unknown
-                       (return-from rewrite-known-pattern-match
-                         (values ':unknown nil)))))
-                :finally (return (values ':match out)))))))
+          (multiple-value-bind (children out opened) (open-known-constructor pattern rands body env)
+            (unless opened (return-from rewrite-known-pattern-match (values ':unknown nil)))
+            (loop :for subpattern :in (reverse children)
+                  :for rand :in (reverse rands) :do
+                    (multiple-value-bind (status new-out)
+                        (rewrite-known-pattern-match subpattern rand out env)
+                      (ecase status
+                        (:match (setf out new-out))
+                        (:no-match (return-from rewrite-known-pattern-match (values ':no-match nil)))
+                        (:unknown (return-from rewrite-known-pattern-match (values ':unknown nil)))))
+                  :finally (return (values ':match out))))))))
 
     (pattern-binding
      (values ':unknown nil))
@@ -593,10 +591,8 @@ Returns a status keyword and a replacement body. Status is one of:
                               :else :if (and (pattern-constructor-p rem-pat)
                                              (eq name (pattern-constructor-name rem-pat))
                                              (= 1 (length (pattern-constructor-patterns rem-pat))))
-                                      :collect (make-match-branch
-                                                :index-equalities (match-branch-index-equalities rem-branch)
-                                                :pattern (first (pattern-constructor-patterns rem-pat))
-                                                :body rem-body)
+                                      :collect (or (unwrap-known-constructor-branch rem-branch rands env)
+                                                   (return nil))
                               :else
                                 :do (return nil))))
                  (when unwrapped
