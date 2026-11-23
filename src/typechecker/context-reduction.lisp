@@ -20,6 +20,8 @@
   (:export
    #:superclass-closure                 ; FUNCTION
    #:entail                             ; FUNCTION
+   #:by-inst                            ; FUNCTION
+   #:super-entail                       ; FUNCTION
    #:fundep-entail                      ; FUNCTION
    #:reduce-context                     ; FUNCTION
    #:split-context                      ; FUNCTION

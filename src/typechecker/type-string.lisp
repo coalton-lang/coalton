@@ -360,9 +360,14 @@
     (write-type-object object)))
 
 (defun type-to-string (object &optional env)
-  (with-pprint-variable-context ()
-    (with-output-to-string (stream)
-      (render-type-object stream object :env env))))
+  (flet ((render ()
+           (with-output-to-string (stream)
+             (render-type-object stream object :env env))))
+    (if *shared-type-names*
+        (with-pprint-variable-scope ()
+          (render))
+        (with-pprint-variable-context ()
+          (render)))))
 
 (defun pprint-type-object (stream object)
   (%call-with-existing-or-fresh-tyvar-context

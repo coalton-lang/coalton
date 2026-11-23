@@ -44,13 +44,22 @@
       (return-from unify-given (unify subs result input)))
     (let* ((open (loop :for var :in vars
                        :collect (make-substitution :from var :to (fresh-type-renamer var))))
-           (close (loop :for sub :in open
-                        :collect (make-substitution :from (substitution-to sub) :to (substitution-from sub))))
-           (given (unify nil (apply-substitution open result) (apply-substitution open input))))
+           (given (unify nil (apply-substitution open result) (apply-substitution open input)))
+           (close nil))
+      ;; Close the *surviving representative* of each still-abstract skolem.
+      ;; Unification may have oriented an opened variable toward a fresh
+      ;; constructor variable. Merely inverting OPEN leaves that type flexible.
+      (dolist (sub open)
+        (let ((rep (apply-substitution given (substitution-to sub))))
+          (when (and (tyvar-p rep) (not (tyvar-rigid-p rep))
+                     (not (find rep close :key #'substitution-from :test #'ty=)))
+            (push (make-substitution :from rep :to (substitution-from sub)) close))))
       (compose-substitution-lists
-       (loop :for sub :in given
-             :collect (make-substitution :from (apply-substitution close (substitution-from sub))
-                                         :to (apply-substitution close (substitution-to sub))))
+       (loop :for sub :in (compose-substitution-lists (compose-substitution-lists close given) open)
+             :for var := (substitution-from sub)
+             :unless (or (find var open :key #'substitution-to :test #'ty=)
+                         (ty= var (substitution-to sub)))
+               :collect sub)
        subs))))
 
 (defun unify-pattern-result (subs result input refinable)

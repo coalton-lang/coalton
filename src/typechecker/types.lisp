@@ -978,10 +978,20 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (let ((value (gethash (tyvar-id tvar) *pprint-tyvar-dict*)))
     (or value
         (let* ((preferred-name (tyvar-source-name tvar))
+               (name (and preferred-name
+                          ;; A distinct variable with a taken source name keeps
+                          ;; that name with a suffix, e.g. :E and :E1.
+                          (loop :for suffix :from 0
+                                :for name := (if (zerop suffix)
+                                                 preferred-name
+                                                 (let ((text (format nil "~A~D" (symbol-name preferred-name) suffix))
+                                                       (package (symbol-package preferred-name)))
+                                                   (if package (intern text package) (make-symbol text))))
+                                :unless (pprint-variable-name-used-p name)
+                                  :return name)))
                (pretty-tyvar
-                 (if (and preferred-name
-                          (not (pprint-variable-name-used-p preferred-name)))
-                     (make-tycon :name preferred-name :kind (tyvar-kind tvar))
+                 (if name
+                     (make-tycon :name name :kind (tyvar-kind tvar))
                      (next-pprint-variable-as-tvar (tyvar-kind tvar)))))
           (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
                 pretty-tyvar)))))

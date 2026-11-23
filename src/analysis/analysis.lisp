@@ -15,6 +15,7 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
+   (#:type-string #:coalton-impl/typechecker/type-string)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:analyze-translation-unit))
@@ -59,8 +60,18 @@
                    (loop :for branch :in (tc:node-match-branches node)
                          :for pat := (tc:node-match-branch-pattern branch)
                          :collect (collapse-binding-patterns pat))))
-             (loop :for pattern :in patterns
-                   :do (check-for-var-matching-constructor pattern env))
+             (dolist (pattern patterns)
+               (check-for-var-matching-constructor pattern env)
+               ;; Later uses may have specialized the scrutinee since this
+               ;; arm was checked. Inspect the *local* scrutinee in the
+               ;; elaborated tree; do not export this arm's MGU to its peers.
+               (let ((pattern-type (tc:qualified-ty-type (tc:pattern-type pattern))))
+                 (unless (or (tc:ty= pattern-type scrutinee-type)
+                             (nth-value 1 (tc:try-unify nil pattern-type scrutinee-type :all)))
+                   (tc-error "Incompatible match pattern"
+                             (source:note pattern "Pattern of type '~A' cannot match the scrutinee of type '~A'."
+                                          (type-string:type-to-string pattern-type env)
+                                          (type-string:type-to-string scrutinee-type env))))))
 
              (let ((exhaustive-or-missing
                      (find-non-matching-value (mapcar #'list patterns)

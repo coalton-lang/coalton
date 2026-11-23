@@ -402,6 +402,113 @@
     (signals tc:tc-error
       (check-coalton-types (format nil "(define-type (Same :a :b) (declare Refl (Same :x :x))) ~A" definition)))))
 
+(deftest gadt-decomposition-keeps-ordinary-requirements ()
+  (let ((witness "(define-type (Proof :p :q :r)
+                    (declare Witness (Proof (Optional :x) :y :y)))"))
+    ;; The proof establishes :p = Optional :b, not that :b itself is a pair.
+    ;; Test both columns and keep the partial branch strictly compile-only.
+    (dolist (row '("(match (Tuple w b) ((Tuple (Witness) (Tuple x _)) (if False x other)))"
+                   "(match (Tuple b w) ((Tuple (Tuple x _) (Witness)) (if False x other)))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil "~A (declare bad (Proof :p (Optional :b) :p * :b * :r -> :r))
+                      (define (bad w b other) ~A)" witness row))))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (declare bad (Proof :p (Optional :b) :p * :b -> Boolean))
+                    (define (bad (Witness) (Tuple flag _)) (the Boolean flag))" witness)))
+    (check-coalton-types
+     (format nil "~A (declare good (Proof :p (Optional (Tuple :r Unit)) :p * Tuple :r Unit -> :r))
+                  (define (good (Witness) (Tuple x (Unit))) x)" witness)))
+  ;; The representative of an inner equality can come from an enclosing
+  ;; constructor's decomposition, not just from the current constructor.
+  (check-coalton-types
+   "(define-type (Same :a :b) (declare Refl (Same :a :a)))
+    (define-type (Outer :p :b) (declare Mk (Same :b :h * :h -> Outer (List :h) :b)))
+    (define (first-value (Mk (Refl) (Tuple x _))) x)"
+   '("first-value" . "(Outer :p (Tuple :a :b) -> :a)")))
+
+(deftest gadt-local-results-retain-only-proven-types ()
+  (let ((proof "(define-type (Same :a :b) (declare SameProof (Same :x :x)))"))
+    (dolist (signature '("(Same :a :b * :a -> Optional :b)" "(Same :a :b * :b -> Optional :a)"))
+      (check-coalton-types
+       (format nil "~A (declare cast ~A)
+                    (define (cast w x)
+                      (let ((y (progn (match w ((SameProof) (Some x))))))
+                        (let copy = y) copy))" proof signature)))
+    ;; Generalizing the postponed component here would let each use of y
+    ;; invent an independent result type.
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (declare bad (Same :a :b * :a -> Tuple :b String))
+                    (define (bad w x) (let ((y (match w ((SameProof) x)))) (Tuple y y)))" proof)))
+    (dolist (result '(":c" ":unrelated"))
+      (flet ((program ()
+               (check-coalton-types
+                (format nil "~A (declare compose-cast (Same :a :b * Same :b :c * :a -> ~A))
+                             (define (compose-cast p q x)
+                               (let y = (match p ((SameProof) (match q ((SameProof) x)))))
+                               y)" proof result))))
+        (if (string= result ":c") (program) (signals tc:tc-error (program)))))
+    ;; Only the equality-dependent part stays monomorphic at a lexical let.
+    (check-coalton-types
+     (format nil "~A (declare cast (forall (:a :b) Same :a :b * :a -> :b))
+                  (define (cast w x)
+                    (let ((p (match w ((SameProof) (Tuple x None)))))
+                      (let (Tuple y _) = (the (Tuple :b (Optional Boolean)) p))
+                      (let _ = (the (Tuple :b (Optional String)) p)) y))" proof))
+    (check-coalton-types
+     (format nil "~A (define-struct Row (label String))
+                  (declare label-of (Same :a :b -> String))
+                  (define (label-of w)
+                    (let row = (match w ((SameProof) (Row \"value\"))))
+                    (let ((get (fn () (.label row)))) (get)))" proof)))
+  (check-coalton-types
+   "(define-type (Parts :a) (declare Pieces (Parts (Tuple Boolean :h))))
+    (declare pass (Parts :a * :a -> Optional :a))
+    (define (pass w x) (let p = (match w ((Pieces) (Some x)))) p)")
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Parts :a) (declare Pieces (:h -> Parts (Tuple Boolean :h))))
+      (declare bad (Parts :a -> :a))
+      (define (bad w) (let p = (match w ((Pieces h) h))) p)"))
+  (let ((indexed "(define-type (Item :i)
+                    (declare Flag (Boolean -> Item Boolean))
+                    (declare Count (Integer -> Item Integer)))"))
+    (check-coalton-types
+     (format nil "~A (define (get-item item)
+                       (let ((v (match item ((Flag b) b) ((Count n) n)))) v))" indexed)
+     '("get-item" . "(Item :i -> :i)"))))
+
+(deftest late-match-scrutinee-specialization ()
+  (let ((items "(define-type (Item :a)
+                  (declare Flag (Boolean -> Item Boolean))
+                  (declare AnyItem (:a -> Item :a)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (define (read-item p)
+                         (let n = (match p ((Flag b) b) ((AnyItem _) False)))
+                         (let _ = (the (Item String) p)) n)" items)))
+    (check-coalton-types
+     (format nil "~A (define (read-item p)
+                       (let n = (match p ((Flag b) b) ((AnyItem _) False)))
+                       (let _ = (the (Item Boolean) p)) n)" items)
+     '("read-item" . "(Item Boolean -> Boolean)"))
+    ;; Redundancy is a usefulness warning, not a type incompatibility.
+    (handler-bind ((source:source-warning #'muffle-warning))
+      (check-coalton-types
+       (format nil "~A (define (read-item p)
+                         (let n = (match p ((Flag b) b) ((Flag _) True) ((AnyItem _) False)))
+                         (let _ = (the (Item Boolean) p)) n)" items)))
+    (check-coalton-types
+     (format nil "~A (define-type (Tag :a)
+                       (declare FlagTag (Tag Boolean)) (declare CountTag (Tag Integer)))
+                  (declare nested (Tag :a * Item :a -> :a))
+                  (define (nested tag item)
+                    (match tag
+                      ((FlagTag) (match item ((Flag b) b) ((AnyItem b) (not b))))
+                      ((CountTag) (match item ((AnyItem n) (1+ n))))))" items))))
+
 (deftest gadt-unsupported-constructor-constraint-diagnostic ()
   (let ((diagnostic (collect-compiler-error
                      "(package gadt-constraint-test (import coalton-prelude))

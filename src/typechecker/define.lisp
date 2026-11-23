@@ -55,8 +55,18 @@
   "Enclosing blocks whose return types must be checked under the current pattern evidence.")
 (defvar *enclosing-predicates* nil
   "Dictionaries supplied by enclosing declarations, in the current branch's types.")
-(defvar *branch-result-checks* :outside
-  "Checks on ambiguous match results, discharged before leaving the enclosing body.")
+(defstruct branch-result-choice
+  (type (util:required 'type) :type tc:ty :read-only t)
+  (candidates (util:required 'candidates) :type tc:ty-list :read-only t)
+  (node (util:required 'node) :type node :read-only t))
+
+(defstruct branch-result-scope
+  (choices nil :type list))
+
+(defvar *branch-result-scope* nil
+  "Collects constraints on ambiguous result components until their use sites are known.")
+(defvar *enclosing-index-evidence* nil
+  "Enclosing index equalities available when a nested match returns a value.")
 
 (declaim (type (or null hash-table) *pre-inferred-builder-items*))
 (defvar *pre-inferred-builder-items* nil
@@ -153,13 +163,14 @@
   (let* ((first-pred (tc:context-fundep-conflict-first-pred condition))
          (second-pred (tc:context-fundep-conflict-second-pred condition))
          (located-pred (find-if #'source:location (list second-pred first-pred))))
-    (tc-error "Context conflicts with functional dependencies"
-              (tc-location (if located-pred
-                               (source:location located-pred)
-                               location)
-                           "the predicates ~A and ~A conflict with functional dependencies"
-                           (type-object-string first-pred env)
-                           (type-object-string second-pred env)))))
+    (with-shared-type-names ()
+      (tc-error "Context conflicts with functional dependencies"
+                (tc-location (if located-pred
+                                 (source:location located-pred)
+                                 location)
+                             "the predicates ~A and ~A conflict with functional dependencies"
+                             (type-object-string first-pred env)
+                             (type-object-string second-pred env))))))
 
 (defmacro with-fundep-errors ((location env) &body body)
   "Report errors from solving functional dependencies in BODY as type errors
@@ -173,10 +184,11 @@ at LOCATION, unless the predicates involved have their own locations."
 
 (defun standard-expression-type-mismatch-error (node subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
-  (tc-error "Type mismatch"
-            (tc-note node "Expected type '~A' but got '~A'"
-                     (type-object-string (tc:apply-substitution subs expected-type))
-                     (type-object-string (tc:apply-substitution subs ty)))))
+  (with-shared-type-names ()
+    (tc-error "Type mismatch"
+              (tc-note node "Expected type '~A' but got '~A'"
+                       (type-object-string (tc:apply-substitution subs expected-type))
+                       (type-object-string (tc:apply-substitution subs ty))))))
 
 (defun required-builder-symbol (package-name symbol-name)
   (or (first (util:find-symbol? symbol-name package-name))
@@ -526,7 +538,8 @@ at LOCATION, unless the predicates involved have their own locations."
       (util:coalton-bug "Cannot desugar non-builder node ~S" node))))
 
 (defun homogeneous-builder-item-error (kind expected-type actual-type current-node first-node)
-  (tc-error (ecase kind
+  (with-shared-type-names ()
+   (tc-error (ecase kind
               (:collection "Collection element type mismatch")
               (:association-key "Association key type mismatch")
               (:association-value "Association value type mismatch"))
@@ -544,7 +557,7 @@ at LOCATION, unless the predicates involved have their own locations."
                                (ecase kind
                                  (:collection "earlier element here")
                                  (:association-key "earlier key here")
-                                 (:association-value "earlier value here")))))
+                                 (:association-value "earlier value here"))))))
 
 (defun check-homogeneous-builder-items (kind items subs env)
   (declare (type list items)
@@ -1956,7 +1969,8 @@ produces runtime dictionary applications."
                            (tc-env-env env) (tc:qualified-ty-predicates skolem-qual-ty)))
              (body-env (tc-env-extend-type-variable-scope env skolems)))
         (multiple-value-bind (inferred-ty wanted-preds accessors typed-node subs)
-            (let ((*enclosing-predicates* (append given-preds *enclosing-predicates*)))
+            (let ((*enclosing-predicates* (append given-preds *enclosing-predicates*))
+                  (*branch-result-scope* nil))
               (infer-expression-type node skolem-body-ty subs body-env))
           (declare (ignore inferred-ty))
           (tc:apply-substitution subs body-env)
@@ -2109,17 +2123,88 @@ produces runtime dictionary applications."
                       subs))))))))
 
 
+(defconstant +hidden-obligation-max-depth+ 64
+  "Deepest chain of instance contexts searched when proving a predicate on an
+existential type. A predicate needing a deeper proof is reported as unsolved.")
+
+(defun discharge-hidden-obligations (hidden preds accessors subs env)
+  "Solve the obligations of a GADT branch that mention its existential types.
+
+The pattern scope is the last place where an existential type is known, so
+an obligation which mentions one is solved here or not at all. Accessors are
+resolved from struct definitions, and predicates are reduced by enclosing
+givens and instances. An instance context replaces the predicate it proves, so
+requirements on outer types still reach the caller. Whatever remains mentions
+an existential type and is rejected by CHECK-PATTERN-SCOPE.
+
+Returns (VALUES PREDS ACCESSORS SUBS)."
+  (declare (type tc:tyvar-list hidden)
+           (type tc:ty-predicate-list preds)
+           (type accessor-list accessors)
+           (type tc:substitution-list subs)
+           (type tc-env env))
+  (when (null hidden)
+    (return-from discharge-hidden-obligations (values preds accessors subs)))
+  (let ((global (tc-env-env env)))
+    (flet ((hidden-p (object)
+             (some (lambda (var) (member var hidden :test #'tc:ty=))
+                   (tc:type-variables (tc:apply-substitution subs object)))))
+      ;; Solving one accessor can expose an existential type in another, as
+      ;; in (.label (.nested r)), so repeat until no new accessor is solved.
+      ;; Each round partitions under the current SUBS, and every accessor is
+      ;; either solved or kept for CHECK-PATTERN-SCOPE.
+      (loop
+        (let ((selected (loop :for accessor :in accessors
+                              :when (hidden-p (accessor-from accessor))
+                                :collect accessor))
+              (others (loop :for accessor :in accessors
+                            :unless (hidden-p (accessor-from accessor))
+                              :collect accessor)))
+          (when (null selected)
+            (return))
+          (multiple-value-bind (unsolved accessor-subs)
+              (solve-accessors (tc:apply-substitution subs selected) global)
+            (setf subs (tc:compose-substitution-lists accessor-subs subs)
+                  accessors (append others unsolved))
+            (when (= (length unsolved) (length selected))
+              (return)))))
+      (let ((givens (tc:apply-substitution subs *enclosing-predicates*)))
+        (labels ((discharge (pred path)
+                   ;; Givens are matched through superclasses only, so this
+                   ;; walk is the only instance descent. PATH holds the
+                   ;; predicates whose instance contexts are being proved. A
+                   ;; predicate that recurs, or a proof deeper than the bound,
+                   ;; is not proved: it is kept and later rejected.
+                   (cond
+                     ((not (hidden-p pred))
+                      (list pred))
+                     ((tc:super-entail global givens pred)
+                      nil)
+                     ((or (member pred path :test #'tc:type-predicate=)
+                          (<= +hidden-obligation-max-depth+ (length path)))
+                      (list pred))
+                     (t
+                      (multiple-value-bind (context foundp) (tc:by-inst global pred)
+                        (if foundp
+                            (mapcan (lambda (p) (discharge p (cons pred path))) context)
+                            (list pred)))))))
+          (values (mapcan (lambda (p) (discharge p nil)) (tc:apply-substitution subs preds))
+                  (tc:apply-substitution subs accessors)
+                  subs))))))
+
 (defun check-pattern-scope (hidden watermark result preds accessors subs location &optional inputs)
   "Skolems may occur inside the elaborated branch, not in its outward interface."
   (when hidden
-    (flet ((check (ty &optional (via "result type"))
+    (flet ((check (ty &optional (via "result type") (shown ty))
              (let* ((ty (tc:apply-substitution subs ty))
                     (var (find-if (lambda (v) (member v hidden :test #'tc:ty=))
                                   (tc:type-variables ty))))
                (when var
-                 (tc-error "Untouchable existential type escapes GADT pattern scope"
-                           (tc-note location "Existential type '~A' escapes through ~A '~A'"
-                                    (type-object-string var) via (type-object-string ty)))))))
+                 (with-shared-type-names ()
+                   (tc-error "Untouchable existential type escapes GADT pattern scope"
+                             (tc-note location "Existential type '~A' escapes through ~A '~A'"
+                                      (type-object-string var) via
+                                      (type-object-string (tc:apply-substitution subs shown)))))))))
       (check result)
       (dolist (input inputs)
         (check input "parameter type"))
@@ -2127,10 +2212,13 @@ produces runtime dictionary applications."
         (when (< (tc:tyvar-id (tc:substitution-from sub)) watermark)
           (check (tc:substitution-to sub) "an enclosing binding of type")))
       (dolist (pred preds)
-        (mapc #'check (tc:ty-predicate-types pred)))
+        (dolist (ty (tc:ty-predicate-types pred))
+          (check ty "unsolved predicate" pred)))
       (dolist (accessor accessors)
-        (check (accessor-from accessor))
-        (check (accessor-to accessor))))))
+        (check (accessor-from accessor) "unresolved field accessor on"
+               (accessor-from accessor))
+        (check (accessor-to accessor) "the result of an unresolved field accessor on"
+               (accessor-from accessor))))))
 
 (defun copy-branch-env (env)
   (make-tc-env :env (tc-env-env env)
@@ -2181,7 +2269,7 @@ Composition also rewrites the ranges of older substitutions. Re-exporting
 those older domains would turn a branch-local equality into an outer one."
   (loop :for sub :in body-subs
         :for var := (tc:substitution-from sub)
-        :when (and (< (tc:tyvar-id var) watermark)
+        :when (and (or (not watermark) (< (tc:tyvar-id var) watermark))
                    (not (find var pattern-subs :key #'tc:substitution-from :test #'tc:ty=)))
           :collect sub))
 
@@ -2189,29 +2277,106 @@ those older domains would turn a branch-local equality into an outer one."
   (remove-if (lambda (sub) (tc:ty= (tc:substitution-from sub) (tc:substitution-to sub)))
              (tc:compose-substitution-lists renamings subs)))
 
-(defun equated-input-indices (inputs base pattern-subs)
-  (let ((vars (tc:type-variables (tc:apply-substitution base inputs))))
-    (loop :for var :in vars
-          :for rep := (tc:apply-substitution pattern-subs var)
-          :when (and (not (tc:ty= var rep)) (find rep vars :test #'tc:ty=))
-            :collect (tc:make-substitution :from var :to rep))))
+(defun branch-input-evidence (inputs base pattern-subs)
+  (loop :for var :in (tc:type-variables (tc:apply-substitution base inputs))
+        :for local := (tc:apply-substitution pattern-subs var)
+        :unless (tc:ty= var local)
+          :collect (tc:make-substitution :from var :to local)))
 
-(defun check-branch-result (expected actual evidence subs node)
-  ;; Compare at the use site's type, modulo this branch's equations. For
-  ;; example, `let z = match w ((Refl) y)` need not choose between two
-  ;; otherwise distinct outer indices before seeing how z is used.
+(defun project-branch-result (type evidence hidden body-subs node)
+  "Express TYPE in the enclosing scope. Where a result can be spelled in
+several ways, keep the choice monomorphic until its uses are known."
+  (labels ((project (ty)
+             (let* ((aliases (loop :for eqn :in evidence
+                                   :when (tc:ty= ty (tc:apply-substitution body-subs (tc:substitution-to eqn)))
+                                     :collect (tc:substitution-from eqn)))
+                    (expanded
+                      (typecase ty
+                        (tc:tapp
+                         (tc:make-tapp :from (project (tc:tapp-from ty))
+                                       :to (project (tc:tapp-to ty)) :alias (tc:ty-alias ty)))
+                        (tc:function-ty
+                         (tc:make-function-ty
+                          :alias (tc:ty-alias ty)
+                          :positional-input-types (mapcar #'project (tc:function-ty-positional-input-types ty))
+                          :keyword-input-types
+                          (loop :for entry :in (tc:function-ty-keyword-input-types ty)
+                                :collect (tc:make-keyword-ty-entry
+                                          :keyword (tc:keyword-ty-entry-keyword entry)
+                                          :type (project (tc:keyword-ty-entry-type entry))))
+                          :keyword-open-p (tc:function-ty-keyword-open-p ty)
+                          :origin (tc:function-ty-origin ty)
+                          :output-types (mapcar #'project (tc:function-ty-output-types ty))))
+                        (tc:result-ty
+                         (tc:make-result-ty :alias (tc:ty-alias ty)
+                                            :output-types (mapcar #'project (tc:result-ty-output-types ty))))
+                        (t ty))))
+               (unless aliases (return-from project expanded))
+               ;; List h can leave the arm as a when a = List h, but h
+               ;; itself must never enter the outward type.
+               (let ((candidates (if (intersection hidden (tc:type-variables expanded) :test #'tc:ty=)
+                                     aliases
+                                     (cons expanded aliases))))
+                 (cond ((null (rest candidates)) (first candidates))
+                       (t
+                        (let ((var (tc:make-variable :kind (tc:kind-of ty))))
+                          (push (make-branch-result-choice :type var :candidates candidates :node node)
+                                (branch-result-scope-choices *branch-result-scope*))
+                          var)))))))
+    (project type)))
+
+(defun unify-branch-result (subs expected actual node)
   (handler-case
-      (let ((givens nil))
-        (dolist (eqn evidence)
-          (setf givens (tc:unify-given
-                        givens (tc:apply-substitution subs (tc:substitution-from eqn))
-                        (tc:apply-substitution subs (tc:substitution-to eqn)) :all)))
-        (let ((wanted (tc:unify nil
-                                (tc:apply-substitution givens (tc:apply-substitution subs expected))
-                                (tc:apply-substitution givens (tc:apply-substitution subs actual)))))
-          (merge-branch-equations subs wanted node)))
+      (tc:unify subs expected actual)
     (tc:coalton-internal-type-error ()
       (standard-expression-type-mismatch-error node subs expected actual))))
+
+(defun solve-branch-result-choices (scope subs)
+  (labels ((result (choice)
+             (tc:apply-substitution subs (branch-result-choice-type choice)))
+           (candidates (choice)
+             (tc:apply-substitution subs (branch-result-choice-candidates choice))))
+    (loop :for (choice . later) :on (reverse (branch-result-scope-choices scope))
+          :for wanted := (result choice)
+          :for options := (candidates choice)
+          :unless (member wanted options :test #'tc:ty=)
+            :do (let* ((others (remove-if-not (lambda (other) (tc:ty= wanted (result other))) later))
+                       ;; Prefer a common spelling across all branches to
+                       ;; specializing an input to make the first arm fit.
+                       (common (find-if (lambda (ty)
+                                          (every (lambda (other) (member ty (candidates other) :test #'tc:ty=))
+                                                 others))
+                                        options))
+                       (chosen (or (and common (nth-value 1 (tc:try-unify subs wanted common)) common)
+                                   (find-if (lambda (ty) (nth-value 1 (tc:try-unify subs wanted ty))) options)
+                                   (first options))))
+                  (setf subs (unify-branch-result subs wanted chosen (branch-result-choice-node choice)))))
+    subs))
+
+(defun branch-result-environment-variables (env-vars subs)
+  ;; A lexical let may generalize independent components (e.g. the element
+  ;; of None), but not an unsolved choice or the types it depends on.
+  (let ((choices (and *branch-result-scope* (branch-result-scope-choices *branch-result-scope*))))
+    (if choices
+        (tc:union-tys env-vars
+                      (tc:type-variables
+                       (tc:apply-substitution
+                        subs (loop :for choice :in choices
+                                   :append (cons (branch-result-choice-type choice)
+                                                 (branch-result-choice-candidates choice))))))
+        env-vars)))
+
+(defun export-nested-result-choices (scope pat-subs body-subs)
+  ;; Keep the use-site type established by the body without substituting away
+  ;; the candidates' outer index names. Existential arms finish their nested
+  ;; checks before escape checking instead of exporting them.
+  (when (and scope (branch-result-scope-choices scope))
+    (let ((wanted (branch-body-equations pat-subs body-subs nil)))
+      (dolist (choice (reverse (branch-result-scope-choices scope)))
+        (push (make-branch-result-choice :type (tc:apply-substitution body-subs (branch-result-choice-type choice))
+                                         :candidates (tc:apply-substitution wanted (branch-result-choice-candidates choice))
+                                         :node (branch-result-choice-node choice))
+              (branch-result-scope-choices *branch-result-scope*))))))
 
 (defun pattern-literal-type (pat)
   (etypecase (parser:pattern-literal-value pat)
@@ -2278,9 +2443,10 @@ all constructors in the pattern."
                        (setf subs (tc:compose-substitution-lists wanted subs)
                              local (tc:compose-substitution-lists wanted local)))
                    (tc:coalton-internal-type-error ()
-                     (tc-error "Type mismatch"
-                               (tc-note pat "Expected type '~A' but pattern has type '~A'"
-                                        (type-object-string input) (type-object-string type)))))))
+                     (with-shared-type-names ()
+                       (tc-error "Type mismatch"
+                                 (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                          (type-object-string input) (type-object-string type))))))))
              (visit-pattern (pat input)
                (typecase pat
                  (parser:pattern-binding
@@ -2300,12 +2466,21 @@ all constructors in the pattern."
                                              (tc:type-entry-type entry)
                                              (mapcar #'tc:fresh-type-renamer (tc:type-entry-tyvars entry)))
                                             input pat))
-                           (handler-case (setf local (tc:unify-pattern-result local result input :all))
+                           (handler-case
+                               (progn
+                                 (setf local (tc:unify-pattern-result local result input :all))
+                                 ;; A nested witness can identify a variable
+                                 ;; from an earlier constructor with an outer
+                                 ;; index. Requirements on the residual type
+                                 ;; must still reach that outer index.
+                                 (setf local (discharge-pattern-renamings
+                                              (branch-index-renamings inputs subs local) local)))
                              (tc:coalton-internal-type-error ()
-                               (tc-error "Type mismatch"
-                                         (tc-note pat "Expected type '~A' but pattern has type '~A'"
-                                                  (type-object-string (tc:apply-substitution local input))
-                                                  (type-object-string result))))))
+                               (with-shared-type-names ()
+                                 (tc-error "Type mismatch"
+                                           (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                                    (type-object-string (tc:apply-substitution local input))
+                                                    (type-object-string result)))))))
                           (t (require-shape result input pat)))
                         (setf pending (append (mapcar #'cons (parser:pattern-constructor-patterns pat)
                                                       (tc:function-type-arguments ty))
@@ -2856,7 +3031,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (scope-pattern-bindings (parser:node-body-nodes node) (parser:node-body-last-node node) env)
       (let ((preds nil)
             (accessors nil)
-            (*branch-result-checks* nil)
+            (own-scope-p (null *branch-result-scope*))
+            (*branch-result-scope* (or *branch-result-scope* (make-branch-result-scope)))
             (nodes nil))
         (dolist (elem elements)
           (multiple-value-bind (_ ps as typed new-subs)
@@ -2866,9 +3042,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (setf preds (append preds ps) accessors (append accessors as) subs new-subs)))
         (multiple-value-bind (ty ps as typed subs)
             (infer-expression-type tail expected-type subs env)
-          (dolist (check (nreverse *branch-result-checks*))
-            (setf subs (funcall check subs)))
-          (values ty (append preds ps) (append accessors as)
+          (when own-scope-p
+            (setf subs (solve-branch-result-choices *branch-result-scope* subs)))
+          (values (tc:apply-substitution subs ty) (append preds ps) (append accessors as)
                   (make-node-body :nodes (nreverse nodes) :last-node typed) subs)))))
 
   (:method ((node parser:node-abstraction) expected-type subs env)
@@ -2877,7 +3053,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-abstraction tc:substitution-list &optional))
 
-    (let* ((effective-expected-type (tc:apply-substitution subs expected-type))
+    (let* ((*branch-result-scope* nil)
+           (effective-expected-type (tc:apply-substitution subs expected-type))
            (positional-params (parser:node-abstraction-params node))
            (keyword-params (parser:node-abstraction-keyword-params node)))
       (ensure-no-duplicate-function-parameters positional-params keyword-params)
@@ -2975,15 +3152,20 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (infer-keyword-params keyword-params expected-keyword-table local-subs env)
             (multiple-value-bind (body-ty preds accessors body-node local-subs)
                 (infer-expression-type (parser:node-abstraction-body node) body-result-ty local-subs env)
+              (multiple-value-setq (preds accessors local-subs)
+                (discharge-hidden-obligations untouchable-existentials
+                                              (append (pattern-predicates typed-positional-params) default-preds preds)
+                                              (append default-accessors accessors)
+                                              local-subs env))
               (flet ((in-body (object)
                        (if abstraction-gadt-p (tc:apply-substitution local-subs object) object)))
                 (let* ((body-ty (tc:apply-substitution local-subs body-ty))
                        (typed-body (merge-keyword-prefix-nodes-into-body (nreverse keyword-prefix-nodes)
                                                                         body-node))
                        (preds (outward-pattern-predicates
-                               (in-body (append (pattern-predicates typed-positional-params) default-preds preds))
+                               (in-body preds)
                                outer-givens *enclosing-predicates* local-subs (tc-env-env env)))
-                       (accessors (in-body (append default-accessors accessors)))
+                       (accessors (in-body accessors))
                        (keywords
                          (loop :for entry :in (nreverse keyword-entry-types)
                                :collect (or (and abstraction-gadt-p
@@ -3234,7 +3416,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
             (let ((branches (parser:node-match-branches node))
                   (input-types (list expr-ty))
+                  (own-scope-p (null *branch-result-scope*))
+                  (*branch-result-scope* (or *branch-result-scope* (make-branch-result-scope)))
                   (typed-branches nil))
+              ;; Branches refine the scrutinee's indices, so its type must be
+              ;; known before they are typed. A field accessor in the scrutinee
+              ;; would otherwise leave it as a variable unrelated to the field.
+              (multiple-value-bind (unsolved accessor-subs)
+                  (solve-accessors (tc:apply-substitution subs accessors) (tc-env-env env))
+                (setf subs (tc:compose-substitution-lists accessor-subs subs)
+                      accessors unsolved))
               (dolist (branch branches)
                 (setf subs (constrain-pattern-inputs (list (parser:node-match-branch-pattern branch))
                                                      input-types subs env)))
@@ -3255,21 +3446,30 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       (let* ((outer-givens *enclosing-predicates*)
                              (*enclosing-predicates* (tc:apply-substitution pat-subs outer-givens))
                              (expected (tc:apply-substitution base-subs expected-type))
-                             (alternatives
-                               (and (listp *branch-result-checks*) (tc:tyvar-p expected)
+                             (givens (append (branch-input-evidence input-types base-subs pat-subs)
+                                             *enclosing-index-evidence*))
+                             (evidence
+                               (and (tc:tyvar-p expected)
                                     (not (member expected (tc:type-variables
                                                            (tc:apply-substitution base-subs input-types))
                                                  :test #'tc:ty=))
-                                    (equated-input-indices input-types base-subs pat-subs))))
+                                    givens))
+                             (body-scope (unless hidden (make-branch-result-scope))))
                         (multiple-value-bind (body-ty body-preds body-accessors typed-body body-subs)
-                            (let ((*gadt-return-targets* *return-blocks*))
-                              (infer-expression-type body (if alternatives
+                            (let ((*gadt-return-targets* *return-blocks*)
+                                  (*enclosing-index-evidence* givens)
+                                  (*branch-result-scope* body-scope))
+                              (infer-expression-type body (if evidence
                                                               (tc:fresh-type-renamer expected)
                                                               (tc:apply-substitution pat-subs expected-type))
                                                      pat-subs branch-env))
+                          (multiple-value-setq (body-preds body-accessors body-subs)
+                            (discharge-hidden-obligations hidden
+                                                          (append body-preds pat-preds (pattern-predicates pat))
+                                                          body-accessors body-subs branch-env))
                           (flet ((local-type (object) (tc:apply-substitution body-subs object)))
                             (setf preds (append preds (outward-pattern-predicates
-                                                       (local-type (append body-preds pat-preds (pattern-predicates pat)))
+                                                       (local-type body-preds)
                                                        outer-givens *enclosing-predicates* body-subs (tc-env-env env)))
                                   accessors (append accessors (local-type body-accessors)))
                             (push (make-node-match-branch :pattern (local-type pat)
@@ -3279,13 +3479,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                           (let ((last (node-body-last-node typed-body)))
                             (setf subs (merge-branch-equations
                                         subs (branch-body-equations pat-subs body-subs watermark) last))
-                            (when alternatives
-                              (let ((actual (tc:apply-substitution body-subs body-ty)))
-                                (check-pattern-scope hidden watermark actual nil nil subs (source:location branch))
-                                (push (lambda (subs) (check-branch-result expected actual alternatives subs last))
-                                      *branch-result-checks*))))
+                            (export-nested-result-choices body-scope pat-subs body-subs)
+                            (when evidence
+                              (let ((outward (project-branch-result (tc:apply-substitution body-subs body-ty)
+                                                                    evidence hidden body-subs last)))
+                                (setf subs (unify-branch-result subs expected outward last)))))
                           (check-pattern-scope hidden watermark expected-type preds accessors subs
                                                (source:location branch))))))))
+              (when own-scope-p
+                (setf subs (solve-branch-result-choices *branch-result-scope* subs)))
               (let ((type (tc:apply-substitution subs expected-type)))
                 (values type preds accessors
                         (make-node-match :type (tc:qualify nil type)
@@ -3358,7 +3560,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    :for branch :in (parser:node-catch-branches node)
                    :for body := (parser:node-catch-branch-body branch)
                    :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
-                                (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+                                (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*))
+                                      (*branch-result-scope* (unless hidden *branch-result-scope*)))
                                   (infer-expression-type body ret-ty subs env))
                               (declare (ignore body-ty))
                               (setf subs subs_)
@@ -3380,6 +3583,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (handler-case
               (progn
                 (setf subs (tc:unify subs ret-ty expected-type))
+                (multiple-value-setq (preds accessors subs)
+                  (discharge-hidden-obligations hidden preds accessors subs env))
                 (let ((type (tc:apply-substitution subs ret-ty)))
                   (check-pattern-scope hidden watermark type preds accessors subs (source:location node))
                   (values
@@ -3431,7 +3636,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :for branch :in (parser:node-resumable-branches node)
                  :for body := (parser:node-resumable-branch-body branch)
                  :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
-                              (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*)))
+                              (let ((*gadt-return-targets* (if hidden *return-blocks* *gadt-return-targets*))
+                                    (*branch-result-scope* (unless hidden *branch-result-scope*)))
                                 (infer-expression-type body expr-ty subs env))
                             (declare (ignore body-ty))
                             (setf subs subs_)
@@ -3450,6 +3656,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (handler-case
             (progn
               (setf subs (tc:unify subs expr-ty expected-type))
+              (multiple-value-setq (preds accessors subs)
+                (discharge-hidden-obligations hidden preds accessors subs env))
               (let ((type (tc:apply-substitution subs expr-ty)))
                 (check-pattern-scope hidden watermark type preds accessors subs (source:location node))
                 (values
@@ -3720,19 +3928,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (handler-case
               (setf subs (tc:unify subs declared-ty expr-ty))
             (tc:coalton-internal-type-error ()
-              (tc-error "Type mismatch"
-                        (tc-note node "Declared type '~A' does not match inferred type '~A'"
-                                 (type-object-string (tc:apply-substitution subs declared-ty))
-                                 (type-object-string (tc:apply-substitution subs expr-ty))))))
+              (with-shared-type-names ()
+                (tc-error "Type mismatch"
+                          (tc-note node "Declared type '~A' does not match inferred type '~A'"
+                                   (type-object-string (tc:apply-substitution subs declared-ty))
+                                   (type-object-string (tc:apply-substitution subs expr-ty)))))))
 
           ;; Check that declared-ty is not more specific than expr-ty
           (handler-case
               (tc:match expr-ty declared-ty)
             (tc:coalton-internal-type-error ()
-              (tc-error "Declared type too general"
-                        (tc-note node "Declared type '~A' is more general than inferred type '~A'"
-                                 (type-object-string (tc:apply-substitution subs declared-ty))
-                                 (type-object-string (tc:apply-substitution subs expr-ty))))))
+              (with-shared-type-names ()
+                (tc-error "Declared type too general"
+                          (tc-note node "Declared type '~A' is more general than inferred type '~A'"
+                                   (type-object-string (tc:apply-substitution subs declared-ty))
+                                   (type-object-string (tc:apply-substitution subs expr-ty)))))))
 
           (handler-case
               (progn
@@ -4450,10 +4660,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :location (source:location node))
                subs))
           (tc:coalton-internal-type-error ()
-            (tc-error "Type mismatch"
-                      (tc-note node "Expected type '~A' but got '~A'"
-                               (type-object-string (tc:apply-substitution subs expected-type))
-                               (type-object-string (tc:apply-substitution subs expr-ty)))))))))
+            (with-shared-type-names ()
+              (tc-error "Type mismatch"
+                        (tc-note node "Expected type '~A' but got '~A'"
+                                 (type-object-string (tc:apply-substitution subs expected-type))
+                                 (type-object-string (tc:apply-substitution subs expr-ty))))))))))
 
   (:method ((node parser:node-do) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -4607,10 +4818,11 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
                subs
                nil)))
         (tc:coalton-internal-type-error ()
-          (tc-error "Type mismatch"
-                    (tc-note pat "Expected type '~A' but pattern literal has type '~A'"
-                             (type-object-string (tc:apply-substitution subs expected-type))
-                             (type-object-string (tc:apply-substitution subs ty))))))))
+          (with-shared-type-names ()
+            (tc-error "Type mismatch"
+                      (tc-note pat "Expected type '~A' but pattern literal has type '~A'"
+                               (type-object-string (tc:apply-substitution subs expected-type))
+                               (type-object-string (tc:apply-substitution subs ty)))))))))
 
   (:method ((pat parser:pattern-wildcard) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -4671,10 +4883,11 @@ Returns (VALUES INFERRED-TYPE PREDS NODE SUBSTITUTIONS EXISTENTIAL-VARS)")
                   (setf ctor-ty (tc:apply-substitution subs ctor-ty))
                   (setf pat-ty (tc:function-return-type ctor-ty)))
               (tc:coalton-internal-type-error ()
-                (tc-error "Type mismatch"
-                          (tc-note pat "Expected type '~A' but pattern has type '~A'"
-                                   (type-object-string (tc:apply-substitution subs expected-type))
-                                   (type-object-string (tc:apply-substitution subs pat-ty))))))
+                (with-shared-type-names ()
+                  (tc-error "Type mismatch"
+                            (tc-note pat "Expected type '~A' but pattern has type '~A'"
+                                     (type-object-string (tc:apply-substitution subs expected-type))
+                                     (type-object-string (tc:apply-substitution subs pat-ty)))))))
 
             (let* ((ctor-preds (tc:apply-substitution subs ctor-preds))
                    ;; A variable not named by the incoming indices is local. This
@@ -5408,19 +5621,21 @@ as a recursive function rather than a recursive value."
                              (tc:quantify-using-tvar-order quantified-tvars output-qual-type t)
                              (tc:quantify quantified-tvars output-qual-type))))
                   (unless (tc:ty-scheme= declared-output-scheme output-scheme)
-                    (tc-error "Declared type is too general"
-                              (tc-location location
-                                           "Declared type ~A is more general than inferred type ~A."
-                                           (type-object-string declared-output-scheme)
-                                           (type-object-string output-scheme)))))
+                    (with-shared-type-names ()
+                      (tc-error "Declared type is too general"
+                                (tc-location location
+                                             "Declared type ~A is more general than inferred type ~A."
+                                             (type-object-string declared-output-scheme)
+                                             (type-object-string output-scheme))))))
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))
-                  (tc-error "Explicit type is missing inferred predicate"
-                            (tc-location location
-                                         "Declared type ~A is missing inferred predicate ~A"
-                                         (type-object-string output-qual-type)
-                                         (type-object-string (first retained-preds))))))
+                  (with-shared-type-names ()
+                    (tc-error "Explicit type is missing inferred predicate"
+                              (tc-location location
+                                           "Declared type ~A is missing inferred predicate ~A"
+                                           (type-object-string output-qual-type)
+                                           (type-object-string (first retained-preds)))))))
 
                 (values deferred-preds
                         (attach-explicit-binding-type
@@ -5790,7 +6005,8 @@ as a recursive function rather than a recursive value."
                      :for ty :in expr-tys
                      :for node := (parser:binding-value binding)
                      :collect (multiple-value-bind (preds_ accessors_ node_ subs_)
-                                  (infer-binding-type binding ty subs env)
+                                  (infer-binding-type binding ty subs env :share-result-choices
+                                                      (typep binding 'parser:node-let-binding))
                                 (setf subs subs_)
                                 (setf preds (append preds preds_))
                                 (setf accessors (append accessors accessors_))
@@ -5816,7 +6032,7 @@ as a recursive function rather than a recursive value."
           (let* ((expr-tys
                    (tc:apply-substitution subs expr-tys))
                  (env-tvars
-                   (tc-env-bindings-variables env bound-variables))
+                   (branch-result-environment-variables (tc-env-bindings-variables env bound-variables) subs))
                  (expr-tvars
                    (remove-duplicates
                     (append (tc:type-variables expr-tys)
@@ -5985,14 +6201,14 @@ as a recursive function rather than a recursive value."
                                      rewrite-table))
                      subs))))))))))))
 
-(defun infer-binding-type (binding expected-type subs env)
+(defun infer-binding-type (binding expected-type subs env &key share-result-choices)
   "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's parameters to the environment."
   (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
            (values tc:ty-predicate-list accessor-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
-  (let ((*branch-result-checks* :outside) ; never delay a check across generalization
+  (let ((*branch-result-scope* (and share-result-choices *branch-result-scope*))
         (params (parser:binding-parameters binding))
         (keyword-params (parser:binding-keyword-parameters binding)))
     (ensure-no-duplicate-function-parameters params keyword-params)

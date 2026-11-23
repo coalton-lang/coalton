@@ -529,7 +529,7 @@ error: Ambiguous predicate
   --> test:5:9
    |
  5 |    (into (into x)))
-   |           ^^^^ Ambiguous predicate Into :A :B
+   |           ^^^^ Ambiguous predicate Into :A :A1
 
 ================================================================================
 Collection builder elements must be homogeneous

@@ -2042,7 +2042,7 @@ consume all attributes")))
            (result-head (if (typep type 'function-ty)
                             (function-ty-return-tycon-head type)
                             (ty-tycon-head type))))
-      (unless (and result-head (eq (tycon-name result-head) (identifier-src-name type-name)))
+      (unless result-head
         (parse-error "Malformed GADT constructor"
                      (note source signature-form "GADT constructor must return ~S" (identifier-src-name type-name))
                      (secondary-note source (cst:second form) "constructor declared here")))

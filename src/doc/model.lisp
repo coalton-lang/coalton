@@ -175,13 +175,15 @@
   (source:docstring (type-entry self)))
 
 (defun type-vars (coalton-type)
-  (loop :for i :below (tc:kind-arity (tc:kind-of (type-entry coalton-type)))
-        :collect (tc:make-variable)))
+  (tc:type-entry-tyvars (type-entry coalton-type)))
 
 (defun type-constructor-args (coalton-type ctor-type)
-  (tc:function-type-arguments
-   (tc:qualified-ty-type (tc:instantiate (type-vars coalton-type)
-                                         (tc:ty-scheme-type ctor-type)))))
+  (declare (ignore coalton-type))
+  (let* ((vars (tc:ty-scheme-instantiation-types ctor-type))
+         (qual-ty (tc:instantiate vars (tc:ty-scheme-type ctor-type))))
+    (when (boundp 'tc:*pprint-tyvar-dict*)
+      (mapc #'tc:pprint-tvar vars))
+    (tc:function-type-arguments (tc:qualified-ty-type qual-ty))))
 
 (defun make-coalton-type (entry constructors applicable-instances)
   (cond ((env:struct-entry-p entry)

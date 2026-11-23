@@ -201,3 +201,97 @@
                                               (tc:ty-class-instance-predicate instance)))))
                                   (coalton/doc/model:object-instances public-type)))))))))
       (delete-package *package*))))
+
+(deftest test-doc-gadt-constructor-rendering ()
+  (let ((*package* (make-package "COALTON-DOC-GADT-TEST-PACKAGE"
+                                 :use '("COALTON" "COALTON-PRELUDE")))
+        (coalton-impl/settings:*coalton-print-unicode* nil)
+        (coalton/doc/base:*local* (namestring (asdf:system-source-directory "coalton"))))
+    (unwind-protect
+         (let ((source
+                 (source:make-source-string
+                  "(define-type Packed
+                     (declare Pack (:e * (:e -> String) -> Packed)))
+                   (define-type (Expr :a)
+                     (declare ZeroInt (Expr Integer))
+                     (declare LitInt (Integer -> Expr Integer))
+                     (declare PairExpr (:x * :y -> Expr (Tuple :x :y))))
+                   (define-type (Same :a :b)
+                     (declare Refl (Same :x :x)))
+                   (define-type (Simple :a)
+                     EmptySimple
+                     (OneSimple :a)
+                     (PairSimple :a String))
+                   (define-type (Outcome :bad :good)
+                     (Failure :bad)
+                     (Success :good))")))
+           (with-open-stream (stream (source:source-stream source))
+             (let ((program (parser:with-reader-context stream
+                              (parser:read-program stream source))))
+               (multiple-value-bind (program env) (entry:entry-point program)
+                 (declare (ignore program))
+                 (export (mapcar (lambda (name) (find-symbol name *package*))
+                                 '("PACKED" "PACK"
+                                   "EXPR" "ZEROINT" "LITINT" "PAIREXPR"
+                                   "SAME" "REFL"
+                                   "SIMPLE" "EMPTYSIMPLE" "ONESIMPLE" "PAIRSIMPLE"
+                                   "OUTCOME" "FAILURE" "SUCCESS")))
+                 (let* ((entry:*global-environment* env)
+                        (pkg (coalton/doc/model::make-coalton-package *package*))
+                        (objects (coalton/doc/model:find-objects :package *package*))
+                        (packed-type (find "Packed" objects :test #'string=
+                                                            :key #'coalton/doc/model:object-name))
+                        (expr-type (find "Expr" objects :test #'string=
+                                                        :key #'coalton/doc/model:object-name))
+                        (same-type (find "Same" objects :test #'string=
+                                                        :key #'coalton/doc/model:object-name))
+                        (simple-type (find "Simple" objects :test #'string=
+                                                            :key #'coalton/doc/model:object-name))
+                        (outcome-type (find "Outcome" objects :test #'string=
+                                                              :key #'coalton/doc/model:object-name)))
+                   (flet ((ctor-names (type-obj)
+                            (mapcar #'coalton/doc/model:object-name
+                                    (coalton/doc/model:coalton-type-constructors type-obj)))
+                          (render (backend)
+                            (with-output-to-string (out)
+                              (coalton/doc/base:write-packages
+                               (coalton/doc/base:make-backend backend out)
+                               (list pkg)))))
+                     (is (equal '("Pack :: forall :E. :E * (:E -> String) -> Packed")
+                                (ctor-names packed-type)))
+                     (is (equal '("LitInt :: Integer -> Expr Integer"
+                                  "PairExpr :: forall :X :Y. :X * :Y -> Expr (Tuple :X :Y)"
+                                  "ZeroInt :: Expr Integer")
+                                (ctor-names expr-type)))
+                     (is (equal '("Refl :: forall :X. Same :X :X")
+                                (ctor-names same-type)))
+                     (is (equal '("EmptySimple"
+                                  "(OneSimple :A)"
+                                  "(PairSimple :A String)")
+                                (ctor-names simple-type)))
+                     (is (equal '("(Failure :BAD)"
+                                  "(Success :GOOD)")
+                                (ctor-names outcome-type)))
+                     (dolist (backend '(:markdown :html :hugo))
+                       (let ((output (render backend)))
+                         ;; Existential / hidden binder and its relation across fields
+                         (is (search "Pack :: &forall; :E. :E * (:E &rarr; <a href=\"#coalton-string-type\">String</a>) &rarr; <a href=\"#coalton-doc-gadt-test-package-packed-type\">Packed</a>"
+                                     output))
+                         ;; Specialized nullary and non-nullary result indices
+                         (is (search "ZeroInt :: <a href=\"#coalton-doc-gadt-test-package-expr-type\">Expr</a> <a href=\"#coalton-integer-type\">Integer</a>"
+                                     output))
+                         (is (search "LitInt :: <a href=\"#coalton-integer-type\">Integer</a> &rarr; <a href=\"#coalton-doc-gadt-test-package-expr-type\">Expr</a> <a href=\"#coalton-integer-type\">Integer</a>"
+                                     output))
+                         (is (search "PairExpr :: &forall; :X :Y. :X * :Y &rarr; <a href=\"#coalton-doc-gadt-test-package-expr-type\">Expr</a> (<a href=\"#coalton-classes-tuple-type\">Tuple</a> :X :Y)"
+                                     output))
+                         ;; Equality witness repeated result index
+                         (is (search "Refl :: &forall; :X. <a href=\"#coalton-doc-gadt-test-package-same-type\">Same</a> :X :X"
+                                     output))
+                         ;; Ordinary ADT output preserved
+                         (is (search "<code>EmptySimple</code>" output))
+                         (is (search "<code>(OneSimple :A)</code>" output))
+                         (is (search "<code>(PairSimple :A <a href=\"#coalton-string-type\">String</a>)</code>"
+                                     output))
+                         (is (search "<code>(Failure :BAD)</code>" output))
+                         (is (search "<code>(Success :GOOD)</code>" output))))))))))
+      (delete-package *package*))))

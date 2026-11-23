@@ -78,12 +78,13 @@ must not collapse distinct variables or specialize one to a concrete type.
          (after (tc:predicates-to-scheme (cons narrowed-pred narrowed-context)
                                          sentinel)))
     (unless (tc:ty-scheme= before after)
-      (tc-error "Instance method type is too specific"
-                (tc-location
-                 (source:location (instance-method-definition-name method))
-                 "The method definition narrows instance ~A to ~A."
-                 (type-object-string pred env)
-                 (type-object-string narrowed-pred env))))))
+      (tc:with-shared-type-names ()
+        (tc-error "Instance method type is too specific"
+                  (tc-location
+                   (source:location (instance-method-definition-name method))
+                   "The method definition narrows instance ~A to ~A."
+                   (type-object-string pred env)
+                   (type-object-string narrowed-pred env)))))))
 
 (defun toplevel-define-instance (instances env)
   (declare (type parser:toplevel-define-instance-list instances)
@@ -252,11 +253,12 @@ must not collapse distinct variables or specialize one to a concrete type.
             ;;   (define-instance (C :a :b => C :a (List :b)))
             ;; Here, the instance requires C :a :b whenever it provides
             ;; C :a (List :b), but :a cannot determine both :b and (List :b).
-            (tc-error "Instance fundep conflict"
-                      (tc-location (parser:toplevel-define-instance-head-location instance)
-                                   "instance requires ~A, which conflicts with ~A under functional dependencies"
-                                   (type-object-string (tc:context-fundep-conflict-second-pred e) env)
-                                   (type-object-string (tc:context-fundep-conflict-first-pred e) env)))))
+            (tc:with-shared-type-names ()
+              (tc-error "Instance fundep conflict"
+                        (tc-location (parser:toplevel-define-instance-head-location instance)
+                                     "instance requires ~A, which conflicts with ~A under functional dependencies"
+                                     (type-object-string (tc:context-fundep-conflict-second-pred e) env)
+                                     (type-object-string (tc:context-fundep-conflict-first-pred e) env))))))
 
         (handler-case
             (setf env (tc:add-instance env class-name instance-entry))
@@ -358,11 +360,12 @@ must not collapse distinct variables or specialize one to a concrete type.
                           :do (unless (tc:entail env context pred
                                                  :initial-stack super-stack
                                                  :check-superclasses-p t)
-                                (tc-error "Instance missing context"
-                                          (tc-location head-location
-                                                       "No instance for ~A arising from constraints of superclasses ~A"
-                                                       (type-object-string pred env)
-                                                       (type-object-string superclass env)))))
+                                (tc:with-shared-type-names ()
+                                  (tc-error "Instance missing context"
+                                            (tc-location head-location
+                                                         "No instance for ~A arising from constraints of superclasses ~A"
+                                                         (type-object-string pred env)
+                                                         (type-object-string superclass env))))))
                     ;; Also reject when additional-context is empty because an
                     ;; indirect superclass cycle made a neighbor look nullary.
                     (tc-error "Instance missing context"

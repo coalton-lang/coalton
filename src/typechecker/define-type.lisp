@@ -663,6 +663,39 @@ signaled with the expectation that they may be ignored."
              (partial-type-env-ty-table env))
     local))
 
+(defun check-constructor-signature (ctor signature scheme type-name)
+  (declare (type parser:constructor ctor)
+           (type parser:qualified-ty signature)
+           (type tc:ty-scheme scheme)
+           (type symbol type-name)
+           (values tc:ty-scheme &optional))
+  (let* ((qual-ty (tc:ty-scheme-type scheme))
+         (body (tc:qualified-ty-type qual-ty))
+         (result-type (if (typep body 'tc:function-ty)
+                          (and (alexandria:length= 1 (tc:function-ty-output-types body))
+                               (first (tc:function-ty-output-types body)))
+                          body))
+         (result-head (and result-type
+                           (not (typep result-type '(or tc:function-ty tc:result-ty tc:forall-ty)))
+                           (first (tc:flatten-type result-type)))))
+    (unless (and (typep result-head 'tc:tycon)
+                 (eq (tc:tycon-name result-head) type-name))
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature "GADT constructor must return ~S" type-name)
+                (source:secondary-note (source:location (parser:type-definition-ctor-name ctor))
+                                       "constructor declared here")))
+    (when (and (typep body 'tc:function-ty)
+               (or (tc:function-ty-keyword-input-types body)
+                   (tc:function-ty-keyword-open-p body)
+                   (null (tc:function-ty-positional-input-types body))))
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature
+                         "use positional fields, or the bare result type for a nullary constructor")))
+    (when (tc:qualified-ty-predicates qual-ty)
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature "typeclass constraints on constructor signatures are not supported")))
+    scheme))
+
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
@@ -671,10 +704,28 @@ signaled with the expectation that they may be ignored."
   (let ((ksubs nil)
         (alias-table (make-hash-table :test #'eq)))
 
-    ;; Infer the kinds of each type
+    ;; Infer the kinds of each type alias before checking constructor
+    ;; applications that reference those aliases.
+    (loop :for type :in types
+          :for name := (parser:identifier-src-name (parser:type-definition-name type))
+          :for parser-aliased-type := (parser:type-definition-aliased-type type)
+          :when parser-aliased-type
+            :do (multiple-value-bind (aliased-type ksubs_)
+                    (pt:infer-type-kinds
+                     parser-aliased-type
+                     (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
+                       (loop :while (typep kind 'tc:kfun)
+                             :do (setf kind (tc:kfun-to kind)))
+                       kind)
+                     ksubs
+                     env)
+                  (setf ksubs ksubs_)
+                  (setf (gethash name alias-table) aliased-type)))
+
+    ;; Infer the kinds of each type in constructor declaration order.
     (loop :for type :in types
           :do (loop
-                :for ctor :in (parser:type-definition-ctors type)
+                :for ctor :in (reverse (parser:type-definition-ctors type))
                 :for signature := (parser:type-definition-ctor-signature ctor)
                 :do (cond
                       (signature
@@ -684,31 +735,20 @@ signaled with the expectation that they may be ignored."
                                                    signature tc:+kstar+ ksubs local)))))
                       (t
                        (dolist (field (parser:type-definition-ctor-field-types ctor))
-                         (setf ksubs (nth-value 1 (parse-type field env ksubs))))))))
-
-    ;; Infer the kinds of each type alias.
-    (loop :for type :in types
-          :for name := (parser:identifier-src-name (parser:type-definition-name type))
-          :for parser-aliased-type := (parser:type-definition-aliased-type type)
-          :when parser-aliased-type
-            :do (multiple-value-bind (aliased-type ksubs_)
-                    (parse-type
-                     parser-aliased-type
-                     env
-                     ksubs
-                     (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
-                       (loop :while (typep kind 'tc:kfun)
-                             :do (setf kind (tc:kfun-to kind)))
-                       kind))
-                  (setf ksubs ksubs_)
-                  (setf (gethash name alias-table) aliased-type)))
+                         (setf ksubs (nth-value 1 (pt:infer-type-kinds field tc:+kstar+ ksubs env))))))))
 
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :for ty := (gethash name (partial-type-env-ty-table env))
           :for kind := (tc:apply-ksubstitution ksubs (tc:kind-of ty))
+          :for aliased-type := (gethash name alias-table)
           :do (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables kind) ksubs))
+          :when aliased-type
+            :do (setf ksubs
+                      (tc:kind-monomorphize-subs
+                       (tc:kind-variables (tc:apply-ksubstitution ksubs aliased-type))
+                       ksubs))
           :do (partial-type-env-replace-type env name (tc:make-tycon
                                                        :name name
                                                        :kind (tc:apply-ksubstitution ksubs kind))))
@@ -793,9 +833,15 @@ signaled with the expectation that they may be ignored."
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
          :for signatures
-           := (loop :for ctor :in (parser:type-definition-ctors type)
-                    :for signature := (parser:type-definition-ctor-signature ctor)
-                    :collect (and signature (parse-ty-scheme signature (constructor-signature-env alias-partial-env))))
+           := (nreverse
+               (loop :for ctor :in (reverse (parser:type-definition-ctors type))
+                     :for signature := (parser:type-definition-ctor-signature ctor)
+                     :collect (and signature
+                                   (check-constructor-signature
+                                    ctor
+                                    signature
+                                    (parse-ty-scheme signature (constructor-signature-env alias-partial-env))
+                                    name))))
 
          :for constructor-args
            := (loop

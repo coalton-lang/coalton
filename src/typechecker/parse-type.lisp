@@ -196,12 +196,14 @@
              (source:note
               (source:location (first unused-vars))
               "quantified type variable ~S is not used in the declared type"
-              (parser:keyword-src-name (first unused-vars)))
+              (or (parser:keyword-src-source-name (first unused-vars))
+                  (parser:keyword-src-name (first unused-vars))))
              (loop :for unused-var :in (rest unused-vars)
                    :collect (source:secondary-note
                              (source:location unused-var)
                              "quantified type variable ~S is not used in the declared type"
-                             (parser:keyword-src-name unused-var))))))
+                             (or (parser:keyword-src-source-name unused-var)
+                                 (parser:keyword-src-name unused-var)))))))
   nil)
 
 (defun normalize-parser-function-output-types (output-types)
@@ -608,7 +610,18 @@ being assembled."
       (cond
         (explicit-p
          (warn-on-unused-explicit-type-variables ty explicit-tvars qual-ty)
-         (tc:quantify-using-tvar-order explicit-tvars qual-ty t))
+         (tc:quantify-using-tvar-order
+          (if (parser:qualified-ty-explicit-p ty)
+              explicit-tvars
+              (remove-duplicates
+               (append (set-difference (tc:type-variables qual-ty)
+                                       (append in-scope-tvars explicit-tvars)
+                                       :test #'tc:ty=)
+                       explicit-tvars)
+               :test #'tc:ty=
+               :from-end t))
+          qual-ty
+          t))
         (t
          (tc:quantify (set-difference (tc:type-variables qual-ty)
                                       in-scope-tvars
@@ -692,7 +705,7 @@ the substitution :b +-> T can be inferred.
            "Declared context is too general"
            (tc-note
             unparsed-ty
-            (with-pprint-variable-context ()
+            (with-shared-type-names ()
               (format nil "the substitution~p ~{~A +-> ~A~^, ~} ~[~;is~:;are~] ~
                            determined for ~A by functional dependencies."
                       (length subs)
@@ -702,19 +715,21 @@ the substitution :b +-> T can be inferred.
                       (length subs)
                       (type-object-string declared env)))))))
     (tc:context-fundep-conflict (e)
-      (tc-error
-       "Context conflicts with functional dependencies"
-       (tc-note unparsed-ty
-                "the predicates ~A and ~A conflict with functional dependencies"
-                (type-object-string (tc:context-fundep-conflict-first-pred e) env)
-                (type-object-string (tc:context-fundep-conflict-second-pred e) env))))
+      (with-shared-type-names ()
+        (tc-error
+         "Context conflicts with functional dependencies"
+         (tc-note unparsed-ty
+                  "the predicates ~A and ~A conflict with functional dependencies"
+                  (type-object-string (tc:context-fundep-conflict-first-pred e) env)
+                  (type-object-string (tc:context-fundep-conflict-second-pred e) env)))))
     (tc:fundep-nontermination (e)
-      (tc-error
-       "Functional dependency improvement does not terminate"
-       (tc-note unparsed-ty
-                "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
-                (mapcar (lambda (pred) (type-object-string pred env))
-                        (tc:fundep-nontermination-preds e)))))))
+      (with-shared-type-names ()
+        (tc-error
+         "Functional dependency improvement does not terminate"
+         (tc-note unparsed-ty
+                  "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
+                  (mapcar (lambda (pred) (type-object-string pred env))
+                          (tc:fundep-nontermination-preds e))))))))
 
 (defun check-for-reducible-context (preds ty qual-ty env)
   (declare (type tc:ty-predicate-list preds)

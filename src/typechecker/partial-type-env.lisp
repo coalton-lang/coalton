@@ -72,7 +72,10 @@ binder share a single type variable."
   (let ((ty (gethash var (partial-type-env-ty-table env))))
     (unless ty
       (tc-error "Unknown type variable"
-                (tc-note source "Unknown type variable ~S" var)))
+                (tc-note source "Unknown type variable ~S"
+                         (or (and (typep source 'parser:tyvar)
+                                  (parser:tyvar-source-name source))
+                             var))))
     ty))
 
 (defun partial-type-env-add-type (env name type)

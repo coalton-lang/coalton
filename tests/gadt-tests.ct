@@ -476,17 +476,25 @@
 
 (coalton-toplevel
   (define-type-alias CountIndex Integer)
+  (define-type-alias (SignatureBoxAlias :a) (SignatureBox :a))
+  (define-type-alias SignatureCountBox (SignatureBox CountIndex))
+  (define-type-alias (SignatureBoxCtor :a) (:a -> SignatureBoxAlias :a))
   (define-type (SignatureBox :a)
-    (declare CountBox (CountIndex -> SignatureBox CountIndex))
-    (declare AnyBox (forall ((:a Type)) (:a -> SignatureBox :a))))
+    (declare ZeroCountBox SignatureCountBox)
+    (declare CountBox (CountIndex -> SignatureBoxAlias CountIndex))
+    (declare AnyBox (forall ((:a Type)) (SignatureBoxCtor :a))))
   (define-type PackedApplication
     (declare PackApplication ((:f :a) -> PackedApplication)))
 
   (declare signature-count (SignatureBox Integer -> Integer))
   (define (signature-count box)
-    (match box ((CountBox n) n) ((AnyBox n) n))))
+    (match box
+      ((ZeroCountBox) 0)
+      ((CountBox n) n)
+      ((AnyBox n) n))))
 
 (define-test gadt-constructor-signature-scope ()
+  (is (== 0 (signature-count ZeroCountBox)))
   (is (== 11 (signature-count (CountBox 11))))
   (is (== 12 (signature-count (AnyBox 12))))
   (is (match (PackApplication (Some "value")) ((PackApplication _) True))))
@@ -550,6 +558,11 @@
     (let z = (match witness ((SameRefl) y)))
     z)
 
+  (declare carry-through-two (SameIndex :a :b * SameIndex :b :c * :a -> Optional :c))
+  (define (carry-through-two p q x)
+    (let ((result (match p ((SameRefl) (match q ((SameRefl) (Some x)))))))
+      result))
+
   (declare use-rank-witness ((forall (:a :b) SameIndex :a :b * :b -> :b) -> String))
   (define (use-rank-witness f) (f SameRefl "rank"))
 
@@ -581,6 +594,8 @@
   (is (compare-successor SameRefl 3 2))
   (is (not (compare-successor SameRefl 3 3)))
   (is (== "right" (keep-right SameRefl "right")))
+  (is (== (Some "nested") (noinline (carry-through-two SameRefl SameRefl "nested"))))
+  (is (== (Some False) (noinline (carry-through-two SameRefl SameRefl False))))
   (is (== "rank" (use-rank-witness (fn (w y) (let z = (match w ((SameRefl) y))) z)))))
 
 (define-test gadt-nested-patterns-and-scoped-annotations ()
@@ -697,3 +712,377 @@
     (is (== "A" (cell:read trace)))
     (is (== (Some 17) (visit (Some (Gadt4-1 17)))))
     (is (== "AAB" (cell:read trace)))))
+
+;;;
+;;; Handler and resumption patterns: literals guarded by a sibling GADT tag
+;;;
+
+(coalton-toplevel
+  (define-type (HandlerView :a)
+    (declare HandlerIntView (HandlerView Integer))
+    (declare HandlerTextView (HandlerView String)))
+
+  (define-type (HandlerBox :a)
+    (HandlerBox :a))
+
+  (define-type HandlerPayload
+    (declare HandlerWrap (:a * HandlerView :a -> HandlerPayload))
+    (declare HandlerWrapFirst (HandlerView :a * :a -> HandlerPayload))
+    (declare HandlerWrapBox (HandlerBox :a * HandlerView :a -> HandlerPayload)))
+
+  (define-exception HandlerNotice
+    (HandlerNotify HandlerPayload))
+
+  (define-resumption (HandlerUse HandlerPayload))
+
+  (declare catch-payload (HandlerPayload -> String))
+  (define (catch-payload p)
+    (catch (throw (HandlerNotify p))
+      ((HandlerNotify (HandlerWrap "hello" (HandlerTextView))) "text")
+      ((HandlerNotify (HandlerWrapFirst (HandlerTextView) "hello")) "text-first")
+      ((HandlerNotify (HandlerWrapBox (HandlerBox "hello") (HandlerTextView))) "boxed-text")
+      ((HandlerNotify (HandlerWrapBox (HandlerBox 42) (HandlerIntView))) "boxed-int")
+      ((HandlerNotify _) "other")))
+
+  (declare handle-payload (HandlerPayload -> String))
+  (define (handle-payload p)
+    (handle (throw (HandlerNotify p))
+      ((HandlerNotify (= q (HandlerWrap 42 (HandlerIntView))))
+       (match q
+         ((HandlerWrap k (HandlerIntView)) (into (+ k 1)))
+         (_ "unreachable")))
+      ((HandlerNotify (HandlerWrap (= s "hello") (HandlerTextView))) (<> s "!"))
+      ((HandlerNotify _) "other")))
+
+  (declare resume-payload (HandlerPayload -> String))
+  (define (resume-payload p)
+    (resumable (resume-to (HandlerUse p))
+      ((HandlerUse (HandlerWrap "hello" (HandlerTextView))) "text")
+      ((HandlerUse (HandlerWrapBox (HandlerBox 42) (HandlerIntView))) "boxed-int")
+      ((HandlerUse _) "other"))))
+
+(define-test gadt-handler-patterns-test-tags-before-literals ()
+  ;; Each payload reaches literal patterns whose type is only justified by
+  ;; another constructor's tag, including ones to the right of the literal.
+  (is (== "other" (catch-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "text" (catch-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "other" (catch-payload (HandlerWrapFirst HandlerIntView 42))))
+  (is (== "text-first" (catch-payload (HandlerWrapFirst HandlerTextView "hello"))))
+  (is (== "boxed-int" (catch-payload (HandlerWrapBox (HandlerBox 42) HandlerIntView))))
+  (is (== "boxed-text" (catch-payload (HandlerWrapBox (HandlerBox "hello") HandlerTextView))))
+  (is (== "other" (catch-payload (HandlerWrapBox (HandlerBox 7) HandlerIntView))))
+  (is (== "43" (handle-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "other" (handle-payload (HandlerWrap 7 HandlerIntView))))
+  (is (== "hello!" (handle-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "other" (resume-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "text" (resume-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "boxed-int" (resume-payload (HandlerWrapBox (HandlerBox 42) HandlerIntView))))
+  (is (== "other" (resume-payload (HandlerWrapBox (HandlerBox "hello") HandlerTextView)))))
+
+;;; A structural pattern on a hidden field is typed by the field's tag alone,
+;;; so its payload literal waits for the sibling witness on either side. A
+;;; transparent wrapper has no tag at all, so even its constant field type
+;;; proves nothing until the witness matches.
+
+(coalton-toplevel
+  (repr :transparent)
+  (define-type HiddenLabel (HiddenLabel String))
+
+  (define-type (HiddenShape :a)
+    (declare HiddenOptShape (HiddenShape (Optional String)))
+    (declare HiddenListShape (HiddenShape (List String)))
+    (declare HiddenBoolShape (HiddenShape Boolean))
+    (declare HiddenLabelShape (HiddenShape HiddenLabel))
+    (declare HiddenIntShape (HiddenShape Integer)))
+
+  (define-type HiddenPacket
+    (declare HiddenPair (:a * HiddenShape :a -> HiddenPacket))
+    (declare HiddenPairFirst (HiddenShape :a * :a -> HiddenPacket)))
+
+  (define-exception HiddenNotice
+    (HiddenRaised HiddenPacket))
+
+  (define-resumption (HiddenUse HiddenPacket))
+
+  (declare catch-hidden (HiddenPacket -> String))
+  (define (catch-hidden p)
+    (catch (throw (HiddenRaised p))
+      ((HiddenRaised (HiddenPair (Some "alpha") (HiddenOptShape))) "some")
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (Some "alpha"))) "some-first")
+      ((HiddenRaised (HiddenPair (None) (HiddenOptShape))) "none")
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (None))) "none-first")
+      ((HiddenRaised (HiddenPair (Cons "x" _) (HiddenListShape))) "cons")
+      ((HiddenRaised (HiddenPairFirst (HiddenListShape) (Cons "x" _))) "cons-first")
+      ((HiddenRaised (HiddenPair (Nil) (HiddenListShape))) "nil")
+      ((HiddenRaised (HiddenPairFirst (HiddenListShape) (Nil))) "nil-first")
+      ((HiddenRaised (HiddenPair (HiddenLabel "text") (HiddenLabelShape))) "label")
+      ((HiddenRaised (HiddenPairFirst (HiddenLabelShape) (HiddenLabel "text"))) "label-first")
+      ((HiddenRaised _) "other")))
+
+  (declare handle-hidden (HiddenPacket -> String))
+  (define (handle-hidden p)
+    (handle (throw (HiddenRaised p))
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (Some (= s "alpha")))) (<> s "!"))
+      ((HiddenRaised (HiddenPair (Cons "x" (Cons s (Nil))) (HiddenListShape))) s)
+      ((HiddenRaised (HiddenPair (HiddenLabel (= s "text")) (HiddenLabelShape))) (<> s "?"))
+      ((HiddenRaised _) "other")))
+
+  (declare resume-hidden (HiddenPacket -> String))
+  (define (resume-hidden p)
+    (resumable (resume-to (HiddenUse p))
+      ((HiddenUse (HiddenPair (Some "alpha") (HiddenOptShape))) "some")
+      ((HiddenUse (HiddenPairFirst (HiddenListShape) (Cons "x" _))) "cons-first")
+      ((HiddenUse (HiddenPair (HiddenLabel "text") (HiddenLabelShape))) "label")
+      ((HiddenUse _) "other"))))
+
+(define-test gadt-handler-patterns-type-hidden-structures-by-witness ()
+  (is (== "some" (catch-hidden (HiddenPair (Some "alpha") HiddenOptShape))))
+  (is (== "some-first" (catch-hidden (HiddenPairFirst HiddenOptShape (Some "alpha")))))
+  (is (== "other" (catch-hidden (HiddenPair (Some "beta") HiddenOptShape))))
+  (is (== "none" (catch-hidden (HiddenPair None HiddenOptShape))))
+  (is (== "none-first" (catch-hidden (HiddenPairFirst HiddenOptShape None))))
+  (is (== "cons" (catch-hidden (HiddenPair ["x" "y"] HiddenListShape))))
+  (is (== "cons-first" (catch-hidden (HiddenPairFirst HiddenListShape ["x"]))))
+  (is (== "other" (catch-hidden (HiddenPair ["y"] HiddenListShape))))
+  (is (== "nil" (catch-hidden (HiddenPair Nil HiddenListShape))))
+  (is (== "nil-first" (catch-hidden (HiddenPairFirst HiddenListShape Nil))))
+  ;; A wrong tag must skip the payload comparison entirely.
+  (is (== "other" (catch-hidden (HiddenPair True HiddenBoolShape))))
+  (is (== "other" (catch-hidden (HiddenPairFirst HiddenBoolShape False))))
+  (is (== "alpha!" (handle-hidden (HiddenPairFirst HiddenOptShape (Some "alpha")))))
+  (is (== "y" (handle-hidden (HiddenPair ["x" "y"] HiddenListShape))))
+  (is (== "other" (handle-hidden (HiddenPair True HiddenBoolShape))))
+  (is (== "other" (handle-hidden (HiddenPairFirst HiddenBoolShape True))))
+  (is (== "some" (resume-hidden (HiddenPair (Some "alpha") HiddenOptShape))))
+  (is (== "cons-first" (resume-hidden (HiddenPairFirst HiddenListShape ["x"]))))
+  (is (== "other" (resume-hidden (HiddenPair False HiddenBoolShape))))
+  (is (== "other" (resume-hidden (HiddenPairFirst HiddenBoolShape True))))
+  (is (== "label" (catch-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "label-first" (catch-hidden (HiddenPairFirst HiddenLabelShape (HiddenLabel "text")))))
+  (is (== "other" (catch-hidden (HiddenPair (HiddenLabel "note") HiddenLabelShape))))
+  (is (== "other" (catch-hidden (HiddenPair 7 HiddenIntShape))))
+  (is (== "other" (catch-hidden (HiddenPairFirst HiddenIntShape 7))))
+  (is (== "text?" (handle-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "other" (handle-hidden (HiddenPair 7 HiddenIntShape))))
+  (is (== "label" (resume-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "other" (resume-hidden (HiddenPair 7 HiddenIntShape)))))
+
+;;; Without a witness dependency, handler tests run in source order: a user
+;;; comparison to the left of a mismatching tag still runs.
+
+(coalton-toplevel
+  (define-type Tally (Tally Integer))
+
+  (declare tally-comparisons (cell:Cell Integer))
+  (define tally-comparisons (cell:new 0))
+
+  (declare tally-log (cell:Cell (List Integer)))
+  (define tally-log (cell:new Nil))
+
+  (define-instance (Eq Tally)
+    (define (== (Tally a) (Tally b))
+      (cell:update! (fn (n) (+ n 1)) tally-comparisons)
+      (cell:push! tally-log a)
+      (== a b)))
+
+  (define-instance (Num Tally)
+    (define (+ (Tally a) (Tally b)) (Tally (+ a b)))
+    (define (- (Tally a) (Tally b)) (Tally (- a b)))
+    (define (* (Tally a) (Tally b)) (Tally (* a b)))
+    (define (fromInt n) (Tally n)))
+
+  (define-type TallySide TallyLeft TallyRight)
+
+  (define-exception TallyNotice
+    (TallyRaised Tally TallySide))
+
+  (repr :transparent)
+  (define-type TallyBox (TallyBox Tally))
+
+  (define-type (TallyShape :a)
+    (declare TallyShapeBox (TallyShape TallyBox))
+    (declare TallyShapeInt (TallyShape Integer)))
+
+  (define-type TallyPacket
+    (declare TallyPair (:a * :a * TallyShape :a -> TallyPacket)))
+
+  (define-exception TallyPacketNotice
+    (TallyPacketRaised TallyPacket))
+
+  ;; Both literals wait for the same witness; they still compare left to
+  ;; right once it matches.
+  (declare catch-tally-packet (TallyPacket -> String))
+  (define (catch-tally-packet p)
+    (catch (throw (TallyPacketRaised p))
+      ((TallyPacketRaised (TallyPair (TallyBox 1) (TallyBox 2) (TallyShapeBox))) "box")
+      ((TallyPacketRaised _) "other")))
+
+  (declare catch-tally (Tally * TallySide -> String))
+  (define (catch-tally n side)
+    (catch (throw (TallyRaised n side))
+      ((TallyRaised 1 (TallyLeft)) "left")
+      ((TallyRaised _ _) "other"))))
+
+(define-test handler-patterns-compare-in-source-order ()
+  (cell:write! tally-comparisons 0)
+  (is (== "other" (catch-tally (Tally 1) TallyRight)))
+  (is (== 1 (cell:read tally-comparisons)))
+  (is (== "left" (catch-tally (Tally 1) TallyLeft)))
+  (is (== 2 (cell:read tally-comparisons)))
+  (cell:write! tally-log Nil)
+  (is (== "box" (catch-tally-packet (TallyPair (TallyBox (Tally 1))
+                                                (TallyBox (Tally 2))
+                                                TallyShapeBox))))
+  (is (== [2 1] (cell:read tally-log)))
+  (cell:write! tally-log Nil)
+  (is (== "other" (catch-tally-packet (TallyPair 1 2 TallyShapeInt))))
+  (is (== Nil (cell:read tally-log))))
+
+;;;
+;;; Coverage evidence shared between columns
+;;;
+
+(coalton-toplevel
+  (define-type (CoverShape :a)
+    (declare CoverPairShape (CoverShape (Tuple Integer Integer)))
+    (declare CoverBoolShape (CoverShape Boolean)))
+
+  (define-type (CoverOptShape :a)
+    (declare CoverOptional (CoverOptShape (Optional Integer)))
+    (declare CoverBoolean (CoverOptShape Boolean)))
+
+  (define-type (CoverSame :a :b)
+    (declare CoverRefl (CoverSame :x :x)))
+
+  (define-type (CoverView :a)
+    (declare CoverIntView (CoverView Integer))
+    (declare CoverTextView (CoverView String)))
+
+  (declare cover-input-first (:a * CoverShape :a -> Integer))
+  (define (cover-input-first v s)
+    (match (Tuple v s)
+      ((Tuple (Tuple x y) (CoverPairShape)) (+ x y))
+      ((Tuple (True) (CoverBoolShape)) 1)
+      ((Tuple (False) (CoverBoolShape)) 0)))
+
+  (declare cover-reachable-fallback (:a * CoverOptShape :a -> Integer))
+  (define (cover-reachable-fallback x tag)
+    (match (Tuple x tag)
+      ((Tuple (Some n) (CoverOptional)) n)
+      ((Tuple (None) (CoverOptional)) 0)
+      (_ 99)))
+
+  (declare cover-transitive (CoverView :a * CoverSame :b Integer * CoverSame :a :b -> Boolean))
+  (define (cover-transitive (CoverIntView) (CoverRefl) (CoverRefl))
+    True))
+
+(define-test gadt-coverage-shares-column-evidence ()
+  (is (== 3 (cover-input-first (Tuple 1 2) CoverPairShape)))
+  (is (== 1 (cover-input-first True CoverBoolShape)))
+  (is (== 0 (cover-input-first False CoverBoolShape)))
+  (is (== 5 (cover-reachable-fallback (Some 5) CoverOptional)))
+  (is (== 0 (cover-reachable-fallback None CoverOptional)))
+  (is (== 99 (cover-reachable-fallback True CoverBoolean)))
+  (is (cover-transitive CoverIntView CoverRefl CoverRefl)))
+
+;;;
+;;; Obligations on existential types are solved inside their pattern scope
+;;;
+
+(coalton-toplevel
+
+  (define-struct (HiddenFieldRecord :a)
+    (payload :a)
+    (label String))
+
+  (define-type HiddenFieldBox
+    (declare HiddenFieldBox (HiddenFieldRecord :a -> HiddenFieldBox)))
+
+  ;; LABEL is a String in every instantiation, so it does not mention the
+  ;; existential type.
+  (declare hidden-field-label (HiddenFieldBox -> String))
+  (define (hidden-field-label (HiddenFieldBox r))
+    (.label r))
+
+  (declare hidden-field-match-label (HiddenFieldBox -> String))
+  (define (hidden-field-match-label box)
+    (match box
+      ((HiddenFieldBox r) (.label r))))
+
+  ;; Resolving NESTED exposes the existential type in the struct of the
+  ;; outer accessor, which must then be resolved as well.
+  (define-struct (HiddenFieldOuter :a)
+    (nested (HiddenFieldRecord :a)))
+
+  (define-type HiddenNestedBox
+    (declare HiddenNestedBox (HiddenFieldOuter :a -> HiddenNestedBox)))
+
+  (declare hidden-nested-label (HiddenNestedBox -> String))
+  (define (hidden-nested-label (HiddenNestedBox r))
+    (.label (.nested r)))
+
+  (define-type (HiddenMarker :a)
+    HiddenMarker)
+
+  (define-class (HiddenDescribe :a)
+    (hidden-describe (:a -> String)))
+
+  (define-instance (HiddenDescribe String)
+    (define (hidden-describe s) s))
+
+  (define-instance (HiddenDescribe (HiddenMarker :a))
+    (define (hidden-describe _) "marker"))
+
+  (define-type (ObligationPair :x :y)
+    (ObligationPair :x :y))
+
+  (define-instance (HiddenDescribe :y => HiddenDescribe (ObligationPair :x :y))
+    (define (hidden-describe (ObligationPair _ y))
+      (<> "pair " (hidden-describe y))))
+
+  (define-type HiddenMarkerBox
+    (declare HiddenMarkerBox (HiddenMarker :a -> HiddenMarkerBox)))
+
+  (define-type HiddenValueBox
+    (declare HiddenValueBox (:a -> HiddenValueBox)))
+
+  ;; The instance for HiddenMarker holds for every index.
+  (declare hidden-marker-describe (HiddenMarkerBox -> String))
+  (define (hidden-marker-describe (HiddenMarkerBox m))
+    (hidden-describe m))
+
+  ;; The instance context mentions only the outer type, so it is required of
+  ;; the caller instead of being dropped.
+  (declare hidden-pair-describe (HiddenDescribe :y => HiddenValueBox * :y -> String))
+  (define (hidden-pair-describe (HiddenValueBox x) y)
+    (hidden-describe (ObligationPair x y)))
+
+  (define (hidden-pair-describe-inferred (HiddenValueBox x) y)
+    (hidden-describe (ObligationPair x y)))
+
+  (define-type (HiddenTag :a)
+    (declare HiddenIntTag (HiddenTag Integer))
+    (declare HiddenStringTag (HiddenTag String)))
+
+  (define-struct (HiddenTagged :a)
+    (tag (HiddenTag :a))
+    (value :a))
+
+  ;; The field accessor in the scrutinee is resolved before its branches
+  ;; refine the struct's index.
+  (declare hidden-tagged-bump (HiddenTagged :a -> :a))
+  (define (hidden-tagged-bump s)
+    (match (.tag s)
+      ((HiddenIntTag) (+ (.value s) 1))
+      ((HiddenStringTag) (.value s)))))
+
+(define-test gadt-existential-obligations ()
+  (is (== "label" (hidden-field-label (HiddenFieldBox (HiddenFieldRecord Unit "label")))))
+  (is (== "match" (hidden-field-match-label (HiddenFieldBox (HiddenFieldRecord 3 "match")))))
+  (is (== "nested" (hidden-nested-label
+                    (HiddenNestedBox (HiddenFieldOuter (HiddenFieldRecord #\x "nested"))))))
+  (is (== "marker" (hidden-marker-describe (HiddenMarkerBox (the (HiddenMarker Integer) HiddenMarker)))))
+  (is (== "pair outer" (hidden-pair-describe (HiddenValueBox 1) "outer")))
+  (is (== "pair inferred" (hidden-pair-describe-inferred (HiddenValueBox Unit) "inferred")))
+  (is (== 42 (hidden-tagged-bump (HiddenTagged HiddenIntTag 41))))
+  (is (== "same" (hidden-tagged-bump (HiddenTagged HiddenStringTag "same")))))

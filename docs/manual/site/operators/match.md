@@ -39,6 +39,7 @@ weight: 150
 - Function parameter patterns are checked together. For example, if one parameter matches a witness that `:a` is `Integer`, a second parameter of type `Tag :a` need only cover `Tag Integer`.
 - A constructor can also be ruled out when a required field cannot exist, for example a product containing an equality witness for `Integer` and `String`. This search is bounded: if recursive or abstract types prevent a proof, the checker still requires the case.
 - Within a branch, an equality witness also applies to scoped annotations and existing typeclass constraints. If `Refl` proves that `:a` and `:b` are equal, an `Eq :b` constraint suffices to compare a value of `:a` with one of `:b`. The equality does not hold outside that branch.
+- A match result can use an enclosing index that is equal to the branch result type in every arm. Naming the result with `let` does not make it polymorphic in that index: all uses of the binding must agree on a type. An existential field cannot be returned unless the result can be expressed without exposing the hidden type.
 - A shorthand `(let pattern = value)` has the same refinement scope as a one-arm match whose body is the rest of the block. Unlike an explicit `match`, the binding pattern must be exhaustive.
 
 ## Examples
