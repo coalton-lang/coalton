@@ -117,15 +117,12 @@ If KEY is not supplied: (FUNCALL TEST A B)"
            (type (or null symbol function) key)
            (type (or symbol function) test)
            (values list &optional))
-  (loop :with old := nil
-        :with new := x
-        ;; See the comment in the function definition for CLOSURE
-        ;; above for an explanation of this algorithm.
-        :until (null (set-exclusive-or new old :key key :test test))
-        :do (progn
-              (setf old new)
-              (loop :for (w . z) :in f
-                    :when (subsetp w new :key key :test test)
-                      :do (setf new (union new z :key key :test test))))
+  ;; Even an empty seed can grow: a concrete determinant has no type variables.
+  (loop :with new := x
+        :for old := new
+        :do (loop :for (w . z) :in f
+                  :when (subsetp w new :key key :test test)
+                    :do (setf new (union new z :key key :test test)))
+        :until (subsetp new old :key key :test test)
         :finally (return new)))
 

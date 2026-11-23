@@ -282,21 +282,16 @@ must not collapse distinct variables or specialize one to a concrete type.
 
          (class (tc:lookup-class env class-name))
 
-         (class-pred (tc:ty-class-predicate class))
+         (head-location (parser:toplevel-define-instance-head-location unparsed-instance))
 
-         (instance-subs (tc:predicate-match class-pred pred))
+         (head-subs (tc:predicate-match (tc:ty-class-predicate class) pred))
 
-         ;; Superclass fundeps can determine variables absent from the class head.
+         (required-superclasses (tc:apply-substitution head-subs (tc:ty-class-superclasses class)))
+
          (instance-subs
-           (with-fundep-errors ((parser:toplevel-define-instance-head-location unparsed-instance) env)
-             (nth-value 1
-                        (tc:solve-fundeps
-                         env
-                         ;; Preserve the instance's variables when unifying dependents.
-                         (append (tc:apply-substitution instance-subs
-                                                       (tc:ty-class-superclasses class))
-                                 context)
-                         instance-subs))))
+           (with-fundep-errors (head-location env)
+             ;; Put the instance's context last to preserve its variables when unifying dependents.
+             (nth-value 1 (tc:solve-fundeps env (append required-superclasses context) head-subs))))
 
          ;; HACK: store this as a hash table in the environment
          ;; HACK: these should *not* be stored as schemes
@@ -306,6 +301,22 @@ must not collapse distinct variables or specialize one to a concrete type.
                  :do (setf (gethash (tc:ty-class-method-name method) table)
                            method)
                  :finally (return table))))
+
+    ;; Solving may choose the hidden types of a superclass dictionary. It
+    ;; may not restrict the instance's own variables beyond what its givens
+    ;; already imply. Match back to the declared variables to allow renaming.
+    (when required-superclasses
+      (let* ((vars (tc:type-variables (cons pred context)))
+             (improved (tc:apply-substitution instance-subs vars)))
+        (unless (or (tc:match-list-p vars improved)
+                    (and context
+                         (with-fundep-errors (head-location env)
+                           (let ((given-subs (nth-value 1 (tc:solve-fundeps env context nil))))
+                             (tc:match-list-p (tc:apply-substitution given-subs vars) improved)))))
+          (tc-error "Instance missing context"
+                    (tc-location head-location
+                                 "cannot satisfy ~{~A~^, ~} without specializing the instance's type variables"
+                                 (mapcar (lambda (p) (type-object-string p env)) required-superclasses))))))
 
     ;; Check for superclasses and check the context of superinstances
     (loop :for superclass_ :in (tc:ty-class-superclasses class)
@@ -317,7 +328,7 @@ must not collapse distinct variables or specialize one to a concrete type.
             :do (let* ((superclass-instance
                          (or (tc:lookup-class-instance env superclass :no-error t)
                              (tc-error "Instance missing context"
-                                       (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                       (tc-location head-location
                                                     "No instance for ~A"
                                                     (type-object-string superclass env)))))
                        (superclass-instance-pred
@@ -334,7 +345,7 @@ must not collapse distinct variables or specialize one to a concrete type.
                   (loop :for pred :in additional-context
                         :do (unless (tc:entail env context pred)
                               (tc-error "Instance missing context"
-                                        (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                        (tc-location head-location
                                                      "No instance for ~A arising from constraints of superclasses ~A"
                                                      (type-object-string pred env)
                                                      (type-object-string superclass env)))))))

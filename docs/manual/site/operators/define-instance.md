@@ -34,7 +34,7 @@ weight: 90
 - All superclass instances required by `⟨class-name⟩` must be satisfied by the global environment together with `⟨instance-context⟩`.
 - **Type variable scoping**: Type variables appearing in the instance head or context, as well as any explicit [`forall`](/manual/operators/forall/) binders declared on the corresponding method in [`define-class`](/manual/operators/define-class/), are in lexical scope inside the method body.
 - **No narrowing**: A method implementation must work for the full generality of the instance head; it is a compile-time error for a method body to unify two distinct instance type variables or specialize an instance type variable to a concrete type.
-- **Functional dependencies**: Instance heads and contexts are checked for consistency and coverage against all functional dependencies of `⟨class-name⟩`.
+- **Functional dependencies**: For each dependency declared by `⟨class-name⟩`, the determining types in the instance head, together with dependencies supplied by the instance context, must determine the dependent types. If a superclass instance determines a hidden type, the subclass instance need not repeat it in its head or context. The head and context must still be consistent with superclass dependencies.
 - **Inlining and ABI**: Individual method definitions may be preceded by [`(inline)`](/manual/operators/inline/) or [`(abi ...)`](/manual/operators/abi/) to control inlining and worker entrypoints when the instance dictionary is statically resolved.
 - **Overlap**: Two instances for the same class whose heads can unify are rejected unless both carry the [`overlap`](/manual/operators/overlap/) attribute.
 
