@@ -6,31 +6,29 @@ math: true
 weight: 15
 ---
 
-If you already use Common Lisp heavily, you have a fast native compiler, interactive development in Emacs, macros, `defstruct`, CLOS, conditions and restarts, and type declarations. Common Lisp is already an exceptionally productive language for exploratory programming, metaprogramming, and building large dynamic systems.
+If you already use Common Lisp, you may wonder what another language in the same image buys you. You already have macros, `defstruct`, CLOS, conditions and restarts, type declarations, and an interactive compiler.
 
-Coalton is not a wholesale replacement for Common Lisp. It is a statically typed language embedded *inside* Common Lisp that compiles down to ordinary Lisp functions and data structures in the same running image. It is designed for the parts of a Lisp system where Common Lisp's dynamic model starts to work against you: maintaining invariants across large refactors, modeling closed data variants without nullable slots, and writing generic, modular algorithms without giving up performance.
+Coalton builds on that environment. It is a statically typed language embedded in Common Lisp that compiles to ordinary Lisp functions and data structures. Its type checker can connect the types of a container, a callback, and a function's result; check that a pattern match covers the possible cases; and provide the type information needed to specialize a generic numerical algorithm. You still develop in the Lisp image and use Common Lisp where its flexibility is useful.
 
-In this article, we give a preview of Coalton for the working Common Lisp programmer. When you are ready for a more complete tour of Coalton's syntax and features, continue to the [Coalton Language Guide](/manual/topics/language-guide/).
+This article introduces those ideas through familiar Lisp problems. For a more complete tour of Coalton's syntax and features, continue to the [Coalton Language Guide](/manual/topics/language-guide/).
 
 {{<toc>}}
 
-## Where Common Lisp's Type System Stops
+## What Coalton adds to Common Lisp's type system
 
-In Common Lisp, types are effectively predicates over objects checkable with `cl:typep`. Types can be used dynamically with `cl:typep` and `cl:check-type`, but they're also possible to put in variable, function, and slot declarations. Some compilers, such as SBCL, may use this information for local type inference, warnings, and representation selection; others may not use it at all.
+In Common Lisp, types describe sets of objects whose membership you can test with `cl:typep`. You can check types at run time with `cl:typep` and `cl:check-type`, and state them in variable, function, and slot declarations. Compilers such as SBCL use this information for type inference, warnings, and representation selection.
 
-Because Common Lisp types describe run-time values and storage layouts rather than static program-wide contracts, you eventually run into several limits:
+Those declarations are useful, but they do not express all the relationships you might want a compiler to check:
 
-1. **Type declarations can be freely ignored by the compiler**: Under the ANSI Common Lisp standard ([CLHS 3.3.1](https://www.lispworks.com/documentation/HyperSpec/Body/03_ca.htm)), `type` and `ftype` declarations are optional promises from the programmer to the compiler (with undefined consequences if violated) that a conforming implementation is free to ignore completely.
-2. **Compound types that *look* precise often collapse to `t`**: In Common Lisp, `(vector person)` looks like a vector of `person` structs, but array element types are governed by storage layout (`upgraded-array-element-type`), not static type safety. Because any struct or class upgrades to `t`, `(vector person)` is actually the exact same type as `(vector t)`, meaning `(typep #("not-a-person" 42) '(vector person))` evaluates to `T`, and storing a string into a `(make-array 5 :element-type 'person)` succeeds.
-3. **Built-in containers cannot be type-checked without expensive scans**: There is no built-in type specifier for "a list of integers" or "a hash table from strings to points," and checking one with `(satisfies ...)` requires walking the entire container at run time.
-4. **Nullable values are implicit everywhere**: Ordinary Common Lisp code relies heavily on `nil` to mean "uninitialized", "no value", etc. Variables and slots are often `nil`, and it's easy to make the mistake of being imprecise, as in not using `(or null person)`, or not being careful to do run-time checks, as in forgetting `(null person)` checks before accessing the `person` object.
-5. **Refactoring across files relies on run-time tests**: If you add a new variant to a data representation or change a function's return contract, Common Lisp will still compile callers that are now broken, waiting until that code path runs to signal a `type-error` or `no-applicable-method` (if sufficient `safety` is enabled) or suffer memory corruption or a hard crash.
+1. **Declarations are promises, not required checks**: Under the ANSI Common Lisp standard ([CLHS 3.3.1](https://www.lispworks.com/documentation/HyperSpec/Body/03_ca.htm)), a conforming implementation may ignore `type` and `ftype` declarations. They are promises from the programmer, with undefined consequences if violated, rather than a requirement that the compiler prove the program respects them.
+2. **Array element types describe storage**: `(vector person)` looks like a vector of `person` structs, but array element types are governed by storage layout (`upgraded-array-element-type`). The element type `person` upgrades to `t`, so `(vector person)` is the same type as `(vector t)`. For example, `(typep #("not-a-person" 42) '(vector person))` evaluates to `T`, and storing a string into a `(make-array 5 :element-type 'person)` succeeds.
+3. **List and hash-table types do not describe their contents**: There is no built-in type specifier for "a list of integers" or "a hash table from strings to points." You can write a predicate and use `(satisfies ...)`, but checking every element this way requires scanning the container at run time.
 
 Coalton adds a global, compile-time type checker and optimizer to the usual Lisp workflow. You load Coalton systems with ASDF, recompile top-level forms interactively from your editor, inspect stack traces in the standard Lisp debugger, and call Coalton functions from Common Lisp (or Common Lisp functions from Coalton) in the same image.
 
-## Core Concepts in Common Lisp Terms
+## Core concepts in Common Lisp terms
 
-You do not need a background in category theory or functional programming to be productive in Coalton. Most of Coalton's core features solve problems you have already encountered in Common Lisp.
+You can approach Coalton's types and protocols through ideas you already know from Common Lisp. The examples below start with ordinary Lisp problems and show what changes when the compiler can check the relationships between types.
 
 ### Disentangling `nil`
 
@@ -41,7 +39,7 @@ In Common Lisp, the value `nil` is overloaded to mean at least four different th
 3. Absence of a value ("not found" from `gethash` or `find`).
 4. An empty result or placeholder value.
 
-Every Common Lisper has written `(multiple-value-bind (val presentp) (gethash k table) ...)` because `nil` might be a legitimate value stored in the table.
+If you've used `gethash`, you've probably needed its second return value: `nil` alone cannot tell you whether a key is missing or its stored value is `nil`.
 
 Coalton separates these roles into distinct, non-overlapping types:
 
@@ -53,9 +51,9 @@ Coalton separates these roles into distinct, non-overlapping types:
 | "Nothing interesting" | `Unit` | `Unit` |
 | Zero return values | `Void` | `(values)` |
 
-Because `Optional Integer` and `Integer` are different types, you can never accidentally pass a "not found" result into `+`. The type checker forces you to handle the `None` case first.
+Because `Optional Integer` and `Integer` are different types, you cannot accidentally pass a "not found" result into `+`. You must obtain an `Integer` from the optional value before using it in arithmetic, deciding what to do when there is no value.
 
-### Closed Variants and Pattern Matching
+### Closed variants and pattern matching
 
 Suppose you are modeling the result of a payment request in Common Lisp. An outcome might be:
 
@@ -79,7 +77,7 @@ In Coalton, you express this directly with `define-type`:
     (RetryLater Integer)))
 ```
 
-`PaymentResult` is a single type with three *constructors* (`Approved`, `Declined`, and `RetryLater`), each carrying only the fields that make sense for that case. Functions that work with `PaymentResult` discriminate between these constructors, like this function to describe a payment as a string:
+`PaymentResult` is a single type with three *constructors* (`Approved`, `Declined`, and `RetryLater`), each carrying only the fields that make sense for that case. A function can use `match` to distinguish them and name their fields:
 
 ```lisp
 (coalton-toplevel
@@ -97,11 +95,11 @@ In Coalton, you express this directly with `define-type`:
 Think of `define-type` + `match` as a combination of `defstruct`, `etypecase`, and `destructuring-bind` that is checked at compile time:
 
 - You cannot read `reason` unless you are in the `Declined` branch.
-- You cannot misspell a constructor name.
-- If you later add a fourth constructor `(Cancelled)` to `PaymentResult`, the compiler will immediately flag `describe-payment` as non-exhaustive.
+- Constructor patterns and their fields are checked against the type definition.
+- If you later add a fourth constructor `(Cancelled)` to `PaymentResult`, recompiling `describe-payment` produces a warning that its match is non-exhaustive.
 - All branches must return the same kind of object, in this case a `String`.
 
-When a type really is just a single record with named fields, like a `defstruct`, one uses `define-struct` instead:
+When you want a single record with named fields, like a `defstruct`, use `define-struct` instead:
 
 ```lisp
 (coalton-toplevel
@@ -115,9 +113,9 @@ When a type really is just a single record with named fields, like a `defstruct`
        (* (.y p) (.y p)))))
 ```
 
-### Type Variables: Connecting Inputs, Callbacks, and Outputs
+### Connecting types across a function
 
-Suppose you write a utility `find-where` that searches for an object in a custom tree data structure `tree` based on a given predicate, like
+Suppose you write a utility `find-where` that searches a custom tree data structure `tree` for an object satisfying a predicate:
 
 ```lisp
 (find-where #'evenp coin-denominations)
@@ -126,13 +124,13 @@ Suppose you write a utility `find-where` that searches for an object in a custom
 (find-where #'point-at-origin-p (graph-quadtree g))
 ```
 
-Suppose a caller passes a predicate on `point` structs and a tree of `point` structs, with all of their types declared. The most precise `ftype` declaration you can write for `find-where` in Common Lisp is still:
+You want the same function to work on trees of integers, strings, and `point` structs. A general-purpose `ftype` declaration might be:
 
 ```lisp
 (function ((function (t) boolean) tree) t)
 ```
 
-A Common Lisp compiler with good type inference still cannot ascertain from that signature that the objects in the tree have the same type as the argument to the callback, or that `find-where` returns an object of that same type.
+Even if callers declare their types precisely, that signature does not say that the objects in the tree have the same type as the argument to the callback, or that a successful search returns an object of that same type.
 
 Coalton expresses these relationships with *type variables*, written as keyword symbols (`:a`, `:b`, `:key`, `:val`), while concrete type names are capitalized (`Integer`, `String`, `List`, `Vector`). Given a tree data structure like
 
@@ -160,12 +158,12 @@ we can write `find-where` as:
          ((None) (find-where pred right)))))))
 ```
 
-Because `:a` appears in all three positions of `(:a -> Boolean) * Tree :a -> Optional :a`, the compiler enforces two things across every call site that `(function ((function (t) boolean) tree) t)` cannot:
+The repeated `:a` connects the callback's argument, the tree's elements, and the optional result. This gives the compiler two useful checks at every call site:
 
 - Passing a predicate of type `Point -> Boolean` together with a `Tree String` is rejected at compile time.
-- Calling `find-where` on a `Tree Point` returns an `Optional Point`, so the caller still knows it has a `Point` without any extra type declarations.
+- Calling `find-where` on a `Tree Point` returns an `Optional Point`, so a value extracted from the result is known to be a `Point` without any extra type declarations.
 
-### Protocols and Type Classes
+### Protocols and type classes
 
 In Common Lisp, when several unrelated types support the same operations, such as serialization, equality, or arithmetic, we usually define a *protocol*: a set of `defgeneric` functions that participating types implement with `defmethod`. Common Lisp leaves that grouping informal, though. There is no built-in way to name the protocol itself, require it in a function's type declaration, or check at compile time that a type implements all of its methods.
 
@@ -207,10 +205,10 @@ Functions that use `Reportable` operations state that requirement in their decla
         (<> "[final] " (summary item)))))
 ```
 
-Compared to CLOS generic functions, type classes behave differently in three ways that matter in practice:
+Compared to CLOS generic functions, type classes have a few differences worth knowing:
 
 1. **Completeness is checked at compile time**: Omitting `recoverable?` from `define-instance`, or calling `(format-report x)` on a type that does not implement `Reportable`, is a compile-time error rather than a run-time `no-applicable-method`.
-2. **Methods can dispatch on return types**: A CLOS generic function can only dispatch on the run-time classes of the arguments passed into it; a zero-argument `(defgeneric default ())` cannot dispatch on anything, so in Common Lisp you have to pass a type symbol like `(default 'point)` or `(cl:coerce x 'list)`. In Coalton, dispatch is driven by static types, including the *return type* expected by the caller. For example, the built-in `Default` type class has a zero-argument method `(default)`:
+2. **Methods can dispatch on return types**: CLOS selects methods using the run-time classes or identities (`eql` specializers) of arguments, not the expected return type. A zero-argument `(defgeneric default ())` has no arguments to distinguish methods, so a Lisp interface might instead take a type symbol, as in `(default 'point)` or `(cl:coerce x 'list)`. In Coalton, static types select the instance, including the *return type* expected by the caller. For example, the built-in `Default` type class has a zero-argument method `(default)`:
 
    ```lisp
    (coalton-toplevel
@@ -226,20 +224,17 @@ Compared to CLOS generic functions, type classes behave differently in three way
 3. **Static resolution and inlining**: When concrete types are known at compile time, the compiler can resolve the instance methods directly and inline them without run-time method dispatch.
 4. **Fast run-time dispatch**: When a generic call is not inlined away, calling a type class method is just a structure slot read and a `funcall`.
 
-## Writing Modular Code Without Giving Up Speed
+## Keeping generic code fast
 
-Experienced Common Lisp programmers know how to make an inner loop fast: add `(declare (type double-float ...))` to every variable, avoid CLOS dispatch in hot paths, avoid allocating wrapper structs or `cons` cells for intermediate results, and write `defmacro` generators when the same numerical kernel needs to run on `single-float`, `double-float`, and `fixnum`.
+Experienced Common Lisp programmers know the techniques for making an inner loop fast: give the compiler precise numeric types, avoid unnecessary dispatch in hot paths, and reduce allocation of wrapper structs and `cons` cells.
 
-The catch is that optimizing Common Lisp this way usually means dismantling your abstractions:
+The difficulty is keeping those optimizations in reusable code. You may have a perfectly good generic algorithm, yet still maintain separate numerical versions to get the performance you need. Macro generators can help, but they leave you responsible for specializing the algorithm and its helpers.
 
-- Writing an algorithm with `defgeneric` (or unspecialized `cl:+` and `cl:*` across helper functions) incurs run-time dispatch and boxes intermediate numbers; avoiding that in Common Lisp means replacing ordinary functions with macro-generators that stamp out `foo-f32`, `foo-f64`, and `foo-fixnum`.
-- A reusable struct like `(defstruct interval low high)` either leaves `low` and `high` as type `t` (boxing every float) or hard-codes `:type double-float` (duplicating the struct and its functions for every numeric type).
-- Wrapping a `double-float` in a `defstruct` or `defclass` so you don't mix up `meters` and `seconds` boxes every number on the heap, whereas `deftype` is just an alias that doesn't catch mixing them up.
-- Returning `nil` on failure from a function that otherwise produces a `double-float` gives the return value type `(or null double-float)`, which forces the float to be heap-boxed unless you rewrite callers around `(values 0.0d0 nil)` with dummy numbers and boolean flags.
+Coalton can do that specialization for you because it knows the static types across function boundaries before generating Common Lisp. Its **development mode** preserves interactive redefinition, for example by compiling data types as CLOS classes. **Release mode** uses representations and calling conventions suited to optimization, including structs and unboxed entry points for eligible functions.
 
-Coalton avoids this trade-off for two reasons. First, it knows the static types of every expression across function boundaries *before* generating Common Lisp. Second, Coalton has an explicit **release mode**. In Common Lisp, the compiler must generally assume the program is never "done", because classes, structs, and functions might be redefined at the REPL at any time. Coalton's **development mode** keeps that interactive flexibility (for instance, compiling data types as CLOS classes so they can be redefined live), while **release mode** lets the compiler assume that types, instances, and functions are sealed and can be specialized and unboxed across the program.
+The examples below show what this buys you. Coalton performs its own specialization and allocation-elimination passes, but low-level results such as keeping floats unboxed in registers also depend on the host Lisp compiler.
 
-### Fast Functions from Generic Functions
+### Specializing a generic function
 
 Suppose you want to evaluate a polynomial $c_0 + x(c_1 + x(c_2 + \dots))$ using Horner's method:
 
@@ -250,12 +245,9 @@ Suppose you want to evaluate a polynomial $c_0 + x(c_1 + x(c_2 + \dots))$ using 
       (+ (car coeffs) (* x (horner x (cdr coeffs))))))
 ```
 
-In Common Lisp, how do you make this function both **generic** (working on `double-float`, `single-float`, `rational`, and user-defined types like matrices or polynomials) and **fast** (running with unboxed `double-float` arithmetic when given `double-float`s)?
+How do you keep this function generic while getting unboxed `double-float` arithmetic when you need it? You might also want it to work on user-defined numeric types, such as matrices or polynomials.
 
-- `(declaim (inline horner))` cannot inline a recursive function away.
-- The literal `0` returns an `integer`, not `0.0d0`, and `(car coeffs)` has type `t`, so every step goes through generic `cl:+` and `cl:*` and boxes floats.
-- Built-in `cl:+` and `cl:*` cannot be extended to user-defined types anyway; if you replace them with CLOS generic functions `generic-+` and `generic-*`, every step of the recursion pays for CLOS dispatch.
-- To get fast specialized versions in Common Lisp, you end up turning `horner` (and every helper function it calls) into a macro that stamps out `horner-f64`, `horner-f32`, and so on.
+An `inline` declaration alone cannot eliminate all recursive calls, and the definition leaves the element type of `coeffs` unspecified. Built-in `cl:+` and `cl:*` cannot be extended to your own types either. A macro that generates specialized versions is one approach.
 
 In Coalton, you write `horner` as an ordinary generic function once:
 
@@ -268,7 +260,7 @@ In Coalton, you write `horner` as an ordinary generic function once:
       ((Cons c rest) (+ c (* x (horner x rest)))))))
 ```
 
-Because `+`, `*`, and the literal `0` are all methods of the `Num` type class, `horner` works on `Integer`, `Fraction`, `F32`, `F64`, `Complex`, or your own matrix or polynomial type.
+The operations `+` and `*` are methods of `Num`, and integer literals such as `0` are interpreted through its `fromInt` method. The same `horner` definition therefore works on any type with a `Num` instance, including `Integer`, `Fraction`, `F32`, `F64`, and suitable user-defined matrix or polynomial types.
 
 When you want a fast `F64` version, you do not rewrite `horner` as a macro. Instead, you ask the compiler to [`monomorphize`](/manual/operators/monomorphize/) a concrete entry point:
 
@@ -280,11 +272,11 @@ When you want a fast `F64` version, you do not rewrite `horner` as a macro. Inst
     (horner x coeffs)))
 ```
 
-Coalton walks the call graph from `horner-f64` and generates a specialized Common Lisp clone of the recursive `horner` function for `F64`: the literal `0` becomes `0.0d0`, `+` and `*` become direct `double-float` operations, and every variable and list element `c` is declared `(type double-float ...)`. You keep a single generic function in your source code while getting the same Common Lisp output you would have written by hand or generated with a macro.
+Coalton specializes the recursive `horner` function for `F64`: `0` is interpreted as an `F64`, and `+` and `*` resolve to that type's arithmetic operations. The generated Common Lisp includes concrete type declarations for the numeric bindings, allowing the host compiler to optimize the arithmetic. You maintain one generic algorithm; the compiler produces the specialized version.
 
-### Distinct Wrapper Types Without Heap Allocation
+### Distinct wrapper types without heap allocation
 
-Suppose you want separate types for `Meters` and `Seconds` so you cannot accidentally add a distance to a duration. In Common Lisp, `deftype` does not make them distinct types, while `defstruct` allocates a heap object for every number.
+Suppose you want separate types for `Meters` and `Seconds` so you cannot accidentally add a distance to a duration. In Common Lisp, `deftype` aliases for `double-float` do not distinguish them, while `defstruct` gives each value a wrapper object.
 
 In Coalton, attaching `(repr :transparent)` to a single-field type gives you a distinct compile-time type that erases to the underlying value at run time:
 
@@ -303,33 +295,89 @@ In Coalton, attaching `(repr :transparent)` to a single-field type gives you a d
     (/ d t)))
 ```
 
-Passing `(Seconds 5.0d0)` as the first argument to `speed` is a compile-time error, but at run time `Meters` and `Seconds` are just raw `double-float`s and `speed` compiles to a direct `double-float` division.
+Passing `(Seconds 5.0d0)` as the first argument to `speed` is a compile-time error. At run time, however, `Meters` and `Seconds` use the underlying `double-float` representation: there is no additional wrapper to allocate or unpack.
 
-### Using `Optional`, `Result`, and Structs Without Boxing in Inner Loops
+### Structured values without extra allocation
 
-In performance-critical Common Lisp, programmers often avoid returning wrapper structs or `(or null double-float)` from helpers inside a loop because doing so allocates on the heap or boxes floats. Instead, they end up threading multiple values with dummy numbers and boolean flags, such as `(values 0.0d0 nil)`.
+A struct can make Lisp code easier to understand: its name and fields tell callers what they've received. But it can also allocate an object that exists only to pass information from one expression to another.
 
-In Coalton's release mode, you can use ordinary structs, `Tuple`s, `Optional`, `Result`, and local mutable `Cell`s inside a function without paying for those intermediate allocations: when those values do not escape the function, the compiler rewrites them into plain, type-declared Common Lisp lexical variables automatically.
+For example, suppose you want the squared distance from the origin to the midpoint of two points. A straightforward Common Lisp version computes a new `point` and passes it to a distance function:
 
-### Generating Type Declarations Automatically
+```lisp
+(defstruct point
+  (x 0.0d0 :type double-float)
+  (y 0.0d0 :type double-float))
 
-When writing fast Common Lisp by hand, leaving a single `(declare (type ...))` off an intermediate `let` binding can quietly reintroduce generic dispatch and float boxing. Conversely, if you refactor a type and forget to update a hand-written `(the ...)` form under `(optimize (safety 0))`, you can corrupt memory.
+(defun midpoint (p q)
+  (declare (type point p q))
+  (make-point :x (/ (+ (point-x p) (point-x q)) 2.0d0)
+              :y (/ (+ (point-y p) (point-y q)) 2.0d0)))
 
-In release mode, Coalton generates Common Lisp `(declare (type ...))` annotations on function parameters, `let` bindings, loop variables, and `match` variables automatically from the static types it has already proved.
+(defun distance-squared (p)
+  (declare (type point p))
+  (+ (* (point-x p) (point-x p))
+     (* (point-y p) (point-y p))))
+
+(defun midpoint-distance-squared (p q)
+  (declare (type point p q))
+  (distance-squared (midpoint p q)))
+```
+
+The functions compose naturally because `midpoint` returns the same kind of object that `distance-squared` accepts. But each call constructs a temporary point just to read its coordinates. If profiling shows that these points account for too much allocation, you might write a version that returns coordinates as multiple values and adjust the caller:
+
+```lisp
+(declaim (inline midpoint-values))
+(defun midpoint-values (p q)
+  (declare (type point p q))
+  (values (/ (+ (point-x p) (point-x q)) 2.0d0)
+          (/ (+ (point-y p) (point-y q)) 2.0d0)))
+
+(defun midpoint-distance-squared (p q)
+  (declare (type point p q))
+  (multiple-value-bind (x y) (midpoint-values p q)
+    (declare (type double-float x y))
+    (+ (* x x) (* y y))))
+```
+
+This avoids constructing the intermediate point, but the caller must know that `midpoint-values` returns the x coordinate followed by the y coordinate. It also computes the distance itself rather than reusing the function that accepts a point. In Coalton, you can keep the original composition, using the `Point` type and `distance-squared` function from earlier:
+
+```lisp
+(coalton-toplevel
+  (inline)
+  (declare midpoint (Point * Point -> Point))
+  (define (midpoint p q)
+    (Point (/ (+ (.x p) (.x q)) 2.0d0)
+           (/ (+ (.y p) (.y q)) 2.0d0)))
+
+  (declare midpoint-distance-squared (Point * Point -> F64))
+  (define (midpoint-distance-squared p q)
+    (let middle = (midpoint p q))
+    (inline (distance-squared middle))))
+```
+
+Here, `midpoint` returns a `Point`, so its result works with other functions that accept points. In release mode, the inline hints expose the construction and field accesses of `middle` to Coalton's scalar-replacement pass. It replaces that intermediate point with two typed numeric bindings, so `midpoint-distance-squared` does not allocate a new `Point`. You keep the record-based interface and reuse `distance-squared` without manually unpacking and repacking coordinates.
+
+The same pass handles eligible locally constructed `Tuple`s, `Optional`, `Result`, and mutable `Cell`s. The compiler must recognize their construction and use, and the values must not escape. Lisp compilers can eliminate some allocations too, but Coalton explicitly performs these transformations on its typed representations before generating Common Lisp.
+
+### Generating type declarations automatically
+
+Hand-written declarations need maintenance too. A missing declaration can leave the compiler without enough information to optimize a binding; a stale declaration can be dangerous under low-safety compilation.
+
+In release mode, Coalton generates Common Lisp `(declare (type ...))` annotations on function parameters, `let` bindings, loop variables, and `match` variables from the types it has checked. When you change the Coalton code, those declarations change with it.
 
 See [Performance and Optimization](/manual/topics/performance-and-optimization/) for examples of the generated Common Lisp code.
 
-## How Programming in Coalton Feels Different
+## How programming in Coalton feels different
 
-Even though Coalton is a language within Common Lisp, many of the practices and patterns of Common Lisp don't apply directly. Adopting Coalton means adjusting how you model data, organize abstractions, and iterate at the REPL.
+Coalton shares the Lisp image, but not all of Common Lisp's programming conventions. A few adjustments to data modeling, generic operations, and interactive development will help you get comfortable with it.
 
-### Data Modeling Comes First, Not Last
+### Starting with your data types
 
 In Common Lisp, it is common to start prototyping with nested lists, alists, or plists like `'(:name "Alice" :age 42 :roles (:admin :staff))` where a single list mixes strings, integers, and symbols, and to put off defining `defstruct` or `defclass` types until the design settles.
 
-In Coalton, every collection is homogeneous: all elements of a list or vector must have the same type. You cannot pass around an untyped plist as a general-purpose record. Instead, you start by writing down the types of your domain data using structs and sum types. Because those definitions are only a few lines of code, sketching them up front is lightweight, and the compiler immediately helps check the functions you write against them.
+In Coalton, lists and vectors are homogeneous: their elements must have the same type. An untyped plist therefore cannot serve as a general-purpose record. You usually start by sketching your data with structs and sum types. Those definitions are short, and they give the compiler something useful to check as you write the functions that work with them.
 
-### Variants and Protocols Instead of Inheritance Hierarchies
+### Variants and protocols instead of inheritance hierarchies
 
 In CLOS, a class hierarchy often serves two purposes at once: it lets you store different kinds of objects together (such as a list of `shape` instances containing both circles and rectangles), and it lets different types share generic operations and slots.
 
@@ -338,19 +386,21 @@ Coalton has no subtyping and no class inheritance. A 32-bit integer is not a sub
 - When you have a fixed set of cases that need to live in the same container, you define a single sum type (`define-type`) with a constructor for each case and branch on it with `match`.
 - When you have an open set of types that share behavior, you define a type class protocol (`define-class`). Unlike a CLOS method specialized on a superclass, a generic function constrained by a type class still operates on one concrete type at a time: a list of drawable items is a list of circles or a list of rectangles, not a mixed list of both.
 
-### Explicit Conversions Instead of Numeric Contagion
+### Explicit conversions instead of numeric contagion
 
 Common Lisp's numeric tower automatically promotes operands across `integer`, `ratio`, and `float` in expressions like `(+ 1 2.5d0 3/4)`.
 
-In Coalton, distinct numeric types never convert into one another behind your back. Even though arithmetic operators are generic across all numeric types, both inputs and the output of `+` or `*` must be the exact same type. Combining an integer and a floating-point number requires an explicit conversion. Mixed-precision code takes a little more care to write, but accidental float contagion and silent loss of exactness cannot happen implicitly.
+In Coalton, distinct numeric types do not implicitly convert into one another. The arithmetic operators are generic, but both inputs and the output of `+` or `*` must have the same type. Combining an `Integer` value and an `F64` value requires an explicit conversion. Integer literals are different: as in the Horner example, `1` can be interpreted directly as an `F64` through `fromInt`. Mixed-precision code takes a little more care to write, but you choose where conversions occur.
 
-### Compiler-Guided Refactoring
+### Compiler-guided refactoring
 
-In Common Lisp, when you change a function's signature or a type's layout with `C-c C-c`, the compiler accepts the new definition silently, and you typically discover which callers were affected when they fail at run time.
+When you recompile a Common Lisp function after changing its parameters or return type, a compiler such as SBCL may warn about incompatible callers. Common Lisp does not require implementations to detect all affected callers, though, so some problems may appear only when those callers run.
 
-In Coalton, each `coalton-toplevel` form is type-checked before code is emitted, so a function with a type mismatch or an unhandled `match` case in its own body is caught immediately. And when you interactively redefine an existing function with an incompatible type signature, Coalton doesn't just silently leave callers broken—or force you to fix the entire program before compiling the new definition. Instead, it tracks dependencies across functions, reports the old and new types along with a list of every affected caller (and its source location), and offers Common Lisp restarts (`Continue anyway` or `Abort redefinition`, configurable via `:auto-continue-redefinition`) so you can install the new definition and work through the affected callers one by one.
+Coalton type-checks each `coalton-toplevel` form before emitting code. It rejects type mismatches and warns about non-exhaustive `match` expressions. When you interactively redefine a function with an incompatible type signature, it uses tracked dependencies to report the old and new types and the affected callers, including their source locations.
 
-## Quirks and Differences from Common Lisp
+You can still work incrementally at the REPL. Common Lisp restarts let you choose `Continue anyway` or `Abort redefinition`, and `:auto-continue-redefinition` controls whether Coalton continues automatically with a warning. You can install the new definition and work through the callers one by one, with the diagnostics as your checklist.
+
+## Familiar syntax, different rules
 
 At the surface syntax level, keep these everyday differences in mind:
 
@@ -365,19 +415,19 @@ At the surface syntax level, keep these everyday differences in mind:
 
 For a fuller side-by-side table of Common Lisp and Coalton names, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
 
-## Structuring Hybrid Coalton/Lisp Systems
+## Structuring hybrid Coalton/Lisp systems
 
 Because Coalton and Common Lisp share the same image, you do not have to commit an entire project to one or the other:
 
 - **Use Common Lisp for dynamic systems and ecosystem glue**: Macro-heavy DSLs, run-time metaprogramming, dynamic code loading, and interfaces to existing Quicklisp libraries (networking, databases, CFFI, GUIs, web servers) are often easiest to write in plain Common Lisp.
-- **Use Coalton for invariant-heavy cores and kernels**: Domain models, compilers and AST passes, state machines, numerical algorithms, and subsystems that undergo frequent refactoring benefit most from static types, exhaustive pattern matching, and release-mode optimization.
+- **Use Coalton for typed data models and algorithms**: Domain models, compilers and AST passes, state machines, numerical algorithms, and subsystems that undergo frequent refactoring are good places to use static types, pattern-match checks, and specialization.
 - **Keep the boundary between them narrow**: Coalton includes an inline `lisp` form for calling Common Lisp directly, where you state the Coalton type that the Lisp expression returns. Because Coalton trusts that annotation without type-checking the Lisp body inside it, it is good practice to keep raw `lisp` calls inside small wrapper functions that convert Lisp values and conditions into typed Coalton values at the boundary.
 - **Keep interfaces immutable and internals pragmatic**: Coalton works best when functions accept and return immutable values at module boundaries, making components easy to test and compose. Inside a function body, however, you do not need to force everything into pure recursion: imperative loops, early returns, and local mutable accumulators are completely normal Coalton style.
 - **Match error handling to the kind of failure**: Rather than signaling conditions for every failure or returning `nil`, Coalton code typically uses `Optional` when a lookup simply finds nothing, `Result` when an operation can fail in expected ways that the caller should handle explicitly, and exceptions or resumptions for rare failures across deep call stacks or interoperation with Common Lisp conditions.
 
-Used this way, Coalton doesn't ask you to give up Common Lisp's interactive image, libraries, or macros. Instead, it gives you another tool inside the same Lisp environment for the parts of your program where static types, explicit data variants, and compiler-driven specialization pay off.
+You need not move a whole system into Coalton. A useful starting point is a component whose data shapes and interfaces are becoming difficult to keep consistent. Define those types in Coalton, keep the surrounding Lisp code, and let the compiler help with the next change.
 
-## Where to Go Next
+## Where to go next
 
 - **[Introduction and Getting Started](/manual/topics/introduction/)**: Setting up a Common Lisp environment, Quicklisp, Emacs/SLIME, and your first `.asd` + `.ct` project.
 - **[Coalton Language Guide](/manual/topics/language-guide/)**: The main tour of Coalton's syntax, types, collections, loops, and type classes.
