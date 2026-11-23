@@ -244,6 +244,7 @@
    #:collect-fundeps                        ; FUNCTION
    #:collect-fundep-vars                    ; FUNCTION
    #:given-superclass-expansions            ; FUNCTION
+   #:instantiate-context-superclasses       ; FUNCTION
    #:context-superclasses                   ; FUNCTION
    #:*given-superclass-expansions*          ; VARIABLE
    #:update-instance-fundeps                ; FUNCTION
@@ -1271,7 +1272,8 @@ only once."
                   (scan (qualified-ty-predicates object))
                   (scan (qualified-ty-type object)))
                  (ty-predicate
-                  (scan (ty-predicate-types object)))
+                  (scan (ty-predicate-types object))
+                  (scan (ty-predicate-superclass-evidence object)))
                  (ty-scheme
                   (scan (ty-scheme-type object)))
                  (type-entry
@@ -2087,11 +2089,41 @@ but not with any other occurrence of the class."
 (defvar *given-superclass-expansions* nil
   "Instantiated fields of the dictionaries in scope while checking or translating an instance.")
 
+(defun superclass-evidence (pred expansions)
+  (or (ty-predicate-superclass-evidence pred)
+      (cdr (assoc pred expansions :test #'type-predicate=))))
+
 (defun context-superclasses (class pred)
   "Look up the superclass fields of a given dictionary in declaration order."
-  (or (cdr (assoc pred *given-superclass-expansions* :test #'type-predicate=))
+  (or (superclass-evidence pred *given-superclass-expansions*)
       (apply-substitution (predicate-match (ty-class-predicate class) pred)
                           (ty-class-superclasses class))))
+
+(defun instantiate-context-superclasses (env preds)
+  "Give each hidden superclass type a witness local to its dictionary.
+Improvement, entailment and dictionary selection must all see the same fields."
+  (declare (type environment env) (type ty-predicate-list preds))
+  (labels ((visit (pred)
+             (let* ((class (lookup-class env (ty-predicate-class pred)))
+                    (supers (ty-class-superclasses class)))
+               (when (or (null supers) (ty-predicate-superclass-evidence pred))
+                 (return-from visit pred))
+               (let* ((hidden (not (subsetp (type-variables supers)
+                                            (ty-predicate-types (ty-class-predicate class))
+                                            :test #'ty=)))
+                      (fields (mapcar #'visit
+                                      (if hidden
+                                          (or (superclass-evidence pred *given-superclass-expansions*)
+                                              (instantiate-superclasses class pred))
+                                          (context-superclasses class pred)))))
+                 ;; Ordinary superclass arguments can be reconstructed from the head.
+                 (if (or hidden (some #'ty-predicate-superclass-evidence fields))
+                     (make-ty-predicate :class (ty-predicate-class pred)
+                                        :types (ty-predicate-types pred)
+                                        :location (source:location pred)
+                                        :superclass-evidence fields)
+                     pred)))))
+    (mapcar #'visit preds)))
 
 (defun collect-fundeps (env preds &optional (scope (make-hash-table :test #'eq)))
   "Collect the functional dependencies associated with PREDS as CONSes of
@@ -2709,7 +2741,7 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                   :for applied-pred := (apply-substitution subs pred)
                   :do (alexandria:nconcf
                        remaining-preds
-                       (or (copy-list (cdr (assoc applied-pred given-expansions :test #'type-predicate=)))
+                       (or (copy-list (superclass-evidence applied-pred given-expansions))
                            (instantiate-superclasses class applied-pred)))
                   :collect pred))
 

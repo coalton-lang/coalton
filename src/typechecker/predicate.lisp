@@ -13,6 +13,7 @@
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
+   #:ty-predicate-superclass-evidence   ; ACCESSOR
    #:ty-predicate-p                     ; FUNCTION
    #:ty-predicate-list                  ; TYPE
    #:qualified-ty                       ; STRUCT
@@ -48,6 +49,8 @@
   "A type predicate indicating that TYPE is of the CLASS"
   (class    (util:required 'class) :type symbol                    :read-only t)
   (types    (util:required 'types) :type ty-list                   :read-only t)
+  ;; Instantiated fields of a dictionary in scope, not part of the predicate's type.
+  (superclass-evidence nil         :type list                      :read-only t)
   (location nil                    :type (or source:location null) :read-only t))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
@@ -227,10 +230,12 @@
   (declare (type substitution-list subst-list)
            (values ty-predicate &optional))
   (rebuild-if-changed (subst-list type)
-      ((types (ty-predicate-types type)))
+      ((types (ty-predicate-types type))
+       (evidence (ty-predicate-superclass-evidence type)))
     (make-ty-predicate
      :class (ty-predicate-class type)
      :types types
+     :superclass-evidence evidence
      :location (ty-predicate-location type))))
 
 (defmethod apply-ksubstitution (subs (type ty-predicate))
@@ -247,6 +252,7 @@
   (mapcan #'kind-variables (copy-list (ty-predicate-types type))))
 
 (defmethod instantiate (types (type ty-predicate))
+  ;; A new use of the scheme does not inherit the defining dictionary's witnesses.
   (make-ty-predicate
    :class (ty-predicate-class type)
    :types (instantiate types (ty-predicate-types type))))
