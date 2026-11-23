@@ -110,6 +110,60 @@
     (when (find-package package-name)
       (delete-package package-name))))
 
+(deftest inline-on-ordinary-values-signals-style-warning ()
+  (dolist (text '("(inline) (declare value String) (define value \"value\")"
+                  "(declare value String) (inline) (define value \"value\")"
+                  "(inline) (define value \"value\")"))
+    (let ((package-name (format nil "COALTON-INLINE-VALUE-~A" (gensym)))
+          (warnings nil)
+          (diagnostics nil))
+      (let ((source:*source-diagnostic-hook*
+              (lambda (condition) (push condition diagnostics))))
+        (handler-bind ((source:source-warning
+                         (lambda (condition)
+                           (push condition warnings)
+                           (muffle-warning condition))))
+          (run-file-program-in-fresh-package
+           package-name
+           (format nil "(package ~A) ~A" package-name text))))
+      (is (= 1 (length warnings)))
+      (let* ((warning (first warnings))
+             (location (source:location (first (source:notes warning)))))
+        (is (typep warning 'style-warning))
+        (is (eq :style-warning (source:severity warning)))
+        (is (equal warnings diagnostics))
+        (is (string= "Ineffective inline attribute" (source:message warning)))
+        (is (search "inline has no effect on the value VALUE"
+                    (princ-to-string warning)))
+        (is (string= "(inline)"
+                     (source:extract-source-text (source:location-source location)
+                                                 (source:location-span location))))))))
+
+(deftest inline-on-callable-bindings-does-not-warn ()
+  (let ((package-name (format nil "COALTON-INLINE-CALLABLE-~A" (gensym)))
+        (warnings nil))
+    (handler-bind ((source:source-warning
+                     (lambda (condition)
+                       (push condition warnings)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A)
+                    (inline)
+                    (define (identity x) x)
+                    (inline)
+                    (define lambda-value (fn (x) x))
+                    (inline)
+                    (define (nullary) \"value\")
+                    (define-class (Witness :a)
+                      (witness :a))
+                    (inline)
+                    (declare constrained (Witness :a => :a))
+                    (define constrained witness)
+                    (define ordinary \"value\")"
+               package-name)))
+    (is (null warnings))))
+
 (deftest toplevel-redefinition-dependencies ()
   (with-codegen-test-environment
     (let ((coalton-impl/redef-detection:*dependency-registry*
