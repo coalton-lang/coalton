@@ -54,18 +54,21 @@
   (define-type (Queue :a)
     "Unbounded FIFO queue implemented with a linked list.")
 
+  (inline)
   (declare new (Void -> Queue :a))
   (define (new)
     "Create a new empty queue."
     (lisp (-> (Queue :a)) ()
       (make-queue-internal)))
 
+  (inline)
   (declare length (Queue :a -> UFix))
   (define (length q)
     "Returns the length of `q`."
     (lisp (-> UFix) (q)
       (queue-internal-length q)))
 
+  (inline)
   (declare empty? (Queue :a -> Boolean))
   (define (empty? q)
     "Is `q` empty?"
@@ -91,6 +94,7 @@
          :last last
          :length (queue-internal-length q)))))
 
+  (inline)
   (declare clear! (Queue :a -> Void))
   (define (clear! q)
     "Clear all elements from `q`."
@@ -127,6 +131,7 @@
           (cl:incf (queue-internal-length q))))
       (values)))
 
+  (inline)
   (declare pop! (Queue :a -> Optional :a))
   (define (pop! q)
     "Remove and return the first item of `q`."
@@ -134,6 +139,7 @@
         None
         (Some (pop-unsafe! q))))
 
+  (inline)
   (declare pop-unsafe! (Queue :a -> :a))
   (define (pop-unsafe! q)
     "Remove and return the first item of `q` without checking if the queue is empty."
@@ -143,6 +149,7 @@
                  (cl:error "pop-unsafe! called on an empty Queue."))
         (cl:decf (queue-internal-length q)))))
 
+  (inline)
   (declare peek (Queue :a -> Optional :a))
   (define (peek q)
     "Peek at the first item of `q`."
@@ -150,6 +157,7 @@
         None
         (Some (peek-unsafe q))))
 
+  (inline)
   (declare peek-unsafe (Queue :a -> :a))
   (define (peek-unsafe q)
     "Peek at the first item of `q` without checking if the queue is empty."
@@ -157,18 +165,20 @@
       (cl:or (cl:car (queue-internal-elements q))
              (cl:error "peek-unsafe called on an empty Queue."))))
 
+  (inline)
   (declare index (UFix * Queue :a -> Optional :a))
-  (define (index index q)
-    "Return the `index`th element of `q`."
-    (if (>= index (length q))
+  (define (index idx q)
+    "Return the `idx`th element of `q`."
+    (if (>= idx (length q))
         None
-        (Some (index-unsafe index q))))
+        (Some (index-unsafe idx q))))
 
+  (inline)
   (declare index-unsafe (UFix * Queue :a -> :a))
-  (define (index-unsafe index q)
-    "Return the `index`th element of `q` without checking if the element exists."
-    (lisp (-> :a) (index q)
-      (cl:nth index (queue-internal-elements q))))
+  (define (index-unsafe idx q)
+    "Return the `idx`th element of `q` without checking if the element exists."
+    (lisp (-> :a) (idx q)
+      (cl:nth idx (queue-internal-elements q))))
 
   (declare append (Queue :a * Queue :a -> Queue :a))
   (define (append q1 q2)
@@ -213,6 +223,7 @@
       (f "]>")))
 
   (define-instance (Semigroup (Queue :a))
+    (inline)
     (define (<> a b)
       (append a b)))
 

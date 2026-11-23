@@ -53,6 +53,7 @@ supported 64-bit implementation."))))
     (coalton++:unsafe
       (lisp (-> :to) (x) x)))
 
+  (inline)
   (declare cast-if-inbounds
     (forall (:src :target)
       ((Ord :src) (Bounded :target) => :src -> (Optional :target))))

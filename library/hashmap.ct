@@ -138,35 +138,43 @@ of empty hashmap, or nodes at the maximum depth."
 
   ;; Utilities
 
+  (inline)
   (define (entry-key (HmEntry key _)) key)
+  (inline)
   (define (entry-value (HmEntry _ value)) value)
 
+  (inline)
   (declare tree-has-entry? (U32 * UFix -> Boolean))
   (define (tree-has-entry? mask index)
     (lisp (-> Boolean) (mask index)
       (cl:logtest mask (cl:ash 1 (cl:the (cl:unsigned-byte 64) index)))))
 
+  (inline)
   (declare index->pos (U32 * UFix -> UFix))
   (define (index->pos mask index)
     (lisp (-> UFix) (mask index)
       (cl:logcount (cl:logand mask (cl:1- (cl:ash 1 index))))))
 
+  (inline)
   (declare mask-set (U32 * UFix -> U32))
   (define (mask-set mask index)
     (lisp (-> U32) (mask index)
       (cl:the cl:fixnum (cl:logior mask
                                    (cl:the cl:fixnum (cl:ash 1 index))))))
 
+  (inline)
   (declare mask-clear (U32 * UFix -> U32))
   (define (mask-clear mask index)
     (lisp (-> U32) (mask index)
       (cl:logand mask (cl:lognot (cl:ash 1 index)))))
 
   ;; Single index to mask.
+  (inline)
   (declare index->mask (UFix -> U32))
   (define (index->mask index)
     (lisp (-> U32) (index) (cl:ash 1 index)))
 
+  (inline)
   (declare hbits (Hash :k => :k -> UFix))
   (define (hbits key)
     "Compute 'hash bits'.  It's easier for us to treat it as UFix than Hash."
@@ -182,6 +190,7 @@ of empty hashmap, or nodes at the maximum depth."
 
   ;; Performance hack.  Check if two objs are eq in CL sense.
   ;; Used to avoid unnecessary consing.
+  (inline)
   (declare unchanged? (:a * :a -> Boolean))
   (define (unchanged? a b)
     (lisp (-> Boolean) (a b) (cl:eq a b)))

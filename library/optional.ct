@@ -64,6 +64,7 @@
         (_ False))))
 
   (define-instance (Ord :a => Ord (Optional :a))
+    (inline)
     (define (<=> x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y))
@@ -93,8 +94,10 @@
         ((None) None))))
 
   (define-instance (Applicative Optional)
+    (inline)
     (define (pure x)
       (Some x))
+    (inline)
     (define (liftA2 f x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y))
@@ -109,6 +112,7 @@
         ((None) None))))
 
   (define-instance (MonadFail Optional)
+    (inline)
     (define (fail _)
       None))
 
@@ -147,6 +151,7 @@
         ((None) (pure None)))))
 
   (define-instance (Default (Optional :a))
+    (inline)
     (define (default) None)))
 
 #+sb-package-locks

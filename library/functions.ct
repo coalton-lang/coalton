@@ -164,6 +164,7 @@ For example, the following expressions are equivalent.
    (fn (left right)
      (func (Tuple left right))))
 
+ (inline)
  (declare uncurry
    (forall (:left :right (:result Values))
      ((:left * :right -> :result) -> (Tuple :left :right -> :result))))

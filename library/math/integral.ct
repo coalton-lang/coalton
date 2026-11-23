@@ -67,11 +67,13 @@ are floored and truncated division, respectively."
     "Converts any Integral N into any Num."
     (fromInt (toInteger n)))
 
+  (inline)
   (declare rsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (rsh x n)
     "Shift `x` right by `n` bits, or left by `-n` bits when `n` is negative. This is `(bits:shift (negate (toInteger n)) x)`, so on fixed-width types the result fits the width as described for `bits:Bits`."
     (bits:shift (negate (toInteger n)) x))
 
+  (inline)
   (declare lsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (lsh x n)
     "Shift `x` left by `n` bits, or right by `-n` bits when `n` is negative. This is `(bits:shift (toInteger n) x)`, so on fixed-width types the result fits the width as described for `bits:Bits`."
@@ -235,6 +237,7 @@ are floored and truncated division, respectively."
              (lisp (-> Boolean) (n) (to-boolean (cl:oddp n)))))
 
          (specialize ^ ,^ (,type * ,type -> ,type))
+         (inline)
          (declare ,^ (,type * ,type -> ,type))
          ,(cl:cond
             (signed
@@ -244,11 +247,9 @@ are floored and truncated division, respectively."
                     (coalton++:unsafe
                       (lisp (-> ,type) (base power) (cl:expt base power))))))
             (cl:t
-             `(progn
-                (inline)
-                (define (,^ base power)
-                  (coalton++:unsafe
-                    (lisp (-> ,type) (base power) (cl:expt base power)))))))
+             `(define (,^ base power)
+                (coalton++:unsafe
+                  (lisp (-> ,type) (base power) (cl:expt base power))))))
 
          (specialize ^^ ,^^ (,type * ,type -> ,type))
          (inline)
@@ -273,6 +274,7 @@ are floored and truncated division, respectively."
                       (lisp (-> Integer) (a b) (cl:lcm a b)))))
 
          (specialize isqrt ,isqrt (,type -> ,type))
+         (inline)
          (declare ,isqrt (,type -> ,type))
          ,(cl:cond
             (signed
@@ -282,11 +284,9 @@ are floored and truncated division, respectively."
                     (coalton++:unsafe
                       (lisp (-> ,type) (a) (cl:isqrt a))))))
             (cl:t
-             `(progn
-                (inline)
-                (define (,isqrt a)
-                  (coalton++:unsafe
-                    (lisp (-> ,type) (a) (cl:isqrt a)))))))))))
+             `(define (,isqrt a)
+                (coalton++:unsafe
+                  (lisp (-> ,type) (a) (cl:isqrt a))))))))))
 
 (%define-integral-native Integer cl:t)
 (%define-integral-native I8 cl:t)
@@ -310,6 +310,7 @@ are floored and truncated division, respectively."
 
     `(coalton-toplevel
        (specialize ^ ,^ (,type * Integer -> ,type))
+       (inline)
        (declare ,^ (,type * Integer -> ,type))
        (define (,^ base power)
          (if (< power 0)

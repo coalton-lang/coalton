@@ -131,6 +131,7 @@ Every type defined with `define-resumption` is an instance, and instances cannot
     (== (:a * :a -> Boolean)))
 
   (define-instance (Eq types:LispType)
+    (inline)
     (define (== a b)
       (lisp (-> Boolean) (a b)
         (cl:equalp a b))))
@@ -143,6 +144,7 @@ Every type defined with `define-resumption` is an instance, and instances cannot
     (fromInt (Integer -> :a)))
 
   (define-instance (Eq Unit)
+    (inline)
     (define (== _ _) True))
 
   ;;
@@ -268,6 +270,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
     "Types which can map an inner type where the mapping adheres to the identity and composition laws."
     (map ((:a -> :b) * (:f :a) -> (:f :b))))
 
+  (inline)
   (declare fmap (Functor :f => (:a -> :b) -> (:f :a -> :f :b)))
   (define (fmap f)
     "A \"curried\" version of `map`. Lift a function into a Functor, converting `:a -> :b` to `:f :a -> :f :b`.
@@ -309,11 +312,13 @@ Equivalent of Haskell's `*>`"
 together."
     (lift (Monad :m => :m :a -> :t :m :a)))
 
+  (inline)
   (declare >> (Monad :m => (:m :a) * (:m :b) -> (:m :b)))
   (define (>> a b)
     "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a ƒ_.b))
 
+  (inline)
   (declare join (Monad :m => :m (:m :a) -> :m :a))
   (define (join m)
     "Equivalent to `(>>= m id)`."
@@ -332,6 +337,7 @@ together."
     (fold  "A left tail-recursive fold."       ((:accum * :elt -> :accum) * :accum * (:container :elt) -> :accum))
     (foldr "A right non-tail-recursive fold."  ((:elt * :accum -> :accum) * :accum * (:container :elt) -> :accum)))
 
+  (inline)
   (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
   (define (mempty? a)
     "Does `a` equal `(the Type mempty)`?"
@@ -347,6 +353,7 @@ together."
     "Map a container to a container of monoids, and then fold that container into a single element."
     (fold ƒab.(<> a (f b)) mempty a))
 
+  (inline)
   (declare mcommute? ((Eq :a) (Semigroup :a) => :a * :a -> Boolean))
   (define (mcommute? a b)
     "Does `a <> b` equal `b <> a`?"
@@ -355,6 +362,7 @@ together."
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) * (:t :a) -> (:f (:t :b)))))
 
+  (inline)
   (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
   (define (sequence x)
     (traverse ƒy.y x))
@@ -363,11 +371,13 @@ together."
     "Types which take two type arguments and are functors on both."
     (bimap ((:a -> :b) * (:c -> :d) * (:f :a :c) -> (:f :b :d))))
 
+  (inline)
   (declare map-fst (Bifunctor :f => (:a -> :b) * (:f :a :c) -> (:f :b :c)))
   (define (map-fst f b)
     "Map over the first argument of a `Bifunctor`."
     (bimap f (fn (x) x) b))
 
+  (inline)
   (declare map-snd (Bifunctor :f => (:b -> :c) * (:f :a :b) -> (:f :a :c)))
   (define (map-snd f b)
     "Map over the second argument of a `Bifunctor`."
@@ -551,6 +561,7 @@ optimization restrictions, and separate-compilation details."
 
   (overlap)
   (define-instance (Into :a :a)
+    (inline)
     (define (into x) x))
 
   (define-instance (Into :a :a => Iso :a :a))
@@ -584,17 +595,20 @@ Typical `fail` continuations are:
          -> :result))))
 
   (define-instance (Unwrappable (Result :a))
-  (define (unwrap-or-else succeed fail res)
-    (match res
-      ((Ok elt) (succeed elt))
-      ((Err _) (fail)))))
+    (inline)
+    (define (unwrap-or-else succeed fail res)
+      (match res
+        ((Ok elt) (succeed elt))
+        ((Err _) (fail)))))
 
   (define-instance (Unwrappable Optional)
+    (inline)
     (define (unwrap-or-else succeed fail opt)
       (match opt
         ((Some elt) (succeed elt))
         ((None) (fail)))))
 
+  (inline)
   (declare expect ((Unwrappable :container) =>
                    String
                    * (:container :element)
@@ -616,11 +630,13 @@ Typical `fail` continuations are:
                                                container))))
                     container))
 
+  (inline)
   (declare unwrap-into (TryInto :a :b => :a -> :b))
   (define (unwrap-into x)
     "Same as `tryInto` followed by `unwrap`."
     (unwrap (tryinto x)))
 
+  (inline)
   (declare with-default ((Unwrappable :container) =>
                          :element
                          * (:container :element)
@@ -631,6 +647,7 @@ Typical `fail` continuations are:
                     (fn () default)
                     container))
 
+  (inline)
   (declare as-optional ((Unwrappable :container) => (:container :elt) -> (Optional :elt)))
   (define (as-optional container)
     "Convert any Unwrappable container into an `Optional`, constructing Some on a successful unwrap and None on a failed unwrap."
@@ -657,6 +674,7 @@ Typical `fail` continuations are:
     "Types which have default values."
     (default (Void -> :a)))
 
+  (inline)
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
@@ -665,6 +683,7 @@ Typical `fail` continuations are:
                     (fn () (default))
                     container))
 
+  (inline)
   (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
   (define (default? x)
       "Is `x` the default item of its type?"
