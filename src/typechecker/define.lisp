@@ -1951,7 +1951,8 @@ produces runtime dictionary applications."
     (multiple-value-bind (skolem-qual-ty skolems)
         (tc:instantiate-forall-ty expected-forall-ty :rigid-p t)
       (let* ((skolem-body-ty (tc:qualified-ty-type skolem-qual-ty))
-             (given-preds (tc:qualified-ty-predicates skolem-qual-ty))
+             (given-preds (tc:instantiate-context-superclasses
+                           (tc-env-env env) (tc:qualified-ty-predicates skolem-qual-ty)))
              (body-env (tc-env-extend-type-variable-scope env skolems)))
         (multiple-value-bind (inferred-ty wanted-preds accessors typed-node subs)
             (infer-expression-type node skolem-body-ty subs body-env)
@@ -1959,7 +1960,8 @@ produces runtime dictionary applications."
           (tc:apply-substitution subs body-env)
           (setf given-preds (tc:apply-substitution subs given-preds))
           (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) given-preds subs)))
-          (setf wanted-preds (tc:apply-substitution subs wanted-preds))
+          (setf wanted-preds (tc:instantiate-context-superclasses
+                              (tc-env-env env) (tc:apply-substitution subs wanted-preds)))
           (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) wanted-preds subs)))
           (setf accessors (tc:apply-substitution subs accessors))
 
@@ -4837,7 +4839,9 @@ as a recursive function rather than a recursive value."
          (fresh-qual-type (tc:instantiate declared-instantiation-types
                                           (tc:ty-scheme-type declared-ty)))
          (fresh-type (tc:qualified-ty-type fresh-qual-type))
-         (fresh-preds (tc:qualified-ty-predicates fresh-qual-type))
+         (fresh-preds (tc:instantiate-context-superclasses
+                       (tc-env-env env) (tc:qualified-ty-predicates fresh-qual-type)))
+         (binding-qual-type (tc:qualify fresh-preds fresh-type))
          (body-env
            (if declared-explicit-p
                (tc-env-extend-type-variable-scope
@@ -4867,7 +4871,8 @@ as a recursive function rather than a recursive value."
       ;; functional dependencies before the accessor source type is concrete.
       (setf fresh-preds (tc:apply-substitution subs fresh-preds))
       (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
-      (setf preds (tc:apply-substitution subs preds))
+      (setf preds (tc:instantiate-context-superclasses
+                   (tc-env-env env) (tc:apply-substitution subs preds)))
       (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
       (setf accessors (tc:apply-substitution subs accessors))
 
@@ -5085,7 +5090,7 @@ as a recursive function rather than a recursive value."
                 (values deferred-preds
                         (attach-explicit-binding-type
                          (tc:apply-substitution subs binding-node)
-                         (tc:apply-substitution subs fresh-qual-type))
+                         (tc:apply-substitution subs binding-qual-type))
                         subs)))))))))
 
 (defun infer-dynamic-binding-type (binding subs env)

@@ -660,6 +660,41 @@ must be distinguished even though the predicate-only variables are ambiguous."
       (declare f (:a -> Boolean))
       (define (f x) (ignored (m x)))")))
 
+(deftest fundep-entail-hidden-superclass-order ()
+  (let ((classes
+          "(define-class (Handles :rt :d (:rt -> :d))
+             (make-handle (:rt -> :d)))
+           (define-class (Handles :rt :d => WithRuntime :m :rt (:m -> :rt))
+             (runtime-of (:m -> :rt)))
+           (define-class (WithRuntime :m :rt => Delays :m))
+           (define-class (WithRuntime :m :rt => NamedRuntime :m :rt))"))
+    (flet ((program (preds)
+             (format nil "~A
+               (declare start (~{~A~^ ~} => :m -> :d))
+               (define (start m) (make-handle (runtime-of m)))" classes preds)))
+      (dolist (runtime '("(WithRuntime :m :rt)" "(NamedRuntime :m :rt)"))
+        (alexandria:map-permutations
+         (lambda (preds) (check-coalton-types (program preds)))
+         (list "(Delays :m)" runtime "(Handles :rt :d)")))
+      ;; The hidden handle type is not a caller-chosen result type.
+      (dolist (preds '(("(Delays :m)" "(WithRuntime :m :rt)")
+                       ("(WithRuntime :m :rt)" "(Delays :m)")))
+        (signals tc:tc-error (check-coalton-types (program preds)))))))
+
+(deftest fundep-entail-partially-hidden-superclasses ()
+  ;; Neither dictionary names the full Assoc predicate on its own.
+  (check-coalton-types
+   "(define-class (Assoc :a :b :c (:a -> :b :c))
+      (both-values (:a -> Tuple :b :c)))
+    (define-class (Assoc :a :b :c => FirstOf :a :b))
+    (define-class (Assoc :a :b :c => SecondOf :a :c))
+    (declare both ((FirstOf :a :b) (SecondOf :a :c) => :a -> Tuple :b :c))
+    (define (both x) (both-values x))
+    (declare use-reader ((forall (:a :b :c) ((FirstOf :a :b) (SecondOf :a :c)
+                                             => :a -> Tuple :b :c)) -> Unit))
+    (define (use-reader _) Unit)
+    (define reader-value (use-reader (fn (x) (both-values x))))"))
+
 (deftest fundep-nested-entail ()
   ;; see https://github.com/coalton-lang/coalton/issues/1717
   (check-coalton-types
