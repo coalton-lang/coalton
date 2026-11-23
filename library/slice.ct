@@ -83,6 +83,7 @@
         (cl:setf (cl:aref s idx) item))
       (values)))
 
+  (inline)
   (declare index (UFix * (Slice :a) -> (Optional :a)))
   (define (index idx s)
     "Lookup the element at `index` in `s`."

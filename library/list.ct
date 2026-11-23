@@ -107,6 +107,7 @@
       ((Cons _ xs) (Some xs))
       ((Nil) None)))
 
+  (inline)
   (declare car (List :a -> :a))
   (define (car x)
     "Return the traditional car of a list. This function is partial."
@@ -130,6 +131,7 @@
       ((Cons _ xs) (last xs))
       ((Nil) None)))
 
+  (inline)
   (declare init (List :a -> List :a))
   (define (init l)
     "Returns every element except the last in a list."
@@ -144,6 +146,7 @@
       ((Nil) True)
       (_ False)))
 
+  (inline)
   (declare cons? (List :a -> Boolean))
   (define (cons? xs)
     "Returns TRUE if XS is a non-empty list."
@@ -151,11 +154,13 @@
       ((Nil) False)
       (_ True)))
 
+  (inline)
   (declare singleton (:a -> List :a))
   (define (singleton x)
     "Returns a list containing one element."
     (Cons x Nil))
 
+  (inline)
   (declare singleton? (List :a -> Boolean))
   (define (singleton? xs)
     "Is `xs` a list containing exactly one element?"
@@ -177,6 +182,7 @@
       ((Nil) bs)
       ((Cons a as) (%reverse as (Cons a bs)))))
 
+  (inline)
   (declare reverse (List :a -> List :a))
   (define (reverse xs)
     "Returns a new list containing the same elements in reverse order."
@@ -184,6 +190,7 @@
     (%reverse xs Nil))
 
   ;; This is only for internal usage
+  (inline)
   (declare %reverse! (List :a -> List :a))
   (define (%reverse! xs)
     "A mutating reverse operation. After (%reverse! LST), LST must not be referenced; the original list, and all its sublists, should be treated as consumed by this operation. Callers should use the return value and only the return value."
@@ -272,6 +279,7 @@
            (Some x)
            (index (- i 1) xs)))))
 
+  (inline)
   (declare nth (UFix * List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
@@ -287,6 +295,7 @@
 	  (True
 	   (nth-cdr (math:1- n) (cdr l)))))
   
+  (inline)
   (declare elemIndex (Eq :a => :a * List :a -> Optional UFix))
   (define (elemIndex x xs)
     (findIndex ƒy.(== x y) xs))
@@ -326,12 +335,14 @@
       ((Nil) result)
       ((Cons x xs) (append-rev xs (Cons x result)))))
 
+  (inline)
   (declare append (List :a * List :a -> List :a))
   (define (append xs ys)
     "Appends two lists together and returns a new list."
     (%reverse! (append-rev ys (append-rev xs Nil))))
 
   (specialize mconcat concat (List (List :a) -> List :a))
+  (inline)
   (declare concat (List (List :a) -> List :a))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
@@ -402,6 +413,7 @@
            (remove-duplicates-rev xs acc)
            (remove-duplicates-rev xs (Cons x acc))))))
 
+  (inline)
   (declare remove-duplicates (Eq :a => ((List :a) -> (List :a))))
   (define (remove-duplicates xs)
     "Returns a new list without duplicate elements."
@@ -416,16 +428,19 @@
            (append-rev ys acc)
            (remove-rev-if pred ys (Cons y acc))))))
 
+  (inline)
   (declare remove-if ((:a -> Boolean) * (List :a) -> (List :a)))
   (define (remove-if pred xs)
     "Return a new list with the first element for which PRED is `True` is removed."
     (%reverse! (remove-rev-if pred xs Nil)))
 
+  (inline)
   (declare remove (Eq :a => (:a * (List :a) -> (List :a))))
   (define (remove x ys)
     "Return a new list with the first element equal to `x` removed."
     (remove-if ƒy.(== x y) ys))
 
+  (inline)
   (declare difference (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (difference xs ys)
     "Returns a new list with the first occurrence of each element in `ys` removed from `xs`."
@@ -485,6 +500,7 @@
           (g as bs cs ds es (Cons (f a b c d e) acc)))
          (_ acc)))))
 
+  (inline)
   (declare zip ((List :a) * (List :b) -> (List (Tuple :a :b))))
   (define (zip xs ys)
     "Builds a list of tuples with the elements of XS and YS."
@@ -500,6 +516,7 @@
           0
           things))
 
+  (inline)
   (declare insert (Ord :a => (:a * (List :a) -> (List :a))))
   (define (insert e ls)
     "Inserts an element into a list at the first place it is less than or equal to the next element."
@@ -518,6 +535,7 @@
             ((GT) (f yss (Cons y acc)))
             (_    (append-rev ys (Cons x acc)))))))))
 
+  (inline)
   (declare sort (Ord :a => ((List :a) -> (List :a))))
   (define (sort xs)
     "Sort `xs`."
@@ -538,6 +556,7 @@
       ((Nil)       Nil)
       ((Cons x xs) (Cons x (concatMap (fn (y) (make-list e y)) xs)))))
 
+  (inline)
   (declare intercalate ((List :a) * (List (List :a)) -> (List :a)))
   (define (intercalate xs xss)
     "Intersperse `xs` into `xss` and then concatenate the result."
@@ -601,6 +620,7 @@
            ((Tuple yes no)
             (g no (Cons (Cons x yes) partitions))))))))
 
+  (inline)
   (declare equivalence-classes (Eq :a => ((List :a) -> (List (List :a)))))
   (define (equivalence-classes l)
     (equivalence-classes-by == l))
@@ -620,21 +640,25 @@
                     opt))
               x xs)))))
 
+  (inline)
   (declare maximum (Ord :a => ((List :a) -> (Optional :a))))
   (define (maximum l)
     "Returns a greatest element of a list, or `None`."
     (optimumBy > l))
 
+  (inline)
   (declare minimum (Ord :a => ((List :a) -> (Optional :a))))
   (define (minimum l)
     "Returns a least element of a list, or `None`."
     (optimumBy < l))
 
+  (inline)
   (declare sum (Num :a => ((List :a) -> :a)))
   (define (sum xs)
     "Returns the sum of `xs`."
     (fold + (fromInt 0) xs))
 
+  (inline)
   (declare product (Num :a => ((List :a) -> :a)))
   (define (product xs)
     "Returns the product of `xs`."
@@ -739,6 +763,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
             lst)))
 
   (define-instance (Semigroup (List :a))
+    (inline)
     (define (<> a b) (append a b)))
 
   (define-instance (Monoid (List :a))
@@ -749,6 +774,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
       (%reverse! (fold (fn (a x) (Cons (f x) a)) Nil l))))
 
   (define-instance (Applicative List)
+    (inline)
     (define (pure x) (Cons x Nil))
     (define (liftA2 f as bs)
       (concatMap (fn (a)
@@ -756,11 +782,13 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                  as)))
 
   (define-instance (Alternative List)
+    (inline)
     (define (alt a b)
       (append a b))
     (define empty Nil))
 
   (define-instance (Monad List)
+    (inline)
     (define (>>= m f)
       (concatMap f m)))
 
@@ -809,10 +837,13 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
            :finally (cl:return top)))))
 
   (define-instance (FromItemizedCollection (List :elt) :elt (List :elt))
+    (inline)
     (define (begin-collection-builder _ _size)
       Nil)
+    (inline)
     (define (adjoin-to-collection-builder _ list _index item)
       (Cons item list))
+    (inline)
     (define (finalize-collection-builder _ list)
       (reverse list)))
 
@@ -820,18 +851,24 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                                             :key
                                             :value
                                             (List (Tuple :key :value)))
+    (inline)
     (define (begin-association-builder _ _size)
       Nil)
+    (inline)
     (define (adjoin-to-association-builder _ assoc _index key value)
       (Cons (Tuple key value) assoc))
+    (inline)
     (define (finalize-association-builder _ assoc)
       (reverse assoc)))
 
   (define-instance (FromCollectionComprehension (List :elt) :elt (List :elt))
+    (inline)
     (define (begin-collection-comprehension _ _size-hint)
       Nil)
+    (inline)
     (define (adjoin-to-collection-comprehension _ list item)
       (Cons item list))
+    (inline)
     (define (finalize-collection-comprehension _ list)
       (reverse list)))
 
@@ -839,20 +876,25 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                                                  :key
                                                  :value
                                                  (List (Tuple :key :value)))
+    (inline)
     (define (begin-association-comprehension _ _size-hint)
       Nil)
+    (inline)
     (define (adjoin-to-association-comprehension _ assoc key value)
       (Cons (Tuple key value) assoc))
+    (inline)
     (define (finalize-association-comprehension _ assoc)
       (reverse assoc)))
 
   (define-instance (Into (Optional :a) (List :a))
+    (inline)
     (define (into opt)
       (match opt
         ((None) Nil)
         ((Some a) (Cons a Nil)))))
 
   (define-instance (Default (List :a))
+    (inline)
     (define (default) Nil)))
 
 (define-expression-macro make (cl:&rest elements)

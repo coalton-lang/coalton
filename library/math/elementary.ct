@@ -51,6 +51,7 @@
     (atan  (:a -> :a))
     (pi    (:a)))
 
+  (inline)
   (declare sincos (Trigonometric :a => :a -> :a * :a))
   (define (sincos x)
     "Computes the sine and cosine of X."
@@ -102,6 +103,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
     (phase (Complex :a -> :a))
     (polar (Complex :a -> :a * :a)))
 
+  (inline)
   (declare magnitude ((ComplexComponent :a) (Radical :a) => Complex :a -> :a))
   (define (magnitude z)
     "The magnitude of a complex number. For `z = x + yi`,
@@ -110,6 +112,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
     (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
     (sqrt (square-magnitude z)))
 
+  (inline)
   (declare cis ((Trigonometric :a) (ComplexComponent :a) => :a -> Complex :a))
   (define (cis z)
     "A point on the complex unit circle:
@@ -128,30 +131,37 @@ For a complex number `z = (complex x y)`, the following identities hold:
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
+  (inline)
   (declare sinh (Elementary :f => :f -> :f))
   (define (sinh x)
     (/ (- (exp x) (exp (negate x))) 2))
 
+  (inline)
   (declare cosh (Elementary :f => :f -> :f))
   (define (cosh x)
     (/ (+ (exp x) (exp (negate x))) 2))
 
+  (inline)
   (declare tanh (Elementary :f => :f -> :f))
   (define (tanh x)
     (/ (sinh x) (cosh x)))
 
+  (inline)
   (declare asinh (Elementary :f => :f -> :f))
   (define (asinh x)
     (ln (+ x (sqrt (+ 1 (pow x 2))))))
 
+  (inline)
   (declare acosh (Elementary :f => :f -> :f))
   (define (acosh x)
     (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
 
+  (inline)
   (declare atanh (Elementary :f => :f -> :f))
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
 
+  (inline)
   (define (canonical-nth-root n x)
     "By definition implementation of `nth-root` for reals"
     (pow x (reciprocal (fromInt n))))
@@ -275,6 +285,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
              (#+(not ccl) cl:progn
                 #+ccl ff:with-float-traps-masked #+ccl cl:t
                 (cl:phase x)))))
+       (inline)
        (define (polar x)
          (values (magnitude x) (phase x))))
 
@@ -390,11 +401,13 @@ For a complex number `z = (complex x y)`, the following identities hold:
 
 (coalton-toplevel
   (define-instance (Elementary :a => Exponentiable (Complex :a))
+    (inline)
     (define (ln z)
       ;; The principal natural log of a complex number
       (let (values r theta) = (polar z))
       ;; ln r + iθ
       (complex (ln r) theta))
+    (inline)
     (define (exp z)
       ;; The natural exponential map of a complex number
       (let x = (real-part z))
@@ -402,19 +415,23 @@ For a complex number `z = (complex x y)`, the following identities hold:
       ;; exp(x + iy) = (exp x) * (exp iy) = (exp x) * (complex (cos y) (sin y))
       (let ex = (exp x))
       (complex (* ex (cos y)) (* ex (sin y))))
+    (inline)
     (define (pow x y)
       (exp (* y (ln x))))
+    (inline)
     (define (log b x)
       (/ (ln x) (ln b)))
     (define ee (Complex ee 0)))
 
   (define-instance (Elementary :a => Radical (Complex :a))
+    (inline)
     (define (sqrt z)
       (let (values r theta) = (polar z))
       (let sqrt-r = (sqrt r))
       (let phi = (/ theta 2))
       ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
       (complex (* sqrt-r (cos phi)) (* sqrt-r (sin phi))))
+    (inline)
     (define (nth-root n z)
       ;; nth-root(z) = nth-root(r) * exp (i theta / n)
       (let (values r theta) = (polar z))
@@ -424,6 +441,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
       (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))
 
   (define-instance (Elementary :a => Trigonometric (Complex :a))
+    (inline)
     (define (sin z)
       (let ((x (real-part z))
             (y (imag-part z))
@@ -431,6 +449,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (e-y (exp (negate y))))
         (Complex (/ (* (+ e+y e-y) (sin x)) 2)
                  (/ (* (- e+y e-y) (cos x)) 2))))
+    (inline)
     (define (cos z)
       (let ((x (real-part z))
             (y (imag-part z))
@@ -438,6 +457,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (e-y (exp (negate y))))
         (Complex (/ (* (+ e+y e-y) (cos x)) 2)
                  (/ (* (- e+y e-y) (sin x)) -2))))
+    (inline)
     (define (tan z)
       (let x = (real-part z))
       (let y = (imag-part z))
@@ -446,16 +466,19 @@ For a complex number `z = (complex x y)`, the following identities hold:
       ;; (i (e^(y - i x) - e^(-y + i x)))
       ;; / (e^(-y + i x) + e^(y - i x))
       (/ (* ii (- c recip-c)) (+ c recip-c)))
+    (inline)
     (define (asin z)
       ;; asin z = -i ln (sqrt (- 1 z^2) + iz)
       (* (complex 0 -1)
          (ln
           (+ (sqrt (- 1 (* z z))) (* ii z)))))
+    (inline)
     (define (acos z)
       ;; acos z = -i ln (i sqrt (-1 z^2) + z)
       (* (complex 0 -1)
          (ln
           (+ (* ii (sqrt (- 1 (* z z)))) z))))
+    (inline)
     (define (atan z)
       ;; atan = (- i/2 (ln (i - z)/(i+z))
       (* (complex 0 (/ -1 2))

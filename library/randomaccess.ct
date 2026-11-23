@@ -49,6 +49,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
 ;;; Derived Functions
 (coalton-toplevel
 
+  (inline)
   (declare aref (RandomAccess :f :t => :f * UFix -> Optional :t))
   (define (aref storage index)
     "Read the element at `index` of the random-access storage `storage`. Return `None` if the read is out-of-bounds or not permitted."
@@ -59,6 +60,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
         (Some (unsafe-aref storage index))
         None))
 
+  (inline)
   (declare set! (RandomAccess :f :t => :f * UFix * :t -> Optional Unit))
   (define (set! storage index value)
     "Write the element `value` at `index` of the random-access storage `storage`. Return `None` if the write is out-of-bounds or not permitted."
@@ -71,6 +73,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
           (Some Unit))
         None))
 
+  (inline)
   (declare unsafe-rotate! (RandomAccess :f :t => :f * UFix * UFix -> Void))
   (define (unsafe-rotate! storage index1 index2)
     "Rotate the elements at indices `index1` and `index2` of the random-access storage `storage`."
@@ -80,6 +83,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
         (unsafe-set! storage index1 element2)
         (unsafe-set! storage index2 element1))))
 
+  (inline)
   (declare rotate! (RandomAccess :f :t => :f * UFix * UFix -> Optional Unit))
   (define (rotate! storage index1 index2)
     "Rotate the elements at indices `index1` and `index2` of the random-access storage `storage`. Return `None` if the indices are out-of-bounds or if reading from or writing to `storage` is not permitted."

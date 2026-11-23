@@ -182,6 +182,7 @@ length of `v` are ignored."
     (lisp (-> UFix) (item v)
       (cl:vector-push-extend item v)))
 
+  (inline)
   (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
     "Remove and return the last item of `v`."
@@ -196,12 +197,13 @@ length of `v` are ignored."
     (lisp (-> :a) (v)
       (cl:vector-pop v)))
 
+  (inline)
   (declare index (UFix * Vector :a -> Optional :a))
-  (define (index index v)
-    "Return the `index`th element of `v`."
-    (if (>= index (length v))
+  (define (index idx v)
+    "Return the `idx`th element of `v`."
+    (if (>= idx (length v))
         None
-        (Some (index-unsafe index v))))
+        (Some (index-unsafe idx v))))
 
   (inline)
   (declare index-unsafe (UFix * Vector :a -> :a))
@@ -231,6 +233,7 @@ length of `v` are ignored."
     "Return the first item of `v` without first checking if `v` is empty."
     (index-unsafe 0 v))
 
+  (inline)
   (declare last (Vector :a -> Optional :a))
   (define (last v)
     "Return the last element of `v`."
@@ -238,6 +241,7 @@ length of `v` are ignored."
         None
         (Some (index-unsafe (- (length v) 1) v))))
 
+  (inline)
   (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
     "Return the last element of `v` without first checking if `v` is empty."
@@ -274,6 +278,7 @@ length of `v` are ignored."
         (cl:replace out v2 :start1 n1)
         out)))
 
+  (inline)
   (declare reverse! (Vector :a -> Vector :a))
   (define (reverse! v)
     "Returns a vector with the elements of vector `v` in reverse order.  The original vector may be destroyed to produce the result."
@@ -289,6 +294,7 @@ length of `v` are ignored."
         (push! (index-unsafe (- (- len i) 1) v) newv))
       newv))
 
+  (inline)
   (declare swap-remove! (UFix * Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec`. Then return the removed element."
@@ -468,20 +474,26 @@ length of `v` are ignored."
       vec))
 
   (define-instance (FromItemizedCollection (Vector :a) :a (Vector :a))
+    (inline)
     (define (begin-collection-builder _ size)
       (with-capacity size))
+    (inline)
     (define (adjoin-to-collection-builder _ vec _index item)
       (push! item vec)
       vec)
+    (inline)
     (define (finalize-collection-builder _ vec)
       vec))
 
   (define-instance (FromCollectionComprehension (Vector :a) :a (Vector :a))
+    (inline)
     (define (begin-collection-comprehension _ size-hint)
       (with-capacity (with-default 0 size-hint)))
+    (inline)
     (define (adjoin-to-collection-comprehension _ vec item)
       (push! item vec)
       vec)
+    (inline)
     (define (finalize-collection-comprehension _ vec)
       vec))
 

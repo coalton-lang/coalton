@@ -273,6 +273,7 @@
 ;;; Utility to define type -> Fraction conversions.
 (cl:defmacro define-float-fraction-conversion (type)
   `(define-instance (TryInto ,type Fraction)
+     (inline)
      (define (tryInto x)
        (if (finite? x)
            (Some (coalton++:unsafe

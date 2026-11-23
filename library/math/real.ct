@@ -143,16 +143,22 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
 (cl:defmacro %define-integer-roundings (coalton-type)
   `(coalton-toplevel
      (define-instance (Quantizable ,coalton-type)
+       (inline)
        (define (floor x) (fromInt (toInteger x)))
+       (inline)
        (define (ceiling x) (fromInt (toInteger x)))
+       (inline)
        (define (proper x)
          (values (fromInt (toInteger x)) 0)))
 
      (define-instance (Real ,coalton-type)
+       (inline)
        (define (real-approx _ x) (fromInt (toInteger x))))
 
      (define-instance (Rational ,coalton-type)
+       (inline)
        (define (to-fraction x) (fromint (tointeger x)))
+       (inline)
        (define (best-approx x) (fromint (tointeger x))))))
 
 (%define-integer-roundings Bit)
@@ -250,16 +256,19 @@ remainders expressed as values of type of X."
     (let x-rem-ceiling = (- x (fromInt x-ceiling)))
     (Quantization x x-floor x-rem-floor x-ceiling x-rem-ceiling))
 
+  (inline)
   (declare round-half-up ((Quantizable :a) (Num :a) => :a -> INteger))
   (define (round-half-up x)
     "Return the nearest integer to X, with ties breaking toward positive infinity."
     (ceiling/ (floor (* 2 x)) 2))
 
+  (inline)
   (declare round-half-down ((Quantizable :a) (Num :a) => :a -> INteger))
   (define (round-half-down x)
     "Return the nearest integer to X, with ties breaking toward positive infinity."
     (floor/ (ceiling (* 2 x)) 2))
 
+  (inline)
   (declare safe/ ((Num :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
@@ -295,11 +304,13 @@ Note: This does *not* divide double-float arguments."
     (lisp (-> Integer) (a b)
       (cl:values (cl:ceiling a b))))
 
+  (inline)
   (declare round/ (Integer * Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
     (round (exact/ a b)))
 
+  (inline)
   (declare fromfrac (Dividable Integer :a => Fraction -> :a))
   (define (fromfrac q)
     "Converts a fraction to a target type.

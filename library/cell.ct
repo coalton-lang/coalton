@@ -138,12 +138,16 @@ value."
       (<=> (read c1) (read c2))))
 
   (define-instance (Num :a => Num (Cell :a))
+    (inline)
     (define (+ c1 c2)
       (new (+ (read c1) (read c2))))
+    (inline)
     (define (- c1 c2)
       (new (- (read c1) (read c2))))
+    (inline)
     (define (* c1 c2)
       (new (* (read c1) (read c2))))
+    (inline)
     (define (fromInt i)
       (new (fromInt i))))
 
@@ -153,12 +157,14 @@ value."
       (new (<> (read a) (read b)))))
 
   (define-instance (Functor Cell)
+    (inline)
     (define (map f c)
       (new (f (read c)))))
 
   (define-instance (Applicative Cell)
     (inline)
     (define pure new)
+    (inline)
     (define (liftA2 f c1 c2)
       (new (f (read c1) (read c2)))))
 

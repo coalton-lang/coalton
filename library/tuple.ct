@@ -118,6 +118,7 @@
   ;;
 
   (define-instance ((Eq :a) (Eq :b) => Eq (Tuple :a :b))
+    (inline)
     (define (== (Tuple a1 b1) (Tuple a2 b2))
       (and (== a1 a2)
            (== b1 b2))))
@@ -138,6 +139,7 @@
     (Tuple b a))
 
   (define-instance ((Hash :a) (Hash :b) => Hash (Tuple :a :b))
+    (inline)
     (define (hash item)
       (combine-hashes
        (hash (.first item))
@@ -149,11 +151,13 @@
       (Tuple (f a) (g b))))
 
   (define-instance (Traversable (Tuple :a))
+    (inline)
     (define (traverse f (Tuple a b))
       (map ƒx.(Tuple a x)
            (f b))))
 
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
+    (inline)
     (define (default) (Tuple (default) (default)))))
 
 #+sb-package-locks
