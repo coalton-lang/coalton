@@ -383,7 +383,7 @@ and result types before beta-reducing."
   (or (and env
            (let ((ctor (tc:lookup-constructor env name :no-error t)))
              (and ctor
-                  (= arity (tc:constructor-entry-arity ctor))
+                  (= arity (tc:constructor-physical-arity ctor env))
                   t)))
       (and (zerop arity)
            (member name '(coalton:None coalton:Nil coalton:True coalton:False coalton:Unit)

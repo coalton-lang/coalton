@@ -88,6 +88,18 @@
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type)))
 
+  (:method ((method method-definition))
+    (declare (values tycon-list &optional))
+    (collect-referenced-types-generic% (method-definition-type method)))
+
+  (:method ((toplevel toplevel-define-class))
+    (declare (values tycon-list))
+    (nconc
+     (mapcan #'collect-referenced-types-generic%
+             (toplevel-define-class-preds toplevel))
+     (mapcan #'collect-referenced-types-generic%
+             (toplevel-define-class-methods toplevel))))
+
   (:method ((list list))
     (declare (values tycon-list &optional))
     (mapcan #'collect-referenced-types-generic% list)))
@@ -513,6 +525,28 @@ After renaming, lexical references have fresh names distinct from globals."
      (mapcan #'collect-referenced-classes-generic%
              (qualified-ty-predicates qual-ty))
      (collect-referenced-classes-generic% (qualified-ty-type qual-ty))))
+
+  (:method ((ctor constructor))
+    (declare (values identifier-src-list))
+    (collect-referenced-classes-generic%
+     (or (constructor-signature ctor)
+         (constructor-fields ctor))))
+
+  (:method ((type toplevel-define-type))
+    (declare (values identifier-src-list))
+    (mapcan #'collect-referenced-classes-generic% (toplevel-define-type-ctors type)))
+
+  (:method ((alias toplevel-define-type-alias))
+    (declare (values identifier-src-list))
+    (collect-referenced-classes-generic% (toplevel-define-type-alias-type alias)))
+
+  (:method ((field struct-field))
+    (declare (values identifier-src-list &optional))
+    (collect-referenced-classes-generic% (struct-field-type field)))
+
+  (:method ((type toplevel-define-struct))
+    (declare (values identifier-src-list))
+    (mapcan #'collect-referenced-classes-generic% (toplevel-define-struct-fields type)))
 
   (:method ((method method-definition))
     (declare (values identifier-src-list &optional))

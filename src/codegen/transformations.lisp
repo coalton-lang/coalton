@@ -10,6 +10,7 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:rename-type-variables
+   #:pred-type
    #:prune-impossible-match-branches
    #:specialize-node
    #:specialize-match
@@ -29,6 +30,20 @@
    #:non-escaping-let-function-names))
 
 (in-package #:coalton-impl/codegen/transformations)
+
+(defun pred-type (pred env)
+  "Returns a type representation of PRED"
+  (declare (type tc:ty-predicate pred)
+           (values tc:ty tc::ksubstitution-list &optional))
+  (let* ((class-entry (tc:lookup-class env (tc:ty-predicate-class pred)))
+         (pred-kind tc:+kstar+))
+    (loop :for type :in (reverse (tc:ty-predicate-types pred)) :do
+      (setf pred-kind (tc:make-kfun :from (tc:kind-of type) :to pred-kind)))
+    (tc:apply-type-argument-list
+     (tc:make-tycon
+      :name (tc:ty-class-codegen-sym class-entry)
+      :kind pred-kind)
+     (tc:ty-predicate-types pred))))
 
 (defun pattern-contains-gadt-p (pat env)
   (typecase pat
@@ -62,9 +77,13 @@ success edge; they are not evidence for reordering tests within the row."
                   ;; throwaway fresh variable, not the field used by the body.
                   (loop :for (index . var) :in (pattern-constructor-openings pat)
                         :do (setf (nth index args) var))
-                  (let ((ctor (tc:qualified-ty-type (tc:fresh-inst scheme args))))
+                  (let* ((qual-ty (tc:fresh-inst scheme args))
+                         (ctor (tc:qualified-ty-type qual-ty))
+                         (fields (append (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
+                                               :collect (pred-type pred env))
+                                         (tc:function-type-arguments ctor))))
                     (equate (tc:function-return-type ctor) expected)
-                    (mapc #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))))
+                    (mapc #'walk (pattern-constructor-patterns pat) fields)))))))
     (loop :for (left right) :on (match-branch-index-equalities branch) :by #'cddr
           :do (equate left right))
     (walk (match-branch-pattern branch) scrutinee)
@@ -94,9 +113,12 @@ operand types don't identify the binders (e.g. a lowered forall), keep the match
     (let* ((scheme (tc:lookup-value-type env (pattern-constructor-name pattern)))
            (args (tc:ty-scheme-instantiation-types scheme))
            (ctor (tc:fresh-inst scheme args))
+           (formal-types (append (loop :for pred :in (tc:qualified-ty-predicates ctor)
+                                       :collect (pred-type pred env))
+                                 (tc:function-type-arguments (tc:qualified-ty-type ctor))))
            (subs (handler-case
                      (tc:match-list (mapcar #'node-type fields)
-                                    (tc:function-type-arguments (tc:qualified-ty-type ctor)))
+                                    formal-types)
                    (tc:coalton-internal-type-error ()
                      (return-from open-known-constructor (values nil nil nil)))))
            (bindings (loop :for (index . var) :in openings

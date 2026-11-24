@@ -95,10 +95,17 @@
             :for constructor :in (tc:type-definition-constructors def)
             :for classname := (tc:constructor-entry-classname constructor)
             :for superclass := (tc:type-definition-name def)
-            :for constructor-name :=  (tc:constructor-entry-name constructor)
+            :for constructor-name := (tc:constructor-entry-name constructor)
+            :for qual-ty := (tc:fresh-inst (tc:lookup-value-type env constructor-name))
+            :for dict-fields
+              := (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
+                       :for class := (tc:lookup-class env (tc:ty-predicate-class pred))
+                       :collect (tc:ty-class-codegen-sym class))
+            :for value-fields
+              := (loop :for field :in (tc:function-type-arguments (tc:qualified-ty-type qual-ty))
+                       :collect (tc:lisp-type field env))
             :for fields
-              := (loop :for field :in (tc:constructor-arguments constructor-name env)
-                       :for runtime-type := (tc:lisp-type field env)
+              := (loop :for runtime-type :in (append dict-fields value-fields)
                        :for i :from 0
                        :for name := (constructor-slot-name constructor i)
                        :collect (make-struct-or-class-field
@@ -106,6 +113,7 @@
                                  :type runtime-type))
 
             :for field-names := (mapcar #'struct-or-class-field-name fields)
+            :for visible-field-names := (nthcdr (length dict-fields) field-names)
 
             :unless (tc:type-definition-exception-p def)
               :append (struct-or-class
@@ -135,7 +143,7 @@
                            (declare (type stream stream)
                                     (type ,classname self))
                            (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
-                           ,@(loop :for slot :in field-names
+                           ,@(loop :for slot :in visible-field-names
                                    :collect `(cond
                                                ((and *print-readably* (not *read-eval*))
                                                 (error 'print-not-readable :object self))
@@ -179,6 +187,6 @@
                    (list `(setf (documentation ',name 'variable)
                                 ,docstring)))
          :append (when (and docstring
-                            (plusp (tc:constructor-entry-arity constructor)))
+                            (plusp (tc:constructor-physical-arity constructor env)))
                    (list `(setf (documentation ',name 'function)
                                 ,docstring))))))

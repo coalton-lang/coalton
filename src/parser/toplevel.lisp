@@ -2035,9 +2035,6 @@ consume all attributes")))
         (parse-error "Malformed GADT constructor"
                      (note source signature-form
                            "use positional fields, or the bare result type for a nullary constructor")))
-      (when (qualified-ty-predicates signature)
-        (parse-error "Malformed GADT constructor"
-                     (note source signature-form "typeclass constraints on constructor signatures are not supported")))
       (make-constructor :name name
                         :signature signature
                         :fields nil

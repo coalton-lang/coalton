@@ -2243,7 +2243,30 @@ Returns (VALUES PREDS ACCESSORS SUBS)."
                   accessors (append others unsolved))
             (when (= (length unsolved) (length selected))
               (return)))))
-      (let ((givens (tc:apply-substitution subs *enclosing-predicates*)))
+      (let* ((givens (tc:apply-substitution subs *enclosing-predicates*))
+             (known-variables
+               (remove-duplicates
+                (append hidden
+                        (remove-if-not #'tc:tyvar-rigid-p
+                                       (tc:type-variables
+                                        (tc:apply-substitution subs (list preds *enclosing-predicates*)))))
+                :test #'tc:ty=)))
+        (loop :for i :below tc:+fundep-max-depth+
+              :for new-subs := (tc:fundep-entail global
+                                                 givens
+                                                 (tc:apply-substitution subs preds)
+                                                 known-variables)
+              :do (when (endp new-subs)
+                    (return))
+                  (setf subs (tc:compose-substitution-lists new-subs subs)
+                        givens (tc:apply-substitution new-subs givens)
+                        known-variables
+                        (remove-duplicates
+                         (append (tc:type-variables (tc:apply-substitution new-subs known-variables))
+                                 (alexandria:mappend #'tc:type-variables
+                                                     (mapcar #'tc:substitution-to new-subs)))
+                         :test #'tc:ty=))
+              :finally (util:coalton-bug "Fundep chain failed to converge"))
         (labels ((discharge (pred path)
                    ;; Givens are matched through superclasses only, so this
                    ;; walk is the only instance descent. PATH holds the
@@ -2305,10 +2328,46 @@ Returns (VALUES PREDS ACCESSORS SUBS)."
   "Skolems refinable by constructor result evidence in the current pattern.
 :ALL is used only when the caller discharges pattern equations at scope exit.")
 
+(defun improve-branch-wanted-predicates (preds watermark subs env)
+  "Use enclosing pattern givens to determine fresh intermediate variables in PREDS."
+  (when (or (null preds) (null *enclosing-predicates*))
+    (return-from improve-branch-wanted-predicates (values preds subs)))
+  (let* ((global (tc-env-env env))
+         (givens (tc:apply-substitution subs *enclosing-predicates*))
+         (known-variables
+           (remove-duplicates
+            (append (tc:type-variables givens)
+                    (tc:type-variables (tc:apply-substitution subs env)))
+            :test #'tc:ty=)))
+    (loop :for i :below tc:+fundep-max-depth+
+          :for raw-subs := (tc:fundep-entail global
+                                             givens
+                                             (tc:apply-substitution subs preds)
+                                             known-variables)
+          :for new-subs := (remove-if-not
+                            (lambda (s)
+                              (let ((from (tc:substitution-from s)))
+                                (and (not (tc:tyvar-rigid-p from))
+                                     (or (null watermark)
+                                         (>= (tc:tyvar-id from) watermark)))))
+                            raw-subs)
+          :do (when (endp new-subs)
+                (return))
+              (setf subs (tc:compose-substitution-lists new-subs subs)
+                    givens (tc:apply-substitution new-subs givens)
+                    known-variables
+                    (remove-duplicates
+                     (append (tc:type-variables (tc:apply-substitution new-subs known-variables))
+                             (alexandria:mappend #'tc:type-variables
+                                                 (mapcar #'tc:substitution-to new-subs)))
+                     :test #'tc:ty=))
+          :finally (util:coalton-bug "Fundep chain failed to converge"))
+    (values (tc:apply-substitution subs preds) subs)))
+
 (defun outward-pattern-predicates (wanted given refined body-subs env)
   ;; A supplied dictionary is still the same dictionary after matching Refl.
   ;; Do not demand its branch-local spelling from the caller as a second one.
-  (if (or (null given) (eq given refined))
+  (if (or (null refined) (eq given refined))
       wanted
       (let ((available (tc:apply-substitution body-subs refined)))
         (remove-if (lambda (pred) (tc:entail env available pred)) wanted))))
@@ -2316,7 +2375,15 @@ Returns (VALUES PREDS ACCESSORS SUBS)."
 (defun defer-branch-result-predicates (result preds watermark subs evidence hidden env)
   "Retain a result-dependent proof until this explicit binding knows its result."
   (let* ((scope (first *branch-predicate-scopes*))
-         (givens (and scope (tc:apply-substitution subs (branch-predicate-scope-givens scope))))
+         (local-givens
+           (remove-if (lambda (given)
+                        (intersection hidden
+                                      (tc:type-variables (tc:apply-substitution subs given))
+                                      :test #'tc:ty=))
+                      (tc:apply-substitution subs *enclosing-predicates*)))
+         (givens (and scope
+                      (append local-givens
+                              (tc:apply-substitution subs (branch-predicate-scope-givens scope)))))
          (available (loop :for given :in givens :append (tc:superclass-closure env given)))
          (result-vars (tc:type-variables (tc:apply-substitution subs result))))
     (remove-if
@@ -2809,11 +2876,13 @@ sealed variables with the constructor's quantified binder positions."
            (ctor-binders (tc:ty-scheme-instantiation-types scheme))
            (qual-ty (tc:fresh-inst scheme ctor-binders))
            (ctor-ty (tc:qualified-ty-type qual-ty))
-           (ctor-preds (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
-                             :collect (tc:make-ty-predicate
-                                       :class (tc:ty-predicate-class pred)
-                                       :types (tc:ty-predicate-types pred)
-                                       :location (source:location pat))))
+           (ctor-preds (tc:instantiate-context-superclasses
+                        (tc-env-env env)
+                        (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
+                              :collect (tc:make-ty-predicate
+                                        :class (tc:ty-predicate-class pred)
+                                        :types (tc:ty-predicate-types pred)
+                                        :location (source:location pat)))))
            (pat-ty (tc:function-return-type ctor-ty))
            (gadt-p (tc:constructor-entry-gadt-p ctor))
            (outer-vars (when gadt-p (tc:type-variables (tc:apply-substitution subs expected-type)))))
@@ -2830,16 +2899,24 @@ sealed variables with the constructor's quantified binder positions."
                                (type-object-string (tc:apply-substitution subs expected-type))
                                (type-object-string (tc:apply-substitution subs pat-ty)))))))
       (let* ((ctor-preds (tc:apply-substitution subs ctor-preds))
+             (pred-closure (loop :for pred :in ctor-preds
+                                 :append (tc:superclass-closure (tc-env-env env) pred)))
              ;; A variable not named by the incoming indices is local. This
-             ;; includes a component exposed by matching an index like List :x.
+             ;; includes a component exposed by matching an index like List :x,
+             ;; as well as any hidden superclass witness of a constructor predicate.
              (seal (when gadt-p
                      (skolem-renamings
                       (set-difference
-                       (remove-if #'tc:tyvar-rigid-p (tc:type-variables (list ctor-ty ctor-preds)))
+                       (remove-if #'tc:tyvar-rigid-p (tc:type-variables (list ctor-ty pred-closure)))
                        (tc:apply-substitution subs outer-vars) :test #'tc:ty=)
                       :existential-p t)))
              (existentials (mapcar #'tc:substitution-to seal))
              (subs (tc:compose-substitution-lists seal subs))
+             (ctor-ty (tc:apply-substitution subs ctor-ty))
+             (pat-ty (tc:function-return-type ctor-ty))
+             (ctor-preds (tc:refine-given-superclasses
+                          (tc-env-env env)
+                          (tc:apply-substitution subs ctor-preds)))
              (openings (when existentials
                          (loop :for var :in ctor-binders :for i :from 0
                                :for opened := (tc:apply-substitution subs var)
@@ -2905,13 +2982,11 @@ patterns and their types in source order."
                (let ((record (gethash pat records)))
                  (etypecase pat
                    (parser:pattern-binding
-                    (multiple-value-bind (bound-ty _ bound) (build (parser:pattern-binding-pattern pat))
-                      (declare (ignore bound-ty _))
+                    (multiple-value-bind (bound-ty bound-preds bound) (build (parser:pattern-binding-pattern pat))
+                      (declare (ignore bound-ty))
                       (multiple-value-bind (var-ty _ var) (build (parser:pattern-binding-var pat))
                         (declare (ignore _))
-                        ;; As before, an alias does not report its pattern's
-                        ;; constructor predicates.
-                        (values var-ty nil
+                        (values var-ty bound-preds
                                 (make-pattern-binding :type (tc:qualify nil var-ty)
                                                       :location (source:location pat)
                                                       :var var
@@ -2925,13 +3000,17 @@ patterns and their types in source order."
                             (declare (ignore _))
                             (push node nodes)
                             (setf child-preds (append child-preds ps))))
-                        (let ((type (tc:apply-substitution subs pat-ty)))
+                        (let ((type (tc:apply-substitution subs pat-ty))
+                              (ctor-preds (tc:apply-substitution subs ctor-preds)))
                           (values type
-                                  (tc:apply-substitution subs (append ctor-preds child-preds))
+                                  (append ctor-preds (tc:apply-substitution subs child-preds))
                                   (make-pattern-constructor :type (tc:qualify nil type)
                                                             :location (source:location pat)
                                                             :name (parser:pattern-constructor-name pat)
                                                             :openings openings
+                                                            :predicates ctor-preds
+                                                            :dictionary-names (loop :for _ :in ctor-preds
+                                                                                    :collect (gensym "CTOR-DICT-"))
                                                             :patterns (nreverse nodes)))))))
                    (parser:pattern
                     (values (car record) nil (cdr record)))))))
@@ -3569,13 +3648,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                              abstraction-base-subs))
 
              (untouchable-existentials nil)
-             (typed-positional-params nil))
+             (typed-positional-params nil)
+             (pat-preds nil))
 
         (multiple-value-bind (params new-subs preds hidden)
             (let ((*refinable-pattern-skolems* :all))
               (infer-pattern-row positional-params positional-arg-tys local-subs env))
-          (declare (ignore preds))
-          (setf local-subs new-subs typed-positional-params params untouchable-existentials hidden))
+          (setf local-subs new-subs
+                typed-positional-params params
+                pat-preds preds
+                untouchable-existentials hidden))
 
         (let* ((*enclosing-pattern-existentials*
                  (tc:union-tys untouchable-existentials *enclosing-pattern-existentials*))
@@ -3586,14 +3668,23 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
                (subs-after-positional-patterns
                  (if renamings (discharge-pattern-renamings renamings local-subs) local-subs))
+               (pat-preds
+                 (tc:refine-given-superclasses
+                  (tc-env-env env)
+                  (tc:apply-substitution subs-after-positional-patterns pat-preds)))
                (outer-givens *enclosing-predicates*)
-               (*enclosing-predicates* (if abstraction-gadt-p
-                                           (tc:refine-given-superclasses
-                                            (tc-env-env env)
-                                            (tc:apply-substitution subs-after-positional-patterns outer-givens))
-                                           outer-givens)))
+               (*enclosing-predicates*
+                 (append pat-preds
+                         (if abstraction-gadt-p
+                             (tc:refine-given-superclasses
+                              (tc-env-env env)
+                              (tc:apply-substitution subs-after-positional-patterns outer-givens))
+                             outer-givens))))
 
-          (setf local-subs subs-after-positional-patterns)
+          (setf local-subs subs-after-positional-patterns
+                typed-positional-params (tc:apply-substitution local-subs typed-positional-params))
+          (when untouchable-existentials
+            (setf env (tc-env-extend-type-variable-scope env nil :hidden untouchable-existentials)))
           (when abstraction-gadt-p
             (tc:apply-substitution local-subs env))
 
@@ -3612,6 +3703,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                               (append (pattern-predicates typed-positional-params) default-preds preds)
                                               (append default-accessors accessors)
                                               local-subs env))
+              (when pat-preds
+                (multiple-value-setq (preds local-subs)
+                  (improve-branch-wanted-predicates preds watermark local-subs env)))
               (flet ((in-body (object)
                        (if abstraction-gadt-p (tc:apply-substitution local-subs object) object)))
                 (let* ((body-ty (tc:apply-substitution local-subs body-ty))
@@ -3901,11 +3995,20 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                               branch-env))
                       (declare (ignore _))
                       (setf pat-subs (discharge-pattern-renamings
-                                      (branch-index-renamings input-types base-subs pat-subs) pat-subs))
+                                      (branch-index-renamings input-types base-subs pat-subs) pat-subs)
+                            pat (tc:apply-substitution pat-subs pat)
+                            pat-preds (tc:refine-given-superclasses
+                                       (tc-env-env env)
+                                       (tc:apply-substitution pat-subs pat-preds)))
+                      (when hidden
+                        (setf branch-env (tc-env-extend-type-variable-scope branch-env nil :hidden hidden)))
                       (tc:apply-substitution pat-subs branch-env)
                       (let* ((outer-givens *enclosing-predicates*)
-                             (*enclosing-predicates* (tc:refine-given-superclasses
-                                                       (tc-env-env env) (tc:apply-substitution pat-subs outer-givens)))
+                             (*enclosing-predicates*
+                               (append pat-preds
+                                       (tc:refine-given-superclasses
+                                        (tc-env-env env)
+                                        (tc:apply-substitution pat-subs outer-givens))))
                              (result-context (contextual-return-result-type expected-type base-subs))
                              (expected (tc:apply-substitution base-subs (or result-context expected-type)))
                              (givens (append (branch-input-evidence input-types base-subs pat-subs)
@@ -3915,7 +4018,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                     (not (member expected (tc:type-variables
                                                            (tc:apply-substitution base-subs input-types))
                                                  :test #'tc:ty=))
-                                    givens))
+                                    (or givens pat-preds)))
                              (body-scope (unless hidden (make-branch-result-scope)))
                              (predicate-mark (branch-predicate-mark)))
                         (multiple-value-bind (body-ty body-preds body-accessors typed-body body-subs)
@@ -3932,13 +4035,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                           (refine-branch-result-predicates predicate-mark body-subs)
                           (multiple-value-setq (body-preds body-accessors body-subs)
                             (discharge-hidden-obligations hidden
-                                                          (append body-preds pat-preds (pattern-predicates pat))
+                                                          (append body-preds (pattern-predicates pat))
                                                           body-accessors body-subs branch-env))
                           (when evidence
                             (setf body-preds
                                   (defer-branch-result-predicates
                                    body-ty (tc:apply-substitution body-subs body-preds) watermark
-                                   body-subs pat-subs hidden (tc-env-env env))))
+                                   body-subs givens hidden (tc-env-env env))))
                           (let ((last (node-body-last-node typed-body)))
                             (setf subs (merge-branch-equations
                                         subs (branch-body-equations pat-subs body-subs watermark) last))
@@ -3947,8 +4050,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               (setf subs (unify-branch-result subs expected-type result-context last)))
                             (when evidence
                               (let ((outward (project-branch-result (tc:apply-substitution body-subs body-ty)
-                                                                    evidence hidden body-subs last)))
+                                                                    givens hidden body-subs last)))
                                 (setf subs (unify-branch-result subs expected outward last)))))
+                          (when pat-preds
+                            (multiple-value-setq (body-preds body-subs)
+                              (improve-branch-wanted-predicates body-preds watermark body-subs branch-env)))
                           ;; Reconnect the synthesized result before comparing
                           ;; dictionaries whose predicates mention that result.
                           (let ((local-subs (tc:compose-substitution-lists subs body-subs)))

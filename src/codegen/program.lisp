@@ -249,18 +249,32 @@ redefinition cleans ENV."
             ,@(when settings:*emit-type-annotations*
                 (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
-            ,@(when (tc:translation-unit-types translation-unit)
-                (list
-                 `(eval-when (:compile-toplevel :load-toplevel :execute)
-                    ,@(loop :for type :in (tc:translation-unit-types translation-unit)
-                            :append (codegen-type-definition type env)))))
-
-            ,@(when (tc:translation-unit-classes translation-unit)
-                (list
-                 `(eval-when (:compile-toplevel :load-toplevel :execute)
-                    ,@(codegen-class-definitions
-                       (tc:translation-unit-classes translation-unit)
-                       env))))
+            ,@(let ((types (tc:translation-unit-types translation-unit))
+                    (classes (tc:translation-unit-classes translation-unit))
+                    (emitted-classes (make-hash-table :test #'eq))
+                    (forms nil))
+                (labels ((emit-class (cls)
+                           (unless (gethash (tc:ty-class-name cls) emitted-classes)
+                             (setf (gethash (tc:ty-class-name cls) emitted-classes) t)
+                             (dolist (super-pred (tc:ty-class-superclasses cls))
+                               (let ((super-cls (find (tc:ty-predicate-class super-pred) classes
+                                                      :key #'tc:ty-class-name :test #'eq)))
+                                 (when super-cls
+                                   (emit-class super-cls))))
+                             (setf forms (append forms (codegen-class-definitions (list cls) env))))))
+                  (dolist (type types)
+                    (dolist (scheme (tc:type-definition-constructor-types type))
+                      (dolist (pred (tc:qualified-ty-predicates (tc:ty-scheme-type scheme)))
+                        (let ((cls (find (tc:ty-predicate-class pred) classes
+                                         :key #'tc:ty-class-name :test #'eq)))
+                          (when cls
+                            (emit-class cls)))))
+                    (setf forms (append forms (codegen-type-definition type env))))
+                  (dolist (cls classes)
+                    (emit-class cls))
+                  (when forms
+                    (list `(eval-when (:compile-toplevel :load-toplevel :execute)
+                             ,@forms)))))
 
             #+sbcl
             ,@(when (eq sb-ext:*block-compile-default* :specified)

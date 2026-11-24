@@ -643,3 +643,28 @@
     (is (zerop (codegen-test-call-count "CLIENT" "FALLBACK")))
     (dolist (ctor '("INTSLOT" "TEXTSLOT" "BOOLSLOT"))
       (is (zerop (codegen-test-call-count "FALLBACK" ctor))))))
+
+(deftest scalar-replacement-unboxes-constrained-constructors ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-type SomeEqPair
+        (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+      (define-type (EqWitness :a)
+        (declare HasEq (Eq :a => EqWitness :a)))
+      (declare local-pair-eq (Eq :a => :a * :a -> Boolean))
+      (define (local-pair-eq x y)
+        (let ((p (PackEqPair x y)))
+          (match p
+            ((PackEqPair a b) (== a b)))))
+      (declare local-witness-eq (forall (:a) (Eq :a => :a * :a -> Boolean)))
+      (define (local-witness-eq x y)
+        (let ((w (the (EqWitness :a) HasEq)))
+          (match w
+            ((HasEq) (== x y)))))")
+    (is (eq t (codegen-test-eval "(local-pair-eq 11 11)")))
+    (is (eq nil (codegen-test-eval "(local-pair-eq 11 12)")))
+    (is (eq t (codegen-test-eval "(local-witness-eq \"a\" \"a\")")))
+    (is (eq nil (codegen-test-eval "(local-witness-eq \"a\" \"b\")")))
+    (when (coalton-impl/settings:coalton-release-p)
+      (is (zerop (codegen-test-call-count "LOCAL-PAIR-EQ" "PACKEQPAIR")))
+      (is (zerop (codegen-test-call-count "LOCAL-WITNESS-EQ" "HASEQ"))))))

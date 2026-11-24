@@ -212,6 +212,8 @@
                  (source:make-source-string
                   "(define-type Packed
                      (declare Pack (:e * (:e -> String) -> Packed)))
+                   (define-type SomeEqPair
+                     (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
                    (define-type (Expr :a)
                      (declare ZeroInt (Expr Integer))
                      (declare LitInt (Integer -> Expr Integer))
@@ -232,6 +234,7 @@
                  (declare (ignore program))
                  (export (mapcar (lambda (name) (find-symbol name *package*))
                                  '("PACKED" "PACK"
+                                   "SOMEEQPAIR" "PACKEQPAIR"
                                    "EXPR" "ZEROINT" "LITINT" "PAIREXPR"
                                    "SAME" "REFL"
                                    "SIMPLE" "EMPTYSIMPLE" "ONESIMPLE" "PAIRSIMPLE"
@@ -241,6 +244,8 @@
                         (objects (coalton/doc/model:find-objects :package *package*))
                         (packed-type (find "Packed" objects :test #'string=
                                                             :key #'coalton/doc/model:object-name))
+                        (some-eq-pair-type (find "SomeEqPair" objects :test #'string=
+                                                                      :key #'coalton/doc/model:object-name))
                         (expr-type (find "Expr" objects :test #'string=
                                                         :key #'coalton/doc/model:object-name))
                         (same-type (find "Same" objects :test #'string=
@@ -259,6 +264,8 @@
                                (list pkg)))))
                      (is (equal '("Pack :: forall :E. :E * (:E -> String) -> Packed")
                                 (ctor-names packed-type)))
+                     (is (equal '("PackEqPair :: forall :A. Eq :A => :A * :A -> SomeEqPair")
+                                (ctor-names some-eq-pair-type)))
                      (is (equal '("LitInt :: Integer -> Expr Integer"
                                   "PairExpr :: forall :X :Y. :X * :Y -> Expr (Tuple :X :Y)"
                                   "ZeroInt :: Expr Integer")

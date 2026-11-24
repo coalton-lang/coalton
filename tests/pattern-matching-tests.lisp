@@ -509,11 +509,25 @@
                       ((FlagTag) (match item ((Flag b) b) ((AnyItem b) (not b))))
                       ((CountTag) (match item ((AnyItem n) (1+ n))))))" items))))
 
-(deftest gadt-unsupported-constructor-constraint-diagnostic ()
-  (let ((diagnostic (collect-compiler-error
-                     "(package gadt-constraint-test (import coalton-prelude))
-                      (define-type (Box :a) (declare Pack (Eq :a => :a -> Box :a)))")))
-    (is (and diagnostic (search "typeclass constraints on constructor signatures are not supported" diagnostic)))))
+(deftest gadt-constructor-constraint-diagnostics ()
+  (dolist (case
+            '(("Enum constructors cannot have typeclass constraints."
+               "(package gadt-enum-constraint-test (import coalton-prelude))
+                (repr :enum)
+                (define-type (EqWitness :a) (declare HasEq (Eq :a => EqWitness :a)))")
+              ("constructors of repr :transparent types cannot have typeclass constraints"
+               "(package gadt-transparent-constraint-test (import coalton-prelude))
+                (repr :transparent)
+                (define-type (Box :a) (declare Pack (Eq :a => :a -> Box :a)))")
+              ("constructors of repr :native types cannot have typeclass constraints"
+               "(package gadt-native-constraint-test (import coalton-prelude))
+                (repr :native cl:t)
+                (define-type (Box :a) (declare Pack (Eq :a => :a -> Box :a)))")
+              ("ambiguous"
+               "(package gadt-ambiguous-constraint-test (import coalton-prelude))
+                (define-type (Box :b) (declare Pack (Eq :a => Box :b)))")))
+    (let ((diagnostic (collect-compiler-error (second case))))
+      (is (and diagnostic (search (first case) diagnostic))))))
 
 (deftest gadt-coverage-still-finds-holes-in-seen-constructors ()
   (let ((diagnostic

@@ -1245,3 +1245,89 @@
   (is (== "kept" (nest-cell-value (NestCell NestLabel) "kept" NestRefl)))
   (is (== "crossed" (nest-crate-tag (NestCrate (Tuple NestOn NestIntShape) (Tuple NestCount NestBoolShape)))))
   (is (== "other" (nest-crate-tag (NestCrate (Tuple NestCount NestBoolShape) (Tuple NestOn NestIntShape))))))
+
+;;;
+;;; Constructor-local type class constraints
+;;;
+
+(coalton-toplevel
+
+  (define-type SomeEqPair
+    (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+
+  (declare pack-pair (Eq :a => :a * :a -> SomeEqPair))
+  (define (pack-pair x y) (PackEqPair x y))
+
+  (declare same-elements (SomeEqPair -> Boolean))
+  (define (same-elements p)
+    (match p
+      ((PackEqPair x y) (== x y))))
+
+  (declare same-elements-let (SomeEqPair -> Boolean))
+  (define (same-elements-let p)
+    (let (PackEqPair x y) = p)
+    (== x y))
+
+  (declare same-elements-do (Optional SomeEqPair -> Optional Boolean))
+  (define (same-elements-do mp)
+    (do
+     ((PackEqPair x y) <- mp)
+     (pure (== x y))))
+
+  (define-type (EqWitness :a)
+    (declare HasEq (Eq :a => EqWitness :a)))
+
+  (declare eq-with-witness (EqWitness :a * :a * :a -> Boolean))
+  (define (eq-with-witness w x y)
+    (match w
+      ((HasEq) (== x y))))
+
+  (declare eq-with-witness-param (EqWitness :a * :a * :a -> Boolean))
+  (define (eq-with-witness-param (HasEq) x y)
+    (== x y))
+
+  (declare eq-list-with-witness (EqWitness :a * List :a * List :a -> Boolean))
+  (define (eq-list-with-witness w xs ys)
+    (match w
+      ((HasEq) (== xs ys))))
+
+  (define-type SomeOrdShow
+    (declare PackOrdShow (forall (:a) ((Ord :a) (Into :a String) => :a * :a -> SomeOrdShow))))
+
+  (declare describe-max (SomeOrdShow -> String))
+  (define (describe-max (PackOrdShow x y))
+    (if (> x y) (into x) (into y)))
+
+  (declare local-unboxed-pair (Eq :a => :a * :a -> Boolean))
+  (define (local-unboxed-pair x y)
+    (let ((p (PackEqPair x y)))
+      (match p
+        ((PackEqPair a b) (== a b)))))
+
+  (declare local-unboxed-witness (forall (:a) (Eq :a => :a * :a -> Boolean)))
+  (define (local-unboxed-witness x y)
+    (let ((w (the (EqWitness :a) HasEq)))
+      (match w
+        ((HasEq) (== x y))))))
+
+(define-test gadt-constructor-constraints ()
+  (is (same-elements (pack-pair 1 1)))
+  (is (not (same-elements (pack-pair 1 2))))
+  (is (same-elements (pack-pair "same" "same")))
+  (is (not (same-elements (pack-pair "a" "b"))))
+  (is (same-elements-let (PackEqPair 42 42)))
+  (is (== (Some True) (same-elements-do (Some (PackEqPair "ok" "ok")))))
+  (is (== None (same-elements-do None)))
+  (let ((ctor PackEqPair))
+    (is (same-elements (ctor 9 9)))
+    (is (not (same-elements (ctor 9 10)))))
+  (is (eq-with-witness HasEq 7 7))
+  (is (not (eq-with-witness HasEq 7 8)))
+  (is (eq-with-witness-param HasEq "w" "w"))
+  (is (eq-list-with-witness HasEq [1 2 3] [1 2 3]))
+  (is (not (eq-list-with-witness HasEq [1 2] [1 3])))
+  (is (== "99" (describe-max (PackOrdShow (the Integer 12) (the Integer 99)))))
+  (is (local-unboxed-pair 5 5))
+  (is (not (local-unboxed-pair 5 6)))
+  (is (local-unboxed-witness "u" "u"))
+  (is (not (local-unboxed-witness "u" "v"))))

@@ -2,6 +2,9 @@
   (:use
    #:cl
    #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:pred-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -21,22 +24,6 @@
 
 (deftype pred-context ()
   '(satisfies pred-context-p))
-
-(defun pred-type (pred env)
-  "Returns a type represention of PRED"
-  (declare (type tc:ty-predicate pred)
-           (values tc:ty tc::ksubstitution-list &optional))
-  (let* ((class-entry (tc:lookup-class env (tc:ty-predicate-class pred)))
-         (pred-kind tc:+kstar+))
-
-    (loop :for type :in (reverse (tc:ty-predicate-types pred)) :do
-      (setf pred-kind (tc:make-kfun :from (tc:kind-of type) :to pred-kind)))
-
-    (tc:apply-type-argument-list
-     (tc:make-tycon
-      :name (tc:ty-class-codegen-sym class-entry)
-      :kind pred-kind)
-     (tc:ty-predicate-types pred))))
 
 (defvar *static-dict-resolvers* nil
   "Symbols naming additional static dictionary resolvers.")

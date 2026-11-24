@@ -31,7 +31,8 @@ weight: 50
 - A non-parametric type is written as a bare symbol `⟨type-name⟩`; a parametric type is written `(⟨type-name⟩ :a :b ...)` with one or more distinct keyword type variables.
 - In ordinary field syntax, every free type variable appearing in a constructor field must be declared in `⟨type-head⟩` (unless bound locally by an explicit `forall` in that field type).
 - A generalized algebraic data type (GADT) uses [`declare`](/manual/operators/declare/) for **every** constructor. `(declare C signature)` introduces `C` and gives its whole type; do not add a separate constructor entry or `define`. In contrast, `(C (Integer -> String))` is an ordinary constructor that stores a function. A single `define-type` cannot mix the two styles.
-- A constructor signature must return the datatype being defined, but its type arguments can be specialized or repeated. Use a bare result type for a nullary constructor and positional inputs for a constructor with fields. Each signature binds its own variables, implicitly or with [`forall`](/manual/operators/forall/); for example, `(declare Wrap (forall (:x) (:x -> Box :x)))`. A variable occurring only in the fields is existential: the caller chooses its type when constructing the value, and a pattern may use the field but cannot choose its type anew or return it at an arbitrary type. Diagnostics label these pattern-local types as `<existential :A>` to distinguish them from lexical type variables with the same source name. Type aliases have their ordinary meaning in signatures; typeclass constraints are not supported.
+- A constructor signature must return the datatype being defined, but its type arguments can be specialized or repeated. Use a bare result type for a nullary constructor and positional inputs for a constructor with fields. Each signature binds its own variables, implicitly or with [`forall`](/manual/operators/forall/); for example, `(declare Wrap (forall (:x) (:x -> Box :x)))`. A variable occurring only in the fields or constraints is existential: the caller chooses its type when constructing the value, and a pattern may use the field but cannot choose its type anew or return it at an arbitrary type. Diagnostics label these pattern-local types as `<existential :A>` to distinguish them from lexical type variables with the same source name. Type aliases have their ordinary meaning in signatures.
+- A constructor signature may carry typeclass constraints, such as `(declare PackEqPair (Eq :a => :a * :a -> SomeEqPair))` or `(declare HasEq (Eq :a => EqWitness :a))`. Constructing a value requires dictionaries for the constructor's constraints and stores them inside the value; matching the constructor recovers those stored dictionaries for dependent subpatterns and the branch body without changing the constructor's visible arity or pattern syntax. Unconstrained constructors keep their normal representation. Because constrained constructors store runtime dictionary fields, they cannot be used with `(repr :enum)`, `(repr :transparent)`, or `(repr :native ...)`.
 - Kinds of type parameters are inferred from their uses in constructor fields (including higher-kinded parameters such as `:f` used as `(:f :a)`). The resulting type constructor produces a type of kind `Type`.
 - Variance of each type parameter is inferred automatically across mutually recursive type definitions. Unused (phantom) type parameters default to covariant; opaque types with zero constructors default to invariant. GADT indices are treated as invariant because constructor results can constrain them even when no field mentions them.
 - Each `⟨constructor-spec⟩` defines a constructor in the current package:
@@ -78,6 +79,19 @@ weight: 50
   (declare cast-with (Same :a :b * :a -> :b))
   (define (cast-with witness x)
     (match witness ((Refl) x))))
+```
+
+A constructor signature can also package typeclass evidence with a value or witness:
+
+```lisp
+(coalton-toplevel
+  (define-type SomeEqPair
+    (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+
+  (declare same-elements (SomeEqPair -> Boolean))
+  (define (same-elements p)
+    (match p
+      ((PackEqPair x y) (== x y)))))
 ```
 
 ## Other notes
