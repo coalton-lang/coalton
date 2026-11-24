@@ -934,12 +934,33 @@
     (loop :for ty :in (ty-predicate-types pred)
           :maximize (type-height ty cache))))
 
-(defun max-class-instance-head-height (env class)
+(defun max-class-instance-head-height (env class &optional height-cache)
   (declare (type environment env)
            (type symbol class)
+           (type (or null hash-table) height-cache)
            (values fixnum &optional))
-  (loop :for inst :in (lookup-class-instances env class :no-error t)
-        :maximize (predicate-height (ty-class-instance-predicate inst))))
+  (let ((height-cache (or height-cache (make-hash-table :test #'eq)))
+        (pending (list class))
+        (visited nil)
+        (max-height 0))
+    (loop :while pending
+          :for current := (pop pending)
+          :unless (member current visited :test #'eq)
+            :do (push current visited)
+                (let ((class-entry (lookup-class env current :no-error t)))
+                  (when class-entry
+                    (dolist (super (ty-class-superclasses class-entry))
+                      (push (ty-predicate-class super) pending))))
+                (dolist (inst (lookup-class-instances env current :no-error t))
+                  (setf max-height
+                        (max max-height
+                             (predicate-height (ty-class-instance-predicate inst)
+                                               height-cache)))
+                  (dolist (constraint (ty-class-instance-constraints inst))
+                    (push (ty-predicate-class constraint) pending))
+                  (dolist (constraint (cdr (instance-dictionary-signature inst)))
+                    (push (ty-predicate-class constraint) pending))))
+    max-height))
 
 (defun type-proper-subterm-p (needle haystack &optional height-cache)
   "Does NEEDLE occur as a proper subterm of HAYSTACK?"
@@ -1100,6 +1121,8 @@
            (type fixnum max-given-height)
            (type (or null hash-table) height-cache)
            (values boolean &optional))
+  (unless (find instance stack :key #'car :test #'eq)
+    (return-from instance-recursion-blocked-p nil))
   (let* ((height-cache (or height-cache (make-hash-table :test #'eq)))
          (sentinel (make-variable))
          (key (predicate-key pred fixed-vars sentinel))
@@ -1109,7 +1132,8 @@
                                    0
                                    (max-class-instance-head-height
                                     env
-                                    (ty-predicate-class pred))))))
+                                    (ty-predicate-class pred)
+                                    height-cache)))))
     (loop :for (prev-inst . prev-pred) :in stack
           :thereis (and (eq instance prev-inst)
                         (or (ty-scheme= key (predicate-key prev-pred fixed-vars sentinel))
@@ -1184,20 +1208,29 @@
                                        (= constraint-index (expansion-frame-constraint-index frame)))
                                    (predicate-embeds-p (expansion-frame-pred frame) pred fixed-vars)))
                             stack)))
+             (retain-at (prior depth stack pred)
+               (let ((retain-depth (max 1 (expansion-frame-depth prior))))
+                 (if (= depth retain-depth)
+                     (list pred)
+                     (throw (find retain-depth stack :key #'expansion-frame-depth :test #'=)
+                            nil))))
              (expand (pred stack depth constraint-index)
-               (let ((instance (lookup-class-instance env pred :no-error t)))
+               (let* ((key (predicate-key pred fixed-vars sentinel))
+                      (instance (lookup-class-instance env pred :no-error t)))
                  (unless instance
-                   (return-from expand (list pred)))
-                 (let* ((key (predicate-key pred fixed-vars sentinel))
-                        (prior (find-matching-frame instance constraint-index pred key stack)))
+                   (let ((root-prior (and (> depth 1)
+                                          root-instance
+                                          (predicate-subsumes-p root-pred pred)
+                                          (find-matching-frame root-instance constraint-index pred key stack))))
+                     (return-from expand
+                       (if root-prior
+                           (retain-at root-prior depth stack pred)
+                           (list pred)))))
+                 (let ((prior (find-matching-frame instance constraint-index pred key stack)))
                    (when prior
                      (when (valid-derived-cycle-p prior pred key stack)
                        (return-from expand nil))
-                     (let ((retain-depth (max 1 (expansion-frame-depth prior))))
-                       (if (= depth retain-depth)
-                           (return-from expand (list pred))
-                           (throw (find retain-depth stack :key #'expansion-frame-depth :test #'=)
-                                  nil))))
+                     (return-from expand (retain-at prior depth stack pred)))
                    (let* ((frame (make-expansion-frame
                                   :depth depth
                                   :pred pred
@@ -3125,7 +3158,11 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                    (setf new-subs (improve-predicate-fundeps env preds subs))
                    (setf preds (substitute-preds preds new-subs))
 
-                   (loop :with fixed-vars := (type-variables (apply-substitution new-subs input-preds))
+                   (loop :with applied-inputs := (apply-substitution new-subs input-preds)
+                         :with fixed-vars := (type-variables applied-inputs)
+                         :with height-cache := (make-hash-table :test #'eq)
+                         :with max-given-height := (loop :for p :in applied-inputs
+                                                         :maximize (predicate-height p height-cache))
                          :for pred :in preds
                          :for class-name := (ty-predicate-class pred)
                          :for class := (class-for class-name)
@@ -3146,13 +3183,21 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                                            :no-error t)
                          :for applied-pred := (apply-substitution new-subs pred)
                          :for history := (gethash pred pred-histories)
+                         :for substituted-history
+                           := (when (and instance
+                                         (find instance history :key #'car :test #'eq))
+                                (loop :for (prev-inst . prev-pred) :in history
+                                      :collect (cons prev-inst
+                                                     (apply-substitution new-subs prev-pred))))
                          :for blocked-p := (and instance
-                                                (loop :for (prev-inst . prev-pred) :in history
-                                                      :thereis (and (eq instance prev-inst)
-                                                                    (predicate-embeds-p
-                                                                     (apply-substitution new-subs prev-pred)
-                                                                     applied-pred
-                                                                     fixed-vars))))
+                                                (instance-recursion-blocked-p
+                                                 env
+                                                 instance
+                                                 applied-pred
+                                                 substituted-history
+                                                 fixed-vars
+                                                 max-given-height
+                                                 height-cache))
 
                          :if (and instance (not blocked-p))
                            ;; Since we allow for type variables in the
