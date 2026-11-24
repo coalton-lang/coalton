@@ -246,6 +246,7 @@
    #:set-function-source-parameter-names    ; FUNCTION
    #:unset-function-source-parameter-names  ; FUNCTION
    #:constructor-arguments                  ; FUNCTION
+   #:constructor-physical-arity             ; FUNCTION
    #:add-instance                           ; FUNCTION
    #:set-method-inline                      ; FUNCTION
    #:lookup-method-inline                   ; FUNCTION
@@ -2303,6 +2304,18 @@ predicate containing inference variables through such an instance."
            (values ty-list &optional))
   (function-type-arguments (lookup-value-type env name)))
 
+(defun constructor-physical-arity (ctor env)
+  "Return the physical runtime arity (dictionary fields plus visible fields) of CTOR."
+  (declare (type (or symbol constructor-entry) ctor)
+           (type environment env)
+           (values alexandria:non-negative-fixnum &optional))
+  (let* ((entry (etypecase ctor
+                  (constructor-entry ctor)
+                  (symbol (lookup-constructor env ctor))))
+         (scheme (lookup-value-type env (constructor-entry-name entry))))
+    (+ (length (qualified-ty-predicates (ty-scheme-type scheme)))
+       (constructor-entry-arity entry))))
+
 (defun instance-signature= (left right)
   "Compare the ordered dictionary ABI, including variables shared with the head."
   (let ((left-preds (instance-dictionary-signature left))
@@ -2730,8 +2743,6 @@ This function will return the single functional dependency
   "Keep the actual dictionary fields in scope for this pattern's proof lookups."
   (declare (type environment env) (type ty-predicate-list preds)
            (values ty-predicate-list &optional))
-  (unless (some #'ty-predicate-superclass-evidence preds)
-    (return-from refine-given-superclasses preds))
   (loop :for p :in (instantiate-context-superclasses env preds)
         :collect (if (pattern-given-p p) p
                      (make-pattern-given :class (ty-predicate-class p) :types (ty-predicate-types p)

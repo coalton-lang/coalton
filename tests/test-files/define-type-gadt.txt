@@ -1713,3 +1713,75 @@ error: Declared type is too general
     |
  15 |  (define (t-dtg82 (Box82 (T82-Int)) (Refl82)) 1)
     |           ^^^^^^^ Declared type forall :T :U. Box82 :T * Same82 :U (T-dtg82 Integer) -> Integer is more general than inferred type forall :A :U1. Box82 (T-dtg82 :A) * Same82 :U1 (T-dtg82 Integer) -> Integer.
+
+================================================================================
+83 Constrained GADT Constructor Producer Missing Constraint
+================================================================================
+
+(package coalton-unit-tests/gadt-constrained-1
+  (import coalton-prelude))
+
+(define-type SomeEqPair83
+  (declare PackEqPair83 (Eq :a => :a * :a -> SomeEqPair83)))
+
+(declare bad-pack83 (:a * :a -> SomeEqPair83))
+(define (bad-pack83 x y)
+  (PackEqPair83 x y))
+
+--------------------------------------------------------------------------------
+
+error: Explicit type is missing inferred predicate
+  --> test:8:9
+   |
+ 8 |  (define (bad-pack83 x y)
+   |           ^^^^^^^^^^ Declared type :A * :A -> SomeEqPair83 is missing inferred predicate Eq :A
+
+================================================================================
+84 Constrained GADT Constructor Unconstrained Sibling Arm
+================================================================================
+
+(package coalton-unit-tests/gadt-constrained-2
+  (import coalton-prelude))
+
+(define-type (MaybeEq84 :a)
+  (declare YesEq84 (Eq :a => MaybeEq84 :a))
+  (declare NoEq84 (MaybeEq84 :a)))
+
+(declare bad-compare84 (MaybeEq84 :a * :a * :a -> Boolean))
+(define (bad-compare84 w x y)
+  (match w
+    ((YesEq84) (== x y))
+    ((NoEq84) (== x y))))
+
+--------------------------------------------------------------------------------
+
+error: Explicit type is missing inferred predicate
+  --> test:9:9
+   |
+ 9 |  (define (bad-compare84 w x y)
+   |           ^^^^^^^^^^^^^ Declared type MaybeEq84 :A * :A * :A -> Boolean is missing inferred predicate Eq :A
+
+================================================================================
+85 Constrained GADT Constructor Independent Existential Packages
+================================================================================
+
+(package coalton-unit-tests/gadt-constrained-3
+  (import coalton-prelude))
+
+(define-type SomeEqPair85
+  (declare PackEqPair85 (Eq :a => :a * :a -> SomeEqPair85)))
+
+(declare bad-cross85 (SomeEqPair85 * SomeEqPair85 -> Boolean))
+(define (bad-cross85 p q)
+  (match (Tuple p q)
+    ((Tuple (PackEqPair85 x _) (PackEqPair85 y _))
+     (== x y))))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:11:11
+    |
+ 11 |       (== x y))))
+    |             ^ Expected type '<existential :A>' but got '<existential :A1>'
+

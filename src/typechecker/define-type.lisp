@@ -486,6 +486,34 @@ itself without passing through a nominal type."
            (subtypep (second a) (second b))
            (subtypep (second b) (second a)))))
 
+(defun same-constructor-evidence-scheme-p (old-scheme new-scheme)
+  "Compare two constructor schemes, including the ordered dictionary ABI."
+  (and (redef:types-compatible-p old-scheme new-scheme)
+       (let ((old-preds (tc:qualified-ty-predicates (tc:ty-scheme-type old-scheme)))
+             (new-preds (tc:qualified-ty-predicates (tc:ty-scheme-type new-scheme))))
+         (and (= (length old-preds) (length new-preds))
+              (every (lambda (a b)
+                       (and (eq (tc:ty-predicate-class a) (tc:ty-predicate-class b))
+                            (= (length (tc:ty-predicate-types a))
+                               (length (tc:ty-predicate-types b)))))
+                     old-preds new-preds)
+              (or (<= (length old-preds) 1)
+                  (flet ((ordered-scheme (scheme)
+                           (let* ((vars (tc:ty-scheme-instantiation-types scheme))
+                                  (qual (tc:instantiate vars (tc:ty-scheme-type scheme)))
+                                  (preds (tc:qualified-ty-predicates qual))
+                                  (body (tc:qualified-ty-type qual))
+                                  (inputs (append (mapcan (lambda (p) (copy-list (tc:ty-predicate-types p)))
+                                                          preds)
+                                                  (list body))))
+                             (tc:quantify vars
+                                          (tc:qualify nil
+                                                      (tc:make-function-ty
+                                                       :positional-input-types inputs
+                                                       :output-types nil))))))
+                    (tc:ty-scheme= (ordered-scheme old-scheme)
+                                   (ordered-scheme new-scheme))))))))
+
 (defun validate-gadt-redefinitions (before after names)
   "Compare whole datatype declarations, before installing AFTER or its code.
 Use both environments: an environment update log can replay in an image
@@ -508,7 +536,7 @@ different from the one in which the declarations were compiled."
                          (= (length (cdr a)) (length (cdr b)))
                          (loop :for (ctor old-scheme) :in (cdr a)
                                :for next := (assoc ctor (cdr b))
-                               :always (and next (redef:types-compatible-p old-scheme (second next)))))
+                               :always (and next (same-constructor-evidence-scheme-p old-scheme (second next)))))
               (redef:raise-gadt-redefinition-error name a b before))))))))
 
 (defun update-env-for-type-definition (type tyvars variances parsed-type env)
@@ -543,12 +571,11 @@ different from the one in which the declarations were compiled."
   (let ((old-type (tc:lookup-type env (type-definition-name type) :no-error t)))
     (when old-type
       (loop :for constructor :in (tc:type-entry-constructors old-type)
-            :for ctor-entry := (tc:lookup-constructor env constructor)
             :unless (find constructor (type-definition-constructors type) :key #'tc:constructor-entry-name)
               :do (setf env (tc:unset-constructor env constructor))
                   (setf env (tc:unset-value-type env constructor))
                   (setf env (tc:unset-name env constructor))
-                  (when (plusp (tc:constructor-entry-arity ctor-entry))
+                  (when (tc:lookup-function env constructor :no-error t)
                     (setf env (tc:unset-function env constructor))))))
 
   (cond ((typep parsed-type 'parser:toplevel-define-type-alias)
@@ -652,22 +679,21 @@ different from the one in which the declarations were compiled."
                       :docstring nil
                       :location (source:location parsed-type))))
 
-          ;; If the constructor takes parameters then
-          ;; add it to the function environment
-          (cond ((not (= (tc:constructor-entry-arity ctor) 0))
-                 (setf env
-                       (tc:set-function
-                        env
-                        ctor-name
-                        (tc:make-function-env-entry
-                         :name ctor-name
-                         :arity (tc:constructor-entry-arity ctor)
-                         :inline-p nil))))
-                ((tc:lookup-function env ctor-name :no-error t)
-                 ;; If the constructor does not take
-                 ;; parameters then remove it from the
-                 ;; function environment
-                 (setf env (tc:unset-function env ctor-name)))))
+          ;; If the constructor takes runtime parameters (visible fields
+          ;; or hidden class dictionaries) then add it to the function
+          ;; environment with its physical arity.
+          (let ((physical-arity (tc:constructor-physical-arity ctor env)))
+            (cond ((not (zerop physical-arity))
+                   (setf env
+                         (tc:set-function
+                          env
+                          ctor-name
+                          (tc:make-function-env-entry
+                           :name ctor-name
+                           :arity physical-arity
+                           :inline-p nil))))
+                  ((tc:lookup-function env ctor-name :no-error t)
+                   (setf env (tc:unset-function env ctor-name))))))
 
   env)
 
@@ -733,9 +759,6 @@ signaled with the expectation that they may be ignored."
       (tc-error "Malformed GADT constructor"
                 (tc-note signature
                          "use positional fields, or the bare result type for a nullary constructor")))
-    (when (tc:qualified-ty-predicates qual-ty)
-      (tc-error "Malformed GADT constructor"
-                (tc-note signature "typeclass constraints on constructor signatures are not supported")))
     scheme))
 
 (defun infer-define-type-scc-kinds (types env)
@@ -912,14 +935,18 @@ signaled with the expectation that they may be ignored."
                                 tvars))))
                       (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))))
 
-         ;; Check that repr :enum types do not have any constructors with fields
+         ;; Check that repr :enum types do not have any constructors with fields or constraints
          :when (eq repr-type :enum)
            :do (loop
                  :for ctor :in (parser:toplevel-define-type-ctors type)
                  :for fields :in constructor-args
+                 :for scheme :in signatures
                  :when fields
                    :do (tc-error "Invalid repr :enum attribute"
-                                 (tc-note ctor "Enum constructors cannot have arguments.")))
+                                 (tc-note ctor "Enum constructors cannot have arguments."))
+                 :when (and scheme (tc:qualified-ty-predicates (tc:ty-scheme-type scheme)))
+                   :do (tc-error "Invalid repr :enum attribute"
+                                 (tc-note ctor "Enum constructors cannot have typeclass constraints.")))
 
          ;; Check that repr :transparent types have a single constructor
          :when (eq repr-type :transparent)
@@ -928,12 +955,26 @@ signaled with the expectation that they may be ignored."
                            (tc-note type
                                     "repr :transparent types must have a single constructor")))
 
-         ;; Check that the single constructor of a repr :transparent type has a single field
+         ;; Check that the single constructor of a repr :transparent type has a single field and no constraints
          :when (eq repr-type :transparent)
            :do (unless (= 1 (length (first constructor-args)))
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
+               (when (and (first signatures)
+                          (tc:qualified-ty-predicates (tc:ty-scheme-type (first signatures))))
+                 (tc-error "Invalid repr :transparent attribute"
+                           (tc-note (first (parser:type-definition-ctors type))
+                                    "constructors of repr :transparent types cannot have typeclass constraints")))
+
+         ;; Check that repr :native types do not have constrained constructors
+         :when (eq repr-type :native)
+           :do (loop
+                 :for ctor :in (parser:type-definition-ctors type)
+                 :for scheme :in signatures
+                 :when (and scheme (tc:qualified-ty-predicates (tc:ty-scheme-type scheme)))
+                   :do (tc-error "Invalid repr :native attribute"
+                                 (tc-note ctor "constructors of repr :native types cannot have typeclass constraints")))
 
          ;; Check that a native exception is represented by a Lisp condition type
          :when (and (eq repr-type :native)

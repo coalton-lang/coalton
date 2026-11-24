@@ -57,6 +57,138 @@
       (dolist (class tc:*changed-instance-classes*) (tc:validate-instance-selections env class))
       (values code env))))
 
+(defun define-program-types-and-classes (program env)
+  "Typecheck and register types, structs, aliases, and classes in dependency order."
+  (let ((types (parser:program-types program))
+        (structs (parser:program-structs program))
+        (aliases (parser:program-type-aliases program))
+        (classes (parser:program-classes program)))
+    (flet ((def-name (def)
+             (parser:identifier-src-name (parser:type-definition-name def)))
+           (cls-name (cls)
+             (parser:identifier-src-name (parser:toplevel-define-class-name cls)))
+           (ref-classes (def)
+             (mapcar #'parser:identifier-src-name (parser:collect-referenced-classes def)))
+           (ref-types (item)
+             (mapcar #'parser:tycon-name (parser:collect-referenced-types item))))
+      (let* ((all-type-defs (append types structs aliases))
+             (local-class-names (mapcar #'cls-name classes)))
+        (unless (and classes
+                     (some (lambda (def)
+                             (intersection (ref-classes def) local-class-names :test #'eq))
+                           all-type-defs))
+          (multiple-value-bind (type-definitions instances env)
+              (tc:toplevel-define-type types structs aliases env)
+            (unless (settings:coalton-release-p)
+              (tc:validate-gadt-redefinitions *global-environment* env
+                                              (mapcar #'tc:type-definition-name type-definitions)))
+            (multiple-value-bind (class-definitions env)
+                (tc:toplevel-define-class classes env)
+              (return-from define-program-types-and-classes
+                (values type-definitions instances class-definitions env)))))
+        (tc:check-duplicates
+         all-type-defs
+         #'def-name
+         (lambda (first second)
+           (tc:tc-error "Duplicate type definitions"
+                        (tc:tc-note first "first definition here")
+                        (tc:tc-note second "second definition here"))))
+        (tc:check-duplicates
+         (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
+                 (append types structs))
+         (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
+         (lambda (first second)
+           (tc:tc-error "Duplicate constructor definitions"
+                        (tc:tc-note first "first definition here")
+                        (tc:tc-note second "second definition here"))))
+        (tc:check-duplicates
+         classes
+         #'cls-name
+         (lambda (first second)
+           (tc:tc-error "Duplicate class definition"
+                        (tc:tc-location (parser:toplevel-define-class-head-location first)
+                                        "first definition here")
+                        (tc:tc-location (parser:toplevel-define-class-head-location second)
+                                        "second definition here"))))
+        (let ((rem-types types)
+              (rem-structs structs)
+              (rem-aliases aliases)
+              (rem-classes classes)
+              (type-definitions nil)
+              (instances nil)
+              (class-definitions nil))
+          (loop :while (or rem-types rem-structs rem-aliases rem-classes)
+                :do (let* ((rem-class-names (mapcar #'cls-name rem-classes))
+                           (rem-all-types (append rem-types rem-structs rem-aliases))
+                           (blocked-type-names
+                             (loop :with blocked := (loop :for def :in rem-all-types
+                                                          :when (intersection (ref-classes def) rem-class-names :test #'eq)
+                                                            :collect (def-name def))
+                                   :with changed := t
+                                   :while changed
+                                   :do (setf changed nil)
+                                       (dolist (def rem-all-types)
+                                         (let ((name (def-name def)))
+                                           (when (and (not (member name blocked :test #'eq))
+                                                      (intersection (ref-types def) blocked :test #'eq))
+                                             (push name blocked)
+                                             (setf changed t))))
+                                   :finally (return blocked)))
+                           (ready-types (remove-if (lambda (d) (member (def-name d) blocked-type-names :test #'eq)) rem-types))
+                           (ready-structs (remove-if (lambda (d) (member (def-name d) blocked-type-names :test #'eq)) rem-structs))
+                           (ready-aliases (remove-if (lambda (d) (member (def-name d) blocked-type-names :test #'eq)) rem-aliases)))
+                      (when (or ready-types ready-structs ready-aliases)
+                        (multiple-value-bind (wave-types wave-instances next-env)
+                            (tc:toplevel-define-type ready-types ready-structs ready-aliases env)
+                          (unless (settings:coalton-release-p)
+                            (tc:validate-gadt-redefinitions *global-environment* next-env
+                                                            (mapcar #'tc:type-definition-name wave-types)))
+                          (setf env next-env
+                                type-definitions (append type-definitions wave-types)
+                                instances (append instances wave-instances)
+                                rem-types (set-difference rem-types ready-types :test #'eq)
+                                rem-structs (set-difference rem-structs ready-structs :test #'eq)
+                                rem-aliases (set-difference rem-aliases ready-aliases :test #'eq))))
+                      (let* ((rem-type-names (mapcar #'def-name (append rem-types rem-structs rem-aliases)))
+                             (blocked-class-names
+                               (loop :with blocked := (loop :for cls :in rem-classes
+                                                            :when (intersection (ref-types cls) rem-type-names :test #'eq)
+                                                              :collect (cls-name cls))
+                                     :with changed := t
+                                     :while changed
+                                     :do (setf changed nil)
+                                         (dolist (cls rem-classes)
+                                           (let ((name (cls-name cls)))
+                                             (when (and (not (member name blocked :test #'eq))
+                                                        (intersection (ref-classes cls) blocked :test #'eq))
+                                               (push name blocked)
+                                               (setf changed t))))
+                                     :finally (return blocked)))
+                             (ready-classes (remove-if (lambda (c) (member (cls-name c) blocked-class-names :test #'eq))
+                                                       rem-classes)))
+                        (cond
+                          (ready-classes
+                           (multiple-value-bind (wave-classes next-env)
+                               (tc:toplevel-define-class ready-classes env)
+                             (setf env next-env
+                                   class-definitions (append class-definitions wave-classes)
+                                   rem-classes (set-difference rem-classes ready-classes :test #'eq))))
+                          ((not (or ready-types ready-structs ready-aliases))
+                           ;; Cyclic or unresolved dependency: run remaining to signal diagnostic.
+                           (multiple-value-bind (wave-types wave-instances next-env)
+                               (tc:toplevel-define-type rem-types rem-structs rem-aliases env)
+                             (setf env next-env
+                                   type-definitions (append type-definitions wave-types)
+                                   instances (append instances wave-instances)
+                                   rem-types nil rem-structs nil rem-aliases nil))
+                           (when rem-classes
+                             (multiple-value-bind (wave-classes next-env)
+                                 (tc:toplevel-define-class rem-classes env)
+                               (setf env next-env
+                                     class-definitions (append class-definitions wave-classes)
+                                     rem-classes nil))))))))
+          (values type-definitions instances class-definitions env))))))
+
 (defun %entry-point (program)
   (declare (type parser:program program))
 
@@ -71,19 +203,8 @@
     (setf (parser:program-instances program)
           (tc:resolve-control-flow (parser:program-instances program)))
 
-    (multiple-value-bind (type-definitions instances env)
-        (tc:toplevel-define-type (parser:program-types program)
-                                 (parser:program-structs program)
-                                 (parser:program-type-aliases program)
-                                 env)
-
-      (unless (settings:coalton-release-p)
-        (tc:validate-gadt-redefinitions *global-environment* env
-                                        (mapcar #'tc:type-definition-name type-definitions)))
-
-      (multiple-value-bind (class-definitions env)
-          (tc:toplevel-define-class (parser:program-classes program)
-                                    env)
+    (multiple-value-bind (type-definitions instances class-definitions env)
+        (define-program-types-and-classes program env)
 
         (let ((all-instances
                 (append instances
@@ -179,7 +300,7 @@
                                                        env
                                                        calling-convention-table)
                     (warn-ineffective-inline-attributes program env)
-                    (values code env)))))))))))
+                    (values code env))))))))))
 
 
 (defun expression-entry-point (node)

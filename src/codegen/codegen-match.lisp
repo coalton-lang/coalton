@@ -248,7 +248,7 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                  'rt:unwrap-cl-some))))
       (t
        (loop :with class := (tc:constructor-entry-classname ctor)
-             :for i :below (tc:constructor-entry-arity ctor)
+             :for i :below (length fields)
              :collect (alexandria:format-symbol (symbol-package class) "~A-_~D" class i))))))
 
 (defun project-field (reader operand)
@@ -265,12 +265,17 @@ NIL means the constructor cannot inhabit these indices."
     (assert (eq (column-type-name column) (tc:constructor-entry-constructs ctor-entry)))
     (let* ((scheme (tc:lookup-value-type env name))
            (binders (tc:ty-scheme-instantiation-types scheme))
-           (ctor (tc:qualified-ty-type (tc:fresh-inst scheme binders))))
+           (qual-ty (tc:fresh-inst scheme binders))
+           (ctor (tc:qualified-ty-type qual-ty)))
       (multiple-value-bind (subs possible)
           (tc:try-unify nil (tc:function-return-type ctor) (match-column-type column) :all)
         (setf (gethash key table)
               (when possible
-                (let ((fields (tc:apply-substitution subs (tc:function-type-arguments ctor))))
+                (let ((fields (tc:apply-substitution
+                               subs
+                               (append (loop :for pred :in (tc:qualified-ty-predicates qual-ty)
+                                             :collect (coalton-impl/codegen/resolve-instance:pred-type pred env))
+                                       (tc:function-type-arguments ctor)))))
                   (make-constructor-specialization
                    :type-arguments (tc:apply-substitution subs binders)
                    :substitutions (let ((vars (tc:type-variables (match-column-type column))))
@@ -395,7 +400,7 @@ when the other is empty."
 (defun constructor-family (pat env)
   (tc:constructor-entry-constructs (tc:lookup-constructor env (pattern:pattern-constructor-name pat))))
 
-(defun match-test-state (pat column givens env dictionaries-ready-p)
+(defun match-test-state (pat column givens env dictionaries-ready-p &optional pending-vars)
   (etypecase pat
     (pattern:pattern-wildcard nil)
     (pattern:pattern-constructor
@@ -406,24 +411,32 @@ when the other is empty."
     (pattern:pattern-literal
      (let* ((expected (tc:apply-substitution givens (pattern:pattern-type pat)))
             (head (tc:base-type expected))
-            (actual (column-type-name column)))
+            (actual (column-type-name column))
+            (test (pattern:pattern-literal-test pat)))
        (cond
          ((and actual (tc:tycon-p head) (not (eq actual (tc:tycon-name head))))
           :impossible)
          ((and (tc:ty= expected (match-column-type column))
-               (or (not dictionaries-ready-p) (not (pattern:pattern-literal-test pat))
-                   (funcall dictionaries-ready-p (pattern:pattern-literal-test pat) givens)))
+               (not (and test
+                         (intersection (coalton-impl/codegen/transformations:node-variables
+                                        test :variable-namespace-only t)
+                                       pending-vars
+                                       :test #'eq)))
+               (or (not dictionaries-ready-p) (not test)
+                   (funcall dictionaries-ready-p test givens pending-vars)))
           :ready))))))
 
 (defun next-match-column (patterns columns givens env &optional dictionaries-ready-p)
   "Select the first ready test. Defer only a test whose operand or dictionary
 awaits evidence, not unrelated tests between it and its witness. A row's
 constructor name is not evidence about its own operand."
-  (let ((best nil) (best-order nil))
+  (let ((best nil)
+        (best-order nil)
+        (pending-vars (mapcan #'pattern:pattern-variables patterns)))
     (loop :for p :in patterns :for c :in columns :for i :from 0
           :for order := (or (pattern:pattern-test-order p) i)
           :when (or (null best-order) (< order best-order))
-            :do (let ((state (match-test-state p c givens env dictionaries-ready-p)))
+            :do (let ((state (match-test-state p c givens env dictionaries-ready-p pending-vars)))
                   (when state
                     (setf best (and (eq state :ready) i)
                           best-order order))))
@@ -431,6 +444,23 @@ constructor name is not evidence about its own operand."
       (util:coalton-bug "No established test in row ~S for columns of types ~S"
                         patterns (mapcar #'match-column-type columns)))
     best))
+
+(defun substitute-row-bindings-in-pattern-literal (pat bindings)
+  (if (or (null (pattern:pattern-literal-test pat))
+          (null bindings))
+      pat
+      (let* ((test (pattern:pattern-literal-test pat))
+             (subs (loop :for b :in bindings
+                         :collect (coalton-impl/codegen/ast-substitutions:make-ast-substitution
+                                   :from (match-binding-var b)
+                                   :to (ast:make-node-local-variable
+                                        :type (match-binding-type b)
+                                        :value (match-binding-source b))))))
+        (pattern:make-pattern-literal
+         :type (pattern:pattern-type pat)
+         :value (pattern:pattern-literal-value pat)
+         :test-order (pattern:pattern-test-order pat)
+         :test (coalton-impl/codegen/ast-substitutions:apply-ast-substitution subs test)))))
 
 (defun specialized-columns (columns idx spec givens)
   "Replace column IDX by SPEC's fields, refining the other columns with the
@@ -465,13 +495,13 @@ test. Return bindings and final evidence only on the success path."
             :do (let ((p (nth idx patterns)) (col (nth idx columns)))
                   (etypecase p
                     (pattern:pattern-literal
-                     (funcall visit p col nil givens)
+                     (funcall visit p col nil givens bindings)
                      (setf columns (remove-nth columns idx) patterns (remove-nth patterns idx)))
                     (pattern:pattern-constructor
                      (let ((spec (specialize-constructor
                                   col (tc:lookup-constructor env (pattern:pattern-constructor-name p)) env table)))
                        (unless spec (return-from walk-pattern-row (values nil nil nil)))
-                       (funcall visit p col spec givens)
+                       (funcall visit p col spec givens bindings)
                        (setf patterns (replace-nth-with-list
                                        patterns idx
                                        (mapcar #'peel (pattern:pattern-constructor-patterns p)
@@ -496,12 +526,24 @@ body may bind its variables *after* unwinding."
     (multiple-value-bind (bindings givens possible)
         (walk-pattern-row
          (list pat) (list root) env nil
-         (lambda (p col spec givens)
+         (lambda (p col spec givens current-bindings)
            (declare (ignore givens))
            (let ((operand (gethash (match-column-var col) paths)))
              (etypecase p
                (pattern:pattern-literal
-                (push (literal-pattern-test-form p operand env) tests))
+                (let ((form (literal-pattern-test-form p operand env))
+                      (test-vars (and (pattern:pattern-literal-test p)
+                                      (coalton-impl/codegen/transformations:node-variables
+                                       (pattern:pattern-literal-test p)
+                                       :variable-namespace-only t))))
+                  (when test-vars
+                    (let ((needed (loop :for b :in current-bindings
+                                        :when (member (match-binding-var b) test-vars :test #'eq)
+                                          :collect (list (match-binding-var b)
+                                                         (gethash (match-binding-source b) paths)))))
+                      (when needed
+                        (setf form `(let ,needed ,form)))))
+                  (push form tests)))
                (pattern:pattern-constructor
                 (let* ((name (pattern:pattern-constructor-name p))
                        (entry (tc:lookup-constructor env name))
@@ -527,8 +569,8 @@ body may bind its variables *after* unwinding."
     (return-from order-pattern-tests pat))
   (let ((order (make-hash-table :test #'eq)))
     (walk-pattern-row (list pat) (list (make-match-column :var (gensym) :type type)) env dictionaries-ready-p
-                      (lambda (p col spec givens)
-                        (declare (ignore col spec givens))
+                      (lambda (p col spec givens current-bindings)
+                        (declare (ignore col spec givens current-bindings))
                         (setf (gethash p order) (hash-table-count order))))
     (pattern:map-pattern pat :order-function (lambda (p) (gethash p order)))))
 
@@ -542,7 +584,7 @@ the next witness. Their scrutinees have *incoming*, not branch-final, types."
     (multiple-value-bind (bindings givens possible)
         (walk-pattern-row
          patterns columns env dictionaries-ready-p
-         (lambda (p col spec givens)
+         (lambda (p col spec givens current-bindings)
            (let ((test (if spec
                            (pattern:make-pattern-constructor
                             :name (pattern:pattern-constructor-name p)
@@ -556,7 +598,9 @@ the next witness. Their scrutinees have *incoming*, not branch-final, types."
                                                          (pattern:make-pattern-wildcard :type (match-column-type fc))
                                                          (pattern:make-pattern-var :type (match-column-type fc)
                                                                                    :name (match-column-var fc)))))
-                           (tc:apply-substitution givens p))))
+                           (substitute-row-bindings-in-pattern-literal
+                            (tc:apply-substitution givens p)
+                            current-bindings))))
              (push (cons (ast:make-node-local-variable :type (match-column-type col) :value (match-column-var col))
                          test)
                    tests))))
@@ -673,7 +717,10 @@ matches, compiled with the evidence available before these rows were tried."
                                :when (or (pattern:pattern-wildcard-p p) (same-value-p p))
                                  :collect (row-with-patterns row (remove-nth (match-row-patterns row) idx))))
                    (else (remove-if (lambda (row) (same-value-p (nth idx (match-row-patterns row)))) prefix)))
-               (make-dtree-literal-if :column col :pattern head
+               (make-dtree-literal-if :column col
+                                      :pattern (substitute-row-bindings-in-pattern-literal
+                                                head
+                                                (match-row-bindings (first rows)))
                                       :then (build (remove-nth columns idx) then fallback)
                                       :else (build columns else fallback))))))))))
 
@@ -684,7 +731,7 @@ matches, compiled with the evidence available before these rows were tried."
        (or (tc:type-entry-newtype (dtree-constructor-switch-type-entry node))
            (and (settings:coalton-release-p) settings:*emit-type-annotations*))))
 
-(defun compute-free-column-vars (tree table)
+(defun compute-free-column-vars (tree table &optional col-type-table)
   "Compute TREE's free variables from its successors, already visited in postorder."
   (declare (type (or null dtree) tree)
            (values list &optional))
@@ -705,13 +752,20 @@ matches, compiled with the evidence available before these rows were tried."
                            :test #'eq)))
        free))
     (dtree-literal-if
-     (union (list (match-column-var (dtree-literal-if-column tree)))
-            (union (gethash (dtree-literal-if-then tree) table)
-                   (gethash (dtree-literal-if-else tree) table)
-                   :test #'eq)
-            :test #'eq))))
+     (let* ((test (pattern:pattern-literal-test (dtree-literal-if-pattern tree)))
+            (test-col-vars
+              (when (and test col-type-table)
+                (remove-if-not (lambda (v) (nth-value 1 (gethash v col-type-table)))
+                               (coalton-impl/codegen/transformations:node-variables
+                                test :variable-namespace-only t)))))
+       (union (cons (match-column-var (dtree-literal-if-column tree))
+                    test-col-vars)
+              (union (gethash (dtree-literal-if-then tree) table)
+                     (gethash (dtree-literal-if-else tree) table)
+                     :test #'eq)
+              :test #'eq)))))
 
-(defun analyze-dtree-dag (tree)
+(defun analyze-dtree-dag (tree &optional col-type-table)
   "Count references, record free variables and find joins in one traversal.
 In particular, don't expand a shared row-failure continuation at each edge."
   (declare (type dtree tree))
@@ -728,7 +782,8 @@ In particular, don't expand a shared row-failure continuation at each edge."
                   (let ((idx (dtree-leaf-action-index node)))
                     (incf (gethash idx action-counts 0))
                     (setf (gethash idx action-leaves) node
-                          (gethash node free-vars) (compute-free-column-vars node free-vars))))
+                          (gethash node free-vars)
+                          (compute-free-column-vars node free-vars col-type-table))))
                  ((or dtree-constructor-switch dtree-literal-if)
                   (incf (gethash node node-counts 0))
                   (unless (nth-value 1 (gethash node free-vars))
@@ -741,7 +796,8 @@ In particular, don't expand a shared row-failure continuation at each edge."
                       (dtree-literal-if
                        (walk (dtree-literal-if-then node))
                        (walk (dtree-literal-if-else node))))
-                    (setf (gethash node free-vars) (compute-free-column-vars node free-vars))
+                    (setf (gethash node free-vars)
+                          (compute-free-column-vars node free-vars col-type-table))
                     (push node shared-postorder))))))
       (walk tree)
       (values action-counts
@@ -1038,7 +1094,7 @@ compiling self-calls in the other branches as tail calls."
          (tree (compile-pattern-matrix (list root-col) rows env memo-table field-column-table (make-dtree-fail)))
          (col-type-table (collect-dtree-column-lisp-types tree root-col env)))
     (multiple-value-bind (action-counts action-leaves free-table shared-nodes)
-        (analyze-dtree-dag tree)
+        (analyze-dtree-dag tree col-type-table)
       (let ((arm-fn-table (make-hash-table :test #'eql))
             (node-join-table (make-hash-table :test #'eq))
             (labels-defs nil))

@@ -414,27 +414,50 @@ needs to synthesize those trailing parameters explicitly."
         :rands eta-rands
         :keyword-rands eta-keyword-rands)))))
 
+(defun pattern-constructor-predicate-context (patterns env)
+  "Collect constructor-bound dictionary entries from PATTERNS."
+  (let ((ctor-ctx nil))
+    (labels ((collect-ctor-preds (pat)
+               (typecase pat
+                 (tc:pattern-binding (collect-ctor-preds (tc:pattern-binding-pattern pat)))
+                 (tc:pattern-constructor
+                  (loop :for pred :in (tc:pattern-constructor-predicates pat)
+                        :for name :in (tc:pattern-constructor-dictionary-names pat)
+                        :do (push (cons pred name) ctor-ctx))
+                  (mapc #'collect-ctor-preds (tc:pattern-constructor-patterns pat))))))
+      (mapc #'collect-ctor-preds patterns)
+      (setf ctor-ctx (nreverse ctor-ctx)))
+    (when ctor-ctx
+      (mapcar #'cons
+              (tc:refine-given-superclasses env (mapcar #'car ctor-ctx))
+              (mapcar #'cdr ctor-ctx)))))
+
 (defun pattern-predicate-context (patterns inputs ctx env)
   "View the enclosing dictionaries at the types justified by these patterns."
-  (when ctx
-    (labels ((indexed-p (pat)
-               (typecase pat
-                 (tc:pattern-binding (indexed-p (tc:pattern-binding-pattern pat)))
-                 (tc:pattern-constructor
-                  (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (tc:pattern-constructor-name pat)))
-                      (some #'indexed-p (tc:pattern-constructor-patterns pat)))))))
-      (let ((subs nil) (indexed nil))
-        (loop :for pat :in patterns :for input :in inputs
-              :when (indexed-p pat)
-                :do (setf indexed t
-                          subs (tc:unify-pattern-result subs input
-                                                       (tc:qualified-ty-type (tc:pattern-type pat)) :all)))
-        (when (or subs (and indexed (find-if #'tc:ty-predicate-superclass-evidence ctx :key #'car)))
-          (setf ctx (append (mapcar #'cons
-                                    (tc:refine-given-superclasses env (tc:apply-substitution subs (mapcar #'car ctx)))
-                                    (mapcar #'cdr ctx))
-                            ctx))))))
-  ctx)
+  (let ((ctor-ctx (pattern-constructor-predicate-context patterns env)))
+    (when ctx
+      (labels ((indexed-p (pat)
+                 (typecase pat
+                   (tc:pattern-binding (indexed-p (tc:pattern-binding-pattern pat)))
+                   (tc:pattern-constructor
+                    (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (tc:pattern-constructor-name pat)))
+                        (some #'indexed-p (tc:pattern-constructor-patterns pat)))))))
+        (let ((subs nil) (indexed nil))
+          (loop :for pat :in patterns :for input :in inputs
+                :when (indexed-p pat)
+                  :do (setf indexed t
+                            subs (tc:unify-pattern-result subs input
+                                                         (tc:qualified-ty-type (tc:pattern-type pat)) :all)))
+          (when (or subs
+                    (and (or indexed ctor-ctx)
+                         (find-if #'tc:ty-predicate-superclass-evidence ctx :key #'car)))
+            (setf ctx (append (mapcar #'cons
+                                      (tc:refine-given-superclasses env (tc:apply-substitution subs (mapcar #'car ctx)))
+                                      (mapcar #'cdr ctx))
+                              ctx))))))
+    (if ctor-ctx
+        (append ctor-ctx ctx)
+        ctx)))
 
 (defun positional-pattern-bindings (params inputs)
   "Pair each formal with its incoming type, before any parameter pattern has matched."
@@ -998,12 +1021,14 @@ Returns a `node'.")
                   (lambda (branch)
                     (let* ((pat (tc:node-match-branch-pattern branch))
                            (input (tc:qualified-ty-type (tc:node-type (tc:node-match-expr expr))))
-                           (branch-ctx (pattern-predicate-context (list pat) (list input) ctx env)))
+                           (branch-ctx (pattern-predicate-context (list pat) (list input) ctx env))
+                           (ready-ctx (append (pattern-constructor-predicate-context (list pat) env) ctx)))
                       (make-match-branch
                        :pattern (coalton-impl/codegen/codegen-match:order-pattern-tests
                                  (translate-pattern pat branch-ctx env) input env
                                  (unless (eq ctx branch-ctx)
-                                   (lambda (test prefix) (literal-dictionaries-ready-p test ctx prefix env))))
+                                   (lambda (test prefix &optional pending-vars)
+                                     (literal-dictionaries-ready-p test ready-ctx prefix pending-vars env))))
                        :body (translate-expression (tc:node-match-branch-body branch) branch-ctx env))))
                   (tc:node-match-branches expr)))))
 
@@ -1548,15 +1573,25 @@ Returns a `node'.")
                      :location (source:location pat))
                     ctx env))))))
 
-(defun literal-dictionaries-ready-p (test incoming-ctx prefix env)
+(defun literal-dictionaries-ready-p (test full-ctx prefix pending-vars env)
   "Can this prefix of the pattern justify the exact dictionaries used by TEST?
 A captured dictionary may keep its head even when a hidden field needs a later witness."
-  (let* ((preds (tc:refine-given-superclasses env (tc:apply-substitution prefix (mapcar #'car incoming-ctx))))
+  (when (intersection (coalton-impl/codegen/transformations:node-variables
+                       test :variable-namespace-only t)
+                      pending-vars
+                      :test #'eq)
+    (return-from literal-dictionaries-ready-p nil))
+  (let* ((active-ctx (remove-if (lambda (entry)
+                                  (member (cdr entry) pending-vars :test #'eq))
+                                full-ctx))
+         (preds (tc:refine-given-superclasses
+                 env
+                 (tc:apply-substitution prefix (mapcar #'car active-ctx))))
          (equations (tc:pattern-given-equations env preds)))
     (labels ((projections (node)
                (typecase node
                  (node-local-variable
-                  (loop :for (nil . name) :in incoming-ctx :for pred :in preds
+                  (loop :for (nil . name) :in active-ctx :for pred :in preds
                         :when (eq name (node-variable-value node)) :collect pred))
                  (node-field
                   (loop :for pred :in (projections (node-field-dict node))
@@ -1620,7 +1655,13 @@ A captured dictionary may keep its head even when a hidden field needs a later w
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-constructor-name pat)
        :openings (tc:pattern-constructor-openings pat)
-       :patterns (mapcar (lambda (child) (translate-pattern child ctx env)) (tc:pattern-constructor-patterns pat))))))
+       :patterns (append (loop :for pred :in (tc:pattern-constructor-predicates pat)
+                               :for dict-name :in (tc:pattern-constructor-dictionary-names pat)
+                               :collect (make-pattern-var
+                                         :type (pred-type pred env)
+                                         :name dict-name))
+                         (mapcar (lambda (child) (translate-pattern child ctx env))
+                                 (tc:pattern-constructor-patterns pat)))))))
 
 (defun apply-dicts (expr ctx env)
   "If there are predicates on EXPR, then find the typeclass dictionaries
@@ -1691,8 +1732,11 @@ dictionaries applied."
   (let* ((items (remove-if (lambda (p) (typep p '(or tc:pattern-var tc:pattern-wildcard)))
                            params :key #'third))
          (patterns (loop :for item :in items :collect (translate-pattern (third item) ctx env)))
+         (ready-ctx (append (pattern-constructor-predicate-context (mapcar #'third items) env)
+                            incoming-ctx))
          (dicts (unless (eq ctx incoming-ctx)
-                  (lambda (test prefix) (literal-dictionaries-ready-p test incoming-ctx prefix env)))))
+                  (lambda (test prefix &optional pending-vars)
+                    (literal-dictionaries-ready-p test ready-ctx prefix pending-vars env)))))
     (cond
       ((and (rest items)
             (some (lambda (p) (coalton-impl/codegen/transformations:pattern-contains-gadt-p p env)) patterns))

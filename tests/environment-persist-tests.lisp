@@ -117,7 +117,21 @@
                    "(declare pack-string (String -> Boxed Integer)) (define (pack-string s) (Pack s))")))
       ;; Ordinary ADTs have no GADT evidence contract to invalidate.
       (codegen-test-inspect "(define-type Plain (Item Integer))")
-      (finishes (codegen-test-inspect "(define-type Plain (Item String))")))))
+      (finishes (codegen-test-inspect "(define-type Plain (Item String))"))
+      ;; Changing or reordering constructor constraints invalidates the GADT contract.
+      (codegen-test-inspect
+       "(define-class (C1 :a) (m1 (:a -> Integer)))
+        (define-class (C2 :a) (m2 (:a -> Integer)))
+        (define-type ConstrainedBox
+          (declare PackConstrained ((C1 :a) (C2 :a) => :a -> ConstrainedBox)))")
+      (unless (coalton-impl/settings:coalton-release-p)
+        (dolist (invalid
+                  '("(define-type ConstrainedBox
+                       (declare PackConstrained (C1 :a => :a -> ConstrainedBox)))"
+                    "(define-type ConstrainedBox
+                       (declare PackConstrained ((C2 :a) (C1 :a) => :a -> ConstrainedBox)))"))
+          (signals coalton-impl/redef-detection:incompatible-gadt-redefinition
+            (codegen-test-inspect invalid)))))))
 
 (deftest test-persist-value ()
   "Test that the value environment persists across loads and fasl loads"
@@ -197,6 +211,8 @@
         (uiop:with-temporary-file (:stream out :pathname script :type "lisp")
           (with-standard-io-syntax
             (dolist (form `((require :asdf)
+                            ,@(when asdf:*output-translations-parameter*
+                                `((asdf:initialize-output-translations ',asdf:*output-translations-parameter*)))
                             (asdf:initialize-source-registry
                              '(:source-registry ,@(loop :for dir :in directories :collect `(:directory ,dir))
                                :ignore-inherited-configuration))

@@ -625,7 +625,7 @@ Returns (VALUES CTOR-ENTRY TYPE-ENTRY ARG-NODES)."
            (when (and ctor
                       type
                       (eligible-adt-type-p type)
-                      (= (tc:constructor-entry-arity ctor) (length rands)))
+                      (= (tc:constructor-physical-arity ctor env) (length rands)))
              (values ctor type rands))))))
     ((or node-local-variable node-global-variable)
      (let* ((name (node-variable-value node))
@@ -637,7 +637,7 @@ Returns (VALUES CTOR-ENTRY TYPE-ENTRY ARG-NODES)."
        (when (and ctor
                   type
                   (eligible-adt-type-p type)
-                  (zerop (tc:constructor-entry-arity ctor)))
+                  (zerop (tc:constructor-physical-arity ctor env)))
          (values ctor type nil))))
     (node-lisp
      (alexandria:if-let ((some-arg (inlined-some-operand node)))
@@ -702,7 +702,7 @@ Returns (VALUES CTOR-ENTRY TYPE-ENTRY ARG-NODES)."
        (and ctor
             type
             (single-constructor-type-p type)
-            (= (tc:constructor-entry-arity ctor)
+            (= (tc:constructor-physical-arity ctor env)
                (length (pattern-constructor-patterns pat)))
             (every (lambda (subpat)
                      (irrefutable-pattern-p subpat env))

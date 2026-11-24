@@ -340,6 +340,8 @@ Supports multiple coordinated entrypoints per function:
       (return-from instantiated-constructor-field-types (values nil nil)))
     (let* ((fresh-qual (tc:fresh-inst scheme))
            (ctor-ty (tc:qualified-ty-type fresh-qual)))
+      (when (tc:qualified-ty-predicates fresh-qual)
+        (return-from instantiated-constructor-field-types (values nil nil)))
       (handler-case
           (if (tc:function-type-p ctor-ty)
               (let ((subs (tc:match (tc:function-return-type ctor-ty) target-type)))

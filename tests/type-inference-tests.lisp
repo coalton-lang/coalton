@@ -812,6 +812,225 @@
     (is (codegen-test-eval
          "(== (Tuple (rank-supplied TI) (rank-supplied TS)) (Tuple 37 \"supplied\"))"))))
 
+(deftest test-gadt-constructor-constraints ()
+  (with-codegen-test-environment
+    ;; Compile generic producers and consumers before any concrete instances exist.
+    ;; All PhantomInt variants erase to Integer at runtime, so selecting the
+    ;; unrelated caller dictionary in scope fails visibly by returning 999.
+    (codegen-test-compile
+     "(repr :transparent)
+      (define-type (PhantomInt :tag) (PhantomInt Integer))
+      (define-class (Badge :a) (badge (:a -> Integer)))
+      (define-class (Scale :a) (scale (:a -> Integer)))
+      (define-class (Badge :a => SuperBadge :a))
+      (define-class (ChainFD :a :b (:a -> :b)) (step-fd (:a -> :b)))
+
+      (define-type SomeEqPair
+        (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+
+      (declare pack-pair (Eq :a => :a * :a -> SomeEqPair))
+      (define (pack-pair x y) (PackEqPair x y))
+
+      (declare same-elements (SomeEqPair -> Boolean))
+      (define (same-elements p)
+        (match p
+          ((PackEqPair x y) (== x y))))
+
+      (define-type (EqWitness :a)
+        (declare HasEq (Eq :a => EqWitness :a)))
+
+      (declare eq-with (EqWitness :a * :a * :a -> Boolean))
+      (define (eq-with w x y)
+        (match w
+          ((HasEq) (== x y))))
+
+      (define-type SomeBadgedPair
+        (declare PackBadgedPair (forall (:a) ((Badge :a) (Scale :a) => :a * :a -> SomeBadgedPair))))
+
+      (declare pack-badged (forall (:a) ((Badge :a) (Scale :a) => :a * :a -> SomeBadgedPair)))
+      (define (pack-badged x y) (PackBadgedPair x y))
+
+      (declare pack-badged-higher-order (forall (:a) ((Badge :a) (Scale :a) => :a * :a -> SomeBadgedPair)))
+      (define (pack-badged-higher-order x y)
+        (let ((ctor PackBadgedPair))
+          (ctor x y)))
+
+      (declare eval-badged-pair (Badge :b => SomeBadgedPair * :b -> Integer))
+      (define (eval-badged-pair pair _unrelated)
+        (match pair
+          ((= _whole (PackBadgedPair x y))
+           (let ((combine (fn (z) (+ (badge x) (scale z)))))
+             (combine y)))))
+
+      (define-type (BadgeWitness :a)
+        (declare HasBadge (Badge :a => BadgeWitness :a)))
+
+      (define-type (SuperBadgeWitness :a)
+        (declare HasSuperBadge (SuperBadge :a => SuperBadgeWitness :a)))
+
+      (declare make-badge-witness (Badge :a => Void -> BadgeWitness :a))
+      (define (make-badge-witness) HasBadge)
+
+      (declare eval-badge-witness (Badge :b => BadgeWitness :a * :a * :b -> Integer))
+      (define (eval-badge-witness w x _unrelated)
+        (match w
+          ((HasBadge) (badge x))))
+
+      (declare eval-super-badge-witness (Badge :b => SuperBadgeWitness :a * :a * :b -> Integer))
+      (define (eval-super-badge-witness w x _unrelated)
+        (match w
+          ((HasSuperBadge) (badge x))))
+
+      (declare eval-badge-witness-param (Badge :b => BadgeWitness :a * :a * :b -> Integer))
+      (define (eval-badge-witness-param (HasBadge) x _unrelated)
+        (badge x))
+
+      (define-type SomeNum
+        (declare PackNum (Num :a => :a -> SomeNum)))
+
+      (define-type (NumWitness :a)
+        (declare HasNum (Num :a => NumWitness :a)))
+
+      (declare packed-zero? (SomeNum -> Boolean))
+      (define (packed-zero? p)
+        (match p
+          ((PackNum 0) True)
+          ((PackNum _) False)))
+
+      (declare shared-join-packed-num (Tuple SomeNum Boolean -> Integer))
+      (define (shared-join-packed-num p)
+        (match p
+          ((Tuple (PackNum 1) (True)) 10)
+          ((Tuple (PackNum 2) (False)) 20)
+          (_ 30)))
+
+      (declare witnessed-zero? (:a * NumWitness :a -> Boolean))
+      (define (witnessed-zero? x w)
+        (match (Tuple x w)
+          ((Tuple 0 (HasNum)) True)
+          (_ False)))
+
+      (declare param-witness-add (:a * :a * NumWitness :a -> :a))
+      (define (param-witness-add x y (HasNum)) (+ x y))
+
+      (define-type (SomeChain :c)
+        (declare PackChain ((ChainFD :a :b) (ChainFD :b :c) => :a -> SomeChain :c)))
+
+      (declare run-chain (SomeChain :c -> :c))
+      (define (run-chain p)
+        (match p
+          ((PackChain x) (step-fd (step-fd x)))))
+
+      (define-class (DefVal :a) (def-val :a))
+      (define-type (DefWitness :a)
+        (declare HasDefVal (DefVal :a => DefWitness :a)))
+
+      (declare read-def-witness (DefVal :b => DefWitness :a * :b -> :a))
+      (define (read-def-witness w _unrelated)
+        (let ((r (match w ((HasDefVal) def-val))))
+          r))")
+    ;; Install concrete instances after the generic producers and consumers are compiled.
+    (codegen-test-compile
+     "(define-instance (Badge (PhantomInt Integer))
+        (define (badge (PhantomInt n)) (+ 100 n)))
+      (define-instance (Scale (PhantomInt Integer))
+        (define (scale (PhantomInt n)) (* 10 n)))
+      (define-instance (SuperBadge (PhantomInt Integer)))
+      (define-instance (Badge (PhantomInt String))
+        (define (badge (PhantomInt n)) (+ 200 n)))
+      (define-instance (Scale (PhantomInt String))
+        (define (scale (PhantomInt n)) (* 100 n)))
+      (define-instance (Badge (PhantomInt Boolean))
+        (define (badge (PhantomInt _)) 999))
+      (define-instance (ChainFD Integer String)
+        (define (step-fd n) (into n)))
+      (define-instance (ChainFD String UFix)
+        (define (step-fd s) (coalton/string:length s)))
+      (define-instance (DefVal (PhantomInt Integer))
+        (define def-val (PhantomInt 77)))
+      (define-instance (DefVal (PhantomInt Boolean))
+        (define def-val (PhantomInt 888)))")
+    (is (eq t (codegen-test-eval "(same-elements (pack-pair 4 4))")))
+    (is (eq nil (codegen-test-eval "(same-elements (pack-pair 4 5))")))
+    (is (eq t (codegen-test-eval "(same-elements (pack-pair \"x\" \"x\"))")))
+    (is (eq t (codegen-test-eval "(eq-with HasEq \"a\" \"a\")")))
+    (is (eq nil (codegen-test-eval "(eq-with HasEq \"a\" \"b\")")))
+    (is (eql 123 (codegen-test-eval
+                  "(eval-badged-pair
+                    (pack-badged (the (PhantomInt Integer) (PhantomInt 3))
+                                 (the (PhantomInt Integer) (PhantomInt 2)))
+                    (the (PhantomInt Boolean) (PhantomInt 0)))")))
+    (is (eql 504 (codegen-test-eval
+                  "(eval-badged-pair
+                    (pack-badged-higher-order (the (PhantomInt String) (PhantomInt 4))
+                                              (the (PhantomInt String) (PhantomInt 3)))
+                    (the (PhantomInt Boolean) (PhantomInt 0)))")))
+    (is (eql 107 (codegen-test-eval
+                  "(eval-badge-witness
+                    (make-badge-witness)
+                    (the (PhantomInt Integer) (PhantomInt 7))
+                    (the (PhantomInt Boolean) (PhantomInt 0)))")))
+    (is (eql 109 (codegen-test-eval
+                  "(eval-super-badge-witness
+                    HasSuperBadge
+                    (the (PhantomInt Integer) (PhantomInt 9))
+                    (the (PhantomInt Boolean) (PhantomInt 0)))")))
+    (is (eql 205 (codegen-test-eval
+                  "(eval-badge-witness-param
+                    HasBadge
+                    (the (PhantomInt String) (PhantomInt 5))
+                    (the (PhantomInt Boolean) (PhantomInt 0)))")))
+    (is (eq t (codegen-test-eval "(packed-zero? (PackNum (the Integer 0)))")))
+    (is (eq nil (codegen-test-eval "(packed-zero? (PackNum (the Integer 3)))")))
+    (is (eql 10 (codegen-test-eval "(shared-join-packed-num (Tuple (PackNum (the Integer 1)) True))")))
+    (is (eql 30 (codegen-test-eval "(shared-join-packed-num (Tuple (PackNum (the Integer 1)) False))")))
+    (is (eql 20 (codegen-test-eval "(shared-join-packed-num (Tuple (PackNum (the Integer 2)) False))")))
+    (is (eq t (codegen-test-eval "(witnessed-zero? (the Integer 0) HasNum)")))
+    (is (eq nil (codegen-test-eval "(witnessed-zero? (the Integer 5) HasNum)")))
+    (is (eql 15 (codegen-test-eval "(param-witness-add (the Integer 7) (the Integer 8) HasNum)")))
+    (is (eql 3 (codegen-test-eval "(run-chain (PackChain (the Integer 123)))")))
+    (is (eql 77 (codegen-test-eval
+                 "(match (read-def-witness (the (DefWitness (PhantomInt Integer)) HasDefVal)
+                                           (the (PhantomInt Boolean) (PhantomInt 0)))
+                    ((PhantomInt n) n))"))))
+  ;; Reject missing producer constraints, sibling arm leaks, and cross-package comparisons.
+  (dolist (invalid
+            '("(define-type SomeEqPair (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+               (declare bad-pack (:a * :a -> SomeEqPair))
+               (define (bad-pack x y) (PackEqPair x y))"
+              "(define-type SomeEqPair (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+               (declare bad-pack-val (Void -> (:a * :a -> SomeEqPair)))
+               (define (bad-pack-val) PackEqPair)"
+              "(define-type (EqWitness :a) (declare HasEq (Eq :a => EqWitness :a)))
+               (declare bad-witness (Void -> EqWitness :a))
+               (define (bad-witness) HasEq)"
+              "(define-type (MaybeEq :a)
+                 (declare YesEq (Eq :a => MaybeEq :a))
+                 (declare NoEq (MaybeEq :a)))
+               (declare bad-sibling (MaybeEq :a * :a * :a -> Boolean))
+               (define (bad-sibling w x y)
+                 (match w ((YesEq) (== x y)) ((NoEq) (== x y))))"
+              "(define-type SomePair
+                 (declare PackEq (Eq :a => :a * :a -> SomePair))
+                 (declare PackAny (:a * :a -> SomePair)))
+               (declare bad-existential-sibling (SomePair -> Boolean))
+               (define (bad-existential-sibling p)
+                 (match p ((PackEq x y) (== x y)) ((PackAny x y) (== x y))))"
+              "(define-type SomeEqPair (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+               (declare bad-cross (SomeEqPair * SomeEqPair -> Boolean))
+               (define (bad-cross p q)
+                 (match (Tuple p q)
+                   ((Tuple (PackEqPair x _) (PackEqPair y _)) (== x y))))"
+              "(define-type SomeEqPair (declare PackEqPair (Eq :a => :a * :a -> SomeEqPair)))
+               (declare bad-nested-cross (SomeEqPair * SomeEqPair -> Boolean))
+               (define (bad-nested-cross p q)
+                 (match p
+                   ((PackEqPair x _)
+                    (match q
+                      ((PackEqPair y _) (== x y))))))"))
+    (signals tc:tc-error
+      (check-coalton-types invalid))))
+
 (deftest test-gadt-independent-existentials-have-distinct-diagnostic-names ()
   (handler-case
       (progn

@@ -1328,42 +1328,53 @@ nullary constructor). A struct is nominal, with a constructor and named
 fields. With the GADT spelling each constructor instead has an independently
 scoped signature
 \[
-        K:\forall\bar b.\,\bar t(\bar b)\arr D\,\bar u(\bar b).
+        K:\forall\bar b.\,\bar Q(\bar b)\Rightarrow
+          \bar t(\bar b)\arr D\,\bar u(\bar b).
                                                         \tag{K}
 \]
 Some indices may be concrete, repeated, or structured; some binders may
-occur only in fields. The signature must return exactly one instance of
-the defining nominal type, of kind $*$; fields are positional. A nullary
-constructor uses the bare type, not a nullary function returning it.
-The implementation rejects mixed ordinary/signed constructor lists and
-predicate contexts \emph{on (K)}; it does not automatically pack class
-dictionaries for existential variables. A polymorphic field can itself
-carry a qualified $\forall$. At construction the caller instantiates all
-binders, checks the fields and obtains $D\,\bar u$ under the same
-instantiation. There is no mystery type chosen by the consumer.
+occur only in fields or predicates. The signature must return exactly one
+instance of the defining nominal type, of kind $*$; fields are positional.
+A nullary constructor uses the bare result type, not a nullary function
+returning it, and remains source-nullary even when $\bar Q$ is nonempty.
+The implementation rejects mixed ordinary/signed constructor lists; each
+constructor signature is checked under the standard kind, scope, ambiguity,
+and functional-dependency rules, and a polymorphic field can itself carry a
+qualified $\forall$. At construction the caller instantiates all binders
+together, supplies dictionaries for $\bar Q(\bar b)$, checks the visible
+fields $\bar t(\bar b)$, and obtains $D\,\bar u(\bar b)$ under the same
+instantiation. There is no mystery type chosen by the consumer. Physical
+dictionary slots precede the visible fields in the constructor's runtime
+representation while remaining hidden from source arity and pattern syntax;
+unconstrained constructors keep their layout unchanged. Explicit
+representations that cannot carry hidden dictionary slots
+(\code{:enum}, \code{:transparent}, and \code{:native}) reject constrained
+constructors.
 
 For elimination write
 \[
-       \Delta;E\vdash p:t\ \rightsquigarrow\ (\Delta_p,E_p,\Gamma_p).
+       \Delta;E\vdash p:t\ \rightsquigarrow\ (\Delta_p,E_p,G_p,\Gamma_p).
 \]
 This is the \emph{meaning} of a pattern assuming that its runtime test
 succeeded. A wildcard adds nothing; a variable binds the input type; an
-as-pattern binds the whole value as well as its subpattern. A literal
-tests a value of the input type. For $K(\bar p)$ against $D\,\bar v$, open
-(K) at fresh local names $\bar b$ and add $\bar v=\bar u(\bar b)$ for
-the fields and continuation only; then check the field patterns at
-$\bar t(\bar b)$ in this same row. For a branch with outer result $r$ the
-meaning is
+as-pattern binds the whole value as well as its subpattern and retains its
+subpattern's evidence. A literal tests a value of the input type. For
+$K(\bar p)$ against $D\,\bar v$, open (K) at fresh local names $\bar b$
+and add $\bar v=\bar u(\bar b)$ to $E_p$ and the stored dictionaries
+$\bar Q(\bar b)$ to $G_p$ for the dependent subpatterns and continuation
+only; then check the field patterns at $\bar t(\bar b)$ in this same row.
+For a branch with outer result $r$ the meaning is
 \[
- \rrule{Arm}{\Delta;E\vdash p:t\rightsquigarrow(\Delta_p,E_p,\Gamma_p)
-          \quad \Delta,\Delta_p;E,E_p;\Gamma,\Gamma_p\vdash e:r}
-      {\Delta;E;\Gamma\vdash (p\mapsto e):t\Rightarrow r}.
+ \rrule{Arm}{\Delta;E\vdash p:t\rightsquigarrow(\Delta_p,E_p,G_p,\Gamma_p)
+          \quad \Delta,\Delta_p;E,E_p;G,G_p;\Gamma,\Gamma_p\vdash e:r}
+      {\Delta;E;G;\Gamma\vdash (p\mapsto e):t\Rightarrow r}.
 \]
-Names introduced by opening are bound in this premise, not in $t,r$ or a
-sibling premise. An obligation about such a name cannot be moved outside
-as an implicit universally quantified predicate. Constructor return indices
-affect compatible type instances, not the identity of the enclosing type
-constructor. E.g.\ for $K:\forall h.\,h\arr D\,(\List\,h)$, matching
+Names and dictionaries introduced by opening are bound in this premise, not
+in $t,r$ or a sibling premise; two independently matched values open
+distinct local names. An obligation about such a name cannot be moved
+outside as an implicit universally quantified predicate. Constructor return
+indices affect compatible type instances, not the identity of the enclosing
+type constructor. E.g.\ for $K:\forall h.\,h\arr D\,(\List\,h)$, matching
 $D\,a$ gives $a=\List\,h$. One can return something of type $\List\,h$
 under the \emph{outer} name $a$; one cannot return an $h$ under an
 arbitrary caller-chosen type.
@@ -1391,15 +1402,19 @@ representative back to a skolem. Otherwise ordinary unification must
 justify the head. Only a constructor test has this authority; a term,
 a literal test and a wildcard do not.
 \item Open each constructor at the exact field count. To describe
-\src{open-constructor-pattern}, let $V$ be the variables of the incoming
+\src{open-constructor-pattern}, instantiate the constructor's fields,
+result and predicates (together with their superclass evidence) at the same
+fresh binder variables. Let $V$ be the variables of the incoming
 substituted input, and $P$ the substitution after the constructor's result
 has been unified with it. Of the nonrigid variables in the substituted
-constructor type and predicates, seal those \emph{not equal to an element of}
-$[Pv:v\in V]$ as fresh existential skolems $H$. This is not set subtraction
-of $\fv(PV)$: an unnamed component of a newly exposed $\List\,h$ may still
+constructor type and the superclass closure of its predicates, seal those
+\emph{not equal to an element of} $[Pv:v\in V]$ as fresh existential
+skolems $H$. This is not set subtraction of $\fv(PV)$: an unnamed component
+of a newly exposed $\List\,h$ or a hidden superclass witness may still
 need sealing. Store the constructor binder positions that open to sealed
-names on this occurrence. Children may use permitted row evidence, including
-such witnesses from enclosing constructors.
+names on this occurrence, and record the refined constructor predicates on
+the typed constructor pattern. Children may use permitted row evidence,
+including such witnesses from enclosing constructors.
 \item A row uses one queue for all columns, also for parameters. Choose a
 GADT-containing pending pattern with a known nominal input head if possible,
 otherwise the first witness, otherwise the first item. Replace a visited
@@ -1408,8 +1423,9 @@ the type at which a sibling literal is to be tested. Typed field and parameter
 order remains source order. Rename residual index representatives back into
 the outer vocabulary when possible. Call the resulting pattern substitution
 $P$ and retain $E_p=\{v=Pv : v\in\fv(S_0t),\,v\ne Pv\}$ plus enclosing
-evidence. Normalize the branch environment, its scoped annotations and
-enclosing dictionaries by $P$ before checking the body.
+evidence. Normalize the branch environment, its scoped annotations, the
+recovered constructor predicates $G_p$, and enclosing dictionaries by $P$
+(recording $H$ as unnamed fixed scope variables) before checking the body.
 \item Check the body at the locally refined expected result, with the
 following exception. Use the contextual return target when applicable.
 If the resulting expectation under $S_0$ is a variable not occurring in
@@ -1458,27 +1474,32 @@ it does not allow substituting this arm's $a=\Int$ into another arm.
 \end{proof}
 
 \paragraph{Predicate and existential discharge.}
-Suppose an arm checks a use requiring $C\,a$ and the enclosing dictionary
-has type $C\,b$. A constructor proving $a=b$ can make these the \emph{same}
-predicate locally; merely being of class $C$ cannot. Obligations mentioning
-hidden types are solved in this scope. Repeatedly solve fields whose
-receiver mentions a hidden type. For hidden predicates try supplied
-dictionaries and their superclasses, then stably selected instance
-prerequisites; keep unproved predicates at a repeated goal or instance-path
-depth 64. Nonhidden prerequisites can still go outward. After substitution,
-\src{check-pattern-scope} rejects a hidden variable in the outward result,
-supplied extra parameter types being checked, an old substitution range,
-an unsolved predicate, or either endpoint of a pending accessor.
+Suppose an arm checks a use requiring $C\,a$ and the enclosing or
+constructor-recovered dictionary has type $C\,b$. A constructor proving
+$a=b$ can make these the \emph{same} predicate locally; merely being of
+class $C$ cannot. Before discharging branch predicates, fresh flexible
+branch unknowns determined by the arm's given predicates via functional
+dependencies are solved by one-way matching against those givens.
+Obligations mentioning hidden types are solved in this scope. Repeatedly
+solve fields whose receiver mentions a hidden type. For hidden predicates
+try supplied and constructor-recovered dictionaries and their superclasses,
+then stably selected instance prerequisites; keep unproved predicates at a
+repeated goal or instance-path depth 64. Nonhidden prerequisites not
+already entailed by the arm's given predicates can still go outward. After
+substitution, \src{check-pattern-scope} rejects a hidden variable in the
+outward result, supplied extra parameter types being checked, an old
+substitution range, an unsolved predicate, or either endpoint of a pending
+accessor.
 
-Let $A\,k\,x\,y$ declare $k\to x\,y$. Suppose supplied dictionaries
-$F\,q\,x$ and $S\,k\,y$ expose superclass fields $A\,q\,x\,h_1$ and
-$A\,k\,h_2\,y$. Inside the success arm of $\mathsf{Same}\,q\,k$
-the determinants coincide. On an indexed match or positional parameter
-edge, \src{refine-given-superclasses} uses the supplied predicates'
-stored superclass fields at the local types. When hidden field evidence
-is present it materializes missing projections and marks the available
-dictionaries for use on this edge. From these predicates and their actual
-fields, \src{pattern-given-equations} computes $E_G$ by pairwise FD
+Let $A\,k\,x\,y$ declare $k\to x\,y$. Suppose supplied or
+constructor-recovered dictionaries $F\,q\,x$ and $S\,k\,y$ expose
+superclass fields $A\,q\,x\,h_1$ and $A\,k\,h_2\,y$. Inside the success arm
+of $\mathsf{Same}\,q\,k$ the determinants coincide. On an indexed match or
+positional parameter edge, \src{refine-given-superclasses} uses the
+available predicates' stored superclass fields at the local types,
+materializing missing projections and marking the available dictionaries as
+\src{pattern-given} for use on this edge. From these predicates and their
+actual fields, \src{pattern-given-equations} computes $E_G$ by pairwise FD
 improvement to a fixed point. Equal determinants justify equality of each
 declared output, including two distinct names fixed by the caller.
 These are equations for \emph{comparing evidence}, not assignments in the
@@ -1498,17 +1519,20 @@ original dictionary. Under the hypotheses of Lemma~\ref{lem:fd} each
 FD comparison preserves every ground solution, hence representative
 choice does not affect ground equality. This does not assert uniqueness
 of dictionary values or completeness of inference. Retained result
-obligations use their saved givens and index equations. No conversion
-is passed to instance selection, a sibling arm, or the caller's solver.
-One partial dictionary alone does not let the caller choose the other output.
+obligations use their saved givens (including nonhidden constructor-local
+givens of that arm) and index equations. No conversion is passed to
+instance selection, a sibling arm, or the caller's solver. One partial
+dictionary alone does not let the caller choose the other output.
 
-An overloaded literal can occur \emph{before} the key witness in source
-order. Its operand type and even the head of its captured dictionary may
-already be known while the type of its numeric superclass field is not.
-The row scheduler checks the selected accessor path from the incoming
-dictionary using only the equations established by the current pattern
-prefix. Thus it need not run an effectful comparison on a path where its
-required key equality has not been established.
+An overloaded literal can occur \emph{before} the key or dictionary witness
+in source order. Its operand type and even the head of its captured
+dictionary may already be known while a constructor-bound dictionary or the
+type of its numeric superclass field is not. The row scheduler defers any
+literal test that references a not-yet-matched constructor's dictionary
+binding and checks the selected accessor path from the active dictionaries
+using only the equations established by the current pattern prefix. Thus it
+need not run an effectful comparison on a path where its required
+dictionary or key equality has not been established.
 
 When the result itself is being chosen, a predicate with fresh variables
 may depend on a not-yet-known result. At an explicit binding or an expected
@@ -1679,22 +1703,23 @@ GADT. The metatheory below fixes the signature throughout a run.
 
 \subsection{The indexed, single-result core}
 Fix a signature of free nominal datatypes, distinct atomic base types for
-primitive literals, and constructor signatures (K) whose parameters
-bind all the variables in their field and result types. All type
-parameters here have kind $*$. Types are first-order trees
-$a,\ B,\ D\,\bar t,\ (\bar t\arr t)$; in this notation nominal applications
-are saturated, arrows are closed and the result is always one value.
-Recursive nominal declarations are fine; there is no term-level recursion,
-recursive let, cyclic value construction or fixed-point primitive in this
-core. Terms are variables, fixed-type constants, uncurried lambdas
-with variable parameters, exactly saturated calls, saturated constructor
-introductions, and cases with distinct constructor tags and variable
-fields. Write a nullary constructor as $K()$. Parameters in a binding
-list are distinct. There is no type-level computation except finite
-tree equality. No overloaded literals, class methods, keyword arguments,
-generalization of local bindings, nonlocal control, host code, mutation,
-or optimizer rewrites occur in this result. The omitted constructs keep
-the checking rules above; they do not acquire a semantics by erasure.
+primitive literals, and unconstrained constructor signatures (K)
+($\bar Q=\varnothing$) whose parameters bind all the variables in their
+field and result types. All type parameters here have kind $*$. Types are
+first-order trees $a,\ B,\ D\,\bar t,\ (\bar t\arr t)$; in this notation
+nominal applications are saturated, arrows are closed and the result is
+always one value. Recursive nominal declarations are fine; there is no
+term-level recursion, recursive let, cyclic value construction or
+fixed-point primitive in this core. Terms are variables, fixed-type
+constants, uncurried lambdas with variable parameters, exactly saturated
+calls, saturated constructor introductions, and cases with distinct
+constructor tags and variable fields. Write a nullary constructor as
+$K()$. Parameters in a binding list are distinct. There is no type-level
+computation except finite tree equality. No overloaded literals, class
+methods, constructor-local constraints, keyword arguments, generalization
+of local bindings, nonlocal control, host code, mutation, or optimizer
+rewrites occur in this result. The omitted constructs keep the checking
+rules above; they do not acquire a semantics by erasure.
 
 For a kinded variable context $\Delta$, let $\mathrm{Types}(\Delta)$
 denote the well-kinded core types with free variables in $\Delta$.

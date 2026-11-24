@@ -221,9 +221,10 @@
                                                        (pattern-constructor-patterns pattern)))
          :test #'tc:ty=))
 
-(defun codegen-pattern->typechecker-pattern (pattern)
+(defun codegen-pattern->typechecker-pattern (pattern env)
   "Convert codegen PATTERN into a typechecker pattern."
   (declare (type pattern pattern)
+           (type tc:environment env)
            (values tc:pattern &optional))
   (labels ((qualify (type)
              (declare (type tc:ty type)
@@ -252,10 +253,14 @@
                 (tc:make-pattern-wildcard
                  :type (qualify (pattern-type pattern))))
                (pattern-constructor
-                (tc:make-pattern-constructor
-                 :type (qualify (pattern-type pattern))
-                 :name (pattern-constructor-name pattern)
-                 :patterns (mapcar #'convert (pattern-constructor-patterns pattern)))))))
+                (let* ((ctor (tc:lookup-constructor env (pattern-constructor-name pattern)))
+                       (arity (tc:constructor-entry-arity ctor))
+                       (children (pattern-constructor-patterns pattern))
+                       (visible (nthcdr (- (length children) arity) children)))
+                  (tc:make-pattern-constructor
+                   :type (qualify (pattern-type pattern))
+                   :name (pattern-constructor-name pattern)
+                   :patterns (mapcar #'convert visible)))))))
     (convert pattern)))
 
 (defun patterns-exhaustive-p (patterns type env)
@@ -266,6 +271,6 @@
            (values boolean &optional))
   (pe:exhaustive-patterns-p
    (mapcar #'pe:collapse-binding-patterns
-           (mapcar #'codegen-pattern->typechecker-pattern patterns))
+           (mapcar (lambda (p) (codegen-pattern->typechecker-pattern p env)) patterns))
    env
    type))
