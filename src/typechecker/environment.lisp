@@ -1157,17 +1157,40 @@ are not yet exposed in PRED. These observations guide search, never selection."
       (mapc #'visit (ty-predicate-types head) (ty-predicate-types pred)))
     distances))
 
+(defun instance-input-progress-p (instance pred ancestors height-cache)
+  "Did the gap between any two carried inputs narrow since each visit in ANCESTORS?"
+  (declare (type ty-class-instance instance)
+           (type ty-predicate pred)
+           (type ty-predicate-list ancestors)
+           (type hash-table height-cache)
+           (values boolean &optional))
+  (destructuring-bind (head . parameters) (instance-dictionary-signature instance)
+    (let ((carried (intersection (type-variables head) (type-variables parameters) :test #'ty=)))
+      (when (cdr carried)
+        (flet ((gaps (goal)
+                 (let* ((inputs (apply-substitution (predicate-match head goal) carried))
+                        (heights (mapcar (lambda (ty) (type-height ty height-cache)) inputs)))
+                   ;; A prerequisite can move a carried input into a tested position.
+                   ;; Keep both directions: trading places is different from moving
+                   ;; farther apart on the same side.
+                   (loop :for (h . rest) :on heights
+                         :append (loop :for k :in rest
+                                       :collect (max 0 (- h k))
+                                       :collect (max 0 (- k h)))))))
+          (let ((current (gaps pred)))
+            (every (lambda (old) (some #'< current (gaps old))) ancestors)))))))
+
 (defun instance-equality-progress-p (env instance pred stack height-cache)
-  "Is PRED closer to a competing head equality than on each prior visit?"
+  "Has a tested equality or one of its possible inputs improved on each prior visit?"
   (declare (type environment env)
            (type (or ty-class-instance symbol) instance)
            (type ty-predicate pred)
            (type list stack)
            (type hash-table height-cache)
            (values boolean &optional))
-  (let ((others (unless (symbolp instance)
-                  (remove instance (lookup-class-instances env (ty-predicate-class pred))
-                          :test #'eq))))
+  (when (symbolp instance)
+    (return-from instance-equality-progress-p nil))
+  (let ((others (remove instance (lookup-class-instances env (ty-predicate-class pred)) :test #'eq)))
     (flet ((distances (goal)
              (loop :for other :in others
                    :append (head-equality-distances (ty-class-instance-predicate other)
@@ -1175,13 +1198,15 @@ are not yet exposed in PRED. These observations guide search, never selection."
            (closer-p (new old)
              (and new (or (null old) (< new old)))))
       (let ((current (distances pred)))
-        ;; The head fixes the number of distances, each a natural number
-        ;; (or not yet observed). Require a new low in at least one position
-        ;; against *each* ancestor so oscillation cannot keep a cycle alive.
-        (and (some #'identity current)
-             (loop :for (old-inst . old) :in stack
-                   :never (and (eq instance old-inst)
-                               (not (some #'closer-p current (distances old))))))))))
+        (when (some #'identity current)
+          ;; Against each ancestor, at least one of a fixed number of nonnegative
+          ;; distances must strictly decrease. A plateau alone is not progress.
+          (let ((stalled (loop :for (old-inst . old) :in stack
+                               :when (and (eq instance old-inst)
+                                          (not (some #'closer-p current (distances old))))
+                                 :collect old)))
+            (or (null stalled)
+                (instance-input-progress-p instance pred stalled height-cache))))))))
 
 (defun instance-recursion-blocked-p (env instance pred stack fixed-vars max-given-height
                                      &optional height-cache)

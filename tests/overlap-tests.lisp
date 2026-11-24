@@ -156,6 +156,45 @@
       (define (meet-packed x y) (packed? (Tuple (Tuple y x) (Tuple y y))))")
     (is (overlap-eval "(meet-packed 0 Nil)"))))
 
+(deftest overlapping-instance-arguments-converge-in-strides ()
+  (with-overlap-environment
+    (overlap-compile
+     "(define-class (Stride :a :b :pad)
+        (stride (:a * :b * :pad -> Integer)))
+      (overlap)
+      (define-instance (Stride (List :pad) (List (List :b)) (List (List :a))
+                        => Stride :a :b :pad)
+        (define (stride a b pad)
+          (+ 1 (stride (Cons pad Nil) (Cons (Cons b Nil) Nil) (Cons (Cons a Nil) Nil)))))
+      (overlap)
+      (define-instance (Stride :same :same :pad)
+        (define (stride _ _ _) 0))
+      (declare finite-stride (List (List Integer) * Integer * List (List Integer) -> Integer))
+      (define (finite-stride a b pad) (stride a b pad))")
+    (is (= 3 (overlap-eval "(finite-stride Nil 0 Nil)")))
+    ;; Which operand is deeper can change before the equality is reached.
+    (is (= 5 (overlap-eval "(stride (the Integer 0) (the (List Integer) Nil)
+                                    (the (List (List (List (List Integer)))) Nil))")))))
+
+(deftest overlapping-instance-arguments-stay-apart ()
+  (with-overlap-environment
+    (overlap-compile
+     "(define-class (Lockstep :a :b :pad) (lockstep (:a * :b * :pad -> Integer)))
+      (overlap)
+      (define-instance (Lockstep (List :a) (List :b) (List (List :pad)) => Lockstep :a :b :pad)
+        (define (lockstep a b pad)
+          (+ 1 (lockstep (Cons a Nil) (Cons b Nil) (Cons (Cons pad Nil) Nil)))))
+      (overlap)
+      (define-instance (Lockstep :same :same :pad) (define (lockstep _ _ _) 0))")
+    (is (equal "Unknown instance"
+               (handler-case
+                   (progn
+                     (overlap-compile
+                      "(declare never-meet (List Integer * Integer * Integer -> Integer))
+                       (define (never-meet a b pad) (lockstep a b pad))")
+                     nil)
+                 (tc:tc-error (c) (source:message c)))))))
+
 (deftest overlap-keeps-functional-dependencies-consistent ()
   (signals tc:tc-error
     (check-coalton-types

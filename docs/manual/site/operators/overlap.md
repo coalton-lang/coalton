@@ -50,7 +50,9 @@ another instance.
 A repeated variable in a head requires the types at its occurrences to be
 identical. For example, `Convert :a :a` is more specific than `Convert :a :b`.
 A recursive prerequisite can reach the more-specific instance even when both
-types grow along the way. Recursion itself does not supply a dictionary.
+types grow along the way. They need not get closer at every step: a
+prerequisite can move another type argument into one of the tested positions.
+Recursion itself does not supply a dictionary.
 
 Sometimes two matching heads are incomparable: neither is more specific than
 the other. These definitions can coexist, but a use matching both is ambiguous
