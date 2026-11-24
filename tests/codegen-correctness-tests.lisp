@@ -1580,10 +1580,13 @@
                   (known (definition (intern "KNOWN") program)))
               (is (= 1 (count-tree-occurrences reader classify)))
               (walk-form classify nil)
-              ;; A known single-constructor input still projects without a
-              ;; tag test in release; globally retaining every test isn't a fix.
+              ;; Only annotated release code omits the tag check for a known
+              ;; single-constructor input; otherwise it retains the fallback.
               (is (= 1 (count-tree-occurrences reader known)))
-              (is (= (if (coalton-impl/settings:coalton-release-p) 0 1)
+              (is (= (if (and (coalton-impl/settings:coalton-release-p)
+                              coalton-impl/settings:*emit-type-annotations*)
+                         0
+                         1)
                      (count-tree-occurrences `(quote ,class) known))))))))))
 
 (deftest codegen-sunk-literal-match-refines-its-dictionary ()
