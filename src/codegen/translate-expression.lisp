@@ -423,14 +423,16 @@ needs to synthesize those trailing parameters explicitly."
                  (tc:pattern-constructor
                   (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (tc:pattern-constructor-name pat)))
                       (some #'indexed-p (tc:pattern-constructor-patterns pat)))))))
-      (let ((subs nil))
+      (let ((subs nil) (indexed nil))
         (loop :for pat :in patterns :for input :in inputs
               :when (indexed-p pat)
-                :do (setf subs (tc:unify-pattern-result subs input
+                :do (setf indexed t
+                          subs (tc:unify-pattern-result subs input
                                                        (tc:qualified-ty-type (tc:pattern-type pat)) :all)))
-        (when subs
-          (setf ctx (append (loop :for (pred . name) :in ctx
-                                  :collect (cons (tc:apply-substitution subs pred) name))
+        (when (or subs (and indexed (find-if #'tc:ty-predicate-superclass-evidence ctx :key #'car)))
+          (setf ctx (append (mapcar #'cons
+                                    (tc:refine-given-superclasses env (tc:apply-substitution subs (mapcar #'car ctx)))
+                                    (mapcar #'cdr ctx))
                             ctx))))))
   ctx)
 
@@ -1001,7 +1003,7 @@ Returns a `node'.")
                        :pattern (coalton-impl/codegen/codegen-match:order-pattern-tests
                                  (translate-pattern pat branch-ctx env) input env
                                  (unless (eq ctx branch-ctx)
-                                   (lambda (test) (literal-dictionary-equalities test ctx env))))
+                                   (lambda (test prefix) (literal-dictionaries-ready-p test ctx prefix env))))
                        :body (translate-expression (tc:node-match-branch-body branch) branch-ctx env))))
                   (tc:node-match-branches expr)))))
 
@@ -1546,23 +1548,33 @@ Returns a `node'.")
                      :location (source:location pat))
                     ctx env))))))
 
-(defun literal-dictionary-equalities (test incoming-ctx env)
-  "Which captured dictionaries does TEST use at a type not yet established
-on entry to this pattern? Its operand annotation alone cannot tell: the
-dictionary for one abstract index may be used to compare another."
-  (let ((pairs nil))
-    (traverse test
-              (list (action (:before node-local-variable var)
-                      (let* ((name (node-variable-value var))
-                             (bindings (loop :for b :in incoming-ctx :when (eq name (cdr b)) :collect b))
-                             (required (node-type var)))
-                        (when (and bindings
-                                   (not (some (lambda (b) (tc:ty= (pred-type (car b) env) required))
-                                              bindings)))
-                          (pushnew (list (pred-type (caar bindings) env) required) pairs
-                                   :test (lambda (x y) (every #'tc:ty= x y)))))
-                      (values))))
-    (loop :for (given required) :in pairs :append (list given required))))
+(defun literal-dictionaries-ready-p (test incoming-ctx prefix env)
+  "Can this prefix of the pattern justify the exact dictionaries used by TEST?
+A captured dictionary may keep its head even when a hidden field needs a later witness."
+  (let* ((preds (tc:refine-given-superclasses env (tc:apply-substitution prefix (mapcar #'car incoming-ctx))))
+         (equations (tc:pattern-given-equations env preds)))
+    (labels ((projections (node)
+               (typecase node
+                 (node-local-variable
+                  (loop :for (nil . name) :in incoming-ctx :for pred :in preds
+                        :when (eq name (node-variable-value node)) :collect pred))
+                 (node-field
+                  (loop :for pred :in (projections (node-field-dict node))
+                        :for class := (tc:lookup-class env (tc:ty-predicate-class pred))
+                        :for field := (cdr (assoc (node-field-name node) (tc:ty-class-superclass-map class)))
+                        :for index := (position field (tc:ty-class-superclass-dict class) :key #'cdr)
+                        :collect (nth (or index (util:coalton-bug "Unknown superclass field ~S" node))
+                                      (tc:context-superclasses class pred))))))
+             (check (node)
+               (let ((available (projections node)))
+                 (when available
+                   (let ((required (tc:apply-substitution equations (tc:apply-substitution prefix (node-type node)))))
+                     (unless (some (lambda (p) (tc:ty= (tc:apply-substitution equations (pred-type p env)) required))
+                                   available)
+                       (return-from literal-dictionaries-ready-p nil)))))))
+      (traverse test (list (action (:before node-local-variable n) (check n) (values))
+                           (action (:before node-field n) (check n) (values))))
+      t)))
 
 (defgeneric translate-pattern (pat ctx env)
   (:documentation "Translate the typechecker AST pattern to the codegen AST.")
@@ -1680,7 +1692,7 @@ dictionaries applied."
                            params :key #'third))
          (patterns (loop :for item :in items :collect (translate-pattern (third item) ctx env)))
          (dicts (unless (eq ctx incoming-ctx)
-                  (lambda (test) (literal-dictionary-equalities test incoming-ctx env)))))
+                  (lambda (test prefix) (literal-dictionaries-ready-p test incoming-ctx prefix env)))))
     (cond
       ((and (rest items)
             (some (lambda (p) (coalton-impl/codegen/transformations:pattern-contains-gadt-p p env)) patterns))

@@ -2371,8 +2371,10 @@ Returns (VALUES PREDS ACCESSORS SUBS)."
                           (branch-predicate-obligation-evidence obligation) subs)
         :for pred := (tc:apply-substitution evidence
                                            (tc:apply-substitution subs (branch-predicate-obligation-predicate obligation)))
-        :for givens := (tc:apply-substitution evidence
-                                             (tc:apply-substitution subs (branch-predicate-obligation-givens obligation)))
+        :for givens := (tc:refine-given-superclasses
+                        env (tc:apply-substitution evidence
+                                                   (tc:apply-substitution subs
+                                                                          (branch-predicate-obligation-givens obligation))))
         :unless (tc:entail env givens pred)
           :do (check-pattern-scope (branch-predicate-obligation-hidden obligation) nil tc:*unit-type*
                                    (list pred) nil nil (source:location pred))
@@ -3586,7 +3588,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (if renamings (discharge-pattern-renamings renamings local-subs) local-subs))
                (outer-givens *enclosing-predicates*)
                (*enclosing-predicates* (if abstraction-gadt-p
-                                           (tc:apply-substitution subs-after-positional-patterns outer-givens)
+                                           (tc:refine-given-superclasses
+                                            (tc-env-env env)
+                                            (tc:apply-substitution subs-after-positional-patterns outer-givens))
                                            outer-givens)))
 
           (setf local-subs subs-after-positional-patterns)
@@ -3900,7 +3904,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                       (branch-index-renamings input-types base-subs pat-subs) pat-subs))
                       (tc:apply-substitution pat-subs branch-env)
                       (let* ((outer-givens *enclosing-predicates*)
-                             (*enclosing-predicates* (tc:apply-substitution pat-subs outer-givens))
+                             (*enclosing-predicates* (tc:refine-given-superclasses
+                                                       (tc-env-env env) (tc:apply-substitution pat-subs outer-givens)))
                              (result-context (contextual-return-result-type expected-type base-subs))
                              (expected (tc:apply-substitution base-subs (or result-context expected-type)))
                              (givens (append (branch-input-evidence input-types base-subs pat-subs)

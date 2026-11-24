@@ -16,6 +16,9 @@
    #:ty-predicate-superclass-evidence   ; ACCESSOR
    #:ty-predicate-p                     ; FUNCTION
    #:ty-predicate-list                  ; TYPE
+   #:pattern-given                      ; STRUCT
+   #:make-pattern-given                 ; CONSTRUCTOR
+   #:pattern-given-p                    ; FUNCTION
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
@@ -53,6 +56,9 @@
   ;; Instantiated fields of a dictionary in scope, not part of the predicate's type.
   (superclass-evidence nil         :type list                      :read-only t)
   (location nil                    :type (or source:location null) :read-only t))
+
+(defstruct (pattern-given (:include ty-predicate))
+  "A supplied dictionary in the local types of a successful pattern edge.")
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -233,7 +239,7 @@
   (rebuild-if-changed (subst-list type)
       ((types (ty-predicate-types type))
        (evidence (ty-predicate-superclass-evidence type)))
-    (make-ty-predicate
+    (funcall (if (pattern-given-p type) #'make-pattern-given #'make-ty-predicate)
      :class (ty-predicate-class type)
      :types types
      :superclass-evidence evidence

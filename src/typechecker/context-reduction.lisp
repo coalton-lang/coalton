@@ -67,13 +67,14 @@ Returns (PREDS FOUNDP INSTANCE)"
            (type boolean check-superclasses-p)
            (values boolean))
   (let* ((super (mapcan (lambda (p) (superclass-closure env p)) preds))
+         (equations (pattern-given-equations env preds))
          (fixed-vars (type-variables (append (cons pred preds)
                                              (mapcar #'cdr initial-stack))))
          (height-cache (make-hash-table :test #'eq))
          (max-given-height (loop :for p :in (cons pred super)
                                  :maximize (predicate-height p height-cache))))
     (labels ((entail-pred (pred stack)
-               (or (true (member pred super :test #'type-predicate=))
+               (or (some (lambda (given) (given-predicate= pred given equations)) super)
                    (multiple-value-bind (inst-preds found inst)
                        (by-inst env pred)
                      (and found
@@ -95,7 +96,9 @@ Returns (PREDS FOUNDP INSTANCE)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean &optional))
-  (true (member pred (mapcan (lambda (p) (superclass-closure env p)) preds) :test #'type-predicate=)))
+  (let ((equations (pattern-given-equations env preds)))
+    (some (lambda (given) (given-predicate= pred given equations))
+          (mapcan (lambda (p) (superclass-closure env p)) preds))))
 
 (defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"

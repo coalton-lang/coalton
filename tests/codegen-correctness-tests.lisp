@@ -1732,6 +1732,15 @@
       (define (compare-linked p) (match p ((Tuple 1 (EqualTag)) True) (_ False)))
       (declare compare-tickets (Tuple Ticket (Link Ticket Ticket) -> Boolean))
       (define (compare-tickets p) (compare-linked p))
+      (define-class (Column :k :x (:k -> :x)))
+      (define-class ((Column :k :x) (Num :x) => HasNumber :k))
+      (define-class (Column :k :x => NamesColumn :k :x))
+      (declare compare-column ((HasNumber :q) (NamesColumn :k :x) => :x * Link :q :k -> Boolean))
+      (define (compare-column x link)
+        (match (Tuple x link) ((Tuple 1 (EqualTag)) True) (_ False)))
+      (define-instance (Column Unit Ticket))
+      (define-instance (HasNumber Unit))
+      (define-instance (NamesColumn Unit Ticket))
       (declare pivot (Tuple Ticket Boolean -> Integer))
       (define (pivot p)
         (match p
@@ -1764,6 +1773,12 @@
     (is (not (codegen-test-eval "(compare-tickets (Tuple (Stamp 0) AnyTag))")))
     (is (null *codegen-events*))
     (is (codegen-test-eval "(compare-tickets (Tuple (Stamp 0) EqualTag))"))
+    (is (equal '(1 9) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    ;; HasNumber itself need not change type; its hidden Num field needs the witness.
+    (is (not (codegen-test-eval "(compare-column (Stamp 0) (the (Link Unit Unit) AnyTag))")))
+    (is (null *codegen-events*))
+    (is (codegen-test-eval "(compare-column (Stamp 0) (the (Link Unit Unit) EqualTag))"))
     (is (equal '(1 9) (reverse *codegen-events*)))
     (setf *codegen-events* nil)
     ;; Factoring the Boolean in the first row must not suppress the earlier

@@ -652,6 +652,54 @@
                         '("Untouchable existential type escapes GADT pattern scope" "Type mismatch")
                         :test #'string=))))))))
 
+(deftest gadt-equality-combines-partial-superclass-evidence ()
+  (with-codegen-test-environment
+    ;; Compile the consumers before installing any instances: the superclass
+    ;; dictionary must come from the two givens, not from a concrete key.
+    (codegen-test-compile
+     "(define-class (Fields :k :x :y (:k -> :x :y)) (fields (:k -> Tuple :x :y)))
+      (define-class (Fields :k :x :y => FirstView :k :x))
+      (define-class (Fields :k :x :y => SecondView :k :y))
+      (define-type (SameKey :q :k) (declare KeysMatch (SameKey :i :i)))
+      (declare by-match ((FirstView :k :x) (SecondView :k :y) => SameKey :q :k * :q -> Tuple :x :y))
+      (define (by-match w value) (match w ((KeysMatch) (fields value))))
+      (declare by-views ((FirstView :q :x) (SecondView :k :y) (FirstView :k :z)
+                         => SameKey :q :k * :q * :z -> Tuple :x :y))
+      (define (by-views w v _z) (match w ((KeysMatch) (fields v))))
+      (declare by-crossed-views ((FirstView :q :x) (SecondView :k :y) (FirstView :k :z) (SecondView :q :w)
+                                 => SameKey :q :k * :q * :z * :w -> Tuple :x :y))
+      (define (by-crossed-views proof v _z _w) (match proof ((KeysMatch) (fields v))))
+      (declare apply-reader ((FirstView :k :x) (SecondView :k :y)
+                  => :k * (forall (:a :b :x :y) ((SecondView :b :y) (FirstView :a :x)
+                           => SameKey :a :b * :a -> Tuple :x :y)) -> Tuple :x :y))
+      (define (apply-reader value f) (f KeysMatch value))
+      (declare by-reader ((FirstView :k :x) (SecondView :k :y) => :k -> Tuple :x :y))
+      (define (by-reader value)
+        (apply-reader value (fn ((KeysMatch) k) (let ((pair (fields k))) pair))))")
+    (signals tc:tc-error
+      (codegen-test-compile
+       "(declare missing (FirstView :k :x => SameKey :q :k * :q -> Tuple :x :y))
+        (define (missing w v) (match w ((KeysMatch) (fields v))))"))
+    (signals tc:tc-error
+      (codegen-test-compile
+       "(declare conflated ((FirstView :k :x) (SecondView :k :y) => SameKey :q :k * :q * :y -> Tuple :x :x))
+        (define (conflated w v _y) (match w ((KeysMatch) (fields v))))"))
+    (signals tc:tc-error
+      (codegen-test-compile
+       "(define-type (Link :a :b) (declare Yes (Link :i :i)) (declare Unknown (Link :a :b)))
+        (declare leak ((FirstView :q :x) (SecondView :k :y) => Link :q :k * :q -> Tuple :x :y))
+        (define (leak w v) (match w ((Yes) (fields v)) ((Unknown) (fields v))))"))
+    (codegen-test-compile
+     "(define-type BlueKey Blue) (define-type GreenKey Green)
+      (define-instance (Fields BlueKey Integer Integer) (define (fields _) (Tuple 11 13)))
+      (define-instance (FirstView BlueKey Integer)) (define-instance (SecondView BlueKey Integer))
+      (define-instance (Fields GreenKey Integer Integer) (define (fields _) (Tuple 31 37)))
+      (define-instance (FirstView GreenKey Integer)) (define-instance (SecondView GreenKey Integer))")
+    (is (codegen-test-eval "(== (noinline (by-match KeysMatch Blue)) (Tuple 11 13))"))
+    (is (codegen-test-eval "(== (noinline (by-views KeysMatch Blue (the Integer 0))) (Tuple 11 13))"))
+    (is (codegen-test-eval "(== (noinline (by-crossed-views KeysMatch Green 0 0)) (Tuple 31 37))"))
+    (is (codegen-test-eval "(== (noinline (by-reader Green)) (Tuple 31 37))"))))
+
 (deftest test-gadt-result-proofs-specialize-the-elaborated-arm ()
   (with-codegen-test-environment
     (codegen-test-compile

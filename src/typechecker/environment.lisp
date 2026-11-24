@@ -14,6 +14,9 @@
   (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
+   #:make-substitution
+   #:substitution-from
+   #:substitution-to
    #:substitution-list
    #:compose-substitution-lists)
   (:import-from
@@ -257,6 +260,9 @@
    #:collect-fundep-vars                    ; FUNCTION
    #:given-superclass-expansions            ; FUNCTION
    #:instantiate-context-superclasses       ; FUNCTION
+   #:refine-given-superclasses              ; FUNCTION
+   #:pattern-given-equations                ; FUNCTION
+   #:given-predicate=                       ; FUNCTION
    #:context-superclasses                   ; FUNCTION
    #:*given-superclass-expansions*          ; VARIABLE
    #:update-instance-fundeps                ; FUNCTION
@@ -2705,19 +2711,57 @@ This function will return the single functional dependency
   (loop :for (from . to) :in (collect-fundeps env preds scope)
         :collect (cons (type-variables from) (type-variables to))))
 
-(defun context-fundep-substitutions (env preds)
+(defun context-fundep-substitutions (env preds &key (superclasses #'instantiate-superclasses)
+                                                    (unify-outputs #'unify-list))
   "Derive equalities from PREDS and their superclasses, without selecting instances."
   (declare (type environment env)
            (type ty-predicate-list preds)
            (values substitution-list &optional))
   (labels ((expand (pred)
              (let ((class (lookup-class env (ty-predicate-class pred))))
-               (cons pred (mapcan #'expand (instantiate-superclasses class pred))))))
+               (cons pred (mapcan #'expand (funcall superclasses class pred))))))
     ;; Pairwise improvement only unifies existing variables.
     (loop :with expanded := (mapcan #'expand preds)
           :for subs := nil :then new-subs
-          :for new-subs := (improve-predicate-fundeps env expanded subs)
+          :for new-subs := (improve-predicate-fundeps env expanded subs unify-outputs)
           :when (equalp subs new-subs) :return subs)))
+
+(defun refine-given-superclasses (env preds)
+  "Keep the actual dictionary fields in scope for this pattern's proof lookups."
+  (declare (type environment env) (type ty-predicate-list preds)
+           (values ty-predicate-list &optional))
+  (unless (some #'ty-predicate-superclass-evidence preds)
+    (return-from refine-given-superclasses preds))
+  (loop :for p :in (instantiate-context-superclasses env preds)
+        :collect (if (pattern-given-p p) p
+                     (make-pattern-given :class (ty-predicate-class p) :types (ty-predicate-types p)
+                                         :superclass-evidence (ty-predicate-superclass-evidence p)
+                                         :location (source:location p)))))
+
+(defun pattern-given-equations (env preds)
+  "Equalities justified by the supplied pattern dictionaries alone.
+For evidence comparison only: never apply these to inference or instance selection."
+  (let ((givens (remove-if-not #'pattern-given-p preds)))
+    (when givens
+      (flet ((equate-outputs (subs left right)
+               (loop :for l :in left :for r :in right
+                     :do (setf subs (unify-given subs l r :all))
+                     :finally (return subs))))
+        (handler-case
+            (context-fundep-substitutions env givens
+                                          :superclasses #'context-superclasses
+                                          :unify-outputs #'equate-outputs)
+          ;; An inconsistent context is not a proof of an arbitrary conversion.
+          (context-fundep-conflict () nil))))))
+
+(defun given-predicate= (wanted given equations)
+  "Compare a request with a real field; neither predicate supplies new equations."
+  (or (type-predicate= wanted given)
+      (and equations
+           (eq (ty-predicate-class wanted) (ty-predicate-class given))
+           (= (length (ty-predicate-types wanted)) (length (ty-predicate-types given)))
+           (every #'ty= (apply-substitution equations (ty-predicate-types wanted))
+                        (apply-substitution equations (ty-predicate-types given))))))
 
 (defun check-fundep-agreement (env class-vars fundep new old)
   "Check one dependency of two instances, freshened apart as (head . context)."
@@ -3119,7 +3163,7 @@ that variable, so this falls back to the full instance list."
         (coalton-internal-type-error ()
           (values subs nil))))))
 
-(defun improve-predicate-fundeps (env preds subs)
+(defun improve-predicate-fundeps (env preds subs &optional (unify-outputs #'unify-list))
   "Relate every pair of predicates whose determinants are equal under SUBS."
   (loop :for remaining :on preds
         :for pred := (first remaining)
@@ -3137,9 +3181,9 @@ that variable, so this falls back to the full instance list."
                                        (project-elements (fundep-from fundep) class-vars types)
                                        (project-elements (fundep-from fundep) class-vars other-types))
                             (setf subs
-                                  (unify-list subs
-                                              (project-elements (fundep-to fundep) class-vars types)
-                                              (project-elements (fundep-to fundep) class-vars other-types))))))
+                                  (funcall unify-outputs subs
+                                           (project-elements (fundep-to fundep) class-vars types)
+                                           (project-elements (fundep-to fundep) class-vars other-types))))))
                     (coalton-internal-type-error ()
                       (error 'context-fundep-conflict
                              :first-pred (apply-substitution subs pred)

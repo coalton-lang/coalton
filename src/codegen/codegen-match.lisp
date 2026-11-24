@@ -395,7 +395,7 @@ when the other is empty."
 (defun constructor-family (pat env)
   (tc:constructor-entry-constructs (tc:lookup-constructor env (pattern:pattern-constructor-name pat))))
 
-(defun match-test-state (pat column givens env dictionary-equalities)
+(defun match-test-state (pat column givens env dictionaries-ready-p)
   (etypecase pat
     (pattern:pattern-wildcard nil)
     (pattern:pattern-constructor
@@ -411,13 +411,11 @@ when the other is empty."
          ((and actual (tc:tycon-p head) (not (eq actual (tc:tycon-name head))))
           :impossible)
          ((and (tc:ty= expected (match-column-type column))
-               (loop :for (a b) :on (and dictionary-equalities (pattern:pattern-literal-test pat)
-                                         (funcall dictionary-equalities (pattern:pattern-literal-test pat)))
-                     :by #'cddr
-                     :always (tc:ty= (tc:apply-substitution givens a) (tc:apply-substitution givens b))))
+               (or (not dictionaries-ready-p) (not (pattern:pattern-literal-test pat))
+                   (funcall dictionaries-ready-p (pattern:pattern-literal-test pat) givens)))
           :ready))))))
 
-(defun next-match-column (patterns columns givens env &optional dictionary-equalities)
+(defun next-match-column (patterns columns givens env &optional dictionaries-ready-p)
   "Select the first ready test. Defer only a test whose operand or dictionary
 awaits evidence, not unrelated tests between it and its witness. A row's
 constructor name is not evidence about its own operand."
@@ -425,7 +423,7 @@ constructor name is not evidence about its own operand."
     (loop :for p :in patterns :for c :in columns :for i :from 0
           :for order := (or (pattern:pattern-test-order p) i)
           :when (or (null best-order) (< order best-order))
-            :do (let ((state (match-test-state p c givens env dictionary-equalities)))
+            :do (let ((state (match-test-state p c givens env dictionaries-ready-p)))
                   (when state
                     (setf best (and (eq state :ready) i)
                           best-order order))))
@@ -450,7 +448,7 @@ equations, the other columns are reused untouched."
              idx (constructor-specialization-fields spec))
             (if new (tc:compose-substitution-lists new givens) givens))))
 
-(defun walk-pattern-row (patterns columns env dictionary-equalities visit)
+(defun walk-pattern-row (patterns columns env dictionaries-ready-p visit)
   "Visit one test at a time with the evidence available on entry to that
 test. Return bindings and final evidence only on the success path."
   (let ((table (make-hash-table :test #'equal))
@@ -462,7 +460,7 @@ test. Return bindings and final evidence only on the success path."
                core)))
       (setf patterns (mapcar #'peel patterns columns))
       (loop :until (every #'pattern:pattern-wildcard-p patterns)
-            :for idx := (next-match-column patterns columns givens env dictionary-equalities)
+            :for idx := (next-match-column patterns columns givens env dictionaries-ready-p)
             :unless idx :do (return-from walk-pattern-row (values nil nil nil))
             :do (let ((p (nth idx patterns)) (col (nth idx columns)))
                   (etypecase p
@@ -522,19 +520,19 @@ body may bind its variables *after* unwinding."
               (loop :for b :in bindings :collect (tc:lisp-type (tc:apply-substitution givens (match-binding-type b)) env))
               possible))))
 
-(defun order-pattern-tests (pat type env dictionary-equalities)
+(defun order-pattern-tests (pat type env dictionaries-ready-p)
   "Fix observable test order before specializing or inlining a copy."
   (unless (and (pattern:pattern-has-user-test-p pat)
                (coalton-impl/codegen/transformations:pattern-contains-gadt-p pat env))
     (return-from order-pattern-tests pat))
   (let ((order (make-hash-table :test #'eq)))
-    (walk-pattern-row (list pat) (list (make-match-column :var (gensym) :type type)) env dictionary-equalities
+    (walk-pattern-row (list pat) (list (make-match-column :var (gensym) :type type)) env dictionaries-ready-p
                       (lambda (p col spec givens)
                         (declare (ignore col spec givens))
                         (setf (gethash p order) (hash-table-count order))))
     (pattern:map-pattern pat :order-function (lambda (p) (gethash p order)))))
 
-(defun lower-parameter-row (patterns vars types body env dictionary-equalities)
+(defun lower-parameter-row (patterns vars types body env dictionaries-ready-p)
   "Lower correlated positional patterns without allocating a tuple. Emit
 shallow matches so that even a nested field in another parameter can provide
 the next witness. Their scrutinees have *incoming*, not branch-final, types."
@@ -543,7 +541,7 @@ the next witness. Their scrutinees have *incoming*, not branch-final, types."
         (result-type (ast:node-type body)))
     (multiple-value-bind (bindings givens possible)
         (walk-pattern-row
-         patterns columns env dictionary-equalities
+         patterns columns env dictionaries-ready-p
          (lambda (p col spec givens)
            (let ((test (if spec
                            (pattern:make-pattern-constructor
