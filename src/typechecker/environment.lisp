@@ -1110,9 +1110,82 @@
                          (coalton-internal-type-error () nil)))))
     (apply-substitution super-subs raw-supers)))
 
+(defun type-disagreement-height (left right height-cache)
+  "Measure the remaining height mismatch after cancelling paired type structure.
+This is a progress measure, not a test for type equality."
+  (declare (type ty left right)
+           (type hash-table height-cache)
+           (values fixnum &optional))
+  (let ((memo (make-hash-table :test #'equal)))
+    (labels ((measure (left right)
+               (let ((ls (type-children left))
+                     (rs (type-children right)))
+                 (cond
+                   ((and ls (eq (class-of left) (class-of right)) (= (length ls) (length rs)))
+                    (loop :for l :in ls :for r :in rs :maximize (distance l r)))
+                   ((and (null ls) (null rs) (ty= left right)) 0)
+                   (t (max (type-height left height-cache) (type-height right height-cache))))))
+             (distance (left right)
+               (if (eq left right)
+                   0
+                   (let ((key (cons left right)))
+                     (or (gethash key memo)
+                         (setf (gethash key memo) (measure left right)))))))
+      (distance left right))))
+
+(defun head-equality-distances (head pred height-cache)
+  "One distance per repeated variable occurrence in HEAD; NIL if its operands
+are not yet exposed in PRED. These observations guide search, never selection."
+  (declare (type ty-predicate head pred)
+           (type hash-table height-cache)
+           (values list &optional))
+  (let ((bindings nil)
+        (distances nil))
+    (labels ((visit (pattern ty)
+               (cond
+                 ((tyvar-p pattern)
+                  (let ((first (assoc pattern bindings :test #'ty=)))
+                    (if first
+                        (push (and ty (cdr first)
+                                   (type-disagreement-height (cdr first) ty height-cache))
+                              distances)
+                        (push (cons pattern ty) bindings))))
+                 (t
+                  (loop :with children := (and ty (type-children ty))
+                        :for child :in (type-children pattern)
+                        :do (visit child (pop children)))))))
+      (mapc #'visit (ty-predicate-types head) (ty-predicate-types pred)))
+    distances))
+
+(defun instance-equality-progress-p (env instance pred stack height-cache)
+  "Is PRED closer to a competing head equality than on each prior visit?"
+  (declare (type environment env)
+           (type (or ty-class-instance symbol) instance)
+           (type ty-predicate pred)
+           (type list stack)
+           (type hash-table height-cache)
+           (values boolean &optional))
+  (let ((others (unless (symbolp instance)
+                  (remove instance (lookup-class-instances env (ty-predicate-class pred))
+                          :test #'eq))))
+    (flet ((distances (goal)
+             (loop :for other :in others
+                   :append (head-equality-distances (ty-class-instance-predicate other)
+                                                    goal height-cache)))
+           (closer-p (new old)
+             (and new (or (null old) (< new old)))))
+      (let ((current (distances pred)))
+        ;; The head fixes the number of distances, each a natural number
+        ;; (or not yet observed). Require a new low in at least one position
+        ;; against *each* ancestor so oscillation cannot keep a cycle alive.
+        (and (some #'identity current)
+             (loop :for (old-inst . old) :in stack
+                   :never (and (eq instance old-inst)
+                               (not (some #'closer-p current (distances old))))))))))
+
 (defun instance-recursion-blocked-p (env instance pred stack fixed-vars max-given-height
                                      &optional height-cache)
-  "Return T when selecting INSTANCE for PRED repeats an identical goal or exceeds the growth bound."
+  "Stop on a repeated goal, or on growth with no progress around the cycle."
   (declare (type environment env)
            (type (or ty-class-instance symbol) instance)
            (type ty-predicate pred)
@@ -1121,25 +1194,29 @@
            (type fixnum max-given-height)
            (type (or null hash-table) height-cache)
            (values boolean &optional))
-  (unless (find instance stack :key #'car :test #'eq)
+  (unless (assoc instance stack)
     (return-from instance-recursion-blocked-p nil))
   (let* ((height-cache (or height-cache (make-hash-table :test #'eq)))
          (sentinel (make-variable))
          (key (predicate-key pred fixed-vars sentinel))
-         (height (predicate-height pred height-cache))
-         (max-target-height (+ max-given-height
-                               (if (symbolp instance)
-                                   0
-                                   (max-class-instance-head-height
-                                    env
-                                    (ty-predicate-class pred)
-                                    height-cache)))))
-    (loop :for (prev-inst . prev-pred) :in stack
-          :thereis (and (eq instance prev-inst)
-                        (or (ty-scheme= key (predicate-key prev-pred fixed-vars sentinel))
-                            (and (> height (max max-target-height
-                                                (predicate-height prev-pred height-cache)))
-                                 (predicate-embeds-p prev-pred pred fixed-vars height-cache)))))))
+         (height (predicate-height pred height-cache)))
+    (or (loop :for (old-inst . old) :in stack
+              :thereis (and (eq instance old-inst)
+                            (ty-scheme= key (predicate-key old fixed-vars sentinel))))
+        (and (> height (+ max-given-height
+                          (if (symbolp instance)
+                              0
+                              (max-class-instance-head-height env (ty-predicate-class pred)
+                                                              height-cache))))
+             (loop :for (old-inst . old) :in stack
+                   :thereis (and (eq instance old-inst)
+                                 (> height (predicate-height old height-cache))
+                                 (predicate-embeds-p old pred fixed-vars height-cache)))
+             ;; A different class on this path may be approaching its base
+             ;; case. Check every step back to the last use of INSTANCE.
+             (loop :for ((inst . goal) . history) :on (acons instance pred stack)
+                   :never (instance-equality-progress-p env inst goal history height-cache)
+                   :until (eq (caar history) instance))))))
 
 (defstruct expansion-frame
   (depth            0                         :type fixnum            :read-only t)
