@@ -55,12 +55,18 @@
 (defun tc-env-parser-env (env)
   (declare (type tc-env env)
            (values partial-type-env &optional))
-  (let ((partial-env (make-partial-type-env :env (tc-env-env env))))
+  (let ((table (make-hash-table :test #'eq))
+        (refinements nil))
     (maphash
-     (lambda (name tyvar)
-       (setf (gethash name (partial-type-env-ty-table partial-env)) tyvar))
+     (lambda (name type)
+       ;; Kind inference expects a variable at a lexical binder. Substitute
+       ;; its branch-local meaning after parsing, not into the parser's syntax.
+       (cond ((tc:tyvar-p type) (setf (gethash name table) type))
+             (t (let ((var (tc:make-variable :kind (tc:kind-of type) :source-name name)))
+                  (setf (gethash name table) var)
+                  (push (tc:make-substitution :from var :to type) refinements)))))
      (tc-env-typevar-table env))
-    partial-env))
+    (make-partial-type-env :env (tc-env-env env) :ty-table table :refinements refinements)))
 
 (defun tc-env-extend-type-variable-scope (env tyvars &key hidden)
   (declare (type tc-env env)
@@ -79,11 +85,7 @@
                  :typevar-table typevar-table)))
 
 (defun tc-env-shadow-definition (env name scheme)
-  "Return a copy of ENV where NAME resolves to SCHEME.
-
-This is used when checking an explicitly typed binding so recursive
-references within that binding reuse the same instantiated scoped
-type variables instead of re-instantiating the declared scheme."
+  "Return a copy of ENV where NAME resolves to SCHEME."
   (declare (type tc-env env)
            (type symbol name)
            (type tc:ty-scheme scheme)

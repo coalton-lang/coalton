@@ -6,207 +6,106 @@
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/environment)
   (:local-nicknames
+   (#:subs #:coalton-impl/typechecker/substitutions)
+   (#:unify #:coalton-impl/typechecker/unify)
    (#:util #:coalton-impl/util))
   (:export
    #:lisp-type))
 
 (in-package #:coalton-impl/typechecker/lisp-type)
 
-(defun lisp-type= (x y)
-  (and (subtypep x y)
-       (subtypep y x)))
+;; These standard library types do not exist when the compiler is built.
+(defun complex-tycon-p (name)
+  (and (find-package "COALTON/MATH/COMPLEX")
+       (eq name (find-symbol "COMPLEX" "COALTON/MATH/COMPLEX"))))
 
-;;; This is a list of Coalton tycon names that (1) have a finite
-;;; number of specialized representations, and (2) won't yet exist
-;;; when this file is first compiled.
+(defun lisparray-tycon-p (name)
+  (and (find-package "COALTON/LISPARRAY")
+       (eq name (find-symbol "LISPARRAY" "COALTON/LISPARRAY"))))
 
-;;; Complex
-(defun complex-tycon-p (tycon)
-  (if (find-package "COALTON/MATH/COMPLEX")
-      (eq tycon (find-symbol "COMPLEX" "COALTON/MATH/COMPLEX"))
-      nil))
+(defun application-size (ty)
+  (if (tapp-p ty)
+      (+ 1 (application-size (tapp-from ty)) (application-size (tapp-to ty)))
+      1))
 
-(defvar *specialized-complex-part-types-considered*
-  '(cl:single-float
-    cl:double-float))
-
-;;; Simple Arrays
-(defun lisparray-tycon-p (tycon)
-  (if (find-package "COALTON/LISPARRAY")
-      (eq tycon (find-symbol "LISPARRAY" "COALTON/LISPARRAY"))
-      nil))
-
-
-;;;
-;;; Lisp types for coalton types
-;;;
-
-(defgeneric lisp-type (ty env)
-  (:documentation "Returns the corresponding lisp type for the type of the given node.")
-
-  (:method ((ty tyvar) env)
-    (declare (ignore env))
-    ;; Since lisp does not have the notion of type variables, emit a top type
-    't)
-
-  (:method ((ty tycon) env)
-    (let*
-        ((tcon-name (tycon-name ty))
-         (type-entry (lookup-type env tcon-name :no-error t)))
-
-      (cond
-        ((eq ty *keyword-frame-type*)
-         'list)
-        ;; If the type is unknown then assume it exists at runtime
-        ((null type-entry)
-         tcon-name)
-
-        (t
-         (type-entry-runtime-type type-entry)))))
-
-  (:method ((ty function-ty) env)
-    (declare (ignore ty env))
-    'function)
-
-  (:method ((ty forall-ty) env)
-    (if (forall-ty-predicates ty)
-        'function
-        (lisp-type (forall-ty-body ty) env)))
-
-  (:method ((ty result-ty) env)
-    (let ((output-types (result-ty-output-types ty)))
-      (cond
-        ;; Capturing a zero-output expression in an ordinary value slot
-        ;; yields CL's primary-value default of NIL.
-        ((null output-types)
-         'null)
-        ;; Single-output result packs are runtime-compatible with their
-        ;; component type when stored in a value slot.
-        ((null (rest output-types))
-         (lisp-type (first output-types) env))
-        (t
-         (util:coalton-bug "Unable to produce a single lisp type for multiple-value result ~S"
-                           ty)))))
-
-  (:method ((ty tapp) env)
-    (cond
-      ;; If we are a function, emit a function type
-      ((function-type-p ty)
-       'function)
-
-      ((typep (tapp-from ty) 'tycon)
-       (let ((from (tycon-name (tapp-from ty)))
-             (to   (tapp-to ty)))
-         (cond
-           ;; First we deal with specialized parametric types.
-           ;;
-           ;; (Complex :t)
-           ((complex-tycon-p from)
-            (let ((lisp-to (lisp-type to env)))
+(defun lisp-type (ty env &optional incomplete-types)
+  "Return a Lisp type containing every representation of TY. INCOMPLETE-TYPES
+are nominal definitions in an SCC whose representations are not installed yet."
+  (labels
+      ((representation (ty seen)
+         ;; The second value says whether the first is also a known storage
+         ;; specifier. Arrays are invariant in their upgraded element type:
+         ;; (SIMPLE-ARRAY T (*)) does not contain specialized float arrays.
+         (typecase ty
+           ((or tyvar tgen) (values 't nil))
+           ((or tycon tapp)
+            (destructuring-bind (head &rest args) (flatten-type ty)
+              (let ((name (and (tycon-p head) (tycon-name head))))
+                (cond
+                  ((or (null name) (member name incomplete-types))
+                   (values 't nil))
+                  ((eq head *keyword-frame-type*)
+                   (values 'list t))
+                  ((function-type-p ty)
+                   (values 'function t))
+                  ((and args (complex-tycon-p name))
+                   (cond
+                     ((ty= (first args) *single-float-type*)
+                      (values '(complex single-float) t))
+                     ((ty= (first args) *double-float-type*)
+                      (values '(complex double-float) t))
+                     (t
+                      (values `(or number ,name) nil))))
+                  ((and args (lisparray-tycon-p name))
+                   (multiple-value-bind (element known-p) (representation (first args) seen)
+                     (values `(simple-array ,(if known-p element '*) (*)) known-p)))
+                  (t
+                   (let ((entry (lookup-type env name :no-error t)))
+                     (cond
+                       ((null entry)
+                        ;; Compiler-generated nominal Lisp types.
+                        (values name t))
+                       ((type-entry-newtype entry)
+                        (transparent-representation ty entry seen))
+                       (t
+                        (values (type-entry-runtime-type entry) t)))))))))
+           (function-ty (values 'function t))
+           (forall-ty
+            (if (forall-ty-predicates ty)
+                (values 'function t)
+                (representation (forall-ty-body ty) seen)))
+           (result-ty
+            (let ((outputs (result-ty-output-types ty)))
               (cond
-                ((member lisp-to
-                         *specialized-complex-part-types-considered*
-                         :test #'lisp-type=)
-                 `(cl:complex ,lisp-to))
+                ((null outputs) (values 'null t))
+                ((null (rest outputs)) (representation (first outputs) seen))
                 (t
-                 ;; We can use FROM directly since it'll be the name
-                 ;; of the Complex tycon, which matches the Lisp type
-                 ;; exactly.
-                 `(cl:or cl:number ,from)))))
+                 (util:coalton-bug "Unable to produce a single lisp type for multiple-value result ~S"
+                                   ty)))))
+           (ty-scheme (representation (fresh-inst ty) seen))
+           (qualified-ty
+            (if (qualified-ty-predicates ty)
+                (values 'function t)
+                (representation (qualified-ty-type ty) seen)))
+           (t (util:coalton-bug "Unable to produce lisp type for ~S" ty))))
 
-           ;; (LispArray :t)
-           ((lisparray-tycon-p from)
-            ;; Subtle observation: We don't want to recursively call
-            ;; LISP-TYPE on a TYVAR, because that will resolve to
-            ;; `cl:t`, which isn't the correct type of
-            ;; arbitrarily-typed arrays.
-            (cond
-              ((or
-                ;; (LispArray :t)
-                (typep to 'tyvar)
-                ;; (LispArray (Complex :t))
-                (and (typep to 'tapp)
-                     (typep (tapp-from to) 'tycon)
-                     (complex-tycon-p (tycon-name (tapp-from to)))
-                     (typep (tapp-to to) 'tyvar)))
-               `(cl:simple-array cl:* (cl:*)))
-              (t
-               `(cl:simple-array ,(lisp-type to env) (cl:*)))))
-
-           ;; When FROM is a transparent type, and we got a specialized type,
-           ;; we propagate parameterization to the inner type.
-           ((and (not (typep to 'tyvar))
-                 (try-recurse-transparent-type from to env)))
-
-
-           ;; Otherwise we fall back.
-           (t
-            (lisp-type (tapp-from ty) env)))))
-
-      ;; Otherwise, emit the applied type
-      (t
-       ;; Our underlying representation of types does not have any
-       ;; parameterization on coalton type parameters so we can just
-       ;; recurse down to the base tycon.
-       (lisp-type (tapp-from ty) env))))
-
-  (:method ((ty ty) env)
-    (declare (ignore env))
-    (util:coalton-bug "Unable to produce lisp type for ~S" ty))
-
-  ;; Allow for calling with other types
-  (:method ((ty ty-scheme) env)
-    (lisp-type (fresh-inst ty) env))
-  (:method ((ty qualified-ty) env)
-    (if (qualified-ty-predicates ty)
-        'function
-        (lisp-type (qualified-ty-type ty) env))))
-
-
-(defun try-recurse-transparent-type (from parameter env)
-  "Called when taking a lisp-type of a parameterized type, where a
-concrete type is given to the parameter.  For example, a type `(Foo
-:t)` is defined, and we try to take a lisp-type of `(Foo UFix)`.  The
-`FROM` argument gets the type `Foo` and the `parameter` argument gets
-the type `UFix`.
-
-There is a special opportunity of optimization when `Foo` is defined
-as a transparent type, e.g. `(repr :transparent) (define-type (Foo
-:t) (Content (Lisparray :t)))`.  In that case, `(Foo UFix)` can have a
-Lisp type `(cl:simple-array cl:fixnum)`, which allows Lisp compiler to
-optimize further.  We check the conditions and returns a specialized
-Lisp type if possible.
-
-If we can't get a specialized Lisp type, this returns nil, and let the
-fallback branch take care of it.
-"
-  (labels ((transparent-type? (from)
-             (alexandria:when-let (entry (lookup-type env from :no-error t))
-               (eq (type-entry-explicit-repr entry) ':transparent)))
-           (reveal-underlying-type (from)
-             "If `from` type satisfies the optimizable condition, returns two
-values: the 'inner' type (wrappee type) and the 'outer' type (wrapper
-type)."
-             (let ((v (lookup-value-type env from :no-error t)))
-               (when (typep v 'ty-scheme)
-                 (let ((qt (qualified-ty-type (ty-scheme-type v))))
-                   ;; In transparent types, we have this in QT.
-                   ;; (Arrow <innter-type>) -> <outer-type>
-                   (when (function-type-p qt)
-                     (values (function-type-from qt)
-                             (function-type-to qt))))))))
-    (and (transparent-type? from)
-         (multiple-value-bind (inner outer) (reveal-underlying-type from)
-           (cond ((and (typep inner 'tycon)
-                       (typep outer 'tycon))
-                  (lisp-type inner env))
-                 ((and (typep inner 'tapp)
-                       (typep outer 'tapp)
-                       (typep (tapp-to inner) 'tgen)
-                       (eq (tapp-to inner) (tapp-to outer)))
-                  ;; Substitute inner type's type variable with the
-                  ;; concrete type
-                  (lisp-type (make-tapp :from (tapp-from inner)
-                                        :to parameter)
-                             env))
-                 (t nil))))))
+       (transparent-representation (ty entry seen)
+         ;; Permit e.g. (Id (Id F64)), but stop direct, mutual and growing
+         ;; recursive expansions, even when the indices change at every step.
+         (let* ((name (type-entry-name entry))
+                (size (application-size ty))
+                (previous (assoc name seen)))
+           (when (and previous (>= size (cdr previous)))
+             (return-from transparent-representation (values 't nil)))
+           (let* ((constructor (first (type-entry-constructors entry)))
+                  (signature (qualified-ty-type (fresh-inst (lookup-value-type env constructor))))
+                  (field (function-type-from signature)))
+             (multiple-value-bind (subs possible-p)
+                 (unify:try-unify nil (function-return-type signature) ty :all)
+               (multiple-value-bind (bound known-p)
+                   (representation (if possible-p (subs:apply-substitution subs field) field)
+                                   (acons name size seen))
+                 ;; The RuntimeRepr instance used by array allocation is
+                 ;; compiled once for the whole newtype, not per application.
+                 (values bound (and known-p (equal bound (type-entry-runtime-type entry))))))))))
+    (values (representation ty nil))))

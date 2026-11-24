@@ -164,22 +164,14 @@ the link and its label."
 
 (defmethod write-object-body ((backend markdown-backend) (object coalton-type))
   (let ((stream (output-stream backend)))
-    (tc:with-pprint-variable-context ()
-      (loop :for ctor :in (coalton-type-constructors object)
-            :for ctor-name := (tc:constructor-entry-name ctor)
-            :for ctor-source-name := (lookup-constructor-source-name ctor-name)
-            :for ctor-type := (tc:lookup-value-type entry:*global-environment* ctor-name)
-            :for ctor-docstring := (source:docstring ctor)
-            :do (let ((args (type-constructor-args object ctor-type)))
-                  (cond (args
-                         (format stream "- <code>(~A~{ ~A~})</code>~A~%"
-                                 (html-entities:encode-entities ctor-source-name)
-                                 (mapcar #'to-markdown args)
-                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))
-                        (t
-                         (format stream "- <code>~A</code> ~A~%"
-                                 (html-entities:encode-entities ctor-source-name)
-                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))))))
+    (loop :for ctor :in (coalton-type-constructors object)
+          :for ctor-docstring := (source:docstring ctor)
+          :for nullary-adt-p := (and (not (tc:constructor-entry-gadt-p ctor))
+                                     (zerop (tc:constructor-entry-arity ctor)))
+          :do (format stream "- <code>~A</code>~A~A~%"
+                      (to-markdown ctor)
+                      (if nullary-adt-p " " "")
+                      (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))
     (write-doc backend object)
     (write-instances backend object)))
 
@@ -278,18 +270,26 @@ the link and its label."
             (html-entities:encode-entities source-name))))
 
 (defun markdown-type-object (object)
-  (tc:with-pprint-variable-context ()
-    (with-output-to-string (stream)
-      (tc:render-type-object stream
-                             object
-                             :env entry:*global-environment*
-                             :type-name-writer #'write-markdown-type-name
-                             :class-name-writer #'write-markdown-class-name
-                             :tyvar-writer #'write-markdown-tyvar
-                             :keyword-name-writer #'markdown-keyword-name
-                             :arrow-string (html-entities:encode-entities " → ")
-                             :implication-string (html-entities:encode-entities " ⇒ ")
-                             :forall-string (html-entities:encode-entities "∀")))))
+  (flet ((render ()
+           (with-output-to-string (stream)
+             (tc:render-type-object stream
+                                    object
+                                    :env entry:*global-environment*
+                                    :type-name-writer #'write-markdown-type-name
+                                    :class-name-writer #'write-markdown-class-name
+                                    :tyvar-writer #'write-markdown-tyvar
+                                    :keyword-name-writer #'markdown-keyword-name
+                                    :arrow-string (html-entities:encode-entities " → ")
+                                    :implication-string (html-entities:encode-entities " ⇒ ")
+                                    :forall-string (html-entities:encode-entities "∀")))))
+    (if (boundp 'tc:*pprint-tyvar-dict*)
+        (tc:with-pprint-variable-scope ()
+          (render))
+        (tc:with-pprint-variable-context ()
+          (render)))))
+
+(defmethod to-markdown ((ctor tc:constructor-entry))
+  (constructor-signature-string ctor #'html-entities:encode-entities #'to-markdown))
 
 (defmethod to-markdown ((object tc:ty))
   (markdown-type-object object))

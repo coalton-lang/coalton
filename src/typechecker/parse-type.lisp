@@ -26,7 +26,9 @@
    #:parse-qualified-type-info          ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
    #:infer-type-kinds                   ; FUNCTION
+   #:infer-top-qualified-type-kinds     ; FUNCTION
    #:infer-predicate-kinds              ; FUNCTION
+   #:seed-qualified-type-variables      ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/parse-type)
@@ -194,12 +196,14 @@
              (source:note
               (source:location (first unused-vars))
               "quantified type variable ~S is not used in the declared type"
-              (parser:keyword-src-name (first unused-vars)))
+              (or (parser:keyword-src-source-name (first unused-vars))
+                  (parser:keyword-src-name (first unused-vars))))
              (loop :for unused-var :in (rest unused-vars)
                    :collect (source:secondary-note
                              (source:location unused-var)
                              "quantified type variable ~S is not used in the declared type"
-                             (parser:keyword-src-name unused-var))))))
+                             (or (parser:keyword-src-source-name unused-var)
+                                 (parser:keyword-src-name unused-var)))))))
   nil)
 
 (defun normalize-parser-function-output-types (output-types)
@@ -470,6 +474,7 @@ that may have been introduced after expanding type aliases."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (setf ty (tc:apply-substitution (partial-type-env-refinements partial-env) ty))
       (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
@@ -506,6 +511,7 @@ Unbound variables still denote ordinary single-value types."
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (setf ty (tc:apply-substitution (partial-type-env-refinements partial-env) ty))
       (check-no-impredicative-forall-types ty parser-ty)
       (values ty ksubs))))
 
@@ -542,10 +548,10 @@ being assembled."
         (setf ksubs (tc:kind-monomorphize-subs
                      (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
 
-        (let* ((qual-ty (apply-type-alias-substitutions
-                         (tc:apply-ksubstitution ksubs qual-ty)
-                         unparsed-ty
-                         partial-env))
+        (let* ((qual-ty (tc:apply-substitution
+                         (partial-type-env-refinements partial-env)
+                         (apply-type-alias-substitutions (tc:apply-ksubstitution ksubs qual-ty)
+                                                        unparsed-ty partial-env)))
                (explicit-tvars (mapcar (lambda (tvar)
                                          (tc:apply-ksubstitution ksubs tvar))
                                        explicit-tvars)))
@@ -593,18 +599,29 @@ being assembled."
 
   (let ((in-scope-tvars
           (if (typep env 'partial-type-env)
-              (remove-duplicates
-               (loop :for type :being :the :hash-values :of (partial-type-env-ty-table env)
-                     :when (tc:tyvar-p type)
-                       :collect type)
-               :test #'tc:ty=)
+              (tc:type-variables
+               (tc:apply-substitution
+                (partial-type-env-refinements env)
+                (loop :for type :being :the :hash-values :of (partial-type-env-ty-table env)
+                      :when (tc:tyvar-p type) :collect type)))
               nil)))
     (multiple-value-bind (qual-ty explicit-tvars explicit-p)
         (parse-qualified-type-internal ty env)
       (cond
         (explicit-p
          (warn-on-unused-explicit-type-variables ty explicit-tvars qual-ty)
-         (tc:quantify-using-tvar-order explicit-tvars qual-ty t))
+         (tc:quantify-using-tvar-order
+          (if (parser:qualified-ty-explicit-p ty)
+              explicit-tvars
+              (remove-duplicates
+               (append (set-difference (tc:type-variables qual-ty)
+                                       (append in-scope-tvars explicit-tvars)
+                                       :test #'tc:ty=)
+                       explicit-tvars)
+               :test #'tc:ty=
+               :from-end t))
+          qual-ty
+          t))
         (t
          (tc:quantify (set-difference (tc:type-variables qual-ty)
                                       in-scope-tvars
@@ -688,7 +705,7 @@ the substitution :b +-> T can be inferred.
            "Declared context is too general"
            (tc-note
             unparsed-ty
-            (with-pprint-variable-context ()
+            (with-shared-type-names ()
               (format nil "the substitution~p ~{~A +-> ~A~^, ~} ~[~;is~:;are~] ~
                            determined for ~A by functional dependencies."
                       (length subs)
@@ -698,19 +715,21 @@ the substitution :b +-> T can be inferred.
                       (length subs)
                       (type-object-string declared env)))))))
     (tc:context-fundep-conflict (e)
-      (tc-error
-       "Context conflicts with functional dependencies"
-       (tc-note unparsed-ty
-                "the predicates ~A and ~A conflict with functional dependencies"
-                (type-object-string (tc:context-fundep-conflict-first-pred e) env)
-                (type-object-string (tc:context-fundep-conflict-second-pred e) env))))
+      (with-shared-type-names ()
+        (tc-error
+         "Context conflicts with functional dependencies"
+         (tc-note unparsed-ty
+                  "the predicates ~A and ~A conflict with functional dependencies"
+                  (type-object-string (tc:context-fundep-conflict-first-pred e) env)
+                  (type-object-string (tc:context-fundep-conflict-second-pred e) env)))))
     (tc:fundep-nontermination (e)
-      (tc-error
-       "Functional dependency improvement does not terminate"
-       (tc-note unparsed-ty
-                "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
-                (mapcar (lambda (pred) (type-object-string pred env))
-                        (tc:fundep-nontermination-preds e)))))))
+      (with-shared-type-names ()
+        (tc-error
+         "Functional dependency improvement does not terminate"
+         (tc-note unparsed-ty
+                  "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
+                  (mapcar (lambda (pred) (type-object-string pred env))
+                          (tc:fundep-nontermination-preds e))))))))
 
 (defun check-for-reducible-context (preds ty qual-ty env)
   (declare (type tc:ty-predicate-list preds)
@@ -771,10 +790,17 @@ the substitution :b +-> T can be inferred.
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error "Kind mismatch"
-                    (tc-note type "Expected kind '~S' but got kind '~S'"
-                             expected-kind
-                             (tc:kind-of type_)))))))
+          (let ((actual-kind
+                  (tc:apply-ksubstitution
+                   (tc:kind-monomorphize-subs
+                    (tc:kind-variables
+                     (tc:apply-ksubstitution ksubs (tc:kind-of type_)))
+                    ksubs)
+                   (tc:kind-of type_))))
+            (tc-error "Kind mismatch"
+                      (tc-note type "Expected kind '~S' but got kind '~S'"
+                               expected-kind
+                               actual-kind)))))))
 
   (:method ((type parser:tapp) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)

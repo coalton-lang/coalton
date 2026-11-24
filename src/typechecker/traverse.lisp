@@ -150,11 +150,11 @@ Leaves need no constructor; wrapper records need no callback."
   :vars node-lisp-vars)
 
 (define-traversal (node-match-branch traverse-match-branch node-match-branch)
-  (make-node-match-branch :pattern node-match-branch-pattern :location source:location)
+  (make-node-match-branch :id node-match-branch-id :pattern node-match-branch-pattern :location source:location)
   :body node-match-branch-body)
 
 (define-traversal (node-match traverse-match)
-  (make-node-match :type node-type :location source:location)
+  (make-node-match :type node-type :location source:location :binding-p node-match-binding-p)
   :expr node-match-expr
   :branches node-match-branches)
 

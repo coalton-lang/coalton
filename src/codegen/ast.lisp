@@ -91,6 +91,7 @@
    #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; READER
    #:match-branch-body                  ; READER
+   #:match-branch-index-equalities      ; READER
    #:branch-list                        ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
@@ -364,6 +365,10 @@ coalton symbols (`parser:identifier`)"
 (defstruct match-branch
   "A branch of a match expression"
   (pattern (util:required 'pattern) :type pattern :read-only t)
+  ;; Adjacent pairs of types equated by the original indexed constructor.
+  ;; Scalar replacement retains these when replacing that constructor's test
+  ;; with a physical tag test. They are not additional runtime tests.
+  (index-equalities nil :type tc:ty-list :read-only t)
   (body    (util:required 'body)    :type node    :read-only t))
 
 (defmethod make-load-form ((self match-branch) &optional env)

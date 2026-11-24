@@ -23,6 +23,7 @@ weight: 265
 - `(return)` is equivalent to `(return (values))` and returns `Void` (zero values).
 - `(return ⟨expr⟩)` evaluates `⟨expr⟩` and returns its result(s), which may be a single value, `Void`, or multiple values via [`values`](/manual/operators/values/).
 - Every `return` targeting the same function, together with the final expression of that function's body, must unify to the same return type.
+- A known function result type is available when checking nested GADT patterns in a returned expression. This context does not establish an equality by itself, and a nested function's `return` still targets that nested function.
 - Because `return` never produces a value locally at the call site, the `(return ...)` expression itself unifies with any expected type in its surrounding expression.
 - `return` is invalid in a top-level value definition without parameters, in a standalone `(coalton ...)` expression outside any function, or inside the right-hand side of a [`do`](/manual/operators/do/) bind `(⟨pattern⟩ <- ⟨expr⟩)`.
 

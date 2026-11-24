@@ -322,6 +322,510 @@
         (dolist (type '("Integer" "(List Integer)" "(Tuple Integer String)" "(:f Integer)"))
           (signals tc:tc-error (check-instance type)))))))
 
+(deftest gadt-matches-cannot-invent-equalities ()
+  (dolist (definition
+           '("(declare get-token (Token :a -> :a))
+              (define (get-token w) (match w ((MkToken) \"not every type\")))"
+             "(declare get-field (Payload -> :b))
+              (define (get-field (MkPayload x)) x)"
+             "(declare get-field (:a -> String))
+              (define (get-field w) (match w ((MkPayload x) x)))"
+             "(declare get-field ((Tuple :a Boolean) -> String))
+              (define (get-field w) (match w ((Tuple (MkPayload x) _) x)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define-type (Token :a) (declare MkToken (Token :a)))
+                    (define-type Payload (declare MkPayload (String -> Payload)))
+                    ~A" definition)))))
+
+(deftest gadt-existentials-are-distinct-and-scoped ()
+  (dolist (definition
+           '("(declare apply-packed (Packed -> String))
+              (define (apply-packed p) (match p ((MkPacked x f) (f x))))"
+             "(declare inspect-packed (Packed -> Boolean))
+              (define (inspect-packed (MkPacked (Tuple _ _) _)) True)"
+             "(declare use-outside (Packed * (:a -> String) -> String))
+              (define (use-outside p f) (match p ((MkPacked x _) (f x))))"
+             "(declare get-hidden (Packed -> :a))
+              (define (get-hidden p) (match p ((MkPacked x _) (return x))))"
+             "(declare get-hidden (Packed -> :a))
+              (define (get-hidden p) (let (MkPacked x _) = p) (return x))"
+             "(define-exception Trouble (GotPacked Packed))
+              (declare recover ((Void -> :a) -> :a))
+              (define (recover thunk) (catch (thunk) ((GotPacked (MkPacked x _)) x)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(define-type Packed (declare MkPacked (:a * (:b -> String) -> Packed)))
+                    ~A" definition)))))
+
+(deftest gadt-parameter-must-cover-the-incoming-type ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Tag :a) (declare TagInt (Tag Integer)) (declare TagStr (Tag String)))
+      (declare int-only (Tag :a -> Boolean))
+      (define (int-only (TagInt)) True)")))
+
+(deftest gadt-binder-evidence-cannot-escape ()
+  (dolist (body '("(let (Pack x) = p) x"
+                  "(coalton/monad/identity:run-identity (do ((Pack x) <- (pure p)) (pure x)))"
+                  "(coalton/monad/identity:run-identity (do (let (Pack x) = p) (pure x)))"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define-type Packed (declare Pack (:h -> Packed)))
+                                        (declare leak (Packed -> :a))
+                                        (define (leak p) ~A)" body)))))
+
+(deftest gadt-ascription-must-not-invent-generality ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Witness :a) (declare W (Witness :a)))
+      (declare bad (forall (:a) Witness :a -> :a))
+      (define (bad w) (the :a (match w ((W) \"not every type\"))))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Witness :a) (declare W (Witness :a)))
+      (declare bad (Witness String -> String))
+      (define (bad w) (the (forall (:a) :a) (match w ((W) \"not every type\"))))")))
+
+(deftest gadt-constructor-must-have-a-representable-signature ()
+  (dolist (signature '("(Void -> Wrap)" "(Integer -> Void)" "(Integer &key (:tag String) -> Wrap)"))
+    (signals parser:parse-error
+      (check-coalton-types (format nil "(define-type Wrap (declare MkWrap ~A))" signature)))))
+
+(deftest gadt-givens-do-not-justify-unrelated-types ()
+  (dolist (definition
+           '("(declare eq-extra (Eq :c => Same :a :b * :a * :c -> Boolean))
+              (define (eq-extra w x _) (match w ((Refl) (== x x))))"
+             "(declare get-extra (Same :a :b * :a -> :c))
+              (define (get-extra w x) (let z = (match w ((Refl) x))) z)"
+             "(declare forged (Same :a :b * :a -> String))
+              (define (forged w x) (let z = (match w ((Refl) x))) z)"))
+    (signals tc:tc-error
+      (check-coalton-types (format nil "(define-type (Same :a :b) (declare Refl (Same :x :x))) ~A" definition)))))
+
+(deftest gadt-decomposition-keeps-ordinary-requirements ()
+  (let ((witness "(define-type (Proof :p :q :r)
+                    (declare Witness (Proof (Optional :x) :y :y)))"))
+    ;; The proof establishes :p = Optional :b, not that :b itself is a pair.
+    ;; Test both columns and keep the partial branch strictly compile-only.
+    (dolist (row '("(match (Tuple w b) ((Tuple (Witness) (Tuple x _)) (if False x other)))"
+                   "(match (Tuple b w) ((Tuple (Tuple x _) (Witness)) (if False x other)))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil "~A (declare bad (Proof :p (Optional :b) :p * :b * :r -> :r))
+                      (define (bad w b other) ~A)" witness row))))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (declare bad (Proof :p (Optional :b) :p * :b -> Boolean))
+                    (define (bad (Witness) (Tuple flag _)) (the Boolean flag))" witness)))
+    (check-coalton-types
+     (format nil "~A (declare good (Proof :p (Optional (Tuple :r Unit)) :p * Tuple :r Unit -> :r))
+                  (define (good (Witness) (Tuple x (Unit))) x)" witness)))
+  ;; The representative of an inner equality can come from an enclosing
+  ;; constructor's decomposition, not just from the current constructor.
+  (check-coalton-types
+   "(define-type (Same :a :b) (declare Refl (Same :a :a)))
+    (define-type (Outer :p :b) (declare Mk (Same :b :h * :h -> Outer (List :h) :b)))
+    (define (first-value (Mk (Refl) (Tuple x _))) x)"
+   '("first-value" . "(Outer :p (Tuple :a :b) -> :a)")))
+
+(deftest gadt-local-results-retain-only-proven-types ()
+  (let ((proof "(define-type (Same :a :b) (declare SameProof (Same :x :x)))"))
+    (dolist (signature '("(Same :a :b * :a -> Optional :b)" "(Same :a :b * :b -> Optional :a)"))
+      (check-coalton-types
+       (format nil "~A (declare cast ~A)
+                    (define (cast w x)
+                      (let ((y (progn (match w ((SameProof) (Some x))))))
+                        (let copy = y) copy))" proof signature)))
+    ;; Generalizing the postponed component here would let each use of y
+    ;; invent an independent result type.
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (declare bad (Same :a :b * :a -> Tuple :b String))
+                    (define (bad w x) (let ((y (match w ((SameProof) x)))) (Tuple y y)))" proof)))
+    (dolist (result '(":c" ":unrelated"))
+      (flet ((program ()
+               (check-coalton-types
+                (format nil "~A (declare compose-cast (Same :a :b * Same :b :c * :a -> ~A))
+                             (define (compose-cast p q x)
+                               (let y = (match p ((SameProof) (match q ((SameProof) x)))))
+                               y)" proof result))))
+        (if (string= result ":c") (program) (signals tc:tc-error (program)))))
+    ;; Only the equality-dependent part stays monomorphic at a lexical let.
+    (check-coalton-types
+     (format nil "~A (declare cast (forall (:a :b) Same :a :b * :a -> :b))
+                  (define (cast w x)
+                    (let ((p (match w ((SameProof) (Tuple x None)))))
+                      (let (Tuple y _) = (the (Tuple :b (Optional Boolean)) p))
+                      (let _ = (the (Tuple :b (Optional String)) p)) y))" proof))
+    (check-coalton-types
+     (format nil "~A (define-struct Row (label String))
+                  (declare label-of (Same :a :b -> String))
+                  (define (label-of w)
+                    (let row = (match w ((SameProof) (Row \"value\"))))
+                    (let ((get (fn () (.label row)))) (get)))" proof)))
+  (check-coalton-types
+   "(define-type (Parts :a) (declare Pieces (Parts (Tuple Boolean :h))))
+    (declare pass (Parts :a * :a -> Optional :a))
+    (define (pass w x) (let p = (match w ((Pieces) (Some x)))) p)")
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type (Parts :a) (declare Pieces (:h -> Parts (Tuple Boolean :h))))
+      (declare bad (Parts :a -> :a))
+      (define (bad w) (let p = (match w ((Pieces h) h))) p)"))
+  (let ((indexed "(define-type (Item :i)
+                    (declare Flag (Boolean -> Item Boolean))
+                    (declare Count (Integer -> Item Integer)))"))
+    (check-coalton-types
+     (format nil "~A (define (get-item item)
+                       (let ((v (match item ((Flag b) b) ((Count n) n)))) v))" indexed)
+     '("get-item" . "(Item :i -> :i)"))))
+
+(deftest late-match-scrutinee-specialization ()
+  (let ((items "(define-type (Item :a)
+                  (declare Flag (Boolean -> Item Boolean))
+                  (declare AnyItem (:a -> Item :a)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "~A (define (read-item p)
+                         (let n = (match p ((Flag b) b) ((AnyItem _) False)))
+                         (let _ = (the (Item String) p)) n)" items)))
+    (check-coalton-types
+     (format nil "~A (define (read-item p)
+                       (let n = (match p ((Flag b) b) ((AnyItem _) False)))
+                       (let _ = (the (Item Boolean) p)) n)" items)
+     '("read-item" . "(Item Boolean -> Boolean)"))
+    ;; Redundancy is a usefulness warning, not a type incompatibility.
+    (handler-bind ((source:source-warning #'muffle-warning))
+      (check-coalton-types
+       (format nil "~A (define (read-item p)
+                         (let n = (match p ((Flag b) b) ((Flag _) True) ((AnyItem _) False)))
+                         (let _ = (the (Item Boolean) p)) n)" items)))
+    (check-coalton-types
+     (format nil "~A (define-type (Tag :a)
+                       (declare FlagTag (Tag Boolean)) (declare CountTag (Tag Integer)))
+                  (declare nested (Tag :a * Item :a -> :a))
+                  (define (nested tag item)
+                    (match tag
+                      ((FlagTag) (match item ((Flag b) b) ((AnyItem b) (not b))))
+                      ((CountTag) (match item ((AnyItem n) (1+ n))))))" items))))
+
+(deftest gadt-unsupported-constructor-constraint-diagnostic ()
+  (let ((diagnostic (collect-compiler-error
+                     "(package gadt-constraint-test (import coalton-prelude))
+                      (define-type (Box :a) (declare Pack (Eq :a => :a -> Box :a)))")))
+    (is (and diagnostic (search "typeclass constraints on constructor signatures are not supported" diagnostic)))))
+
+(deftest gadt-coverage-still-finds-holes-in-seen-constructors ()
+  (let ((diagnostic
+          (collect-compiler-error
+           "(package correlated-tag-test (import coalton-prelude))
+            (define-type (Tag :a) (declare I (Boolean -> Tag Integer)) (declare S (Tag String)))
+            (declare classify ((Tuple (Tag :a) (Tag :a)) -> Boolean))
+            (define (classify p)
+              (match p ((Tuple (I (True)) _) True) ((Tuple _ (S)) False)))")))
+    (is (and diagnostic (search "missing case (TUPLE (I (FALSE)) (I \"_\"))" diagnostic)))))
+
+(deftest gadt-coverage-refutes-empty-fields ()
+  (flet ((packet (field)
+           (format nil
+                   "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+                    (define-type Recursive (Roll Recursive))
+                    (define-type Packet Here (Other ~A))
+                    (declare get-packet (Packet -> Boolean))
+                    (define (get-packet (Here)) True)" field)))
+    (check-coalton-types (packet "(Tuple Boolean (Same Integer String))"))
+    ;; A real witness, an opaque type, or an unresolved cycle cannot refute Other.
+    (dolist (field '("(Tuple Boolean (Same Integer Integer))" "Integer" "Recursive"))
+      (signals tc:tc-error (check-coalton-types (packet field))))))
+
+(deftest gadt-coverage-refutes-empty-field-sums ()
+  ;; Restricted needs an Envelope, and every Envelope alternative needs a
+  ;; Proof, which exists only at Integer. The ordinary Wide fields before it
+  ;; must not use up the search budget for that contradiction.
+  (flet ((visit (index alternatives &optional (rest ""))
+          (format nil
+                  "(define-type (Proof :i) (declare Affirm (Proof Integer)))
+                   (define-type Wide (W1 Integer) (W2 String) (W3 Boolean))
+                   (define-type (Envelope :i) (Thin (Proof :i)) (Thick Wide (Proof :i)) ~A)
+                   (define-type (Visit :i) Everywhere (Restricted Wide Wide Wide (Envelope :i)))
+                   (define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+                   (define-type Route (declare Road (Visit :i * Lane :i -> Route)))
+                   (declare examine (Visit ~A -> Boolean))
+                   (define (examine (Everywhere)) True)
+                   (declare route (Route -> Integer))
+                   (define (route r)
+                     (match r
+                       ((Road (Everywhere) _) 1)~A))"
+                  alternatives index rest)))
+    (check-coalton-types (visit "String" ""))
+    ;; A real Restricted value, or an Envelope cycle that the bounded search
+    ;; leaves unresolved.
+    (dolist (case '(("Integer" "") ("String" "(Extra Wide)") ("String" "(Wrapped (Envelope :i))")))
+      (signals tc:tc-error (check-coalton-types (apply #'visit case))))
+    ;; A Restricted visit exists only with a West lane.
+    (multiple-value-bind (useless missing)
+       (match-analysis-report (visit "String" "" "
+                       ((Road _ (West)) 2)"))
+      (is (null useless))
+      (is (null missing)))
+    (let ((program (visit "String" "" "
+                        ((Road _ (West)) 2)
+                        ((Road (Restricted _ _ _ _) (East)) 3)")))
+      (multiple-value-bind (useless missing) (match-analysis-report program)
+        (is (equal (arm-lines program "((Road (Restricted") useless))
+        (is (null missing))))
+    (let ((missing (nth-value 1 (match-analysis-report (visit "String" "")))))
+      (is (= 1 (length missing)))
+      (is (search "(RESTRICTED" (first missing)))
+      (is (not (search "(EAST)" (first missing)))))))
+
+(deftest gadt-coverage-keeps-independent-refutations ()
+  ;; Exploring the trees in a Crate needs more than the search budget. That
+  ;; must not hide the contradiction in an independent Proof field, nor in an
+  ;; Envelope whose every alternative needs a Proof, in either field order.
+  (flet ((visit (index field crate-first)
+           (with-output-to-string (s)
+             (write-line "(define-type (Proof :i) (declare Affirm (Proof Integer)))" s)
+             (write-line "(define-type (Envelope :i) (Thin (Proof :i)) (Thick (Proof :i)))" s)
+             (write-line "(define-type Tree0 Leaf Seed)" s)
+             (loop :for i :from 1 :to 6
+                   :do (format s "(define-type Tree~D (Bud~D Tree~D Tree~D) (Fork~D Tree~D Tree~D))~%"
+                               i i (1- i) (1- i) i (1- i) (1- i)))
+             (write-line "(define-type Crate (Boxed Tree6))" s)
+             (format s "(define-type (Visit :i) Plain (Loaded ~:[~A Crate~;Crate ~A~]))~%" crate-first field)
+             (format s "(declare plain-only (Visit ~A -> Boolean))~%(define (plain-only (Plain)) True)" index))))
+    (dolist (field '("(Proof :i)" "(Envelope :i)"))
+      (dolist (crate-first '(nil t))
+        (check-coalton-types (visit "String" field crate-first))
+        (signals tc:tc-error (check-coalton-types (visit "Integer" field crate-first)))))))
+
+(defun match-analysis-report (program)
+  "Compile PROGRAM, returning the source lines of the useless match cases and
+the text of each non-exhaustive match warning."
+  (let ((useless nil)
+        (missing nil))
+    (handler-bind ((source:source-warning
+                     (lambda (condition)
+                       (let ((text (princ-to-string condition)))
+                         (cond
+                           ((search "useless match case" text :test #'char-equal)
+                            (let* ((arrow (search "-->" text))
+                                   (start (1+ (position #\: text :start arrow))))
+                              (push (parse-integer text :start start :junk-allowed t) useless)))
+                           ((search "non-exhaustive match" text :test #'char-equal)
+                            (push text missing))))
+                       (muffle-warning condition))))
+      (check-coalton-types program))
+    (values (sort useless #'<) missing)))
+
+(defun arm-lines (program &rest markers)
+  "The source line of each MARKER in PROGRAM."
+  (mapcar (lambda (marker)
+            (1+ (count #\Newline program :end (search marker program))))
+          markers))
+
+(deftest mixed-literal-constructor-gadt-coverage ()
+  ;; Literal and constructor patterns share a column when GADT evidence
+  ;; from another column fixes its type differently in each row.
+  (flet ((check (columns arms useless-markers &optional missing)
+           (let ((program
+                   (format nil "(define-type (Tag :a) (declare TextTag (Tag String)) (declare UnitTag (Tag Unit)))
+(declare classify (~A -> Integer))
+(define (classify p)
+  (match p~{~%    ~A~}))" columns arms)))
+             (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+               (is (equal (apply #'arm-lines program useless-markers) useless-lines))
+               (cond
+                 (missing
+                  (is (= 1 (length warnings)))
+                  (is (search missing (first warnings))))
+                 (t
+                  (is (null warnings))))))))
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple \"\" (TextTag)) 1)" "((Tuple (Unit) (UnitTag)) 2)" "((Tuple _ (TextTag)) 3)")
+           '())
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple (Unit) (UnitTag)) 1)" "((Tuple \"\" (TextTag)) 2)" "((Tuple _ (TextTag)) 3)")
+           '())
+    (check "(Tuple (Tag :a) :a)"
+           '("((Tuple (TextTag) \"\") 1)" "((Tuple (UnitTag) (Unit)) 2)" "((Tuple (TextTag) _) 3)")
+           '())
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple (Unit) (UnitTag)) 1)" "((Tuple _ (TextTag)) 2)" "((Tuple \"\" (TextTag)) 3)")
+           '("((Tuple \"\" (TextTag)) 3)"))
+    (check "(Tuple :a (Tag :a))"
+           '("((Tuple \"\" (TextTag)) 1)" "((Tuple (Unit) (UnitTag)) 2)")
+           '()
+           "missing case (TUPLE \"_\" (TEXTTAG))")))
+
+(deftest mixed-literal-constructor-overloaded-coverage ()
+  ;; A literal of a type with constructors matches the values that a user
+  ;; Eq instance relates to it, which the analysis cannot know. It may
+  ;; report a row as useless only if the row is unreachable for every
+  ;; such instance, and coverage never relies on a literal.
+  (flet ((check (type arms useless-markers &optional missing)
+           (let ((program
+                   (format nil "(define-type Amount (Amount Integer) Zero)
+(define-instance (Eq Amount)
+  (define (== a b)
+    (match (Tuple a b)
+      ((Tuple (Amount x) (Amount y)) (== x y))
+      ((Tuple (Zero) (Zero)) True)
+      (_ False))))
+(define-instance (Num Amount)
+  (define (+ _a b) b) (define (- _a b) b) (define (* _a b) b)
+  (define (fromInt n) (Amount n)))
+(declare classify (~A -> Integer))
+(define (classify p)
+  (match p~{~%    ~A~}))" type arms)))
+             (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+               (is (equal (apply #'arm-lines program useless-markers) useless-lines))
+               (cond
+                 (missing
+                  (is (= 1 (length warnings)))
+                  (is (search missing (first warnings))))
+                 (t
+                  (is (null warnings))))))))
+    (check "Amount" '("(5 1)" "((Amount _) 2)" "((Zero) 3)") '())
+    (check "Amount" '("((Amount _) 1)" "((Zero) 2)" "(5 3)") '("(5 3)"))
+    (check "Amount" '("((Amount 5) 1)" "(5 2)" "(_ 3)") '())
+    (check "Amount" '("(5 1)" "(5 2)" "((Amount _) 3)" "((Zero) 4)") '("(5 2)"))
+    (check "Amount" '("(5 1)" "((Amount _) 2)") '() "missing case (ZERO)")
+    (check "(Optional Amount)"
+           '("((Some (Amount _)) 1)" "((Some (Zero)) 2)" "((Some 5) 3)" "((None) 4)")
+           '("((Some 5) 3)"))
+    (check "(Tuple Amount Boolean)"
+           '("((Tuple 5 (True)) 1)" "((Tuple (Amount _) _) 2)" "((Tuple _ (False)) 3)" "((Tuple (Zero) _) 4)")
+           '())
+    (check "(Tuple Boolean Amount)"
+           '("((Tuple _ (Amount _)) 1)" "((Tuple (True) (Zero)) 2)" "((Tuple (True) 5) 3)")
+           '("((Tuple (True) 5) 3)")
+           "missing case (TUPLE (FALSE) (ZERO))")))
+
+(deftest gadt-coverage-checks-unexpanded-fields ()
+  ;; A Door's index is fixed only through its fields: Metered holds a Permit,
+  ;; which exists only for Integer. With a Lane sharing the index, the only
+  ;; values are Free/East, Free/West and Metered/West. Every sequence of up
+  ;; to three distinct rows, in both field orders and with Door both as a
+  ;; GADT and as an ordinary type, is checked against direct first-match
+  ;; enumeration of those values, including the displayed missing case.
+  (let* ((crossings '((free east) (free west) (metered west)))
+         (rows '((free _) (_ west) (metered _) (_ east) (free west) (_ _)))
+         (door-patterns '((free . "(Free)") (metered . "(Metered _)") (_ . "_")))
+         (lane-patterns '((east . "(East)") (west . "(West)") (_ . "_")))
+         ;; Each displayable missing pattern, with the values it denotes.
+         (door-witnesses '(("(FREE)" free) ("(METERED \"_\")" metered)
+                           ("(METERED (NUMPASS))" metered) ("\"_\"" free metered)))
+         (lane-witnesses '(("(EAST)" east) ("(WEST)" west) ("\"_\"" east west)))
+         (sequences nil))
+    (labels ((matches-p (row value)
+               (every (lambda (pattern part) (or (eq pattern '_) (eq pattern part))) row value))
+             (selections (pool n)
+               (if (zerop n)
+                   (list nil)
+                   (loop :for row :in pool
+                         :append (mapcar (lambda (rest) (cons row rest))
+                                         (selections (remove row pool) (1- n)))))))
+      (dotimes (n 3)
+        (setf sequences (append sequences (selections rows (1+ n)))))
+      (dolist (door '("(declare Free (Door :i)) (declare Metered (Permit :i -> Door :i))"
+                      "Free (Metered (Permit :i))"))
+        (dolist (door-first '(t nil))
+          (dolist (sequence sequences)
+            (let* ((arms (loop :for (door-pattern lane-pattern) :in sequence
+                               :for n :from 1
+                               :for door-text := (cdr (assoc door-pattern door-patterns))
+                               :for lane-text := (cdr (assoc lane-pattern lane-patterns))
+                               :collect (if door-first
+                                            (format nil "((Road ~A ~A) ~D)" door-text lane-text n)
+                                            (format nil "((Road ~A ~A) ~D)" lane-text door-text n))))
+                   (program
+                     (format nil "(define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+(define-type (Permit :i) (declare NumPass (Permit Integer)))
+(define-type (Door :i) ~A)
+(define-type Crossing (declare Road (~A -> Crossing)))
+(declare classify (Crossing -> Integer))
+(define (classify c)
+  (match c~{~%    ~A~}))"
+                             door (if door-first "Door :i * Lane :i" "Lane :i * Door :i") arms))
+                   (expected-useless
+                     (loop :for row :in sequence
+                           :for arm :in arms
+                           :for k :from 0
+                           :unless (some (lambda (value)
+                                           (and (matches-p row value)
+                                                (notany (lambda (earlier) (matches-p earlier value))
+                                                        (subseq sequence 0 k))))
+                                         crossings)
+                             :collect arm))
+                   (unmatched (remove-if (lambda (value)
+                                           (some (lambda (row) (matches-p row value)) sequence))
+                                         crossings)))
+              (multiple-value-bind (useless-lines warnings) (match-analysis-report program)
+                (is (equal (apply #'arm-lines program expected-useless) useless-lines)
+                    "Useless rows ~S in ~S" useless-lines arms)
+                (cond
+                  ((null unmatched)
+                   (is (null warnings) "Spurious missing case for ~S" arms))
+                  (t
+                   (is (= 1 (length warnings)) "No missing case for ~S" arms)
+                   ;; The witness must denote some value that no row matches.
+                   (is (loop :for (door-text . doors) :in door-witnesses
+                             :thereis (loop :for (lane-text . lanes) :in lane-witnesses
+                                            :thereis (and (search (if door-first
+                                                                      (format nil "missing case (ROAD ~A ~A)" door-text lane-text)
+                                                                      (format nil "missing case (ROAD ~A ~A)" lane-text door-text))
+                                                                  (first warnings))
+                                                          (some (lambda (value)
+                                                                  (and (member (first value) doors)
+                                                                       (member (second value) lanes)))
+                                                                unmatched))))
+                       "Missing case for ~S does not denote ~S: ~A" arms unmatched (first warnings))))))))))))
+
+(deftest gadt-coverage-independent-column-growth-is-bounded ()
+  ;; Proving a Metered door's Lane impossible must not make the unrelated
+  ;; Selector columns before it retry their other constructors, which would
+  ;; repeat the Door/Lane search once per combination of selectors. Measure
+  ;; work rather than elapsed time, allowing linear growth instead of
+  ;; requiring an exact traversal count.
+  (let* ((searcher 'coalton-impl/analysis/pattern-exhaustiveness::search-column-cases)
+         (original (symbol-function searcher))
+         (lane-searches 0))
+    (flet ((lane-searches (selectors)
+             (setf lane-searches 0)
+             (let ((warnings
+                     (nth-value 1 (match-analysis-report
+                                   (format nil "(define-type Selector Chosen LeftOver RightOver)
+(define-type (Lane :i) (declare East (Lane String)) (declare West (Lane Integer)))
+(define-type (Permit :i) (declare NumPass (Permit Integer)))
+(define-type (Door :i) Free (Metered (Permit :i)))
+(define-type Route (declare Road (~{~A * ~}Door :i * Lane :i -> Route)))
+(declare classify (Route -> Integer))
+(define (classify x)
+  (match x~{~%    ((Road ~{~A ~}_ _) 1)~}
+    ((Road ~{~A ~}(Free) _) 2)
+    ((Road ~:*~{~A ~}_ (West)) 3)))"
+                                           (make-list selectors :initial-element "Selector")
+                                           (loop :for j :below selectors
+                                                 :collect (loop :for k :below selectors
+                                                                :collect (if (= j k) "(Chosen)" "_")))
+                                           (make-list selectors :initial-element "_"))))))
+               (is (null warnings))
+               lane-searches)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function searcher)
+                   (lambda (matrix column-types &rest args)
+                     (let ((head (tc:base-type (first column-types))))
+                       (when (and (tc:tycon-p head)
+                                  (string= "LANE" (symbol-name (tc:tycon-name head))))
+                         (incf lane-searches)))
+                     (apply original matrix column-types args)))
+             (let ((alone (lane-searches 0)))
+               (is (plusp alone))
+               (is (<= (lane-searches 4) (* 5 alone)))))
+        (setf (symbol-function searcher) original)))))
+
 (deftest test-deep-constructor-pattern-analysis ()
   (let* ((specializer 'coalton-impl/analysis/pattern-exhaustiveness::specialize-matrix)
          (original (symbol-function specializer))

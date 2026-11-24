@@ -58,6 +58,7 @@
    #:coalton-type
    #:coalton-type-constructors
    #:type-constructor-args
+   #:constructor-signature-string
 
    #:coalton-macro
    #:coalton-macro-name
@@ -174,14 +175,28 @@
 (defmethod object-docstring ((self coalton-type))
   (source:docstring (type-entry self)))
 
-(defun type-vars (coalton-type)
-  (loop :for i :below (tc:kind-arity (tc:kind-of (type-entry coalton-type)))
-        :collect (tc:make-variable)))
-
 (defun type-constructor-args (coalton-type ctor-type)
-  (tc:function-type-arguments
-   (tc:qualified-ty-type (tc:instantiate (type-vars coalton-type)
-                                         (tc:ty-scheme-type ctor-type)))))
+  (declare (ignore coalton-type))
+  (let* ((vars (tc:ty-scheme-instantiation-types ctor-type))
+         (qual-ty (tc:instantiate vars (tc:ty-scheme-type ctor-type))))
+    (when (boundp 'tc:*pprint-tyvar-dict*)
+      (mapc #'tc:pprint-tvar vars))
+    (tc:function-type-arguments (tc:qualified-ty-type qual-ty))))
+
+(defun constructor-signature-string (ctor render-name render-type)
+  "Render CTOR as `(Name Arg ...)`, or `Name :: Type` for a GADT constructor.
+RENDER-NAME is applied to the constructor's source name and RENDER-TYPE to
+each rendered type."
+  (let* ((ctor-name (tc:constructor-entry-name ctor))
+         (source-name (funcall render-name (lookup-constructor-source-name ctor-name)))
+         (ctor-type (tc:lookup-value-type entry:*global-environment* ctor-name)))
+    (tc:with-pprint-variable-context ()
+      (if (tc:constructor-entry-gadt-p ctor)
+          (format nil "~A :: ~A" source-name (funcall render-type ctor-type))
+          (let ((args (type-constructor-args nil ctor-type)))
+            (if args
+                (format nil "(~A~{ ~A~})" source-name (mapcar render-type args))
+                source-name))))))
 
 (defun make-coalton-type (entry constructors applicable-instances)
   (cond ((env:struct-entry-p entry)

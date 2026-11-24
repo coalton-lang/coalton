@@ -8,6 +8,9 @@
    #:coalton-impl/typechecker/predicate)
   (:export
    #:unify                              ; FUNCTION
+   #:unify-given                        ; FUNCTION
+   #:unify-pattern-result               ; FUNCTION
+   #:try-unify                          ; FUNCTION
    #:match                              ; FUNCTION
    #:predicate-mgu                      ; FUNCTION
    #:predicate-match                    ; FUNCTION
@@ -28,6 +31,64 @@
   (let ((new-substs (mgu (apply-substitution substs type1)
                          (apply-substitution substs type2))))
     (compose-substitution-lists new-substs substs)))
+
+(defun unify-given (subs result input refinable)
+  "Accumulate a proven equality, allowing only REFINABLE skolems to change."
+  (let* ((input (apply-substitution subs input))
+         (result (apply-substitution subs result))
+         (vars (loop :for var :in (type-variables (list input result))
+                     :when (and (tyvar-rigid-p var)
+                                (or (eq refinable :all) (member var refinable :test #'ty=)))
+                       :collect var)))
+    (unless vars
+      (return-from unify-given (unify subs result input)))
+    (let* ((open (loop :for var :in vars
+                       :collect (make-substitution :from var :to (fresh-type-renamer var))))
+           (given (unify nil (apply-substitution open result) (apply-substitution open input)))
+           (close nil))
+      ;; Close the *surviving representative* of each still-abstract skolem.
+      ;; Unification may have oriented an opened variable toward a fresh
+      ;; constructor variable. Merely inverting OPEN leaves that type flexible.
+      (dolist (sub open)
+        (let ((rep (apply-substitution given (substitution-to sub))))
+          (when (and (tyvar-p rep) (not (tyvar-rigid-p rep))
+                     (not (find rep close :key #'substitution-from :test #'ty=)))
+            (push (make-substitution :from rep :to (substitution-from sub)) close))))
+      (compose-substitution-lists
+       (loop :for sub :in (compose-substitution-lists (compose-substitution-lists close given) open)
+             :for var := (substitution-from sub)
+             :unless (or (find var open :key #'substitution-to :test #'ty=)
+                         (ty= var (substitution-to sub)))
+               :collect sub)
+       subs))))
+
+(defun unify-pattern-result (subs result input refinable)
+  "A pattern may provide evidence about the indices of a known datatype,
+never about its head. Ordinary unification still checks that head."
+  (unless refinable
+    (return-from unify-pattern-result (unify subs result input)))
+  (let ((input (apply-substitution subs input))
+        (result (apply-substitution subs result)))
+    (compose-substitution-lists
+     (if (and (tapp-p input)
+              (ty= (first (flatten-type input)) (first (flatten-type result))))
+         (unify-given nil result input refinable)
+         (unify nil result input))
+     subs)))
+
+(defun try-unify (subs type1 type2 &optional refinable)
+  "Try to unify TYPE1 and TYPE2 under SUBS.
+
+Returns two values:
+  1. The resulting substitutions, or the original substitutions on failure
+  2. Whether unification succeeded."
+  (declare (type substitution-list subs)
+           (type ty type1 type2)
+           (values substitution-list boolean))
+  (handler-case
+      (values (unify-pattern-result subs type1 type2 refinable) t)
+    (coalton-internal-type-error ()
+      (values subs nil))))
 
 (defun function-keyword-entry (entries keyword)
   (declare (type keyword keyword)

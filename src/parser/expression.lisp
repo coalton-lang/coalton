@@ -111,6 +111,7 @@
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
+   #:node-match-binding-p               ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
@@ -618,6 +619,7 @@ Rebound to NIL parsing an anonymous FN.")
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)     :type node                   :read-only t)
+  (binding-p nil                      :type boolean                :read-only t)
   (branches (util:required 'branches) :type node-match-branch-list :read-only t))
 
 (defstruct (node-progn

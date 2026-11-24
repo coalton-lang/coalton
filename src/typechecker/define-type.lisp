@@ -10,13 +10,16 @@
    #:check-duplicates)
   (:local-nicknames
    (#:source #:coalton-impl/source)
+   (#:redef #:coalton-impl/redef-detection)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
-   (#:derive #:coalton-impl/typechecker/derive))
+   (#:derive #:coalton-impl/typechecker/derive)
+   (#:pt #:coalton-impl/typechecker/parse-type))
   (:export
    #:toplevel-define-type               ; FUNCTION
+   #:validate-gadt-redefinitions        ; FUNCTION
    #:type-definition                    ; STRUCT
    #:make-type-definition               ; CONSTRUCTOR
    #:type-definition-name               ; ACCESSOR
@@ -31,6 +34,7 @@
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-constructor-types  ; ACCESSOR
    #:type-definition-docstring          ; ACCESSOR
+   #:type-definition-gadt-p             ; ACCESSOR
    #:type-definition-list               ; TYPE
    ))
 
@@ -62,7 +66,8 @@
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
   (location          (util:required 'location)          :type source:location           :read-only t)
   (exception-p       (util:required 'exception-p)       :type boolean                   :read-only t)
-  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t))
+  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t)
+  (gadt-p            (util:required 'gadt-p)            :type boolean                   :read-only t))
 
 (defmethod source:location ((self type-definition))
   (type-definition-location self))
@@ -123,7 +128,8 @@ This is conservative and intentionally aligns with mutable native wrappers."
   (let ((variance-table (make-hash-table :test #'eq))
         (env-resolver (tc:make-env-variance-resolver env)))
     ;; Initialize each type parameter as absent (not yet observed), except
-    ;; opaque types, which are conservatively invariant.
+    ;; opaque types and GADTs, which are conservatively invariant. A GADT
+    ;; result can constrain an index without ever using it in a field.
     ;;
     ;; Current stdlib audit (2026-02) for parametric opaque types:
     ;;   Cell, Vector, Queue, Slice, Hashtable, LispArray, FileStream
@@ -133,9 +139,9 @@ This is conservative and intentionally aligns with mutable native wrappers."
           :for name := (type-definition-name type)
           :for tyvars := (gethash name type-tyvar-table)
           :for initial := (make-list (length tyvars)
-                                     :initial-element (if (type-definition-opaque-p type)
-                                                          ':invariant
-                                                          ':absent))
+                                     :initial-element (if (or (type-definition-opaque-p type)
+                                                              (type-definition-gadt-p type))
+                                                          ':invariant ':absent))
           :do (setf (gethash name variance-table) initial))
 
     (labels ((erase-absent-arguments (ty)
@@ -195,7 +201,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
                 :for name := (type-definition-name type)
                 :for tyvars := (gethash name type-tyvar-table)
                 :for current-variances := (gethash name variance-table)
-                :unless (type-definition-opaque-p type)
+                :unless (or (type-definition-opaque-p type) (type-definition-gadt-p type))
                   :do (let ((observed-variances (make-hash-table :test #'eql)))
                         (flet ((observe (ty)
                                  (declare (type tc:ty ty))
@@ -465,6 +471,46 @@ itself without passing through a nominal type."
      instances
      env)))
 
+(defun datatype-evidence-contract (entry env)
+  (cons (cond ((tc:type-entry-enum-repr entry) :enum)
+              ((tc:type-entry-newtype entry) (list :transparent (tc:type-entry-runtime-type entry)))
+              ((consp (tc:type-entry-explicit-repr entry)) (tc:type-entry-explicit-repr entry))
+              ((tc:type-entry-exception-p entry) :exception)
+              (t :boxed))
+        (loop :for name :in (tc:type-entry-constructors entry)
+              :collect (list name (tc:lookup-value-type env name)))))
+
+(defun same-datatype-representation-p (a b)
+  (or (equal a b)
+      (and (consp a) (consp b) (eq (first a) (first b))
+           (subtypep (second a) (second b))
+           (subtypep (second b) (second a)))))
+
+(defun validate-gadt-redefinitions (before after names)
+  "Compare whole datatype declarations, before installing AFTER or its code.
+Use both environments: an environment update log can replay in an image
+different from the one in which the declarations were compiled."
+  (let ((affected-types names))
+    ;; A differently named declaration can also replace one of an existing
+    ;; datatype's constructors in the value and constructor environments.
+    (dolist (name names)
+      (dolist (ctor (tc:type-entry-constructors (tc:lookup-type after name)))
+        (let ((prior (tc:lookup-constructor before ctor :no-error t)))
+          (when (and prior (not (eq (tc:constructor-entry-constructs prior) name)))
+            (pushnew (tc:constructor-entry-constructs prior) affected-types)))))
+    (dolist (name affected-types)
+      (let ((old (tc:lookup-type before name :no-error t))
+            (new (tc:lookup-type after name)))
+        (when (and old (or (tc:type-entry-gadt-p old) (tc:type-entry-gadt-p new)))
+          (let ((a (datatype-evidence-contract old before))
+                (b (datatype-evidence-contract new after)))
+            (unless (and (same-datatype-representation-p (car a) (car b))
+                         (= (length (cdr a)) (length (cdr b)))
+                         (loop :for (ctor old-scheme) :in (cdr a)
+                               :for next := (assoc ctor (cdr b))
+                               :always (and next (redef:types-compatible-p old-scheme (second next)))))
+              (redef:raise-gadt-redefinition-error name a b before))))))))
+
 (defun update-env-for-type-definition (type tyvars variances parsed-type env)
   (declare (type type-definition type)
            (type tc:tyvar-list tyvars)
@@ -581,7 +627,8 @@ itself without passing through a nominal type."
           :docstring (source:docstring type)
           :location (source:location parsed-type)
           :exception-p (type-definition-exception-p type)
-          :resumption-p (type-definition-resumption-p type))))
+          :resumption-p (type-definition-resumption-p type)
+          :gadt-p (type-definition-gadt-p type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -648,56 +695,102 @@ signaled with the expectation that they may be ignored."
                       (tc-note repr "~A is not a known Lisp condition type at compile time; a condition defined in the same file must be wrapped in (EVAL-WHEN (:COMPILE-TOPLEVEL :LOAD-TOPLEVEL :EXECUTE) ...)"
                                printed-type)))))))
 
+(defun constructor-signature-env (env)
+  ;; The nominal types in a recursive group are in scope, but each constructor
+  ;; quantifies its own variables, independently of the datatype head.
+  (let ((local (make-partial-type-env :env (partial-type-env-env env))))
+    (maphash (lambda (name ty)
+               (when (tc:tycon-p ty)
+                 (partial-type-env-add-type local name ty)))
+             (partial-type-env-ty-table env))
+    local))
+
+(defun check-constructor-signature (ctor signature scheme type-name)
+  (declare (type parser:constructor ctor)
+           (type parser:qualified-ty signature)
+           (type tc:ty-scheme scheme)
+           (type symbol type-name)
+           (values tc:ty-scheme &optional))
+  (let* ((qual-ty (tc:ty-scheme-type scheme))
+         (body (tc:qualified-ty-type qual-ty))
+         (result-type (if (typep body 'tc:function-ty)
+                          (and (alexandria:length= 1 (tc:function-ty-output-types body))
+                               (first (tc:function-ty-output-types body)))
+                          body))
+         (result-head (and result-type
+                           (not (typep result-type '(or tc:function-ty tc:result-ty tc:forall-ty)))
+                           (first (tc:flatten-type result-type)))))
+    (unless (and (typep result-head 'tc:tycon)
+                 (eq (tc:tycon-name result-head) type-name))
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature "GADT constructor must return ~S" type-name)
+                (source:secondary-note (source:location (parser:type-definition-ctor-name ctor))
+                                       "constructor declared here")))
+    (when (and (typep body 'tc:function-ty)
+               (or (tc:function-ty-keyword-input-types body)
+                   (tc:function-ty-keyword-open-p body)
+                   (null (tc:function-ty-positional-input-types body))))
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature
+                         "use positional fields, or the bare result type for a nullary constructor")))
+    (when (tc:qualified-ty-predicates qual-ty)
+      (tc-error "Malformed GADT constructor"
+                (tc-note signature "typeclass constraints on constructor signatures are not supported")))
+    scheme))
+
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
            (values type-definition-list parser:toplevel-define-instance-list))
 
   (let ((ksubs nil)
-
-        (ctor-table (make-hash-table :test #'eq))
-
         (alias-table (make-hash-table :test #'eq)))
 
-    ;; Infer the kinds of each type
-    (loop :for type :in types
-          :for name := (parser:identifier-src-name (parser:type-definition-name type))
-          :do (loop
-                :for ctor :in (parser:type-definition-ctors type)
-                :for ctor-name
-                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                :for fields
-                  := (loop
-                       :for field :in (parser:type-definition-ctor-field-types ctor)
-                       :collect (multiple-value-bind (type ksubs_)
-                                    (parse-type field env ksubs)
-                                  (setf ksubs ksubs_)
-                                  type))
-                :do (setf (gethash ctor-name ctor-table) fields)))
-
-    ;; Infer the kinds of each type alias.
+    ;; Infer the kinds of each type alias before checking constructor
+    ;; applications that reference those aliases.
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :for parser-aliased-type := (parser:type-definition-aliased-type type)
           :when parser-aliased-type
             :do (multiple-value-bind (aliased-type ksubs_)
-                    (parse-type
+                    (pt:infer-type-kinds
                      parser-aliased-type
-                     env
-                     ksubs
                      (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
                        (loop :while (typep kind 'tc:kfun)
                              :do (setf kind (tc:kfun-to kind)))
-                       kind))
+                       kind)
+                     ksubs
+                     env)
                   (setf ksubs ksubs_)
                   (setf (gethash name alias-table) aliased-type)))
+
+    ;; Infer the kinds of each type in constructor declaration order.
+    (loop :for type :in types
+          :do (loop
+                :for ctor :in (reverse (parser:type-definition-ctors type))
+                :for signature := (parser:type-definition-ctor-signature ctor)
+                :do (cond
+                      (signature
+                       (let ((local (constructor-signature-env env)))
+                         (pt:seed-qualified-type-variables signature local)
+                         (setf ksubs (nth-value 1 (pt:infer-top-qualified-type-kinds
+                                                   signature tc:+kstar+ ksubs local)))))
+                      (t
+                       (dolist (field (parser:type-definition-ctor-field-types ctor))
+                         (setf ksubs (nth-value 1 (pt:infer-type-kinds field tc:+kstar+ ksubs env))))))))
 
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :for ty := (gethash name (partial-type-env-ty-table env))
           :for kind := (tc:apply-ksubstitution ksubs (tc:kind-of ty))
+          :for aliased-type := (gethash name alias-table)
           :do (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables kind) ksubs))
+          :when aliased-type
+            :do (setf ksubs
+                      (tc:kind-monomorphize-subs
+                       (tc:kind-variables (tc:apply-ksubstitution ksubs aliased-type))
+                       ksubs))
           :do (partial-type-env-replace-type env name (tc:make-tycon
                                                        :name name
                                                        :kind (tc:apply-ksubstitution ksubs kind))))
@@ -781,37 +874,52 @@ signaled with the expectation that they may be ignored."
          :for repr-arg
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
+         :for signatures
+           := (nreverse
+               (loop :for ctor :in (reverse (parser:type-definition-ctors type))
+                     :for signature := (parser:type-definition-ctor-signature ctor)
+                     :collect (and signature
+                                   (check-constructor-signature
+                                    ctor
+                                    signature
+                                    (parse-ty-scheme signature (constructor-signature-env alias-partial-env))
+                                    name))))
 
          :for constructor-args
            := (loop
                 :for ctor :in (parser:type-definition-ctors type)
+                :for scheme :in signatures
                 :collect
-                (loop :for parser-field-type
-                        :in (parser:type-definition-ctor-field-types ctor)
-                      :collect (multiple-value-bind (field-type ignored-ksubs)
-                                   (parse-type parser-field-type alias-partial-env ksubs)
-                                 (declare (ignore ignored-ksubs))
-                                 field-type)))
+                (if scheme
+                    (tc:function-type-arguments scheme)
+                    (loop :for parser-field-type
+                            :in (parser:type-definition-ctor-field-types ctor)
+                          :collect (multiple-value-bind (field-type ignored-ksubs)
+                                       (parse-type parser-field-type alias-partial-env ksubs)
+                                     (declare (ignore ignored-ksubs))
+                                     field-type))))
 
          :for constructor-types
            := (loop
+                :for scheme :in signatures
                 :for ctor-args :in constructor-args
-                :for ty
-                  := (tc:prepend-function-input-types
-                      ctor-args
-                      (tc:apply-type-argument-list
-                       (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
-                       tvars))
-                :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
+                :collect
+                (or scheme
+                    (let ((ty (tc:prepend-function-input-types
+                               ctor-args
+                               (tc:apply-type-argument-list
+                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
+                                tvars))))
+                      (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))))
 
          ;; Check that repr :enum types do not have any constructors with fields
          :when (eq repr-type :enum)
            :do (loop
                  :for ctor :in (parser:toplevel-define-type-ctors type)
-                 :unless (endp (parser:constructor-fields ctor))
+                 :for fields :in constructor-args
+                 :when fields
                    :do (tc-error "Invalid repr :enum attribute"
-                                 (tc-note (first (parser:constructor-fields ctor))
-                                          "constructors of repr :enum types cannot have fields")))
+                                 (tc-note ctor "Enum constructors cannot have arguments.")))
 
          ;; Check that repr :transparent types have a single constructor
          :when (eq repr-type :transparent)
@@ -822,7 +930,7 @@ signaled with the expectation that they may be ignored."
 
          ;; Check that the single constructor of a repr :transparent type has a single field
          :when (eq repr-type :transparent)
-           :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
+           :do (unless (= 1 (length (first constructor-args)))
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
@@ -836,6 +944,8 @@ signaled with the expectation that they may be ignored."
              ((ctors
                 (loop
                   :for ctor :in (parser:type-definition-ctors type)
+                  :for fields :in constructor-args
+                  :for scheme :in signatures
                   :for ctor-name
                     := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                   :for classname
@@ -845,13 +955,14 @@ signaled with the expectation that they may be ignored."
                   :collect (tc:make-constructor-entry
                             :name ctor-name
                             :source-name (parser:identifier-src-source-name (parser:type-definition-ctor-name ctor))
-                            :arity (length (parser:type-definition-ctor-field-types ctor))
+                            :arity (length fields)
                             :constructs name
                             :classname classname
                             :docstring ctor-docstring
                             :compressed-repr (if (eq repr-type :enum)
                                                  classname
-                                                 nil))))
+                                                 nil)
+                            :gadt-p (not (null scheme)))))
 
               (type-definition
                 (make-type-definition
@@ -863,7 +974,10 @@ signaled with the expectation that they may be ignored."
                                    (tc:function-type-from
                                     (tc:qualified-ty-type
                                      (tc:fresh-inst (first constructor-types))))
-                                   (partial-type-env-env env)))
+                                   (partial-type-env-env env)
+                                   (mapcar (alexandria:compose #'parser:identifier-src-name
+                                                               #'parser:type-definition-name)
+                                           types)))
                                  ((eq repr-type :native)
                                   repr-arg)
                                  ((eq repr-type :enum)
@@ -884,7 +998,8 @@ signaled with the expectation that they may be ignored."
                  :docstring (source:docstring type)
                  :location (source:location type)
                  :exception-p (parser:type-definition-exception-p type)
-                 :resumption-p (parser:type-definition-resumption-p type))))
+                 :resumption-p (parser:type-definition-resumption-p type)
+                 :gadt-p (not (null (some #'tc:constructor-entry-gadt-p ctors))))))
 
            (setf instances
                  ;; Some generated instances depend only on the raw type

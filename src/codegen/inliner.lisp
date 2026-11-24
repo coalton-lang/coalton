@@ -6,6 +6,7 @@
    (#:traverse #:coalton-impl/codegen/traverse)
    (#:transformations #:coalton-impl/codegen/transformations)
    (#:substitutions #:coalton-impl/codegen/ast-substitutions)
+   (#:pattern #:coalton-impl/codegen/pattern)
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
@@ -138,10 +139,11 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 ;;; Inlining
 
-(defun inline-code-from-application (application abstraction)
+(defun inline-code-from-application (application abstraction env)
   "Bind call arguments sequentially before evaluating the inlined function body."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type ast:node-abstraction abstraction)
+           (type tc:environment env)
            (values ast:node &optional))
 
   (let* ((fresh-abstraction
@@ -206,7 +208,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
               (ast:node-abstraction-subexpr fresh-abstraction)
               t)))
       ;; Call operands have an evaluation order; a recursive LET group does not.
-      (loop :with body := (tc:apply-substitution new-substitutions new-subexpr)
+      (loop :with body := (transformations:specialize-node new-subexpr new-substitutions env)
             :for (name . expr) :in (reverse bindings)
             :do (setf body (ast:make-node-bind
                            :type (ast:node-type application)
@@ -259,7 +261,8 @@ and user-supplied inline declarations to determine if it is appropriate."
        (inline-applications*
         (inline-code-from-application
          application
-         (lookup-global-application-body application env))
+         (lookup-global-application-body application env)
+         env)
         env
         stack
         noinline-functions))
@@ -277,7 +280,8 @@ and user-supplied inline declarations to determine if it is appropriate."
        (inline-applications*
         (inline-code-from-application
          application
-         (lookup-anonymous-application-body application))
+         (lookup-anonymous-application-body application)
+         env)
         env
         stack
         noinline-functions))

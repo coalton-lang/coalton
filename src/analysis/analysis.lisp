@@ -15,44 +15,73 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
+   (#:type-string #:coalton-impl/typechecker/type-string)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:analyze-translation-unit))
 
 (in-package #:coalton-impl/analysis/analysis)
 
-(defun check-pattern-exhaustiveness (pattern env)
+(defun check-pattern-exhaustiveness (pattern input-type env)
   (declare (type tc:pattern pattern)
+           (type tc:ty input-type)
            (type tc:environment env))
-  (let ((missing
-          (find-non-matching-value
-           ;; binding patterns can be collapsed in exhaustiveness check
-           (list (list (collapse-binding-patterns pattern)))
-           1
-           env)))
+  (let* ((pattern (collapse-binding-patterns pattern))
+         (missing (find-non-matching-value (list (list pattern)) (list input-type) env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
                 (source:secondary-note pattern "missing case ~w"
                                        (print-pattern (first missing)))))))
+
+(defun check-parameter-exhaustiveness (patterns function-type env)
+  (when patterns
+    (let ((inputs (tc:function-type-arguments (tc:qualified-ty-type function-type))))
+      (cond ((null (rest patterns))
+             (check-pattern-exhaustiveness (first patterns) (first inputs) env))
+            (t
+             (let ((missing (find-non-matching-value (list (mapcar #'collapse-binding-patterns patterns))
+                                                     inputs env)))
+               (unless (eq t missing)
+                 (tc-error "Non-exhaustive match"
+                           (source:secondary-note (first patterns) "missing arguments ~w"
+                                                  (mapcar #'print-pattern missing))))))))))
 
 (defun analyze-translation-unit (translation-unit env)
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
   (declare (type tc:translation-unit translation-unit)
            (type tc:environment env))
   (flet ((analysis-match-traversal (node)
-           (let ((patterns
+           (let ((scrutinee-type (tc:qualified-ty-type (tc:node-type
+                                                        (tc:node-match-expr node))))
+                 (patterns
                    ;; for exhaustiveness checking, we can collapse
                    ;; binding patterns, (@ VAR PAT) is part of an
                    ;; exhaustive match expression iff PAT is.
                    (loop :for branch :in (tc:node-match-branches node)
                          :for pat := (tc:node-match-branch-pattern branch)
                          :collect (collapse-binding-patterns pat))))
-             (loop :for pattern :in patterns
-                   :do (check-for-var-matching-constructor pattern env))
+             (dolist (pattern patterns)
+               (check-for-var-matching-constructor pattern env)
+               ;; Later uses may have specialized the scrutinee since this
+               ;; arm was checked. Inspect the *local* scrutinee in the
+               ;; elaborated tree; do not export this arm's MGU to its peers.
+               (let ((pattern-type (tc:qualified-ty-type (tc:pattern-type pattern))))
+                 (unless (or (tc:ty= pattern-type scrutinee-type)
+                             (nth-value 1 (tc:try-unify nil pattern-type scrutinee-type :all)))
+                   (tc-error "Incompatible match pattern"
+                             (source:note pattern "Pattern of type '~A' cannot match the scrutinee of type '~A'."
+                                          (type-string:type-to-string pattern-type env)
+                                          (type-string:type-to-string scrutinee-type env))))))
 
              (let ((exhaustive-or-missing
-                     (find-non-matching-value (mapcar #'list patterns) 1 env)))
+                     (find-non-matching-value (mapcar #'list patterns)
+                                              (list scrutinee-type)
+                                              env)))
                (unless (eq t exhaustive-or-missing)
+                 (when (tc:node-match-binding-p node)
+                   (tc-error "Non-exhaustive match"
+                             (source:secondary-note (first patterns) "missing case ~w"
+                                                    (print-pattern (first exhaustive-or-missing)))))
                  (let ((head-note (source:note node "non-exhaustive match"))
                        (tail-notes (if (first exhaustive-or-missing)
                                        (list (source:secondary-note
@@ -62,18 +91,19 @@
                                        nil)))
                    (apply #'source:warn "non-exhaustive match" (list* head-note tail-notes))))
                (loop :for pattern :in patterns
-                     :unless (useful-pattern-p patterns pattern env) :do
+                     :unless (useful-pattern-p patterns pattern env scrutinee-type) :do
                        (source:warn "Useless match case"
                                     (source:note pattern "useless match case")
                                     (source:note node "in this match"))))))
 
          (analysis-abstraction-traversal (node)
            (declare (type tc:node-abstraction node))
-           (loop :for pattern :in (tc:node-abstraction-params node)
-                 :do (check-pattern-exhaustiveness pattern env)))
+           (check-parameter-exhaustiveness (tc:node-abstraction-params node) (tc:node-type node) env))
          (analysis-bind-traversal (node)
            (declare (type tc:node-bind node))
-           (check-pattern-exhaustiveness (tc:node-bind-pattern node) env)))
+           (check-pattern-exhaustiveness (tc:node-bind-pattern node)
+                                         (tc:qualified-ty-type (tc:node-type (tc:node-bind-expr node)))
+                                         env)))
 
     (let ((analysis-traverse-block
             (tc:make-traverse-block
@@ -87,8 +117,7 @@
             :do (find-unused-variables define)
             :do (find-underapplied-values define)
             :do (find-discarded-results define)
-            :do (loop :for pattern :in (tc:binding-parameters define)
-                      :do (check-pattern-exhaustiveness pattern env)))
+            :do (check-parameter-exhaustiveness (tc:binding-parameters define) (tc:binding-type define) env))
 
       ;; Run analysis on instance definitions
       (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
@@ -96,8 +125,7 @@
               :do (tc:visit (tc:instance-method-definition-body method) analysis-traverse-block)
               :do (find-underapplied-values method)
               :do (find-discarded-results method)
-              :do (loop :for pattern :in (tc:binding-parameters method)
-                        :do (check-pattern-exhaustiveness pattern env)))))))
+              :do (check-parameter-exhaustiveness (tc:binding-parameters method) (tc:binding-type method) env))))))
 
 (defgeneric print-pattern (pat)
   (:method ((pat tc:pattern-constructor))

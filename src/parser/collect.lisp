@@ -70,7 +70,7 @@
 
   (:method ((ctor constructor))
     (declare (values tycon-list))
-    (mapcan #'collect-referenced-types-generic% (constructor-fields ctor)))
+    (collect-referenced-types-generic% (or (constructor-signature ctor) (constructor-fields ctor))))
 
   (:method ((type toplevel-define-type))
     (declare (values tycon-list))

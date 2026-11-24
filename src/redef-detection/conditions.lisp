@@ -3,15 +3,18 @@
   (:local-nicknames
    (#:tc-scheme #:coalton-impl/typechecker/scheme)
    (#:tc-env #:coalton-impl/typechecker/environment)
+   (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
    (#:deps #:coalton-impl/redef-detection/dependencies))
   (:export
    #:incompatible-redefinition
+   #:incompatible-gadt-redefinition
    #:redefinition-function-name
    #:redefinition-old-type
    #:redefinition-new-type
    #:redefinition-affected-functions
    #:raise-redefinition-error
+   #:raise-gadt-redefinition-error
    #:abort-redefinition
    #:continue-anyway
    #:abort-redef))
@@ -63,11 +66,11 @@
    (old-type
     :initarg :old-type
     :reader redefinition-old-type
-    :type tc-scheme:ty-scheme)
+    :type (or tc-scheme:ty-scheme list))
    (new-type
     :initarg :new-type
     :reader redefinition-new-type
-    :type tc-scheme:ty-scheme)
+    :type (or tc-scheme:ty-scheme list))
    (affected-functions
     :initarg :affected-functions
     :reader redefinition-affected-functions
@@ -84,18 +87,58 @@
              (redefinition-old-type condition))
      (format stream "  New: ~A~%"
              (redefinition-new-type condition))
-     (let ((affected (redefinition-affected-functions condition))
-           (env (redefinition-environment condition)))
-       (when affected
-         (format stream "~%  Affected functions (~D):~%"
-                 (length affected))
-         (dolist (fn affected)
-           (let ((location (deps:get-function-location fn env)))
-             (if location
-                 (format stream "    - ~A (~A)~%"
-                         (format-function-name fn)
-                         (format-location location))
-                 (format stream "    - ~A~%" (format-function-name fn))))))))))
+     (report-affected-functions condition stream "Affected functions"))))
+
+(defun report-affected-functions (condition stream label)
+  (let ((affected (redefinition-affected-functions condition))
+        (env (redefinition-environment condition)))
+    (when affected
+      (format stream "~%  ~A (~D):~%" label (length affected))
+      (dolist (fn affected)
+        (let ((location (deps:get-function-location fn env)))
+          (if location
+              (format stream "    - ~A (~A)~%" (format-function-name fn) (format-location location))
+              (format stream "    - ~A~%" (format-function-name fn))))))))
+
+(define-condition incompatible-gadt-redefinition (incompatible-redefinition) ()
+  (:report
+   (lambda (condition stream)
+     (format stream "Redefining ~A invalidates GADT constructor evidence.~%"
+             (format-function-name (redefinition-function-name condition)))
+     (flet ((report-contract (label contract)
+              (format stream "  ~A (~S):~{~%    ~{~S: ~A~}~}~%"
+                      label (car contract) (cdr contract))))
+       (report-contract "Old representation and constructors" (redefinition-old-type condition))
+       (report-contract "New representation and constructors" (redefinition-new-type condition)))
+     (report-affected-functions condition stream "Known constructor dependents")
+     (format stream "Existing values and compiled matches can still rely on the old definition. ~
+Continuing does not update them."))))
+
+(defun raise-gadt-redefinition-error (name old new env)
+  ;; The function dependency registry does not track live inhabitants, or
+  ;; exhaustiveness decisions made from a constructor's *absence*.
+  (let* ((dependencies (remove-duplicates
+                        (mapcan (lambda (entry) (deps:find-affected-functions (first entry)))
+                                (rest old))))
+         (condition (make-condition 'incompatible-gadt-redefinition
+                                    :function-name name :old-type old :new-type new
+                                    :affected-functions dependencies :environment env)))
+    (flet ((continue-with-warning ()
+             (warn "Continuing despite an incompatible redefinition.~%~A" condition)))
+      (restart-case
+          (if settings:*auto-continue-redefinition*
+              (continue-with-warning)
+              (error condition))
+        (abort-redefinition ()
+          :report "Abort this compilation or load and keep the previous definition"
+          ;; Do not just skip the environment update: the rest of a FASL
+          ;; contains code compiled against the incompatible definition.
+          (let ((abort (find-restart 'abort)))
+            (when abort (invoke-restart abort))
+            (error "Aborted incompatible redefinition of ~S." name)))
+        (continue-anyway ()
+          :report "Continue anyway without updating existing values or compiled matches"
+          (continue-with-warning))))))
 
 (defun raise-redefinition-error (&rest initargs)
   "Signal an incompatible-redefinition error with the given initargs."

@@ -94,10 +94,12 @@
    #:make-node-match-branch             ; CONSTRUCTOR
    #:node-match-branch-pattern          ; ACCESSOR
    #:node-match-branch-body             ; ACCESSOR
+   #:node-match-branch-id               ; ACCESSOR
    #:node-match-branch-list             ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
+   #:node-match-binding-p               ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
@@ -354,6 +356,7 @@
 
 (defstruct (node-match-branch
             (:copier nil))
+  (id       (gensym "BRANCH-")       :type symbol          :read-only t)
   (pattern  (util:required 'pattern)  :type pattern         :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
@@ -367,6 +370,7 @@
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)         :type node                   :read-only t)
+  (binding-p nil                          :type boolean                :read-only t)
   (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
 
 (defstruct (node-progn
@@ -688,6 +692,7 @@
   (declare (type tc:substitution-list subs)
            (values node-match-branch))
   (make-node-match-branch
+   :id (node-match-branch-id node)
    :pattern (tc:apply-substitution subs (node-match-branch-pattern node))
    :body (tc:apply-substitution subs (node-match-branch-body node))
    :location (source:location node)))
@@ -699,6 +704,7 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
+   :binding-p (node-match-binding-p node)
    :branches (tc:apply-substitution subs (node-match-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-catch-branch))

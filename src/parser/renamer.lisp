@@ -440,6 +440,7 @@
     (values
      (make-node-match
       :expr (rename-variables-generic% (node-match-expr node) ctx)
+      :binding-p (node-match-binding-p node)
       :branches (rename-variables-generic% (node-match-branches node) ctx)
       :location (source:location node))
      ctx))
@@ -1076,6 +1077,7 @@
              (values constructor))
     (make-constructor
      :name (constructor-name ctor)
+     :signature (constructor-signature ctor)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
      :docstring (source:docstring ctor)
      :location (source:location ctor)))

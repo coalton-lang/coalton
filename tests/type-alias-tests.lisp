@@ -380,6 +380,13 @@
                                (tc:lookup-type env (intern (string-upcase name) *package*)))))))
       (delete-package *package*))))
 
+(deftest gadt-result-indices-are-not-phantom ()
+  (is (equal '((:invariant :invariant) (:invariant))
+             (type-alias-test-variances
+              "(define-type (Same :a :b) (declare Refl (Same :x :x)))
+               (define-type (Evidence :a) (Ev (Same :a Integer)))"
+              "Same" "Evidence"))))
+
 (deftest test-contravariant-type-parameter-variance ()
 
   (is (equal '((:contravariant) (:covariant) (:contravariant) (:covariant))

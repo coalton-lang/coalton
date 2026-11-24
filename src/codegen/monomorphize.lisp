@@ -44,6 +44,7 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:action
+   #:specialize-node
    #:traverse-with-binding-list
    #:node-free-p)
   (:import-from
@@ -85,8 +86,6 @@ ARGUMENTS some of which are statically known dictionaries."
   (name      (util:required 'name) :type symbol        :read-only t)
   (args      (util:required 'args) :type argument-list :read-only t))
 
-(util:define-list-type compile-candidate-list compile-candidate-p)
-
 (defun propagatable-p (x)
   (not (eq x '@@unpropagated)))
 
@@ -122,7 +121,11 @@ constant values could be."
   "A CANDIDATE-MANAGER is used to deduplicate COMPILE-CANDIDATE
 recompilation, and also maintains a stack of uncompiled candidates."
   (map   (make-hash-table :test #'equalp) :type hash-table            :read-only t)
-  (stack nil                              :type compile-candidate-list            ))
+  ;; Each work item pairs a new candidate with the names on its discovery path.
+  (stack nil :type list)
+  (remaining 0 :type (integer 0)))
+
+(defparameter *max-clones-per-root* 128)
 
 (defun candidate-manager-get (candidate-manager candidate)
   "Returns name the given to a compile-candidate"
@@ -132,13 +135,17 @@ recompilation, and also maintains a stack of uncompiled candidates."
   (let ((name (gethash candidate (candidate-manager-map candidate-manager))))
     name))
 
-(defun candidate-manager-push (candidate-manager candidate package)
+(defun candidate-manager-push (candidate-manager candidate package ancestors)
   "Push a new candidate to be compiled. This function is idempotent."
   (declare (type candidate-manager candidate-manager)
            (type compile-candidate candidate)
            (values))
 
-  (when (candidate-manager-get candidate-manager candidate)
+  ;; An exact recursive call can reuse its clone. Do not create a different
+  ;; one along that cycle: its dictionary may grow at every recursive call.
+  (when (or (candidate-manager-get candidate-manager candidate)
+            (member (compile-candidate-name candidate) ancestors :test #'eq)
+            (zerop (candidate-manager-remaining candidate-manager)))
     (return-from candidate-manager-push nil))
 
   (let ((new-name
@@ -147,15 +154,11 @@ recompilation, and also maintains a stack of uncompiled candidates."
 
     (setf (gethash candidate (candidate-manager-map candidate-manager)) new-name))
 
-  (push candidate (candidate-manager-stack candidate-manager))
+  (decf (candidate-manager-remaining candidate-manager))
+  (push (cons candidate (cons (compile-candidate-name candidate) ancestors))
+        (candidate-manager-stack candidate-manager))
 
   nil)
-
-(defun candidate-manager-pop (candidate-manager)
-  "Returns a candidate that has been queued for compilation"
-  (declare (type candidate-manager candidate-manager)
-           (values (or null compile-candidate)))
-  (pop (candidate-manager-stack candidate-manager)))
 
 (defun valid-candidate-p (name args bound-variables env)
   "Returns the candidate for a given function and arguments. Returns nil if a given application cannot be a candidate."
@@ -234,12 +237,10 @@ recompilation, and also maintains a stack of uncompiled candidates."
             (cond
               ;; Candidate is fully applied
               ((= (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
-               (tc:apply-substitution
-                subs
-                (make-node-abstraction
-                 :type (tc:prepend-function-input-types arg-tys new-type)
-                 :vars new-vars
-                 :subexpr subexpr)))
+               (make-node-abstraction
+                :type (tc:prepend-function-input-types arg-tys new-type)
+                :vars new-vars
+                :subexpr subexpr))
 
               ;; Overapplication
               ((> (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
@@ -260,24 +261,16 @@ recompilation, and also maintains a stack of uncompiled candidates."
                  (unless (every (lambda (x) (eq x '@@unpropagated)) remaining-args)
                    (util:coalton-bug "something has gone terribly wrong"))
 
-                 (tc:apply-substitution
-                  subs
-                  (make-node-abstraction
-                   :type (tc:merge-function-input-types
-                          arg-tys
-                          new-type)
-                   :vars (append new-vars remaining-names)
-                   :subexpr (make-node-application
-                             :type (tc:function-remove-arguments
-                                    new-type
-                                    num-remaining)
-                             :properties '()
-                             :rator subexpr
-                             :rands (loop :for name :in remaining-names
-                                          :for ty :in remaining-types
-                                          :collect (make-node-local-variable
-                                                    :type ty
-                                                    :value name)))))))
+                 (make-node-abstraction
+                  :type (tc:merge-function-input-types arg-tys new-type)
+                  :vars (append new-vars remaining-names)
+                  :subexpr (make-node-application
+                            :type (tc:function-remove-arguments new-type num-remaining)
+                            :properties '()
+                            :rator subexpr
+                            :rands (loop :for name :in remaining-names
+                                         :for ty :in remaining-types
+                                         :collect (make-node-local-variable :type ty :value name))))))
               ;; Underapplication
               ((< (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
                (let* ((remaining-parameters (util:drop (length (compile-candidate-args candidate)) (node-abstraction-vars node))))
@@ -287,17 +280,16 @@ recompilation, and also maintains a stack of uncompiled candidates."
                                    :vars remaining-parameters
                                    :subexpr subexpr)))
                    (if (null new-vars)
-                       (tc:apply-substitution subs inner-abs)
-                        (tc:apply-substitution
-                         subs
-                         (make-node-abstraction
-                          :vars new-vars
-                         :type (tc:prepend-function-input-types arg-tys new-type)
-                          :subexpr inner-abs))))))
+                       inner-abs
+                       (make-node-abstraction
+                        :vars new-vars
+                        :type (tc:prepend-function-input-types arg-tys new-type)
+                        :subexpr inner-abs)))))
 
               (t
                (util:unreachable)))))
 
+      (setf new-node (specialize-node new-node subs env))
       (typecheck-node new-node env)
       new-node)))
 
@@ -318,7 +310,7 @@ propagate dictionaries that have been moved by the hoister."
         resolved
         node)))
 
-(defun candidate-selection (node candidate-manager resolve-table package env)
+(defun candidate-selection (node candidate-manager resolve-table package env &optional ancestors)
   (declare (type node node)
            (type candidate-manager candidate-manager)
            (type hash-table resolve-table)
@@ -347,7 +339,7 @@ propagate dictionaries that have been moved by the hoister."
                  (unless candidate
                    (return-from validate-candidate nil))
 
-                 (candidate-manager-push candidate-manager candidate package)
+                 (candidate-manager-push candidate-manager candidate package ancestors)
 
                  nil))))
 
@@ -378,19 +370,17 @@ propagate dictionaries that have been moved by the hoister."
                (unless name
                  (return-from apply-candidate nil))
 
-               (let ((candidate (valid-candidate-p
-                                 name
-                                 (loop :for rand :in rands
-                                       :collect (resolve-var rand resolve-table))
-                                 bound-variables
-                                 env)))
-
-                 (unless candidate
+               (let* ((candidate (valid-candidate-p
+                                  name
+                                  (loop :for rand :in rands
+                                        :collect (resolve-var rand resolve-table))
+                                  bound-variables
+                                  env))
+                      (function-name (and candidate (candidate-manager-get candidate-manager candidate))))
+                 (unless function-name
                    (return-from apply-candidate nil))
 
-                 (let* ((function-name (candidate-manager-get candidate-manager candidate))
-
-                        (new-type (node-rator-type node))
+                 (let* ((new-type (node-rator-type node))
 
                         (arg-tys nil) 
 
@@ -439,12 +429,12 @@ propagate dictionaries that have been moved by the hoister."
 
          (binding-group nil))
 
+    (setf (candidate-manager-remaining manager) *max-clones-per-root*)
     (candidate-selection initial-code manager resolve-table package env)
     (push (cons name (rewrite-callsites initial-code manager resolve-table env)) binding-group)
 
-    (loop :for candidate := (candidate-manager-pop manager)
-          :while candidate
-
+    (loop :while (candidate-manager-stack manager)
+          :for (candidate . ancestors) := (pop (candidate-manager-stack manager))
           :for name := (compile-candidate-name candidate)
           :for code := (tc:lookup-code env name)
           :for function-env-entry := (tc:lookup-function env name :no-error t)
@@ -454,13 +444,13 @@ propagate dictionaries that have been moved by the hoister."
           :for new-code := (funcall optimize-node (compile-candidate candidate code env) env)
 
           :for new-code_ := (progn
-                              (candidate-selection new-code manager resolve-table package env)
+                              (candidate-selection new-code manager resolve-table package env ancestors)
                               (rewrite-callsites new-code manager resolve-table env))
 
           :for new-code__ := (funcall optimize-node new-code_ env)
           :for candidate-name := (candidate-manager-get manager candidate)
 
-          :do (candidate-selection new-code__ manager resolve-table package env)
+          :do (candidate-selection new-code__ manager resolve-table package env ancestors)
           :do (push (cons candidate-name (rewrite-callsites new-code__ manager resolve-table env))
                     binding-group)
           :do (when inline-p

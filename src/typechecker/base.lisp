@@ -27,6 +27,8 @@
    #:lisp-error-type-name               ; FUNCTION
    #:with-pprint-variable-scope         ; MACRO
    #:with-pprint-variable-context       ; MACRO
+   #:*shared-type-names*                ; VARIABLE
+   #:with-shared-type-names             ; MACRO
    ))
 
 (in-package #:coalton-impl/typechecker/base)
@@ -88,6 +90,21 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
          (*coalton-pretty-print-tyvars* t))
      (with-pprint-variable-scope ()
        ,@body)))
+
+(defvar *shared-type-names* nil
+  "When true, TYPE-TO-STRING names variables in the enclosing pretty printing context.")
+
+(defmacro with-shared-type-names (() &body body)
+  "Name type variables consistently across every type rendered as a string by BODY.
+
+A diagnostic which renders several types separately would otherwise give two
+distinct variables with the same source name the same printed name."
+  `(flet ((body () ,@body))
+     (if *shared-type-names*
+         (body)
+         (with-pprint-variable-context ()
+           (let ((*shared-type-names* t))
+             (body))))))
 
 ;;;
 ;;; Conditions

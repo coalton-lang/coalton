@@ -74,6 +74,14 @@ EQL-specialize on symbol `class'."))
   (loop :for type :in (append types structs)
         :for derive := (parser:type-definition-derive type)
         :for classes := (and derive (parser:attribute-derive-classes derive))
+        :do (when (and classes
+                       (some #'parser:type-definition-ctor-signature
+                             (parser:type-definition-ctors type)))
+              (let ((location (parser:toplevel-define-type-head-location type)))
+                (parser:parse-error "Invalid derive application"
+                                    (parser:note (source:location-source location)
+                                                 (source:location-span location)
+                                                 " cannot apply (derive) to a GADT definition"))))
         :unless (null classes)
           :nconc (loop :for class :in (cst:raw classes)
                        :collect (make-toplevel-derivation

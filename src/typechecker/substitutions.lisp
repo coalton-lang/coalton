@@ -171,7 +171,6 @@ Substitution returns its argument when nothing in it changes."
     (mapcar (lambda (x) (apply-substitution subst-list x)) type-list)))
 
 
-
 (defun pprint-substitution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)
            (ignore at-sign-p))

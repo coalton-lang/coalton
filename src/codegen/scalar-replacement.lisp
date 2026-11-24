@@ -28,6 +28,9 @@ calling conventions.")
    #:traverse-with-binding-list)
   (:import-from
    #:coalton-impl/codegen/transformations
+   #:specialize-match
+   #:open-known-constructor
+   #:unwrap-known-constructor-branch
    #:inlined-some-operand
    #:inlined-cons-operands
    #:node-abstraction-bound-variables
@@ -770,8 +773,10 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                       (every (lambda (subpat)
                                (irrefutable-pattern-p subpat env))
                              (pattern-constructor-patterns pat)))
-                 (let ((out (copy-node branch-body (node-type match-node))))
-                   (loop :for subpat :in (reverse (pattern-constructor-patterns pat))
+                 (multiple-value-bind (children out opened)
+                     (open-known-constructor pat fields (copy-node branch-body (node-type match-node)) env)
+                   (unless opened (return (values nil nil)))
+                   (loop :for subpat :in (reverse children)
                          :for field :in (reverse fields)
                          :do (setf out (bind-irrefutable-pattern subpat field out)))
                    (return (values out nil))))
@@ -781,13 +786,14 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                       (eq ctor-name (pattern-constructor-name pat))
                       (= 1 (length (pattern-constructor-patterns pat))))
                  (let* ((field (first fields))
-                        (field-ty (pattern-type (first (pattern-constructor-patterns pat))))
+                        (field-ty (node-type field))
                         (unwrapped-branches
                           (loop :for rem-branch :in rest-branches
                                 :for rem-pat := (match-branch-pattern rem-branch)
                                 :for rem-body := (match-branch-body rem-branch)
                                 :if (pattern-wildcard-p rem-pat)
                                   :collect (make-match-branch
+                                            :index-equalities (match-branch-index-equalities rem-branch)
                                             :pattern (make-pattern-wildcard :type field-ty)
                                             :body rem-body)
                                   :and :do (loop-finish)
@@ -795,6 +801,7 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                                                (node-free-p rem-body
                                                             (list (pattern-var-name rem-pat))))
                                         :collect (make-match-branch
+                                                  :index-equalities (match-branch-index-equalities rem-branch)
                                                   :pattern (make-pattern-wildcard :type field-ty)
                                                   :body rem-body)
                                         :and :do (loop-finish)
@@ -806,16 +813,17 @@ branch struct when CTOR matched a catch-all wildcard or unused-variable branch."
                                                (eq ctor-name
                                                    (pattern-constructor-name rem-pat))
                                                (= 1 (length (pattern-constructor-patterns rem-pat))))
-                                        :collect (make-match-branch
-                                                  :pattern (first (pattern-constructor-patterns rem-pat))
-                                                  :body rem-body)
+                                        :collect (or (unwrap-known-constructor-branch rem-branch fields env)
+                                                     (return nil))
                                 :else
                                   :do (return nil))))
                    (when unwrapped-branches
-                     (return (values (make-node-match
-                                      :type (node-type match-node)
-                                      :expr (copy-node field field-ty)
-                                      :branches unwrapped-branches)
+                     (return (values (specialize-match
+                                      (make-node-match
+                                       :type (node-type match-node)
+                                       :expr field
+                                       :branches unwrapped-branches)
+                                      field env)
                                      nil)))
                    (return (values nil nil))))
 
@@ -859,7 +867,13 @@ hidden in Lisp escapes, direct calls, and keyword arguments."
     (when (node-free-p body (list name))
       body)))
 
-(defun default-node-for-type (ty env)
+(defun type-application-count (ty)
+  (if (tc:tapp-p ty)
+      (+ 1 (type-application-count (tc:tapp-from ty))
+           (type-application-count (tc:tapp-to ty)))
+      0))
+
+(defun default-node-for-type (ty env &optional outer-wrappers)
   "Return a pure, allocation-free placeholder node of Coalton type TY for
 unboxed sum payload slots in branches that construct a different variant, or
 NIL when no zero-cost placeholder is available."
@@ -871,15 +885,25 @@ NIL when no zero-cost placeholder is available."
          (entry (and tcon-name (tc:lookup-type env tcon-name :no-error t))))
     (cond
       ((and entry (tc:type-entry-newtype entry))
-       (let* ((ctor-name (first (tc:type-entry-constructors entry)))
-              (scheme (and ctor-name (tc:lookup-value-type env ctor-name :no-error t))))
-         (when scheme
-           (let* ((ctor-ty (tc:qualified-ty-type (tc:fresh-inst scheme)))
-                  (subs (tc:match (tc:function-return-type ctor-ty) ty))
-                  (inner-ty (tc:apply-substitution subs (tc:function-type-from ctor-ty)))
-                  (inner-node (default-node-for-type inner-ty env)))
-             (when inner-node
-               (copy-node inner-node ty))))))
+       ;; Peeling (Box (Box Integer)) consumes a known layer. Unfolding
+       ;; (Peel :a), with MkPeel :: Peel :x -> Peel (List :x), only replaces
+       ;; one unknown index with another. Don't follow such cycles.
+       (alexandria:when-let ((previous (assoc tcon-name outer-wrappers)))
+         (unless (< (type-application-count ty) (type-application-count (cdr previous)))
+           (return-from default-node-for-type nil)))
+       (let* ((ctor (first (tc:type-entry-constructors entry)))
+              (ctor-ty (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type env ctor)))))
+         ;; If this slot is occupied, its sole constructor witnesses the
+         ;; result indices. Use that equality to find the representation,
+         ;; not to specialize TY in the surrounding function.
+         (multiple-value-bind (subs applicable-p)
+             (tc:try-unify nil (tc:function-return-type ctor-ty) ty :all)
+           (when applicable-p
+             (let* ((inner-ty (tc:apply-substitution subs (tc:function-type-from ctor-ty)))
+                    (inner-node (default-node-for-type inner-ty env
+                                                       (acons tcon-name ty outer-wrappers))))
+               (when inner-node
+                 (copy-node inner-node ty)))))))
 
       ((member tcon-name
                '(coalton:Bit coalton:U8 coalton:U16 coalton:U32 coalton:U64
@@ -919,7 +943,11 @@ NIL when no zero-cost placeholder is available."
         :type ty
         :value (first (tc:type-entry-constructors entry))))
 
-      (t
+      ;; The Lisp type of an open slot can narrow after specialization.
+      ;; NIL is not a default for every :A. An explicit native representation,
+      ;; on the other hand, fixes the slot type regardless of its parameters.
+      ((or (and entry (typep (tc:type-entry-explicit-repr entry) '(cons (eql :native))))
+           (null (tc:type-variables ty)))
        (let ((lisp-ty (tc:lisp-type ty env)))
          (cond
            ((or (eq lisp-ty 't)
@@ -1087,12 +1115,24 @@ spine node types to TARGET-TYPE."
            :expr (node-match-expr node)
            :branches (loop :for branch :in (node-match-branches node)
                            :collect (make-match-branch
+                                     :index-equalities (match-branch-index-equalities branch)
                                      :pattern (match-branch-pattern branch)
                                      :body (rewrite-adt-branch-leaves
                                             (match-branch-body branch)
                                             target-type
                                             leaf-fn
                                             env))))))))))
+
+(defun constructor-index-equalities (ctor type env)
+  (declare (type tc:constructor-entry ctor)
+           (type tc:ty type)
+           (type tc:environment env)
+           (values tc:ty-list &optional))
+  (when (tc:constructor-entry-gadt-p ctor)
+    (list type
+          (tc:function-return-type
+           (tc:qualified-ty-type
+            (tc:fresh-inst (tc:lookup-value-type env (tc:constructor-entry-name ctor))))))))
 
 (defun replace-sum-reads (body name distinct-ctors ctor-fields-alist tag-var boolean-tag-p env)
   "Replace `node-match` uses of sum-type binding NAME with matches on TAG-VAR."
@@ -1126,7 +1166,8 @@ spine node types to TARGET-TYPE."
                   (unless failed?
                     (setf reduced-bodies (nreverse reduced-bodies)
                           catch-branches (nreverse catch-branches))
-                    (let ((first-catch (find-if #'identity catch-branches)))
+                    (let ((first-catch (find-if #'identity catch-branches))
+                          (scrutinee (node-type (node-match-expr node))))
                       (cond
                         ;; Every constructor hit the same wildcard branch.
                         ((and first-catch
@@ -1140,12 +1181,14 @@ spine node types to TARGET-TYPE."
                           :expr (copy-node tag-var tc:*boolean-type*)
                           :branches
                           (list (make-match-branch
+                                 :index-equalities (constructor-index-equalities (first distinct-ctors) scrutinee env)
                                  :pattern (make-pattern-constructor
                                            :type tc:*boolean-type*
                                            :name 'coalton:True
                                            :patterns nil)
                                  :body (first reduced-bodies))
                                 (make-match-branch
+                                 :index-equalities (constructor-index-equalities (second distinct-ctors) scrutinee env)
                                  :pattern (make-pattern-constructor
                                            :type tc:*boolean-type*
                                            :name 'coalton:False
@@ -1166,9 +1209,11 @@ spine node types to TARGET-TYPE."
                             (append
                              (loop :for body-j :in reduced-bodies
                                    :for catch-j :in catch-branches
+                                   :for ctor :in distinct-ctors
                                    :for index :from 0
                                    :unless catch-j
                                      :collect (make-match-branch
+                                               :index-equalities (constructor-index-equalities ctor scrutinee env)
                                                :pattern (make-pattern-literal
                                                          :type tc:*ufix-type*
                                                          :value index)
@@ -1185,17 +1230,32 @@ spine node types to TARGET-TYPE."
                           :branches
                           (append
                            (loop :for body-j :in (butlast reduced-bodies)
+                                 :for ctor :in distinct-ctors
                                  :for index :from 0
                                  :collect (make-match-branch
+                                           :index-equalities (constructor-index-equalities ctor scrutinee env)
                                            :pattern (make-pattern-literal
                                                      :type tc:*ufix-type*
                                                      :value index)
                                            :body body-j))
                            (list (make-match-branch
+                                  :index-equalities (constructor-index-equalities (car (last distinct-ctors)) scrutinee env)
                                   :pattern (make-pattern-wildcard :type tc:*ufix-type*)
                                   :body (car (last reduced-bodies)))))))))))))))))
     (when (node-free-p body (list name))
       body)))
+
+(defun consistent-constructor-fields-p (leaves)
+  ;; A single existential constructor may package different types at each
+  ;; allocation site. Compare complete field types, not just Lisp layouts.
+  (let ((samples (make-hash-table :test #'eq)))
+    (loop :for (ctor nil args) :in leaves
+          :always (multiple-value-bind (sample found-p) (gethash ctor samples)
+                    (cond (found-p
+                           (and (= (length args) (length sample))
+                                (every (lambda (a b) (tc:ty= (node-type a) (node-type b))) args sample)))
+                          (t (setf (gethash ctor samples) args)
+                             t))))))
 
 (defun scalar-replace-branching-binding (name expr body env)
   "Scalar-replace a local binding whose initializer branches across `if`/`match`
@@ -1208,7 +1268,7 @@ and constructs known ADTs at every returning leaf."
     (when (and ok? leaves)
       (let* ((type (second (first leaves)))
              (same-type-p (every (lambda (leaf) (eq type (second leaf))) leaves)))
-        (when same-type-p
+        (when (and same-type-p (consistent-constructor-fields-p leaves))
           (let ((distinct-ctors
                   (remove-duplicates (mapcar #'first leaves) :test #'eq)))
             (cond
@@ -1496,6 +1556,7 @@ and update spine node types to TARGET-TYPE."
            :expr (node-match-expr node)
            :branches (loop :for branch :in (node-match-branches node)
                            :collect (make-match-branch
+                                     :index-equalities (match-branch-index-equalities branch)
                                      :pattern (match-branch-pattern branch)
                                      :body (rewrite-cell-branch-leaves
                                             (match-branch-body branch)

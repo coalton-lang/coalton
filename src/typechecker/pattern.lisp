@@ -37,6 +37,7 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-openings       ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    ))
@@ -81,7 +82,10 @@
             (:include pattern)
             (:copier nil))
   (name     (util:required 'name)     :type parser:identifier :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list      :read-only t))
+  (patterns (util:required 'patterns) :type pattern-list      :read-only t)
+  ;; (scheme binder index . fresh skolem) BEFORE checking the subpatterns.
+  ;; These are binders, not uses to be rewritten by branch refinements.
+  (openings nil :type list :read-only t))
 
 ;;;
 ;;; Methods
@@ -159,4 +163,5 @@
    :type (tc:apply-substitution subs (pattern-type node))
    :location (pattern-location node)
    :name (pattern-constructor-name node)
+   :openings (pattern-constructor-openings node)
    :patterns (tc:apply-substitution subs (pattern-constructor-patterns node))))

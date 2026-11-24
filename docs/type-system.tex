@@ -1,0 +1,2034 @@
+% Build from docs with pdflatex type-system.tex until the references settle.
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1.05in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[hyphens]{url}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={The type system of Coalton}}
+\setcounter{tocdepth}{2}
+\setlength{\emergencystretch}{1.5em}
+\raggedbottom
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{invariant}[theorem]{Invariant}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\src}[1]{\nolinkurl{#1}}
+\newcommand{\fv}{\operatorname{fv}}
+\newcommand{\dom}{\operatorname{dom}}
+\newcommand{\pack}{\operatorname{out}}
+\newcommand{\Fn}{\mathsf{Fn}}
+\newcommand{\Pack}{\mathsf{Pack}}
+\newcommand{\Bool}{\mathsf{Boolean}}
+\newcommand{\Int}{\mathsf{Integer}}
+\newcommand{\Str}{\mathsf{String}}
+\newcommand{\Unit}{\mathsf{Unit}}
+\newcommand{\Void}{\mathsf{Void}}
+\newcommand{\List}{\mathsf{List}}
+\newcommand{\Dict}{\mathsf{Dict}}
+\newcommand{\sel}{\operatorname{select}}
+\newcommand{\clo}{\operatorname{cl}}
+\newcommand{\eqs}{\doteq}
+\newcommand{\mgu}{\operatorname{mgu}}
+\newcommand{\oneway}{\mathrel{\triangleright}}
+\newcommand{\given}{\,;\,}
+\newcommand{\chk}{\mathrel{\Leftarrow}}
+\newcommand{\arr}{\mathbin{\to}}
+\newcommand{\rrule}[3]{\frac{\displaystyle #2}{\displaystyle #3}
+                       \;{\scriptstyle[\textsf{#1}]}}
+% Keep identifier-heavy source notes in a short, ragged-right paragraph.
+\long\def\sources#1\par{\par\smallskip\begingroup\small\raggedright
+                       \noindent\textit{Source:} #1\par\endgroup}
+
+\title{The type system of Coalton}
+\author{}
+\date{Source revision \texttt{8f69e30780f4}, based on \texttt{34e112ad}}
+\begin{document}
+\maketitle
+
+{\centering
+\fbox{An automated AI system created this document and updates it periodically.}\par}
+
+\begin{abstract}
+Coalton checks expressions against expected types while inferring substitutions,
+class constraints and field selections. Three operations that look like solving
+the same equation have different authority: unification may determine a caller's
+unknowns, instance matching must not, and a constructor test may refine an
+index only on the path on which the test succeeds. We specify these operations,
+where inference calls them, and what leaves each scope. We prove first-order
+unification, fixed-environment evidence and conditional improvement results,
+and isolate a sharing invariant at generalization. We prove progress and
+preservation for a pure, nonrecursive indexed core with exhaustive cases.
+The connection to the checker covers a monomorphic fragment and a family of
+explicitly quantified eliminators, not arbitrary GADT inference or generated
+Common Lisp. A compiled instance retains its evidence interface across
+extensions. We show why admission justifies agreement on shared inputs
+under its prerequisite hypotheses and how recursive instance search
+can reach a base case even when its arguments grow, without treating
+that growth as evidence.
+\end{abstract}
+\tableofcontents
+
+\section{What is being specified}
+
+The input is a parsed, macroexpanded (where the parser expands macros),
+lexically renamed Coalton program, in a fixed compiler environment. Symbols
+include their packages; different fresh names with the same printed spelling
+are different variables. Source examples use the usual Coalton syntax;
+formulas use an abstract syntax in which, for instance, $D\,s\,t$ is
+left-associated type application, not a call. A bar denotes an ordered finite
+list, possibly empty; $P\mathbin{+\!\!+}Q$ concatenates two lists in order.
+Substitutions act pointwise on lists. Finite sets are used
+when order and multiplicity are immaterial. $\fv$ means free \emph{type}
+variables, including free skolems, not term variables. Spelling, diagnostic
+locations and alias histories do not justify type equations.
+
+There are three levels of statement here:
+\begin{itemize}
+\item A \emph{meaning} rule says what a type or piece of evidence licenses.
+It need not say how to find it. In particular, an equality given by a pattern
+is not a unification request from its body.
+\item A \emph{checking} rule or procedure describes a successful compiler path;
+failed premises reject that path unless a fallback is specified. We specify
+type-relevant decisions, not the choice of diagnostic or the layout of every
+typed node. Inference is not defined as ``find any declarative derivation.''
+\item A \emph{theorem} identifies its domain and hypotheses. In particular,
+only Section~\ref{sec:safety} assigns an operational semantics to terms.
+No theorem silently assumes the whole compiler implements that semantics.
+\end{itemize}
+The global signature $\Sigma$ contains nominal constructors and their kinds,
+aliases, data constructors and their value schemes, structs and fields,
+classes, instances, and global value schemes. The compiler resolves lexical
+control targets, checks type/struct/alias groups, then classes, installs
+instance heads (including generated and derived instances), finalizes their
+dictionary signatures as a batch, checks value definitions, checks instance
+bodies, and processes explicit specializations.
+Analysis of the typed unit, dictionary translation, optimizations and host
+compilation follow. Thus instance selection is relative to a signature, not
+to the textual prefix ending at a call. Source anchors below are relative to
+\src{src/typechecker/} unless a path is given.
+
+\sources \src{src/entry.lisp}: \code{\%entry-point}, \src{entry-point};
+\src{tc-env.lisp}: \src{tc-env-lookup-value}, \src{tc-env-parser-env};
+\src{src/parser/renamer.lisp}: \src{rename-variables}.
+
+\section{Type language and its sorts}\label{sec:types}
+
+The following grammar describes internal objects; position and kind checks
+restrict their combinations. $D$ is a nominal type constant, $C$ a class.
+$a$ is a flexible type variable, $s$ a rigid variable (skolem), and $g_i$ a
+generic index in a stored scheme. Write $\alpha$ for any type variable when
+rigidity is unimportant.
+\[
+\begin{aligned}
+ \kappa &::= * \mid \kappa\arr\kappa \mid u
+                       && u\text{ a kind unknown}\\
+ t &::= a \mid s \mid g_i \mid D \mid t\,t
+        \mid \Fn(\bar t;K;o;\bar t)
+        \mid \Pack(\bar t) \mid \forall\bar\alpha.\,Q\Rightarrow t\\
+ K &::= \{\,{:}k_i:t_i\,\}_{i=1}^m
+          && o\in\{\mathsf{closed},\mathsf{open}\}\\
+ p &::= C\,\bar t,\qquad Q ::= [p_1,\dots,p_n].
+\end{aligned}
+\]
+In $\Fn(\bar A;K;o;\bar B)$, $\bar A$ is the positional input vector,
+$K$ a finite map of optional keyword inputs (stored in keyword-name order),
+and $\bar B$ the output vector. An open inferred function can also carry an
+\emph{origin}, a variable used to propagate new keywords; it is not a
+program-visible argument or an additional type parameter of the function.
+Write $\bar A\arr t$ for a closed keyword-free function with result $t$.
+One $A * B \arr C$ call consumes two positional arguments;
+$A\arr(B\arr C)$ consumes one and returns a function. A nullary function
+is not its result. $\mathsf{Arrow}:*\arr *\arr *$ permits partially applied
+arrows at higher kind. A saturated \code{Arrow} normalizes to a unary
+function; comparison against an application spine can re-express a closed,
+keyword-free, one-input/one-output function as an arrow application if neither
+endpoint is a \emph{bare} nested $\forall$.
+
+\paragraph{Kinding.}
+For $\Delta$ a finite assignment of kinds to variables, the leaves have their
+declared kinds ($g_i$ uses its scheme's $i$th kind). The central rules are
+\[
+ \rrule{K-app}{\Delta\vdash f:\kappa\arr\lambda\quad
+                   \Delta\vdash a:\kappa}{\Delta\vdash f\,a:\lambda}
+ \qquad
+ \rrule{K-fn}{\Delta\vdash \bar A,\operatorname{ran}K,\bar B:*}
+             {\Delta\vdash\Fn(\bar A;K;o;\bar B):*}.
+\]
+A pack of $*$ components has kind $*$; a nested $\forall$ has kind $*$ when
+its body has kind $*$ and its predicates have the class parameter kinds
+under the extended $\Delta$. A class is a relation on its parameter types,
+not a type of kind $*$. Predicate arity must equal the class arity. Kinding
+collects equations (give an unknown head the kind
+$\kappa_{\rm arg}\arr\kappa_{\rm expected}$), solves by first-order
+unification on $*,\arr,u$ with an occurs check, and replaces still
+undetermined kind variables by $*$ at the appropriate declaration/group
+boundary. There is higher-kinded inference, not polymorphism over kinds in
+stored schemes. Mutually dependent data declarations share preliminary
+constructor kinds; aliases cannot form a cycle. Aliases expand by application
+of their parameters, retaining a printing history. The post-expansion type,
+not an alias's name, is checked.
+
+\paragraph{Results are not tuples.}
+Define the result of an output vector by
+\[
+ \pack([])=\Pack([])=\Void,\qquad
+ \pack([t])=t,\qquad
+ \pack([t_1,\ldots,t_n])=\Pack([t_1,\ldots,t_n])\quad(n\ge2).
+\]
+Writing $\pack^{-1}(t)$ means the component list of a pack and $[t]$
+otherwise. A singleton output that becomes a pack under substitution is
+spliced into its function's outputs. A \code{Tuple} is one nominal value;
+$\Unit$ has a value, whereas $\Void$ here means \emph{zero results}, not
+an uninhabited value type. A plain variable $a^v$ ranges over single-value
+types. A result-capable variable $a^r$ may also stand for zero or several
+outputs. Source \code{Values} on a binder sets that flag at kind $*$; it
+is not a second base kind. A scoped such binder may occupy a whole function
+or \code{lisp} output slot, not an input, class argument, type argument or
+element of a multi-output list. Thus one signature can forward a call's
+entire output without giving \code{List} a type of lists of packs.
+
+\paragraph{Two representations of polymorphism.}
+A stored value scheme $\sigma=\forall\bar a.\,Q\Rightarrow t$ is a kind
+vector and a qualified body with selected variables replaced by $g_i$.
+$\operatorname{inst}(\sigma)$ replaces all occurrences of each $g_i$ by
+\emph{one} fresh flexible variable of its kind and result capability, shared
+across predicates and body. Free variables, e.g.\ a weak variable in a local
+scheme, are \emph{not} freshened. Quantification picks eligible nonrigid
+variables actually occurring in the qualified type. Explicit binder order
+and source names are preserved for scope/printing; generalized open origins
+are refreshed separately, consistently within an instantiation. A nested
+$\forall$ instead binds named-by-identity variables in its own qualified body:
+substitution excludes their domains, and instantiation freshens binders to
+avoid capture. We always choose fresh identities when entering a binder.
+
+Ordinary annotations implicitly bind their unscoped free variables where
+schemes are formed. Explicit \code{forall} introduces a lexical scope;
+unlisted free variables must already be in scope. E.g.\ an explicit
+\code{:a} in a function declaration is available in a \code{the} or
+\code{lisp} inside the definition; a printed \code{:a} in an implicitly
+quantified declaration does not establish that lexical name. Class/instance
+head variables and explicitly scoped method binders also have body scopes.
+A nested predicate context requires an explicit \code{forall}. A bare
+quantified type can be a function input, single output or nominal field,
+but not a type application operand, a class argument or a multi-value
+component; a nested $\forall$ cannot quantify a pack directly. These are
+positional checks (also performed on expanded types), not a ban on
+functions that contain polymorphic slots. A root alias expanding to
+$\forall$ has its freshened binders and predicates lifted into the scheme.
+
+\sources \src{types.lisp}: \src{apply-type-argument}, \src{output-types-result-type},
+\src{normalize-function-output-types}; \src{kinds.lisp}: \src{kmgu},
+\src{kind-monomorphize-subs}; \src{parse-type.lisp}: \src{infer-type-kinds},
+\src{check-result-variable-positions}, \src{parse-qualified-type-info},
+\src{check-no-impredicative-forall-types}; \src{scheme.lisp}: \src{quantify},
+\src{fresh-inst}; \src{predicate.lisp}: \src{instantiate-forall-ty}.
+
+\section{Equality, unification and matching}\label{sec:unification}
+
+Write $St$ for simultaneous substitution: a variable lookup returns the
+first right-hand side for that variable, not a recursive application of
+the substitution to itself. On ordinary compound types substitution is
+structural. Composition $T\circ S$ maps each $a\mapsto t$ in $S$ to
+$a\mapsto Tt$, followed by $T$'s entries. Thus on ordinary trees
+$(T\circ S)t=T(St)$. Function outputs and arrow applications normalize;
+if substitution maps an open function's origin to another function, the
+updated function replaces the old one. These representation operations are
+why it is useful to state the unifier theorem on a specified grammar.
+
+$t=u$ in the algorithm below denotes \src{ty=}: the same constructor
+symbol and kind, or the same variable ID, kind, rigidity and result flag,
+or structural equality. Aliases, diagnostic existential flags and origin
+identity do not enter this test. For functions it compares full arities,
+keyword entries, openness and outputs; for nested binders its fast path
+compares kinds/flags in order and bodies opened with shared fresh indices.
+Predicate equality compares the class and all arguments. The order of
+predicates matters to \src{qualified-ty=}; the separate binding scheme
+comparison \src{ty-scheme=} instead seeks a kind- and flag-respecting
+renaming on occurrences and compares predicate \emph{bags}, tracking binder
+scopes. Equality is not class entailment or observational equivalence.
+
+\paragraph{Ordinary equations.}
+An equation $t\eqs u$ extends $S$ by
+$\mgu(St,Su)\circ S$. Equal constants need no binding; unequal constant
+heads fail. Applications decompose head then argument, using the head
+solution before comparing arguments. In each binding of $a$ to $u$:
+\begin{enumerate}
+ \item Identical variables succeed unchanged. A rigid variable is never
+ bound; a rigid/flexible pair is oriented towards the rigid variable if
+ admissible, otherwise it fails.
+ \item Kinds must agree. A flexible variable cannot bind to a bare $\forall$.
+ Only a result-capable variable can bind to a pack. Between flexible variables
+ of different result capability the ordinary variable survives; an ordinary
+ variable cannot bind to a result-capable skolem.
+ \item If $a$ occurs free in the proposed nonvariable right-hand side, fail;
+ otherwise emit $[a\mapsto u]$.
+\end{enumerate}
+Packs unify componentwise at equal lengths. Functions require equal input
+arity, keyword sets and openness; unify positional slots, corresponding
+keyword slots, and $\pack(\bar B_1)\eqs\pack(\bar B_2)$ in sequence.
+Unequal output counts are tried only if one side is a singleton
+result-capable variable. If both functions carry origins, also unify the
+origins. Keyword \emph{projection} at a use site is a separate operation
+(Section~\ref{sec:terms}). For two $\forall$ types, after the equality fast
+path, check equal binder and predicate counts. Open one side rigidly and the
+other flexibly; unify corresponding predicate arguments (same class in each
+position) and then the bodies. The fresh flexibles must map bijectively to
+the skolems with matching kinds/flags, and no remaining substitution may
+contain these skolems. Drop the temporary domains. This permits renaming
+and unification of free variables, not arbitrary subsumption under arrows.
+
+\paragraph{One-way equations.}
+$t\oneway u\leadsto M$ means that $t$ is the \emph{pattern of types}:
+only its flexible variables may be assigned. Leaf checks parallel the
+unifier; in particular an ordinary pattern variable cannot match a
+result-capable target variable. On ordinary product shapes match each pair
+\emph{independently}, merging maps only when they agree on common domains.
+A repeated source variable must therefore meet the same target twice.
+For nested $\forall$, open the source flexibly, target rigidly and check
+the same bijection/non-escape conditions. In predicate/instance comparisons
+freshening apart matters: matching is not unification with an occurs check.
+For instance $(a\arr a)\oneway(b\arr\Int)$ fails when $b$ is a distinct
+unconstrained target. Symmetric unification would equate $b$ with $\Int$,
+which is exactly what a dictionary lookup is not allowed to do.
+
+\paragraph{The first-order fragment.}
+Take finite well-kinded types with flexible variables, rigid leaves,
+nominal constants, application, and closed keyword-free functions of fixed
+positional arity and one ordinary output. Kinds are fixed; use normalized,
+alias-free inputs and substitution ranges, with no packs, quantified types,
+origins or result-capable variables. ``First-order'' here refers to the
+term algebra, not to a restriction that every variable have kind $*$.
+
+Use one mathematical tree for each type: read every unary function
+$A\arr B$ as $(\mathsf{Arrow}\,A)\,B$. The constant $\mathsf{Arrow}$ and
+its partial applications are allowed. A function of any other arity $n$
+has a distinct tree constructor with $n$ inputs and one output.
+For example, with $f:*\arr *$, both unifying $f\,a$ with
+$\Int\arr\Int$ and matching $f\,a$ into it give
+$[f\mapsto\mathsf{Arrow}\,\Int,\ a\mapsto\Int]$. Although neither input
+mentions \code{Arrow} by name, the substitution needs its partial application.
+
+\begin{theorem}[First-order solver]\label{thm:mgu}
+For a well-sorted list of equations in this fragment, ordinary unification
+from the empty substitution succeeds iff there is a finite kind-preserving
+solution fixing the rigid constants. Its answer $S$ solves the equations,
+and every solution $U$ factors as $V\circ S$ on the input variables.
+For fresh-apart trees in the same fragment, one-way matching succeeds
+iff the target is a substitution instance of the source; it does not
+alter target variables. Equality and factorization are on the trees above.
+\end{theorem}
+\begin{proof}
+Substitution commutes with this tree interpretation: the only change of
+representation is that a newly saturated \code{Arrow} is stored as a unary
+function, which denotes the same tree. When comparing an application with
+a unary function, \src{mgu} and \src{match} expose the latter's arrow spine.
+When both sides are functions they compare their slots directly, which
+decomposes the same trees. No such spine exists for the other arities.
+
+Maintain a solved substitution and a work list. Removing a reflexive equation
+does not change the solution set. Distinct constants or incompatible shapes
+have no common instance in a free term algebra. Equal application or function
+heads are injective in every slot, so replacing their equation by the ordered
+child equations is equivalent. For $a\eqs t$ with $a$ flexible, unequal
+kinds cannot be repaired at this stage. A proper occurrence of $a$ in $t$
+would make the finite tree $Ua$ a proper subtree of itself. Otherwise put
+$B=[a\mapsto t]$. Every solution satisfies $Ua=Ut$, so $U=U\circ B$
+on the variables; conversely a solution of the remaining $B$-transformed
+equations composed with $B$ solves the old list. Orienting a flexible/rigid
+pair in the other direction would invalidate this argument. Iterating the
+factorization proves most-generality and the composition identity above proves
+soundness. Termination follows lexicographically by the number of distinct
+flexibles in the unsolved equations, then total unsolved tree size:
+elimination removes a variable, decomposition or deletion reduces size
+when the first count does not fall. These are exactly the recursive
+decompositions and threaded calls of \src{mgu} and \src{unify-list}.
+For matching, induct on the source tree: each variable occurrence prescribes
+one target subtree; equal prescriptions on shared variables are necessary
+and sufficient to take the union. A rigid leaf must agree literally.
+Fresh-apartness makes the resulting map disjoint from target variables.
+\end{proof}
+\noindent The same elimination argument on the grammar $*,u,\kappa\arr\lambda$
+applies to kind equations \emph{before} the final $*$ default. This theorem
+does not say that term inference with defaults or branch result choices has
+principal types.
+
+\sources \src{substitutions.lisp}: \src{apply-substitution},
+\src{compose-substitution-lists}, \src{merge-substitution-lists};
+\src{unify.lisp}: \src{bind-variable}, \src{mgu}, \src{match}, \src{unary-function-type-as-arrow-type},
+\src{mgu-forall-types}, \src{validate-forall-bijection-and-filter-subs}.
+
+\section{Classes, evidence and improvement}\label{sec:classes}
+
+\subsection{What proves a predicate?}
+A class $C\,\bar a$ declares superclass fields $P$, method signatures,
+and dependencies between positions of $\bar a$. A method with signature
+$Q\Rightarrow t$ is available as a value with context
+$[C\,\bar a]\mathbin{+\!\!+} Q$. Class parameters and method-local binders
+are distinct. Superclass hierarchies are acyclic. A superclass field may
+mention an extra variable absent from the subclass head: two occurrences of
+the class do not thereby share the same hidden witness. At an explicit
+binding or expected $\forall$, \src{instantiate-context-superclasses}
+materializes hidden fields (also through intermediate superclasses).
+These fields are evidence attached to a predicate occurrence, not extra
+class arguments. Substitution carries the fields along; instantiating a
+scheme for a new use does not copy the old dictionary's witnesses.
+Improvement and superclass lookup must see the same fields. If
+$\mathsf{Child}\,a$ supplies $\mathsf{Assoc}\,a\,h$ with $a\to h$,
+adding a given $\mathsf{Assoc}\,a\,b$ can identify $h$ with $b$ in
+either order. $\mathsf{Child}\,a$ alone does not name a caller-chosen $b$.
+
+An instance is a named clause $i:\forall\bar b.\,P_i\Rightarrow h_i$, with
+an optional \code{overlap} mark. Alpharenamings apart are implicit when
+comparing heads. Say $h_1\succeq h_2$ (``at least as general'') when
+$h_1\oneway h_2$ succeeds, matching class and arguments; $h_2$ is strictly
+more specific if the converse fails. Mutual matching heads are replacements,
+not a pair of distinct alternative candidates. A new, distinct head that
+\emph{unifies} with an existing one requires \emph{both} instances to be
+marked. For a wanted $p$:
+\[
+ M_\Sigma(p)=\{i\in\Sigma:h_i\succeq p\},\quad
+ W_\Sigma(p)=\{i\in M_\Sigma(p):\text{no }j\in M_\Sigma(p)
+                      \text{ is strictly more specific}\}.
+\]
+$\sel_\Sigma(p)=i$ iff $W_\Sigma(p)=\{i\}$ and either $\fv(p)=\varnothing$ or $i$ is
+unmarked. Otherwise there is no stable choice; incomparable winners for
+a ground $p$ signal ambiguity. Do \emph{not} try the most specific context
+and backtrack to a weaker head when a prerequisite fails. A non-ground
+constraint with a marked winner can be retained as a dictionary parameter.
+Recorded instance choices and some optimizer assumptions about classes
+without marked instances are validated when the environment changes.
+
+Distinguish the \emph{declared} context $P_i$ from the compiled interface
+$I_i=(h_i;Q_i)$, where $Q_i$ is an ordered vector of dictionary inputs.
+Initially a new entry has the provisional vector $P_i$. Once all heads
+of the unit are installed, \src{finalize-instance-signatures} computes
+the vectors for the entire batch \emph{before} replacing any provisional
+vector. A prerequisite with no stable instance is retained as a leaf
+unless it leads back to the defining instance as described below
+(an ambiguous ground selection is an error). For a selected
+instance, expand its instantiated interface inputs in order: these come
+from a provisional signature for this batch and from the saved signature
+for an older entry. Duplicate leaves are removed by predicate equality
+(the last occurrence survives). The result, including the head with its shared variables, is
+saved as $I_i$; a one-element list $(h_i)$ means no dictionary inputs.
+Absent signature metadata is an error requiring recompilation, not the
+nullary case.
+
+\paragraph{Residual prerequisites.}
+Expansion records the selected instance, goal, depth and prerequisite
+position at each frame, including the defining instance at depth zero.
+The top-level prerequisites are numbered; a derived instance sets the
+position to its child's index, while a non-derived instance inherits a
+specified position (or uses its child's index if none is specified).
+The root and superclass obligations have unspecified positions.
+Goal keys keep variables of the original head and context fixed and compare
+path-local variables up to renaming. Write $p\preceq_X q$ for the
+implemented homeomorphic embedding with fixed variables $X$: the class
+and arity agree and each earlier argument embeds in the corresponding
+later argument. A type embeds by descending into a child or by matching
+its root and recursively embedding corresponding children. Fixed variables
+match only themselves at a variable leaf; a path-local variable can couple
+only with another nonfixed variable. Functions respect their positional
+and keyword shapes, and the $\forall$ case aligns compatible binders;
+descending under a quantifier must not capture a variable of the earlier type.
+
+On reselecting the same instance, first look for an equal goal key. Otherwise
+look for an earlier embedded goal at a compatible prerequisite position
+(equal positions, or either unspecified). Ordinary recursion unwinds to the
+entry of that cycle or growth, but no farther than the first prerequisite
+below the root. The predicate at that frame becomes a \emph{required input},
+not an empty proof. Expansion also checks superclass paths for back-edges
+but does not append their leaves to the instance's input vector;
+the superclass check in \src{typecheck-instance} seeds the path with the
+instance being checked, so it cannot justify its own missing superclass.
+
+When no instance is stably selected at depth greater than one, expansion
+also checks whether the defining head matches the goal and its instance
+has a matching frame by the same key or embedding test. If so, it unwinds
+to retain the prerequisite as above. This is cycle detection, \emph{not}
+selection. In particular an open goal matching a marked head cannot use
+this fallback to discharge an input, even if the path includes a derive.
+In the \code{AuditTree} example in \src{tests/fundep-tests.lisp}, the
+generic \code{CarrierEq} instance thus keeps its
+$\mathsf{Eq}\,(\mathsf{AuditTree}\,a)$ input for comparing the contents;
+a ground client can still select the more specific wrapper instance.
+
+There is a distinct convention for a \emph{stably selected} structural back-edge.
+\src{valid-derived-cycle-p} requires an equal key and a cycle containing a
+compiler-generated instance. Walk the cycle from the newest frame back to
+the matching frame. Start with the oldest derived frame's predicate (the
+current goal if that frame is the matching frame), and reset the target
+at each derived frame encountered. At each non-derived frame, every
+argument of the current target must be a proper subterm of an argument
+of that frame's predicate. An accepted structural back-edge
+contributes no additional input; the defining instance need not itself be
+derived. An embedded but unequal key does not close such a cycle. Thus
+regular recursive derivations can close, whereas a nested datatype at a
+larger parameter can retain a field constraint.
+
+Write $\Sigma;G\vdash p\leadsto d$ when the available dictionaries
+$G=[x_i:p_i]$ supply a proof term $d$. Its meaning is $d:\Dict(p)$. For
+an ordered path $\pi$ of superclass fields, $\pi(x)$ projects them in
+order (the empty path returns $x$). In \textsf{Given}, $E_G$ is the
+identity except for local equations proved by supplied pattern dictionaries
+(Section~\ref{sec:patterns}); it is not obtained by matching the request.
+In \textsf{Instance}, $(h;q_1,\ldots,q_n)$ is one fresh copy of the
+selected instance's stored interface. The rules behind \src{entail} and
+\src{resolve-dict} are
+\[
+ \rrule{Given}{(x:q)\in G\quad q\xrightarrow{\pi}_{\Sigma}r\quad E_G r=E_G p}
+                {\Sigma;G\vdash_H p\leadsto\pi(x)}
+\]
+\[
+ \rrule{Instance}{\sel_\Sigma(p)=i\quad h\oneway p\leadsto M\quad
+       \mathrm{open}_{H}(i,p)\quad
+       \Sigma;G\vdash_{H,(i,p)}\theta q_j\leadsto d_j\ (1\le j\le n)}
+       {\Sigma;G\vdash_H p\leadsto i(\bar d)} .
+\]
+The head match gives $M$. A variable shared by two inputs but absent
+from $h$ is fresh \emph{once per call}, not once per input.
+\src{by-inst} takes $\theta=M$; \src{resolve-static-dict} also solves
+FDs on $M\bar q$, obtaining $F$, and uses $\theta=F\circ M$.
+The typing argument requires $\theta h=p$; an undetermined prerequisite
+variable is not a free choice of dictionary. When $n=0$, $i(\bar d)$
+denotes the dictionary value $i$, not a nullary call. Translation tries
+supplied dictionaries and their fields before static instances or
+registered synthesis. For example, when no ordinary instance is selected
+it can synthesize a prerequisite-free $\mathsf{RuntimeRepr}$ dictionary
+for a function type.
+
+The annotation $H$ is the active instance/goal path (empty when omitted).
+\textsf{Given} is available at every depth and is tried first.
+$\mathrm{open}_H$ always blocks a previously selected instance at the
+same goal key. A distinct goal $p$ at the same instance is a candidate
+for the growth cutoff if some earlier $p_0\preceq_X p$ and the height
+of $p$ exceeds \emph{both} that of $p_0$ and the search allowance.
+This second cutoff applies only if the cycle shows no progress as
+defined below. Height counts the longest type-tree path (a leaf has
+height one); a predicate takes the maximum of its argument heights.
+
+For an ordinary instance of class $C$, let $R_\Sigma(C)$ be the least
+set containing $C$ and closed under direct superclasses and the classes
+mentioned in the declared prerequisites \emph{or} stored dictionary inputs
+of each instance of a class in the set. Let $m_\Sigma(C)$ be the maximum
+head height over these classes, or zero if there are no heads. The allowance
+is $h_0+m_\Sigma(C)$, not a bound from $C$'s own heads alone; a synthesized
+step uses zero for the head contribution. For \src{entail}, $h_0$ is the
+maximum height of the root goal, givens and their superclass closure;
+$X$ comes from the root goal, given predicates and any initial stack.
+Static instance resolution uses the root goal and the superclass closure
+of its dictionary context for both $h_0$ and $X$. Definition-time
+retention uses neither this height allowance nor the following test.
+
+\paragraph{Progress toward a repeated-variable head.}
+For a growth-cutoff candidate at instance $i$, inspect the current step
+and the intervening steps since the \emph{most recent} prior selection
+of $i$, excluding that prior step. Any one of these frames can permit
+search to continue. To test an ordinary frame $(j,q)$:
+\begin{enumerate}
+\item For every \emph{other} head of $q$'s class, compare the argument
+      subtrees of $q$ at the first and each later occurrence of a repeated
+      head variable. Follow child positions; no head match is required
+      to take this measurement. Record $\infty$ when an operand is absent.
+      The disagreement is zero for identical nodes or equal leaves. For
+      nonleaves of the same internal node class and child count, it is the
+      maximum disagreement of corresponding children; otherwise it is the
+      larger operand height. If none of these \emph{head} distances is
+      finite, the frame cannot report progress. A finite distance improves
+      on $\infty$; even distance zero is not a proof of type equality.
+\item The \emph{carried} variables are those occurring both in $j$'s
+      head and in its stored dictionary inputs. Match that head into $q$.
+      For each pair of carried variables with instantiated heights $u,v$,
+      record both $\max(0,u-v)$ and $\max(0,v-u)$. Keeping directions
+      separate distinguishes passing the other input from moving farther
+      away on the same side.
+\end{enumerate}
+For each earlier visit to $j$ in its full preceding history, first compare
+the head distances. Only if none decreased for that visit must a carried
+gap decrease instead. Equivalently, once a head distance is observable,
+\emph{each} earlier visit needs \emph{some} strictly smaller coordinate
+in the combined vector $V_j(q)$; the coordinate may differ between
+visits. With no earlier visit the comparison is vacuous. Synthesized
+frames never report progress. No measurement selects a head or supplies
+a dictionary.
+
+\begin{lemma}[Finite progress reports on a fixed path]
+Fix the signature and an append-only path with unchanged observations
+for earlier visits (in particular, a path of ground goals). An instance
+can report progress at only finitely many of its own visits.
+\end{lemma}
+\begin{proof}
+Its vector has fixed finite dimension and entries in
+$\mathbb N\cup\{\infty\}$. An infinite sequence in one coordinate
+has an infinite nondecreasing subsequence: either a value recurs
+infinitely often or only finitely many entries lie below any given
+natural bound and $\infty$ occurs only finitely often. In the latter
+case choose successively larger natural entries. Thin an infinite
+sequence of reporting visits this way once per coordinate. Two visits
+in the resulting subsequence have
+no coordinate strictly smaller at the later visit, contrary to the test.
+\end{proof}
+The lemma is about fixed observations on one path; it is not a
+termination theorem for the compiler or for histories being resubstituted.
+
+Methods of an instance are checked at the class signatures specialized to
+its head; the instance context supplies dictionaries but does not permit
+the implementation to narrow the public head. Required superclass
+dictionaries must be available without further specializing the variables
+fixed by the instance and its givens. The resulting dictionary holds the
+superclass fields and method implementations. \src{typecheck-instance}
+uses $Q_i$ as the method context, and \src{translate-instance} emits the
+corresponding parameters. A later client can choose \emph{how to supply}
+these dictionaries in its own environment, not change their types or order.
+Derivation generates instance declarations; exceptions and resumptions get
+sealed marker instances, and runtime representations have special rules.
+
+\begin{theorem}[Selection and evidence, in a fixed signature]\label{thm:evidence}
+Let $p$ and the instance heads of its class belong to the first-order
+fragment of Theorem~\ref{thm:mgu}, and suppose those heads satisfy the
+overlap admission rule. An unmarked selected head for $p$ remains the
+unique selected head at every ground substitution instance $Up$ in that
+\emph{same} $\Sigma$. Furthermore, for finite successful evidence search
+with well-typed given fields, dictionary constructors typed at their
+stored $Q_i\Rightarrow h_i$, and correctly typed synthesized dictionaries,
+the resulting evidence has type $\Dict(p)$ up to valid local conversion.
+Here a conversion in \textsf{Given} is valid if the projected and requested
+predicates agree at every ground valuation satisfying the local givens
+and index equations. Section~\ref{sec:fd} establishes this premise
+for first-order fields satisfying the declared FDs.
+Any extra FD instantiation must respect the scope of
+prerequisite-only variables and preserve the goal and given types.
+\end{theorem}
+\begin{proof}
+If $Mh_i=p$, composition gives $(U\circ M)h_i=Up$. Any other head matching
+$Up$ would have a common instance with $h_i$; the fresh-apart assignments
+combine to a unifier. Admission forbids this since $i$ is unmarked, unless
+the heads are replacements, in which case only one is present. For the
+second assertion induct on search height. A given is either the correctly
+typed input dictionary or a chain of typed record projections; induction
+on path length gives the projected field type $\Dict(r)$. If equality is
+not literal, the local conversion premise licenses $\Dict(p)$ at the
+same ground instantiations. At an instance step,
+$\theta h=p$ specializes the stored constructor's result to $\Dict(p)$.
+By induction argument $j$ has type $\Dict(\theta q_j)$; application in
+the stored order therefore has the required type (or take the dictionary
+value directly when $n=0$). Synthesis is the stated base case.
+The growth guard contributes no proof term. Whether it permits the step
+by height or by progress, the same selected constructor still requires
+all of its stored inputs.
+\end{proof}
+This proves neither equality of the \emph{values} of dictionaries from
+different paths nor termination. In particular, cutting cycles in
+\src{expand-context} (used for recursive derived instances) is \emph{not}
+induction on a finite proof in the Horn theory of the original clauses:
+the raw clause $p\Rightarrow p$ alone has no such proof of $p$. To read
+the evidence argument as ordinary logical entailment from the raw clauses,
+require finite acyclic context expansion and correctly instantiated
+witnesses, including for older interfaces. To include generated structural
+back-edges in a semantic soundness argument one must justify the recursive
+dictionary construction separately; the finite Horn induction does not do
+that. The convergence examples below show finite paths that the checker
+does find; these arguments do not establish completeness of proof search.
+
+\paragraph{Linking corollary.}
+Let a provider emit $i$ at $I_i$ and a client select it in a later
+environment. For an unchanged instance, or a replacement with the same
+compiled interface up to a single binder renaming, the client specializes
+the stored inputs under the \emph{same} instantiation as the head.
+Indeed, loading the provider restores $I_i$. Compose the freshening of
+that signature (and any binder renaming) with $\theta$ for this call.
+The resulting map specializes the stored head to $p$ and the $j$th
+parameter to the predicate proved for the $j$th argument, in order.
+The evidence induction therefore applies even when a new instance is
+used in one of those argument proofs. This corollary has the typing
+hypotheses of Theorem~\ref{thm:evidence}; it assumes compatible class
+layouts and does not assert that method \emph{values} never change.
+
+For recorded selections, validation reselects an instance for the recorded
+predicate and compares the overlap and derivation flags, constructor symbol and joint
+ordered signature, including classes, arities, kinds and type-variable
+sharing. Unit compilation defers checking changed classes until the batch
+is finalized; FASL replay checks the stored interfaces before installing
+the resulting environment. Checking the head
+alone, the raw source context, or the parameter count alone would not
+suffice. Optimizer reconstruction likewise uses the stored signature.
+
+\begin{example}[A fixed input supplied by new evidence]\label{ex:dict}
+Let $W$ be a unary datatype, and $N,O$ unary classes. In $\Sigma_0$ install
+$N\,\Int$ and $i:\forall a.\,N\,(W\,a)\Rightarrow O\,a$. No instance
+matches $N\,(W\,a)$. Compile $i$ now. In $\Sigma_1$ add
+$j:\forall b.\,N\,b\Rightarrow N\,(W\,b)$. It does not overlap
+$N\,\Int$. At $O\,\Int$ the two environments select the same $i$
+with the same stored parameter $N\,(W\,\Int)$. What changes is the
+availability of an argument, not the interface:
+\[
+\begin{aligned}
+ d &: \Dict(N\,\Int),\qquad j(d):\Dict(N\,(W\,\Int)),\\
+ i\bigl(j(d)\bigr)&:\Dict(O\,\Int).
+\end{aligned}
+\]
+Re-expanding $i$ at the use site would instead pass $d$ to $i$: the arity
+would agree but the argument type would not. Recompiling $i$ in
+$\Sigma_1$ is a different operation: its freshly computed interface can
+change and previously recorded callers must then be revalidated.
+\end{example}
+
+\subsection{What determines a type?}\label{sec:fd}
+For $C$ with a functional dependency $X\to Y$ (sets of parameter positions),
+the intended assertion about a ground dictionary relation $R_C$ is
+\[
+ \bar u,\bar v\in R_C,\quad \bar u|_X=\bar v|_X
+       \quad\Longrightarrow\quad \bar u|_Y=\bar v|_Y.       \tag{FD}
+\]
+It is not a dictionary constructor. Improvement changes types; the
+resulting predicate still needs its own evidence. For instance
+$C\,a\,b,\ C\,a\,c$ with $1\to2$ gives $b\eqs c$, not $a\eqs b$,
+and $C\,a\,b,\ C\,d\,c$ alone does not give $a\eqs d$.
+
+For each predicate in a context and each inherited superclass predicate,
+collect pairs
+$(\fv(\bar t|_X),\fv(\bar t|_Y))$. For a finite such set $F$, let
+\[
+ \clo_F(A)=\mu Z.\,\bigl(A\cup Z\cup
+                  \bigcup\{V:(U,V)\in F,\ U\subseteq Z\}\bigr)
+\]
+(start at $A$). In a declared qualified type all predicate variables must
+lie in $\clo_F(\fv(t))$. A method must identify all class head parameters
+from the head parameters occurring in its type using class and superclass
+dependencies. A class's own dependencies may name only its head parameters.
+A declaration is also checked for actual restriction by improvement; a
+context reducible merely by entailment can receive a warning.
+
+\paragraph{Instance admission.}
+For every dependency of the head require coverage:
+$\fv(h_i|_Y)\subseteq\clo_{F(P_i)}(\fv(h_i|_X))$. Write $(l,r)$ for
+the head's determinant and dependent projections. Compare the new clause
+with \emph{every other definition} of the same class, freshening each
+head together with its declared prerequisites. Skip the equivalent head
+being replaced. The improvement table can coalesce projected rows with
+different prerequisites; it is not the list of definitions to compare.
+For two such clauses $(l,r,P)$ and $(l',r',P')$:
+\begin{enumerate}
+\item A failed determinant unification ends the comparison (in the
+      first-order fragment, the two clauses then have no shared input).
+      Otherwise let $S=\mgu(l,l')$, $u=Sl$, $v=Sr$, and $v'=Sr'$.
+      If $v=v'$ pointwise, agreement is immediate.
+\item Otherwise the two projected rows $(u,v)$ and $(u,v')$ must
+      one-way match in \emph{both} directions. The separate improvement
+      index can use rows without their contexts; it may not promise a
+      more specific output shape for one of these rows than the other.
+\item Take only $S(P\mathbin{+\!\!+}P')$ and their superclasses as givens.
+      Repeatedly compare same-class predicates with already equal
+      determinants and unify their dependents, until the substitution stops
+      changing. A conflict, or failure to obtain $Tv=Tv'$ at that fixed
+      point $T$, rejects the new clause. Neither head is a given in this
+      proof: unifying $v$ with $v'$ simply because the heads declare an
+      FD would assume the result. Even contradictory prerequisites do not
+      count as proof by vacuity. No lookup of today's ground instances is
+      a premise.
+\end{enumerate}
+The checker also tests a \emph{single} head and its context for internal
+conflicts. It maintains the projected improvement index separately.
+Admission is conservative: currently unsatisfied contexts do not certify
+disjointness under future extensions.
+
+\paragraph{Solving.}
+After substituting the known equations, expand superclasses (reusing
+given expansions when supplied). \src{solve-fundeps} iterates:
+\begin{enumerate}
+\item Compare predicates of the same class: for each FD with already
+      \emph{equal} determinant vectors, unify its dependent vectors,
+      signalling a conflict on failure.
+\item A stable instance match can expose its compiled inputs
+      $Q_i$, freshly instantiated for further improvement. Freshen the
+      head \emph{with} the context so hidden context variables are shared
+      within that occurrence only. A generated predicate remembers its
+      instance path. On a repeated selection the solver substitutes into
+      that history and uses the same repeated-key, growth and progress
+      tests as evidence search.
+      Here $h_0$ and $X$ are the maximum height and free variables of the
+      \emph{original input predicates} under the round's substitution,
+      not of all generated prerequisites. A blocked instance is not unfolded.
+\item Without an unblocked match, first try instance-head improvement.
+      Even without an FD, a unique unmarked \emph{unifying} instance can
+      constrain repeated variables \emph{inside one structural argument}.
+      Freshen its argument patterns separately; its linearization
+      (new variable per occurrence) must already match the wanted shape.
+      Keep only wanted-variable refinements caused by repetition, with no
+      surviving fresh instance variables. E.g.\ a sole $C\,(D\,x\,x)$
+      can relate $a,b$ in $C\,(D\,a\,b)$; a sole $C\,\Int$ does not
+      default $C\,a$ to it. This is signature-relative, not (FD).
+      A successful improvement ends this scan so that the next round
+      compares determinants with the new substitution.
+\item Otherwise, for a class with FDs, try its determinant table:
+      match a fresh entry's determinant into the wanted determinant,
+      unify the resulting dependents, and keep an improvement only if
+      it makes the wanted predicate strictly more specific. Nonapplicable
+      entries, including failed unifications here, are skipped.
+\end{enumerate}
+The iteration is bounded at 1000 rounds; the solver distinguishes continued
+specialization from a failed fixed point on exhausting that budget. When
+comparing declared/given to wanted predicates, \src{fundep-entail} can
+further align differing \emph{determined} arguments. After superclass
+expansion it takes as known positions those mentioning a known variable,
+closes those positions under the class FDs, finds a same-class given with
+the same known arguments, and one-way matches determined wanted arguments
+to the corresponding given arguments. The checker iterates this with a
+growing known-variable set and checks entailment afterwards.
+
+\begin{lemma}[When pairwise improvement is sound]\label{lem:fd}
+Use the trees of Theorem~\ref{thm:mgu} and assume relations satisfying
+(FD). For an ordinary unification step, valuations fix its rigid leaves.
+For the branch-local computation of $E_G$, the skolems opened by
+\src{unify-given} are parameters of the ground valuation, not distinct
+ground constants; the valuation must satisfy the supplied predicates,
+their actual superclass fields and the branch equations. If $U$
+is a ground solution of two same-class predicates and their determinants
+already agree under $S$ through which $U$ factors, unifying their dependents
+under $S$ loses no such solution. For the collected dependencies, if two
+satisfying assignments agree on $A$, they agree on $\clo_F(A)$, assuming
+they satisfy the same expanded predicate occurrences (including their
+superclass witnesses).
+\end{lemma}
+\begin{proof}
+The determinants remain equal under $U$. By (FD) the instantiated
+dependents are equal, so Theorem~\ref{thm:mgu} factors $U$ through the
+ordinary unifier. For the local step, assign each fresh flexible copy
+the ground type of the skolem it opens. The same factorization now
+applies. Closing a surviving representative back to an original name
+preserves that valuation: names unified with the same representative
+already have the same ground type. This is not a binding in the caller's
+inference substitution. For closure, agreement on all variables of a
+determinant vector implies agreement on the instantiated vector. By (FD)
+the instantiated dependent trees agree. Every occurrence of a variable
+in those trees is at a fixed path in a free term tree; equality at that
+path gives agreement on the variable. Induct on closure rounds. Neither
+claim establishes (FD) for a particular set of declarations.
+\end{proof}
+In particular, under these first-order hypotheses each step producing
+$E_G$ preserves every admissible ground valuation. Hence $E_G r=E_G p$
+implies $Ur=Up$ at each such valuation. This supplies the local conversion
+premise of Theorem~\ref{thm:evidence} without assuming that two dictionary
+values with the same type behave identically.
+
+\paragraph{What admission proves for two clauses.}
+Suppose two distinct admitted heads have ground uses with equal inputs
+and with both declared contexts true. In the first-order fragment their
+joint valuation factors through $S$. If $v=v'$ the outputs already agree.
+Otherwise assume the prerequisite relations used in step 3 satisfy (FD)
+and their superclass fields are valid. Extend the valuation with witnesses
+for the fresh context-only and hidden superclass variables. By
+Lemma~\ref{lem:fd}, every improvement step preserves a solution extending
+the original head valuation. Hence equality
+$Tv=Tv'$ at acceptance implies equality of the two ground outputs.
+The mutual row-shape check further restricts admission; it is not the
+proof of that equality. For two uses of \emph{one} clause, agreement on
+the input trees gives agreement on their variables; coverage and the
+closure part of the lemma give agreement on the output variables under
+the same prerequisite hypotheses. If a prerequisite relies on the head
+class's own FD, that hypothesis cannot establish functionality from
+scratch. The argument is noncircular along well-founded prerequisite
+proofs. In particular, retaining a recursive prerequisite as an input
+does not establish it without a supplied dictionary.
+
+\begin{example}[A rejected pair and a shared-prerequisite control]\label{ex:fd}
+In a fresh package using Coalton, the following program is accepted:
+\begin{verbatim}
+(define-class (LKey :k :v (:k -> :v)))
+(define-class (RKey :k :v (:k -> :v)))
+(define-class (TaggedKey :k :v :tag (:k -> :v)))
+(define-instance (LKey Unit Integer))
+(define-instance (RKey Unit String))
+(define-instance (LKey Unit :v => TaggedKey Unit :v Boolean))
+(define-instance (LKey Unit :w => TaggedKey Unit :w Char))
+\end{verbatim}
+The full heads are disjoint ($\Bool\ne\mathsf{Char}$), but their determinant
+is $\Unit$ in both cases. Coverage alone permits the two output variables.
+Agreement follows because the two \code{LKey} prerequisites have the same
+determinant, so their declared FD equates the outputs. Replace only the
+last prerequisite's \code{LKey} with \code{RKey}: neither given now equates
+those outputs, so admission rejects whichever definition comes second.
+\end{example}
+
+\begin{example}[Retention and reachable base instances]\label{ex:fd-cycle}
+Let $C\,k\,v$ be a method-free class with $k\to v$. The single clause
+$C\,\Unit\,v\Rightarrow C\,\Unit\,v$ passes coverage through its own
+prerequisite and has no other head to check for disagreement. Its compiled
+input vector is $[C\,\Unit\,v]$. In given-free search for
+$C\,\Unit\,\Int$, selecting the clause requires the identical goal at the
+same instance, which is blocked. The independent $\Str$ query likewise fails.
+A supplied matching dictionary is still evidence. The same retention
+applies to a two-class hand-written cycle.
+
+For $G\,(\List\,a)\Rightarrow G\,a$, the next required goal grows. Its
+stored input is $G\,(\List\,a)$, not the result of an infinite unfolding.
+With no givens and no other instances the use-site guard eventually blocks;
+giving $G\,(\List^3\,\Int)$ instead supplies a finite path for $G\,\Int$.
+Conversely $D\,a\Rightarrow D\,(\List\,a)$ with base $D\,\Int$ proves
+$D\,(\List^5\,\Int)$ by descent, but not $D\,(\List^5\,\Str)$.
+
+Let $\mathsf{WalkA}\,a$ require $\mathsf{WalkB}\,(\List\,a)$ and
+$\mathsf{WalkB}\,a$ require $\mathsf{WalkA}\,a$, with both general instances
+marked for overlap. Add a marked, more-specific, input-free instance for
+$\mathsf{WalkB}\,(\List^3\,\Int)$.
+Writing $L=\List$, the finalized inputs give the ground path
+\[
+\begin{aligned}
+ \mathsf{WalkA}\,\Int &\leadsto \mathsf{WalkB}\,(L\Int)
+                        \leadsto \mathsf{WalkA}\,(L\Int)\\
+ &\leadsto \mathsf{WalkB}\,(L^2\Int) \leadsto \mathsf{WalkA}\,(L^2\Int)
+                        \leadsto \mathsf{WalkB}\,(L^3\Int).
+\end{aligned}
+\]
+Here the arrows mean ``requires''. More generally, if the ground base is
+$k\ge1$ lists deep, the root height is one and both classes can reach the
+base head of height $k+1$. The allowance is $k+2$; no goal on the path
+exceeds $k+1$. Thus the height guard does not prevent this proof. Removing
+the base or changing its leaf to an unrelated type leaves the goal unproved.
+\end{example}
+
+\begin{example}[Growing arguments that converge]\label{ex:fd-height}
+Give $\mathsf{MeetDepth}\,a\,b$ a marked instance requiring
+$\mathsf{MeetDepth}\,(L^2a)\,(L b)$, where $L=\List$, and a more specific
+marked instance for $\mathsf{MeetDepth}\,s\,s$ with no inputs. Starting
+at $\mathsf{MeetDepth}\,\Int\,(L^3\Int)$, write each pair of argument
+types as their list depths over $\Int$. The stored inputs give
+\[
+ (0,3)\;\leadsto\;(2,4)\;\leadsto\;(4,5)\;\leadsto\;(6,6).
+\]
+Both heads have height one and the root goal has height four. At $(4,5)$
+the goal height is six, above the allowance of five, and an earlier goal
+embeds in it at the same general instance. But the disagreement of the two operands
+at the first three goals is respectively $4,3,2$. Search continues; at
+$(6,6)$ ordinary selection picks the more specific, input-free instance.
+When the base method returns zero and the general method adds one, the
+ground clients at initial gaps three and four return three and four.
+Changing only the leaf of the second operand to $\Str$ gives no such base.
+
+Progress need not come from the compared operands alone. Let a marked
+$\mathsf{Stride}\,a\,b\,c$ require $\mathsf{Stride}\,(Lc)\,(L^2b)\,(L^2a)$,
+with an input-free marked base at $\mathsf{Stride}\,s\,s\,c$. The list depths follow
+\[
+ (2,0,2)\;\leadsto\;(3,2,4)\;\leadsto\;(5,4,5)\;\leadsto\;(6,6,7).
+\]
+At $(5,4,5)$ the first two arguments are still one layer apart, just as
+at $(3,2,4)$. But the height of $c$ exceeds that of $b$ by one rather
+than two, and $c$ feeds the first argument of the next prerequisite.
+Against the initial visit the repeated-variable disagreement itself has
+decreased. The step is therefore allowed and the next goal selects the
+base. By contrast, growing two unequal arguments in lockstep does not
+make them equal. Continuing a search and successfully discharging its
+last prerequisite are distinct events.
+\end{example}
+
+\paragraph{Why the revision matters.}
+On \code{deb300be}, the client in Example~\ref{ex:dict} passed $d$ rather
+than $j(d)$, and the split-prerequisite variant in Example~\ref{ex:fd}
+entailed both $\mathsf{TaggedKey}\ \Unit\ \Int\ \Bool$ and
+$\mathsf{TaggedKey}\ \Unit\ \Str\ \mathsf{Char}$ separately. On
+\code{cd7cb56c}, the hand-written cycles in Example~\ref{ex:fd-cycle}
+had zero-input signatures and entailed both ground results. The
+class-local bound on \code{09c5e3fe} missed the \code{WalkA} proofs at
+depths three and four; the reachable-head bound on \code{21c6d7c8}
+still stopped the \code{MeetDepth} example at $(4,5)$. These are
+contrasts with the current rules, not failures on the pinned revision.
+
+\sources \src{define-class.lisp}: \src{infer-class-kinds};
+\src{define-instance.lisp}: \src{define-instance-in-environment},
+\src{typecheck-instance}; \src{environment.lisp}: \src{add-instance},
+\src{lookup-class-instance-in-list}, \src{expand-context}, \src{finalize-instance-signatures},
+\src{instantiate-instance-context}, \src{instance-signature=},
+\src{predicate-embeds-p}, \src{valid-derived-cycle-p}, \src{max-class-instance-head-height},
+\src{type-disagreement-height}, \src{head-equality-distances}, \src{instance-input-progress-p},
+\src{instance-equality-progress-p}, \src{instance-recursion-blocked-p},
+\src{instantiate-context-superclasses}, \src{update-instance-fundeps},
+\src{check-fundep-agreement}, \src{context-fundep-substitutions}, \src{improve-predicate-fundeps},
+\src{solve-fundeps}; \src{context-reduction.lisp}: \src{entail},
+\src{by-inst}, \src{fundep-entail};
+\src{src/codegen/resolve-instance.lisp}: \src{resolve-dict}, \src{resolve-static-dict};
+\src{src/codegen/translate-instance.lisp}: \src{translate-instance}.
+
+\section{Checking expressions}\label{sec:terms}
+
+Write $\Gamma(x)=\sigma$ for lexical then global scheme lookup. $\Delta$
+also tracks source type names currently in scope. $G$ contains available
+predicates, $E$ the local type equations supplied by patterns, and $B$ the
+lexical return targets. Abbreviate this data with $\Sigma$ by $\mathcal C$.
+The main checking judgment is
+\[
+ \mathcal C;S\vdash e\chk t
+      \ \Longrightarrow\ (u,W,A,e',S').
+\]
+It checks a parser expression $e$ against expected type $t$, returns its
+inferred type $u$, wanted predicates $W$, delayed accessor obligations $A$,
+and typed syntax $e'$ with updated substitution $S'$. At ordinary value
+nodes $S'u$ agrees with $S't$, using the visible interface when there is a
+coercion. An effect-only \emph{binding statement} need not even have a
+meaningful $u$. Synthesis is a call with a fresh expected $a^v$, or $a^r$
+where any result sequence is permitted. It is \emph{not} an unrestricted
+search for a polytype. The short rules below omit unchanged data, carry the
+substitutions left-to-right through the premises, concatenate obligations,
+and attach the solved type to the corresponding syntax. In the expression
+rules, $e\chk t$ is a check against an expectation; $e:t$ is a typing
+premise or conclusion. Only $\vdash_0$ denotes the declarative core
+judgment of Section~\ref{sec:safety}. $U_S(u,t)$ denotes
+the ordinary equation step of Section~\ref{sec:unification}. Sections below
+specify the cases that open a local scope instead of threading everything
+outward.
+
+\subsection{Values, functions and applications}
+\[
+ \rrule{Var}{\operatorname{inst}(\Gamma(x))=(P,u)
+                  \quad S'=U_S(u,t)}
+            {\mathcal C;S\vdash x\chk t
+              \Longrightarrow(S'u,S'P,[],x^{S'P:S'u},S')}
+\]
+This is the ordinary lookup rule; constructors, methods and recursive
+references use the scheme under their name. The superscript records the
+predicate list and occurrence type used by translation. Integer literals
+$n$ have the same rule with $(P,u)=([\mathsf{Num}\,a],a)$, $a$ fresh:
+conversion is through a dictionary, not an initial guess of $\Int$.
+Characters, strings, ratios and the two floating-point literal formats
+have fixed types $\mathsf{Char},\Str,\mathsf{Fraction},\mathsf{F32},
+\mathsf{F64}$ respectively, with no wanteds. Integer \emph{patterns}
+also demand $\mathsf{Num}$; a literal test is not constructor-tag evidence.
+
+\paragraph{Abstraction.}
+For $(\mathsf{fn}\ \bar x.\,e)$ with ordinary variable parameters, take
+the positional types $\bar u$ and result $r$ from an expected function
+type when present, checking arity. Otherwise choose fresh single-value
+inputs and a fresh result-capable $r$. With empty keyword set the rule is
+\[
+ \rrule{Fn}{\Gamma[\bar x:\bar u]\vdash e\chk r
+               \quad \Fn(\bar u;\varnothing;\mathsf{closed};\pack^{-1}(r))
+                      \eqs t}
+            {\Gamma\vdash(\mathsf{fn}\ \bar x.\,e)\chk t}.
+\]
+Here and below a short $\Gamma$ judgment inherits the rest of $\mathcal C$.
+There is no generalization of an inferred parameter. A parameter with a
+known $\forall$ type binds the corresponding scheme instead. Patterns in
+parameters are checked together (Section~\ref{sec:patterns}). With keyword
+parameters, check each default at its expected keyword type or a fresh
+ordinary variable, \emph{before} introducing its binder; later defaults see
+earlier binders. The elaborated prefix chooses the supplied value or
+evaluates the default, based on a presence flag. An abstraction's own
+interface is closed.
+
+\paragraph{Application.}
+The meaning rule for a known closed function is
+\[
+ \rrule{Call}{f:\Fn(\bar u;K;\mathsf{closed};\bar r)
+        \quad \bar e:\bar u \quad J\subseteq\dom K
+        \quad(e_k:K(k))_{k\in J}}
+       {f(\bar e;\,{:}k=e_k\ (k\in J)):\pack(\bar r)} .
+\]
+The vector premise requires \emph{exact} positional arity: this rule
+does not curry, partially apply, or discard extra outputs. The checker
+implements it as follows:
+\begin{enumerate}
+\item Infer the operator at a fresh ordinary variable. Its fresh
+instantiation's result may be unified speculatively with the expected result
+as a hint to its arguments, only when the hint binds exclusively variables
+fresh since starting the operator. The final result check is still required.
+\item If the operator is still a variable, unify it with a function of the
+actual positional arity, fresh inputs and supplied keyword set, and outputs
+from the expected result (or the direct \code{values} binding context).
+The guessed function is open with a fresh origin iff keywords were supplied.
+\item Check non-$\forall$ positional arguments first, then the remaining
+polymorphic positions, then the supplied keyword arguments, putting the
+typed terms back at their original positions. This is \emph{checking}
+order, not a change in argument evaluation order. A missing label is an
+error in a closed interface. For an open interface, extend it with the
+label at a fresh type and a new origin, redirect the old origin to the
+extension, and update an eligible unresolved local binding.
+\item If the result is a bare $\forall$ in an ordinary context, instantiate
+it, add the new wanteds, and account for their dictionary applications.
+Unify the effective result with $t$. A temporary binds an expression whose
+result must be consumed with dictionaries; instantiation does not duplicate
+its evaluation.
+\end{enumerate}
+A variable or abstraction used as a function \emph{value} at an expected
+function interface may hide optional keywords. For each expected label,
+the actual interface must contain it, or be open and extendible. Project
+both to those labels, close the projections, then unify their slots and
+outputs. Thus a closed value accepting both \code{:x} and \code{:y} may be
+used via a view exposing only \code{:x}, not conversely. This specific
+coercion does not implement general function subtyping or row polymorphism.
+
+\paragraph{Fields and packs.}
+The accessor \code{.field} produces a unary $a\arr b$ with the obligation
+$a.\mathit{field}=b$. If the head of $Sa$ is unknown, defer it. Otherwise
+it must identify a struct with this field: freshen its parameter vector,
+one-way match its head into $Sa$, and unify the specialized field type with
+$Sb$. A bare unconstrained polymorphic field is instantiated here; a
+qualified polymorphic field requires pattern matching instead. Iterate
+accessor solving while at least one is solved; unresolved accessors at the
+binding check are ambiguous. There is no row constraint that can be
+generalized in their place.
+
+For \code{(values} $\bar e$\code{)}, check each $e_j$ against a separate
+fresh \emph{ordinary} $a_j$; unify $\pack(\bar a)$ with $t$.
+A \code{let (values} $\bar x$\code{) =} binding requires exactly the
+number of components named, each binder a variable or wildcard. A named
+ordinary local value requires one result; an explicit discard
+\code{let \_ =} can discard any result sequence. In a sequencing body the
+nonfinal expressions have fresh result-capable expectations, the last
+expression inherits $t$. Analysis may diagnose discarded non-void results
+even when this equation check succeeds.
+
+\begin{example}[The output slot in a higher-order call]
+The quantifier in this declaration belongs to the caller, not the callback:
+\begin{verbatim}
+(declare call-results
+  (forall ((:r Values)) (Void -> :r) -> :r))
+(define (call-results f) (f))
+\end{verbatim}
+At a use with a nullary argument returning two results $\Int,\Str$, the
+fresh $a^r$ for \code{:r} unifies with $\Pack([\Int,\Str])$ when checking
+$f$'s output. The outer singleton output $[a^r]$ normalizes to
+$[\Int,\Str]$. Neither binding the call to one ordinary variable nor
+returning two values where a single $\mathsf{Tuple}\ \Int\ \Str$ is expected
+uses an implicit conversion.
+\end{example}
+
+\sources \src{define.lisp}: \src{infer-expression-type}
+(\src{node-variable}, \src{node-abstraction}, \src{node-application},
+\src{node-values}, \src{node-values-bind}), \src{infer-application-rator},
+\src{coerce-function-value-type}, \src{infer-keyword-params};
+\src{accessor.lisp}: \src{solve-accessor}.
+
+\subsection{Bindings and generalization}\label{sec:gen}
+Local binding groups and top-level definitions use the following procedure.
+First put explicit declarations in scope as schemes; infer the implicit
+strongly connected components (SCCs) in dependency order; finally check
+the declared definitions against their schemes. Dependencies include
+keyword defaults. Sequential \code{let*} infers bindings successively;
+the statement \code{let} with a pattern binds the checked pattern, not a
+freshly generalized scheme at every variable in the pattern.
+
+Within an implicit SCC, install mutually visible monomorphic placeholders
+(an outer \code{the} on an initializer can supply its actual annotation
+instead); infer all definitions, sharing equations. Collect their types
+$\bar u$, wanteds $W$ and accessors $A$. Solve FDs before accessors,
+then solve/reduce/default the context. In detail:
+\begin{itemize}
+\item $\operatorname{red}(W)$ applies current substitutions, removes
+predicates entailed with empty givens, and removes duplicate or
+superclass-implied predicates using the others. Builder defaulting can
+choose $\mathsf{Seq}\,a$ or $\mathsf{Seq}\,(\mathsf{Tuple}\,k\,v)$ for
+an unprotected unknown collection head, by unifying the \emph{whole}
+collection type, solving FDs and exposing the builder's prerequisites.
+\item Start the fixed variables $F$ with variables free in substituted
+pre-group environment bindings, scoped type variables and relevant open
+origins. Unresolved branch result choices and retained proof obligations
+also protect variables from local quantification (Section~\ref{sec:patterns}).
+Let $L$ be variables/origins of the inferred types outside $F$. Under the
+relevant substitutions enlarge $L$ by FD closure minus $F$, then $F$ by
+FD closure minus the enlarged $L$. In the reduced context split off
+$D=\{p:\fv(p)\subseteq F\}$ (defer to caller); the rest $P$ is retained
+provisionally.
+\item A predicate variable not known from $F\cup L$ must be defaultable or
+inference reports ambiguity. Numeric candidates for $a$ require that all
+predicates mentioning $a$ have no \emph{other} variables, at least one has
+a recognized numeric class, and all hold after the proposed substitution.
+Choose the first valid candidate in $[\Int,\mathsf{F64},\mathsf{F32}]$.
+Remove these defaulted predicates from $P$. At top level, also try defaulting
+all $D$ (and all $P$ in a restricted group) and reduce again.
+\end{itemize}
+
+\paragraph{Relaxed value restriction.}
+The syntactic predicate $N(e)$ holds for variables, literals, lambdas and
+\code{type-of}; \code{the} preserves it, as does a single-expression
+\code{unsafe} wrapper. A constructor applied to its \emph{exact} number
+of positional arguments with all $N(e_i)$ is nonexpansive. An ordinary
+function call is not, even a call to a function known to a human to be pure.
+A function binding counts as nonexpansive; other bindings need a
+nonexpansive initializer.
+
+Variance signs are $+,-,\pm$ with $\bot$ for ``not observed''. Join
+collects occurrences ($+\sqcup-=\pm$); an input, including a keyword
+input, flips sign, an output/pack component preserves it, a nominal
+argument composes with its stored variance, and an invariant or
+unknown-head argument is invariant. Free variables in a nested $\forall$
+are conservatively invariant. Compute variances for a mutually recursive
+type group by starting inspectable parameters at $\bot$, accumulating
+observations in fields/alias bodies and joining until stable. An
+unobserved argument at an SCC-local occurrence contributes no observation.
+After convergence phantom parameters default to $+$. Opaque and GADT
+parameters start and stay invariant. This is an analysis for generalization,
+not an assignment conversion $D\,s<:D\,t$.
+
+Let $H$ be the union of the free variables of the types of expansive
+bindings, intersected initially with the local variables; if a weak
+candidate later becomes a compound type, track its variables. At the
+final substitution, let $v(a,\bar u)$ be the sign joined over the
+whole group. Define the eligible local variables as
+\[
+ L^+ = L\setminus
+   \{a\in H : v(a,\bar u)\ne +\ \lor\ a\in\fv(P)\}.
+\]
+Here all sets in the formula use their substituted variables; eligible open
+origins are handled separately from structural occurrences. When
+generalization is disabled $L^+=\varnothing$. The \emph{monomorphism
+restriction} is a second, distinct decision. The group is unrestricted
+when generalization is enabled and all its members are functions; otherwise
+it is restricted. Quantifying only eligible occurrences, for each $u_i$:
+\[
+\begin{array}{c|c|c}
+ \text{group} & \text{scheme} & \text{outgoing predicates}\\ \hline
+ \text{unrestricted} & \forall L^+.\ P\Rightarrow u_i & D\\
+ \text{restricted}
+    & \forall(L^+\setminus\fv(P)).\ \varnothing\Rightarrow u_i & D\cup P
+\end{array}
+\]
+Only flexible variables are abstracted. All bindings of the group see the
+same provisional context. Recursive occurrences are rewritten to carry the
+solved type and needed dictionaries. Local weak variables can be solved by
+later uses; top-level inferred schemes may contain neither free variables
+nor predicates left for a caller to supply outside the scheme.
+
+\begin{example}
+An inferred numeric function $(\mathsf{fn}\ (x)\ (+\ x\ x))$ can keep
+$\forall a.\mathsf{Num}\,a\Rightarrow a\arr a$; an implicit top-level
+nonfunction initialized with $1$ defaults to $\Int$ in the usual library.
+For a \emph{local} binding initialized with \code{(cell:new None)}, the provisional type
+is $\mathsf{Cell}\,(\mathsf{Optional}\,a)$. $\mathsf{Cell}$ is opaque, so
+$a$ is invariant and remains shared. Giving each lookup a fresh $a$
+would let two consumers disagree about the type of the same mutable slot.
+The same unannotated allocation at top level is rejected if its element
+type remains unresolved; it does not introduce a top-level polymorphic cell.
+By contrast an ordinary call returning $\List\,a$ with no predicate on
+$a$ can generalize $a$ if it is local and there are only positive
+occurrences in the group.
+\end{example}
+
+\begin{invariant}[Sharing of a blocked weak variable]
+At an implicit binding boundary, suppose a remaining ordinary variable
+$a$ of an expansive initializer is local and is either observed negatively
+or invariantly in the group, or appears in a retained predicate. No scheme
+created by the group makes fresh copies of that $a$ at lookup.
+\end{invariant}
+\begin{proof}
+After substitutions the variable is in $H$. A negative occurrence joins
+to $-$ or $\pm$; an invariant occurrence joins to $\pm$. Either excludes
+$a$ from $L^+$, as does membership in $\fv(P)$. Neither row of the table
+quantifies anything outside $L^+$. In the stored body its occurrences
+therefore remain the same free identity, not a $g_i$.
+$\operatorname{inst}$ freshens only abstracted positions (and distinct
+origin metadata); any later ordinary equation constrains that same identity.
+This is a sharing invariant, not a semantic proof that all positive
+constructors or all foreign operations are safe.
+\end{proof}
+
+\paragraph{Declared bindings.}
+For $\sigma$ freshen the declared binders, check the binding at the
+instantiated body with its declared predicates available, solve its result
+proofs, FDs and accessors, align determined arguments, and remove
+entailed wanteds. Default and split the remainder. Requantify the
+\emph{final} declared instance, excluding variables fixed to a structure,
+identified with one another, or free in the outer environment. For explicit
+binders use their declared order on the eligible survivors. The resulting
+scheme must pass \src{ty-scheme=} against the substituted original; a
+remaining retained predicate is a missing declared constraint. Thus an
+annotation does not make an unconstrained expansive initializer more
+general. Qualified declarations introduce dictionary parameters and do
+not apply the same once-evaluated initializer restriction. The local
+checker for a bare nested $\forall$ is different (next subsection).
+Self-calls of a declared function instantiate its original scheme, not the
+single instance being checked: polymorphic recursion needs this distinction.
+
+Recursive SCCs of functions are allowed. Mixed mutually recursive functions
+and values are rejected, as are recursive top-level values; there is a
+special local value case for saturated, representation-eligible recursive
+constructors with guarded components. The typed top-level/method recursion
+check accounts for implicit dictionary parameters. These are initialization
+conditions in addition to type equality.
+
+\sources \src{define.lisp}: \src{infer-bindings-type},
+\src{infer-impls-binding-type}, \src{infer-expl-binding-type},
+\src{generalizable-type-variables}, \src{check-for-invalid-recursive-scc};
+\src{context-reduction.lisp}: \src{reduce-context}, \src{split-context},
+\src{candidates}, \src{default-builder-context}; \src{variance.lisp}:
+\src{collect-tyvar-variances}; \src{define-type.lisp}:
+\src{infer-type-definition-scc-variances}.
+
+\subsection{Expected universals and expression ascriptions}\label{sec:rank}
+Nested universals are checked, not discovered by guessing where to insert
+$\forall$. When the substituted expectation is $\forall\bar a.\,P\Rightarrow u$,
+intercept the ordinary check except at transparent body/block/ascription
+nodes. The logical introduction rule is
+\[
+ \rrule{Forall-in}{\bar s\text{ fresh rigid}\quad
+       G,P[\bar s/\bar a];\Gamma\vdash e\chk u[\bar s/\bar a]
+       \quad\text{scope and value conditions}}
+      {G;\Gamma\vdash e\chk\forall\bar a.\,P\Rightarrow u}.
+\]
+Specifically, snapshot the next fresh ID $m$ and outer bindings, scope the
+names to $\bar s$, and check with a private result-proof scope. Resolve its
+saved branch predicates before relaxing any skolem. Solve given and wanted
+FDs, attempt accessor solving (an unresolved source involving a local
+skolem is ambiguous), and align FDs from the givens. For every substitution
+whose domain was allocated before $m$, inspect the substituted range; also
+inspect substituted outer environment variables. Neither may contain a
+local skolem. Discharge entailed predicates; after builder defaulting and
+context reduction no remaining wanted may mention a local skolem.
+If there are no given predicates, the expression is expansive and there
+are skolems, every local skolem must be covariant or absent in the checked
+body type. If there are givens, the elaborated expression instead accepts
+dictionaries: attach them to an abstraction or insert a dictionary-binding
+wrapper. Finally replace the local skolems by fresh flexible names inside
+the elaborated object; the exported type is the substituted \emph{original}
+$\forall$. This administrative relaxation is not an equation on caller types.
+
+\begin{example}
+To check \code{(fn (z) z)} at $\forall a.\,a\arr a$, use a fresh $s$;
+the parameter and result both have type $s$ and no prior unknown must
+equal it. Conversely, if $x:b$ is a captured monomorphic value, checking
+\code{(fn (\_) x)} at that type would solve the old $b$ to $s$ or require
+an incompatible rigid equality. The former fails the watermark test.
+The use of a variable bound to the successful polymorphic parameter can
+instantiate it independently at $\Int$ and $\Str$.
+\end{example}
+
+\paragraph{The \code{the} form is not an unchecked assertion.}
+Parse its annotation with the current scoped variables and branch
+refinements. A predicate context requires explicit quantification. If
+the declaration is explicitly quantified and either has predicates or is
+checked at a $\forall$ expectation, use universal introduction on the
+operand and compare the resulting
+polytype (or instantiate it if an ordinary type is expected). In the
+other case let $d$ be the parsed declared body. Check compound operands at
+$d$ so e.g.\ a match sees its expected result. Simple leaves without
+nested $\forall$ are inferred at a fresh result-capable expectation.
+Let $u$ be the resulting \emph{substituted} operand type. Require
+$u\eqs d$ and also $u\oneway d$ on the saved operands (not their common
+unified image), then unify $u$ with the enclosing expectation. The
+one-way check prevents certifying an annotation just because it could be
+made \emph{less} general to fit. There is no recursive subsumption rule
+that moves binders through a function, reorders visible arguments, or
+delays an effect to manufacture a more polymorphic value.
+
+\sources \src{define.lisp}: \src{check-forall-expression-type},
+\src{parse-the-type-annotation}, \src{node-the} method of
+\src{infer-expression-type}, \src{wrap-expression-with-given-predicates};
+\src{tc-env.lisp}: \src{tc-env-extend-type-variable-scope}.
+
+\section{Constructors, patterns and local equality}\label{sec:patterns}
+
+\subsection{Introduction versus opening}
+An ordinary constructor $K$ of $D\,\bar a$ with fields $\bar t$ has the
+scheme $\forall\bar a.\,\bar t\arr D\,\bar a$ (the bare result type for a
+nullary constructor). A struct is nominal, with a constructor and named
+fields. With the GADT spelling each constructor instead has an independently
+scoped signature
+\[
+        K:\forall\bar b.\,\bar t(\bar b)\arr D\,\bar u(\bar b).
+                                                        \tag{K}
+\]
+Some indices may be concrete, repeated, or structured; some binders may
+occur only in fields. The signature must return exactly one instance of
+the defining nominal type, of kind $*$; fields are positional. A nullary
+constructor uses the bare type, not a nullary function returning it.
+The implementation rejects mixed ordinary/signed constructor lists and
+predicate contexts \emph{on (K)}; it does not automatically pack class
+dictionaries for existential variables. A polymorphic field can itself
+carry a qualified $\forall$. At construction the caller instantiates all
+binders, checks the fields and obtains $D\,\bar u$ under the same
+instantiation. There is no mystery type chosen by the consumer.
+
+For elimination write
+\[
+       \Delta;E\vdash p:t\ \rightsquigarrow\ (\Delta_p,E_p,\Gamma_p).
+\]
+This is the \emph{meaning} of a pattern assuming that its runtime test
+succeeded. A wildcard adds nothing; a variable binds the input type; an
+as-pattern binds the whole value as well as its subpattern. A literal
+tests a value of the input type. For $K(\bar p)$ against $D\,\bar v$, open
+(K) at fresh local names $\bar b$ and add $\bar v=\bar u(\bar b)$ for
+the fields and continuation only; then check the field patterns at
+$\bar t(\bar b)$ in this same row. For a branch with outer result $r$ the
+meaning is
+\[
+ \rrule{Arm}{\Delta;E\vdash p:t\rightsquigarrow(\Delta_p,E_p,\Gamma_p)
+          \quad \Delta,\Delta_p;E,E_p;\Gamma,\Gamma_p\vdash e:r}
+      {\Delta;E;\Gamma\vdash (p\mapsto e):t\Rightarrow r}.
+\]
+Names introduced by opening are bound in this premise, not in $t,r$ or a
+sibling premise. An obligation about such a name cannot be moved outside
+as an implicit universally quantified predicate. Constructor return indices
+affect compatible type instances, not the identity of the enclosing type
+constructor. E.g.\ for $K:\forall h.\,h\arr D\,(\List\,h)$, matching
+$D\,a$ gives $a=\List\,h$. One can return something of type $\List\,h$
+under the \emph{outer} name $a$; one cannot return an $h$ under an
+arbitrary caller-chosen type.
+
+\subsection{The two environments of a GADT match}
+For a match without GADT patterns infer the scrutinee at a fresh ordinary variable,
+unify its type against every pattern and check every arm at the same
+expected result. If \emph{any} pattern contains a signed constructor
+(also inside an ordinary constructor or as-pattern), use the following
+branch-local algorithm for the whole match.
+\begin{enumerate}
+\item Solve available scrutinee accessors. Compute a common base substitution
+$S_0$ by collecting input \emph{shape} requirements across rows. E.g.\
+knowing only $x:a$, a pattern may require $x:D\,b$ for fresh $b$;
+it does not demand of all rows that $b=\Int$ just because this constructor
+returns $D\,\Int$. This preliminary walk uses a local solution for nested
+witnesses while committing required nominal shapes.
+\item For each arm start the pattern from the same $S_0$ in a copied term
+\emph{and} scoped-type environment. Snapshot the next variable ID $m$.
+Freeze flexible variables of the substituted scrutinee as fresh skolems.
+When a GADT result and input have matching applied heads, use
+\src{unify-given}: temporarily open permitted rigid variables on the
+two sides, unify the results, and close each surviving abstract flexible
+representative back to a skolem. Otherwise ordinary unification must
+justify the head. Only a constructor test has this authority; a term,
+a literal test and a wildcard do not.
+\item Open each constructor at the exact field count. To describe
+\src{open-constructor-pattern}, let $V$ be the variables of the incoming
+substituted input, and $P$ the substitution after the constructor's result
+has been unified with it. Of the nonrigid variables in the substituted
+constructor type and predicates, seal those \emph{not equal to an element of}
+$[Pv:v\in V]$ as fresh existential skolems $H$. This is not set subtraction
+of $\fv(PV)$: an unnamed component of a newly exposed $\List\,h$ may still
+need sealing. Store the constructor binder positions that open to sealed
+names on this occurrence. Children may use permitted row evidence, including
+such witnesses from enclosing constructors.
+\item A row uses one queue for all columns, also for parameters. Choose a
+GADT-containing pending pattern with a known nominal input head if possible,
+otherwise the first witness, otherwise the first item. Replace a visited
+constructor by its fields in place. This allows a tag in one field to identify
+the type at which a sibling literal is to be tested. Typed field and parameter
+order remains source order. Rename residual index representatives back into
+the outer vocabulary when possible. Call the resulting pattern substitution
+$P$ and retain $E_p=\{v=Pv : v\in\fv(S_0t),\,v\ne Pv\}$ plus enclosing
+evidence. Normalize the branch environment, its scoped annotations and
+enclosing dictionaries by $P$ before checking the body.
+\item Check the body at the locally refined expected result, with the
+following exception. Use the contextual return target when applicable.
+If the resulting expectation under $S_0$ is a variable not occurring in
+the substituted scrutinee, and local or enclosing index evidence is
+available, check at a fresh flexible copy and \emph{project} the inferred
+type outward as described below.
+Let $T$ be the final body substitution. Export as body requirements only
+equations $v\mapsto u$ in $T$ with $\operatorname{id}(v)<m$ and
+$v\notin\dom P$. Re-unify them with the accumulating outward substitution;
+do not export the domains of $P$ merely because later composition changed
+their ranges. A sibling's own pattern starts from $S_0$, not $P$ or $T$.
+\end{enumerate}
+
+\paragraph{Choosing an outward result.}
+Given a locally normalized result type $u$, for an occurrence of a subtree
+$w$ collect its aliases $\{a:a=w'$ is in the saved evidence and
+$Tw'=w\}$. Recursively project arguments, function slots and pack components
+to obtain a structural spelling $w'_{\rm str}$. With no aliases, use that
+spelling (escape checks still apply). Otherwise the candidates are the
+aliases and, unless it mentions a hidden variable, $w'_{\rm str}$. With
+several candidates record a fresh \emph{monomorphic} choice together with
+the ordered options (structural first when permitted). At boundary solving,
+accept an already equal option, otherwise prefer a unifiable option shared
+by later choices for the same wanted type, then try the first unifiable
+option, failing on incompatible types. This is a finite choice procedure,
+not general anti-unification. A local binding may not quantify an undecided
+choice or the variables it depends on. A nested arm with hidden variables
+finishes nested choices before its escape check.
+
+\begin{lemma}[Projection respects the evidence]\label{lem:project}
+On closed-interface first-order types, suppose a valuation satisfies the
+arm's saved index equations under its body substitution and a solution of
+all its recorded choices (each choice equals one of its candidates).
+Interpreting the projected result under that valuation gives the same type
+as interpreting the local result.
+\end{lemma}
+\begin{proof}
+Induct bottom-up on the local type. A structural spelling rebuilds the same
+head from equal children by the induction hypothesis. Every alias was
+added only by equality with that very subtree after the body substitution;
+the corresponding saved equation makes the alias denote the same tree.
+Omitting an option that mentions a hidden variable does not add any new
+interpretation. Replacing the remaining options by a variable equated
+to one of them therefore preserves equality. The assertion is local:
+it does not allow substituting this arm's $a=\Int$ into another arm.
+\end{proof}
+
+\paragraph{Predicate and existential discharge.}
+Suppose an arm checks a use requiring $C\,a$ and the enclosing dictionary
+has type $C\,b$. A constructor proving $a=b$ can make these the \emph{same}
+predicate locally; merely being of class $C$ cannot. Obligations mentioning
+hidden types are solved in this scope. Repeatedly solve fields whose
+receiver mentions a hidden type. For hidden predicates try supplied
+dictionaries and their superclasses, then stably selected instance
+prerequisites; keep unproved predicates at a repeated goal or instance-path
+depth 64. Nonhidden prerequisites can still go outward. After substitution,
+\src{check-pattern-scope} rejects a hidden variable in the outward result,
+supplied extra parameter types being checked, an old substitution range,
+an unsolved predicate, or either endpoint of a pending accessor.
+
+Let $A\,k\,x\,y$ declare $k\to x\,y$. Suppose supplied dictionaries
+$F\,q\,x$ and $S\,k\,y$ expose superclass fields $A\,q\,x\,h_1$ and
+$A\,k\,h_2\,y$. Inside the success arm of $\mathsf{Same}\,q\,k$
+the determinants coincide. On an indexed match or positional parameter
+edge, \src{refine-given-superclasses} uses the supplied predicates'
+stored superclass fields at the local types. When hidden field evidence
+is present it materializes missing projections and marks the available
+dictionaries for use on this edge. From these predicates and their actual
+fields, \src{pattern-given-equations} computes $E_G$ by pairwise FD
+improvement to a fixed point. Equal determinants justify equality of each
+declared output, including two distinct names fixed by the caller.
+These are equations for \emph{comparing evidence}, not assignments in the
+type inference substitution. If the output equations conflict, no FD
+conversion is used. A wanted predicate and a global instance are never
+premises of this calculation.
+
+For example, $h_1=y$ and $h_2=x$ after the key match. Now add supplied
+$F\,k\,z$ and $S\,q\,w$. Prior to the match the two pairs of dictionaries
+may already have fields $A\,q\,x\,w$ and $A\,k\,z\,y$. After $q=k$
+the FD proves $x=z$ and $w=y$; either actual field agrees with the
+request $A\,k\,x\,y$ under $E_G$. Binding inference need not have kept
+that literal spelling at any field. The checker and translator compare
+both sides under the equations of their respective givens; the translator
+prefers an exact path, otherwise projects a field of equal type from the
+original dictionary. Under the hypotheses of Lemma~\ref{lem:fd} each
+FD comparison preserves every ground solution, hence representative
+choice does not affect ground equality. This does not assert uniqueness
+of dictionary values or completeness of inference. Retained result
+obligations use their saved givens and index equations. No conversion
+is passed to instance selection, a sibling arm, or the caller's solver.
+One partial dictionary alone does not let the caller choose the other output.
+
+An overloaded literal can occur \emph{before} the key witness in source
+order. Its operand type and even the head of its captured dictionary may
+already be known while the type of its numeric superclass field is not.
+The row scheduler checks the selected accessor path from the incoming
+dictionary using only the equations established by the current pattern
+prefix. Thus it need not run an effectful comparison on a path where its
+required key equality has not been established.
+
+When the result itself is being chosen, a predicate with fresh variables
+may depend on a not-yet-known result. At an explicit binding or an expected
+$\forall$ the checker can retain $(p,G_p,E_p,H)$ as an \emph{obligation},
+not as an equation or a dictionary. It does so for nonhidden predicates
+under its retention policy when their fresh variables occur in the result,
+or when a supplied predicate can be matched by binding only fresh result
+variables. Independently synthesized functions do not inherit a contextual
+result merely by being lexically nested. Once the result substitution $S$
+is known, transport saved equations on \emph{both} sides
+($a=u$ becomes $Sa=Su$), normalize wanted and givens and test entailment.
+Failed transport on a contradictory branch leaves compatibility/generality
+to the ordinary checks. An unproved predicate is returned for ordinary
+checking (or rejected for escape); it is not deemed proved by retention.
+At a rank boundary only unresolved obligations independent of the local
+skolems, with a retaining parent, can be forwarded; the implementation
+filters out givens mentioning those skolems. It finalizes the typed arms
+using their local equations and stable branch identities before relaxing
+skolems and abstracting dictionaries. Equality evidence need not survive
+as a runtime object; dictionary evidence does.
+
+\begin{example}[Same tag test, two different result indices]
+The expected output type can be given the scrutinee's index:
+\begin{verbatim}
+(define-type (Atom :a)
+  (declare AnInt (Integer -> Atom Integer))
+  (declare AString (String -> Atom String)))
+(declare unpack (forall (:a) (Atom :a -> :a)))
+(define (unpack term)
+  (match term ((AnInt x) x) ((AString y) y)))
+\end{verbatim}
+The shared input is $\mathsf{Atom}\,a$, the expected result $a$. The
+first arm has $a=\Int,\ x:\Int$, so $x:a$ by its equation; the second
+has $a=\Str,\ y:\Str$. Discharging these two implications gives the
+declared result without solving $\Int\eqs\Str$. A wildcard fallback would
+get \emph{neither} positive equation merely from previous patterns failing.
+Conversely, against a statically known $\mathsf{Atom}\,\Int$, an explicitly
+written \code{AString} arm fails pattern compatibility; there is no rule
+allowing arbitrary code because its premises are contradictory.
+\end{example}
+
+Sequential GADT pattern bindings give the continuation the arm scope by
+rewriting it as a one-arm match. For monadic \code{<-}, the action stays
+in the prefix; matching is in the callback, not in a computation that
+repeats the action. Parameter patterns similarly check their common
+input shapes, body, keyword defaults and result with local evidence;
+catch/resumption pattern scopes have their own checks. In a separate
+analysis pass the pattern matrix specializes candidate constructor results
+against a column type and propagates equations to remaining columns.
+It checks compatibility again after later uses may have specialized
+the scrutinee. A non-exhaustive \code{match} expression produces a
+\emph{warning}; a refutable function parameter row or a refutable
+\code{let} binding pattern is an error. Do not infer totality from the
+success of expression typing.
+
+\sources \src{define-type.lisp}: \src{check-constructor-signature},
+\src{infer-define-type-scc-kinds}; \src{unify.lisp}: \src{unify-pattern-result},
+\src{unify-given}; \src{define.lisp}: \src{constrain-pattern-inputs},
+\src{open-constructor-pattern}, \src{infer-pattern-row}, \src{branch-body-equations},
+\src{project-branch-result}, \src{solve-branch-result-choices},
+\src{resolve-branch-result-predicates}, \src{discharge-hidden-obligations},
+\src{check-pattern-scope}; \src{src/analysis/analysis.lisp}:
+\src{analyze-translation-unit}; \src{src/analysis/pattern-exhaustiveness.lisp}:
+\src{possible-constructor-pattern}, \src{find-non-matching-value}.
+The input-shape and pattern-row walks both use
+\src{visit-pattern-queue}; matrix specialization and defaulting share
+\src{refine-column-types} to transport the remaining column types, fields
+and obligations.
+
+\section{Control, effects and the host}\label{sec:effects}
+There is no effect row in $\Fn$. A type records what a computation may
+return \emph{normally}, not that it is pure, terminates, cannot signal a
+condition or is being run in the dynamic extent of a handler.
+
+\paragraph{Local choice and iteration.}
+\code{if} and each \code{cond} clause require Boolean tests and check result
+arms at the common expectation. \code{and}/\code{or} take and return
+Booleans. \code{when}/\code{unless} check a Boolean test, discard any body
+results and return $\Void$. In \code{for}/\code{for*} mutable loop
+variables have \emph{one} instance for initializer and step (generalization
+disabled even for declarations). A while/until test has type $\Bool$, a
+repeat count $\mathsf{UFix}$, and the body checks at $\Void$. The loop's
+result comes from the optional returns form or is $\Void$; \code{break}
+and \code{continue} check as $\Void$, not as expressions of every type.
+\code{rec} binds and immediately invokes a local tail-recursive function.
+The independent-initializer path seeds monomorphic parameter types from
+the initial call; dependent initializers use the nested-let lowering.
+Only direct self-calls in allowed tail positions are admitted.
+
+\paragraph{Named exits.}
+\src{resolve-control-flow} rewrites surface \code{return} to a named exit
+from its lexically enclosing return scope, rejecting it in disallowed
+contexts. A block introduces a shared result-capable target $B(\ell)$
+unified with its expectation and the normal tail. The meaning rule is
+\[
+ \rrule{Exit}{B(\ell)=u \quad \Delta;E;B;\Gamma\vdash e:u}
+       {\Delta;E;B;\Gamma\vdash \mathsf{returnFrom}(\ell,e):t}.
+\]
+There are two result types here: the payload's destination $u$ and the
+surrounding expression's expectation $t$, to which the exit does \emph{not} return.
+Ordinarily the checker infers payloads at fresh result-capable types,
+records the first, then checks later returns and normal completion against
+it. At a target with local GADT evidence, check the payload at the locally
+substituted target directly; do not record a branch-only spelling as the
+type of other exits. A $\forall$ target also supplies the operand
+expectation. Fresh-result-only hints may carry the destination through
+intervening function results. A new lambda introduces its own return
+scope; returns in parameter defaults share its body block.
+
+\paragraph{Classes of effects.}
+In \code{do}, choose $m:*\arr *$, demand $\mathsf{Monad}\,m$, check each
+action at $m\,a_i$, the bound pattern at $a_i$, and the last expression at
+$m\,b$ for the result $m\,b$. Ordinary local bindings are still possible
+inside the sequence. This is an overloaded sequencing interface, not an
+effect discipline for Coalton expressions. Collection and association
+builders check homogeneous items (respectively keys and values), then
+typecheck the generated builder-protocol calls; comprehension clauses
+likewise lower to library operations. Dynamic rebinding checks an
+initializer in the \emph{old} environment, applies generalization/defaulting
+and requires the resulting scheme to equal the variable's existing scheme.
+
+\code{throw} accepts a known exception type, or a variable with an
+$\mathsf{Exception}$ predicate; \code{resume-to} analogously uses
+$\mathsf{Resumption}$. Both have the local expected result, since they
+transfer control. \code{catch}/\code{handle} check their guarded expression
+and every handler body at one result (including a pack); their patterns
+are restricted to admissible exception tests, optionally typed, or
+wildcards. \code{resumable} requires a \emph{single} result for its guarded
+expression and branches, and resumption-constructor patterns. These
+checks do not ensure that a dynamically applicable handler exists.
+\code{protect} preserves the guarded expression's result sequence and
+discards the cleanup result. \code{type-of} infers its operand, solves
+its constraints/accessors and returns a quoted $\mathsf{TypeScheme}$;
+it does not evaluate that operand to determine its type.
+
+\paragraph{Foreign terms and representation.}
+A \code{lisp} form declares zero, one or several outputs. Parse these
+types in the lexical type-variable environment, form $\pack(\bar t)$ and
+unify with the context. Look up the explicit captures; a fresh constrained
+capture may specialize to an unambiguous supplied predicate, but may not
+solve an old lexical variable to do so. A still-fresh ambiguous capture
+predicate is an error, not a defaulting request. The checker does
+\emph{not} derive a typing for the host forms themselves. The host must
+deliver the claimed representation and arity, respect captured values and
+obey representation invariants. For example, a \code{lisp} form claiming
+$\Int$ can contain host code producing a string; the declared output
+alone cannot prove otherwise. Generated checks may signal errors, and
+\code{unsafe} changes host safety settings without disabling Coalton's
+static checking. A \code{repr} declaration, optimizer specialization or
+host-side mutation is not validated by a source substitution lemma.
+
+In particular, \code{specialize} checks that the replacement value's scheme
+equals the requested unqualified specialization, is not scheme-equal to
+the original, and that the original's fresh body type one-way matches the
+replacement's. This is a type test, not observational equivalence of the
+two definitions. In development mode redefinition checks guard, among
+other things, changes to the representation/constructor evidence of a
+GADT. The metatheory below fixes the signature throughout a run.
+
+\sources \src{control-flow.lisp}: \src{resolve-control-flow};
+\src{define.lisp}: \src{infer-rec-node-type}, \src{infer-dynamic-binding-type},
+\src{reflect-expression-type-scheme}, \src{specialize-lisp-capture},
+\src{infer-expression-type} methods for the named nodes;
+\src{specialize.lisp}: \src{process-specialize}; \src{lisp-type.lisp}:
+\src{lisp-type}; \src{define-type.lisp}: \src{validate-gadt-redefinitions}.
+
+\section{A type safety result with an explicit boundary}\label{sec:safety}
+
+\subsection{The indexed, single-result core}
+Fix a signature of free nominal datatypes, distinct atomic base types for
+primitive literals, and constructor signatures (K) whose parameters
+bind all the variables in their field and result types. All type
+parameters here have kind $*$. Types are first-order trees
+$a,\ B,\ D\,\bar t,\ (\bar t\arr t)$; in this notation nominal applications
+are saturated, arrows are closed and the result is always one value.
+Recursive nominal declarations are fine; there is no term-level recursion,
+recursive let, cyclic value construction or fixed-point primitive in this
+core. Terms are variables, fixed-type constants, uncurried lambdas
+with variable parameters, exactly saturated calls, saturated constructor
+introductions, and cases with distinct constructor tags and variable
+fields. Write a nullary constructor as $K()$. Parameters in a binding
+list are distinct. There is no type-level computation except finite
+tree equality. No overloaded literals, class methods, keyword arguments,
+generalization of local bindings, nonlocal control, host code, mutation,
+or optimizer rewrites occur in this result. The omitted constructs keep
+the checking rules above; they do not acquire a semantics by erasure.
+
+For a kinded variable context $\Delta$, let $\mathrm{Types}(\Delta)$
+denote the well-kinded core types with free variables in $\Delta$.
+Write $\rho:\Delta$ for an assignment of closed types of the required kinds. Define
+$\Delta;E\models t=u$ to mean that $\rho t=\rho u$ for every such
+$\rho$ satisfying all equations in $E$. Equality here is equality of free
+trees, not equality of host representations. Define
+$\Delta;E;\Gamma\vdash_0 e:t$ by the following rules (suppressing the
+fixed $\Sigma$). Variables have their types in $\Gamma$ and constants
+their fixed base types. Unlike the checking rules of
+Section~\ref{sec:terms}, these rules have no substitution state:
+\[
+ \rrule{Fn}{\Delta;E;\Gamma,\bar x:\bar t\vdash_0 e:u}
+           {\Delta;E;\Gamma\vdash_0 \lambda\bar x.e:\bar t\arr u}
+\]
+\[
+ \rrule{Call}{\Delta;E;\Gamma\vdash_0 f:\bar t\arr u\quad
+              (\Delta;E;\Gamma\vdash_0 e_i:t_i)_i}
+             {\Delta;E;\Gamma\vdash_0 f(\bar e):u}.
+\]
+The two lists in a call have the same length, including length zero.
+\[
+ \rrule{Conv}{\Delta;E;\Gamma\vdash_0 e:t\quad\Delta;E\models t=u}
+             {\Delta;E;\Gamma\vdash_0 e:u}
+\]
+\[
+ \rrule{Make}{K:\forall\bar b.\,\bar t\arr D\,\bar u
+       \quad\eta:\bar b\to\mathrm{Types}(\Delta)
+       \quad\Delta;E;\Gamma\vdash_0\bar e:\eta\bar t}
+       {\Delta;E;\Gamma\vdash_0 K(\bar e):D\,(\eta\bar u)}.
+\]
+Parentheses in $D\,(\eta\bar u)$ delimit its vector of indices. A case
+at $r$ requires a scrutinee at $D\,\bar v$ and, for each written
+alternative $K_i(\bar x_i)\mapsto e_i$, the premise
+\[
+ \Delta,\bar b_i;\
+ E,\bar v=\bar u_i;\
+ \Gamma,\bar x_i:\bar t_i\ \vdash_0 e_i:r,                  \tag{Case}
+\]
+where every written $K_i$ belongs to $D$, has the displayed field arity, and
+$\bar b_i$ freshen \emph{its} signature $K_i:\forall\bar b_i.\,
+\bar t_i\arr D\,\bar u_i$. Thus this premise cannot smuggle an equation
+from a constructor of a different datatype into the body. Neither $\Gamma$
+nor $r$ mentions these new binders. Impose the following sufficient
+\emph{coverage} premise: for every $\rho:\Delta$ satisfying $E$, every
+constructor whose result can be instantiated to $D\,(\rho\bar v)$
+has a written alternative. This is a mathematical premise, not an appeal
+to the absence of compiler warnings. It may conservatively require a
+constructor even when one of its fields is uninhabited.
+
+\begin{proposition}[Monomorphic checker fragment]\label{prop:mono}
+Take a successful check of the core syntax with monomorphic term entries (apart from
+constructor instantiation), no remaining predicates/accessors, only the
+ordinary equations of Theorem~\ref{thm:mgu}, and no overloading, hidden
+keyword interfaces or result choices. For a case require that its
+scrutinee indices and expected result are already ground when the patterns
+are checked, and that the stated coverage premise holds. Saturated
+constructor syntax here abbreviates its ordinary lookup and exact call.
+Apply the solved substitution and complete any remaining flexible unknowns
+with well-kinded closed core types consistent with it. Rigid witnesses
+introduced in case arms stay bound there. The erased term at these types
+has a $\vdash_0$ derivation.
+\end{proposition}
+\begin{proof}
+Induct on the successful check. For a leaf take its substituted environment type or fixed literal
+type. For a lambda extend by the solved positional types and use the
+derivation for the body. For a call use the derivations for its operator
+and operands; the solved slot equalities give the premises of \textsf{Call}.
+For a constructor the instantiation and those same equalities give
+\textsf{Make}. In each case Theorem~\ref{thm:mgu} justifies the equation
+step, including a successful operator-result hint; no operand proof
+depends on the traversal order.
+
+For a flat arm against $D\,\bar v$ with $\bar v$ ground there is
+no outer index to solve by freezing or projection. Unifying a fresh
+constructor result with $D\,\bar v$ fixes every constructor binder
+appearing in that result to the corresponding ground subtree; repeated
+occurrences must agree. The remaining field-only binders are unconstrained
+by the result and are sealed as distinct skolems. The body's recursive
+derivation may use the fixed subtrees and these arbitrary representatives.
+Under $\bar v=\bar u_i$ the fixed binder positions equal those subtrees
+by injectivity, so \textsf{Conv} justifies their uses. Renaming each
+sealed representative to its fresh $\bar b_i$ binder gives the other
+field types in (Case). The ground $r$ is identical outside. Combining
+the arm derivations with the scrutinee and coverage gives the case rule.
+\end{proof}
+This induction on the ordinary checker cases does not yet justify an
+elimination whose scrutinee has a rigid, \emph{unknown} index.
+
+\subsection{From a rigid index to a core derivation}\label{sec:elim}
+Consider a separate class of inputs for which we can follow that path all
+the way through the checker. Let a fresh unary $D$ have finitely many
+constructors of the following forms. Take at least one of each so that
+the checker encounters both kinds of result projection:
+\[
+  I_i:B_i\arr D\,B_i,\qquad
+  K_j:\forall b.\ b\arr D\,(F_j\,b).
+\]
+Here $B_i$ are ground base types, and each $F_j$ is a unary ordinary
+datatype with a constructor $A_j:\forall b.\ b\arr F_j\,b$. Require fresh
+term binders, all tags exactly once, and no other fields, constraints,
+captures, annotations or operations in the following template. A declared
+nullary function returns a lambda at $\forall s.\ D\,s\arr s$. Its body
+matches its parameter $p$, returning $x$ in $I_i(x)$ arms and $A_j(x)$ in
+$K_j(x)$ arms. It binds that match to a local monomorphic $z$ and returns
+$z$. One complete input, with declared arities and no foreign operations:
+\begin{verbatim}
+(define-type (Envelope :a) (Enclose :a))
+(define-type (Parcel :a)
+  (declare Counted (Integer -> Parcel Integer))
+  (declare Wrapped (:b -> Parcel (Envelope :b))))
+(declare make-unpacker
+  (Void -> (forall (:a) (Parcel :a -> :a))))
+(define (make-unpacker)
+  (fn (p)
+    (let result = (match p
+      ((Counted n) n)
+      ((Wrapped x) (Enclose x))))
+    result))
+\end{verbatim}
+Putting the universal \emph{inside} the declaration matters. A prenex
+\code{declare} freshens its variables and rechecks generality afterwards;
+the result position here actually calls \src{check-forall-expression-type}
+and allocates a rigid skolem. Naming the match result matters too: its
+immediate expectation is fresh, not simply the known answer $s$.
+
+\paragraph{What the checker projects.}
+In a successful check of this template the match projects to the declared
+index without exporting an equation on that index. The universal check gives
+$p:D\,s$ for fresh rigid $s$ and demands body result $s$. The binder for
+$z$ makes the match synthesize at a fresh result-capable $r$. The common
+shape pass already sees $D\,s$; freezing has nothing to do to $s$, and
+the local pattern checks start from this same shape in each arm. Since
+$r$ is distinct from the input index, local evidence triggers projection.
+\begin{itemize}
+\item For $I_i$, \src{unify-given} temporarily opens $s$ to a flexible and
+unifies it with $B_i$. The resulting local equation is $s=B_i$;
+the bound $x$ has type $B_i$. There is no hidden variable. Projecting $x$'s
+type yields a fresh choice $c_i$ with options $[B_i,s]$.
+\item For $K_j$, opening the signature introduces a fresh \emph{flexible}
+$b$. Equating $D\,s$ with $D\,(F_j\,b)$ under the permitted opening of
+$s$ exposes $s=F_j\,b$. Neither $s$ nor its whole image $F_j\,b$ names
+the component $b$; \src{open-constructor-pattern} seals $b$ as a fresh
+rigid $h_j$. The field thus has type $h_j$ and local evidence is
+$s=F_j\,h_j$. Instantiating $A_j$ at a new flexible and checking the
+field argument sets that flexible to $h_j$, giving $A_j(x):F_j\,h_j$.
+For the whole result the structural spelling contains the hidden $h_j$;
+the only alias is $s$. Projection therefore returns $s$ itself, not a
+constraint that could bind the caller to $F_j\,h_j$.
+\end{itemize}
+No other syntax here produces an outward equation on $s$. In particular
+the equation whose domain is $s$ is in the pattern substitution, so
+\src{branch-body-equations} does not export it. Merging the projected
+results equates $r$, each $c_i$, and $s$; the $K_j$ arms supply the latter
+spelling directly. Ordinary variable unification can direct a flexible
+toward $s$ but cannot bind $s$. Each $I_i$ choice now already equals one
+of its options, so no $s=B_i$ is exported by choice resolution either.
+The final occurrence of $z$ checks at $s$. All $h_j$ stay local, all
+uses of $s$ outside the arms belong to the universal's check, and the
+unconstrained lambda is nonexpansive. The universal is closed again on
+exit. In the concrete input above the two projection calls respectively
+produce a flexible choice and the rigid alias; their types are not both
+guessed from the last use of \code{result}.
+
+\begin{theorem}[Core typing of the eliminator template]\label{thm:elim}
+In a fixed signature as above, let $e_\lambda$ be the template's returned
+lambda, forgetting types and unused implicit return blocks. Encode the
+strict binding $\mathsf{let}\ z=M\ \mathsf{in}\ z$ by $(\lambda z.z)(M)$.
+Then
+\[
+  s:*;\varnothing;\varnothing\vdash_0 e_\lambda:D\,s\arr s.
+\]
+For every closed core type $t$, the same lambda has type $D\,t\arr t$.
+\end{theorem}
+\begin{proof}
+Construct the derivation from the template and its constructor signatures,
+not from checker success. Work in $\Delta=\{s:*\}$ with $p:D\,s$. In an
+$I_i$ arm assume $s=B_i$ as in (Case). Lookup gives $x:B_i$; \textsf{Conv}
+gives $x:s$. In a $K_j$ arm take a fresh $b_j:*$ with $s=F_j\,b_j$.
+Lookup gives $x:b_j$ and \textsf{Make} with the explicit instantiation
+$[b\mapsto b_j]$ gives $A_j(x):F_j\,b_j$. \textsf{Conv} gives $A_j(x):s$.
+This conversion expresses exactly the outward projection just traced;
+it does not promote either branch equation into $\Delta$. All tags of
+$D$ are present, so (Case) gives $M:s$ without equations. Type the identity
+at $s\arr s$, apply it to $M$, then abstract $p$ to obtain the displayed
+judgment. For any closed $t$, use the type-substitution part of
+Lemma~\ref{lem:substitution} with $[s\mapsto t]$: the outer equation
+context is empty, so the substitution has no further premise to solve.
+At runtime a matching constructor value supplies its own witnesses for
+the branch equations. This specializes a \emph{derivation}; rerunning
+source inference at a narrower scrutinee type might reject a now
+incompatible written arm.
+\end{proof}
+Nested patterns, dependent dictionary obligations, nonlocal exits and
+arbitrary result-choice search are not covered by this correspondence.
+
+\subsection{Evaluation and proof}
+Constants and lambdas are values; $K(\bar v)$ is a value when all fields
+are values. Write $\longmapsto_h$ for the two head reductions:
+\[
+\begin{aligned}
+ (\lambda\bar x.e)(\bar v)&\longmapsto_h e[\bar v/\bar x],\\
+ \mathsf{case}\ K_i(\bar v)\ \mathsf{of}\ \{\ldots,
+       K_i(\bar x)\mapsto e_i,\ldots\}
+       &\longmapsto_h e_i[\bar v/\bar x].
+\end{aligned}
+\]
+The evaluation contexts $\mathcal J$ choose the next position from left
+to right; $\bar v$ is an already evaluated prefix and $\mathcal A$ is a
+list of alternatives:
+\[
+\begin{aligned}
+ \mathcal J ::={}&[\,]\mid \mathcal J(\bar e)\mid v(\bar v,\mathcal J,\bar e)\\
+                 &{}\mid K(\bar v,\mathcal J,\bar e)
+                   \mid \mathsf{case}\ \mathcal J\ \mathsf{of}\ \mathcal A .
+\end{aligned}
+\]
+One evaluation step is $\mathcal J[e]\longmapsto\mathcal J[e']$ whenever
+$e\longmapsto_h e'$. In particular no step enters a lambda or an untaken
+arm. Term substitution is simultaneous and capture avoiding. Type witnesses
+belong to derivations, not to the runtime test.
+
+\begin{lemma}[Weakening]\label{lem:weakening}
+Let $\Delta;E;\Gamma\vdash_0 e:t$. Extend $\Delta$ and $\Gamma$ with
+fresh bindings, preserving the old kinds and types, and strengthen $E$
+to well-formed $E'$ entailing each old equation in the extended type
+context $\Delta'$. Then $\Delta';E';\Gamma'\vdash_0 e:t$.
+\end{lemma}
+\begin{proof}
+Induct on the derivation. Old lookups and constant types are unchanged.
+For \textsf{Conv}, an assignment to $\Delta'$ satisfying $E'$ restricts
+to one satisfying $E$, so it preserves the required equality. All type
+instantiations in \textsf{Make} are still well formed; rebuild the rule
+on the weakened children, as for a call. At a lambda freshen its bound
+term names and extend both term contexts by the same argument types.
+At a case, any tag possible for a new valuation was possible for its
+restriction, so coverage survives. Freshen each arm's type and term
+binders away from the added bindings, keep the same field types and add
+the same branch equations on each side. The extended new equations entail
+the extended old ones, so induction gives the required arm derivation.
+\end{proof}
+
+\begin{lemma}[Substituting types and values]\label{lem:substitution}
+If $\Delta;E;\Gamma\vdash_0 e:t$ and a type assignment
+$\theta:\Delta\to\mathrm{Types}(\Delta')$ satisfies
+$\Delta';E'\models\theta E$ (each substituted equation), then
+$\Delta';E';\theta\Gamma\vdash_0 e:\theta t$.
+If $\Delta;E;\Gamma,\bar x:\bar t\vdash_0 e:u$ and
+$\Delta;E;\Gamma\vdash_0\bar v:\bar t$, then
+$\Delta;E;\Gamma\vdash_0 e[\bar v/\bar x]:u$.
+\end{lemma}
+\begin{proof}
+For the first assertion induct on the typing derivation. Lookup,
+constants, lambda and call are structural. In \textsf{Make} use
+$\theta\circ\eta$; in \textsf{Conv} any $\rho'$ satisfying $E'$ gives
+$\rho'\circ\theta$ satisfying $E$. In (Case) freshen the local binders
+$\bar b_i$ away from $\theta$ and extend it by the identity on them.
+Only $\bar b_i$ can occur free in the signature's $\bar t_i,\bar u_i$,
+so those field and index types do not change. The new arm premise
+contains $\theta\bar v=\bar u_i$, as required by the induction hypothesis.
+Coverage is preserved: a constructor possible for an assignment in the
+new context is possible for its composition in the old one.
+For the second assertion induct again. Lookup of $x_j$ uses the $j$th
+supplied derivation; other lookups and constants are unchanged. At a
+lambda or a case field binder first rename to avoid capture. The supplied
+derivations remain valid under extra fresh type and term bindings, and
+in a branch under its extra equations, by Lemma~\ref{lem:weakening}.
+The induction hypotheses re-establish
+the body or arm premises. \textsf{Make}, call and conversion preserve
+their type premises and are rebuilt on the substituted children.
+\end{proof}
+
+\begin{theorem}[Progress and preservation for the indexed core]\label{thm:safety}
+If $\varnothing;\varnothing;\varnothing\vdash_0 e:t$ with $t$ closed,
+then $e$ is a value or has a step. If $e\longmapsto e'$ then
+$\varnothing;\varnothing;\varnothing\vdash_0 e':t$.
+In particular, a ground instance of the lambda in Theorem~\ref{thm:elim}
+applied to a closed core term of its argument type has these properties.
+There is no assertion here for recursion or arbitrary compiler elaborations.
+\end{theorem}
+\begin{proof}
+At closed types with empty equations, \textsf{Conv} identifies only
+identical ground trees. Inspecting the last non-conversion value rule
+therefore gives canonical forms: a value at $\bar t\arr u$ is a lambda
+of that arity, and a value at $D\,\bar w$ is $K_i(\bar v)$ for some
+signature instance $\eta$ with $\eta\bar u_i=\bar w$ and fields typed
+at $\eta\bar t_i$. Constants have only base types, disjoint from these
+two shapes. For progress induct on typing. A closed variable is
+impossible. In any strict argument position the first nonvalue steps by
+induction. With all children values a construction is a value; a call
+uses the first canonical form and beta-reduces; a case uses the second
+and coverage to find the tag. No other expression is left.
+
+For preservation, a step in an evaluation position preserves that child's
+type by induction; put it back in the same rule, including the original
+arm premises and coverage for a changed scrutinee. For beta-reduction
+use inversion for the lambda and the term part of
+Lemma~\ref{lem:substitution}. For the case reduction take the
+\emph{constructor's} ground instantiation $\eta$ from the value
+derivation, not a new arbitrary instantiation from the arm. It satisfies
+$\bar w=\eta\bar u_i$, so the type part of Lemma~\ref{lem:substitution}
+specializes (Case) to a derivation under $\bar x:\eta\bar t_i$ with
+no residual index assumption. Its result is still $t$ because the opened
+variables were fresh for $t$. The value fields have exactly these types;
+the term part of the lemma gives $e_i[\bar v/\bar x]:t$. Any last
+conversion can be reapplied. This is the point at which exporting an
+existential witness as the caller's arbitrary type would break the proof.
+\end{proof}
+
+\paragraph{What would invalidate a stronger conclusion?}
+A non-exhaustive match expression can lack a branch for a well-typed
+constructor; an unchecked foreign result need not satisfy the canonical
+forms lemma. Example~\ref{ex:fd-height} shows how search can reach a
+growing proof's base, not that every finite proof will be found.
+The FD argument is conditional on the evidence relation, not a validation
+of arbitrary recursive dictionaries or user method laws. The linking
+corollary also needs well-typed arguments and compatible class layouts.
+The sharing invariant does not model a mutable store. Operational
+preservation for rank-polymorphic dictionary wrappers, nonlocal exits,
+representation changes and the optimizer needs a semantics accounting for
+those operations and their calling conventions. Thus the result is not
+``every accepted Coalton program runs without error.'' Its useful consequences
+are more specific: which substitutions are justified, which equalities
+belong only to an arm, and exactly where an additional invariant is needed.
+
+\paragraph{Source examples for comparison.}
+In \src{tests/test-files/define-type-gadt.txt}, case~2 warns about a
+missing constructor in a match expression, case~6 rejects an incompatible
+index, and case~20 rejects a refutable parameter. For recursive calls,
+rank scopes and nonlocal returns, see \src{tests/gadt-tests.ct}.
+These examples illustrate behavior; the proofs do not assume their results.
+
+\sources \src{tests/type-inference-tests.lisp}:
+\src{test-matching-preserves-target-variables},
+\src{test-hidden-ascription-generality-diagnostic}.
+
+\end{document}

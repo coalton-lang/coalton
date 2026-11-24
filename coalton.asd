@@ -354,6 +354,7 @@
                 :components ((:file "lisp-type-tests")
                              (:file "traverse-tests")
                              (:file "dictionary-resolution-tests")))
+               (:ct-file "gadt-tests")
                (:file "environment-persist-tests")
                (:file "overlap-tests")
                (:file "coalton-tests")

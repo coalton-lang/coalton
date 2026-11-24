@@ -29,6 +29,7 @@ rigid skolem flags so post-translation codegen typechecking can unify physical s
                         :kind (tc:tyvar-kind type)
                         :allow-result-p (tc:tyvar-allow-result-p type)
                         :rigid-p nil
+                        :existential-p (tc:tyvar-existential-p type)
                         :source-name (tc:tyvar-source-name type))
          type))
     (tc:forall-ty
@@ -459,7 +460,7 @@ rigid skolem flags so post-translation codegen typechecking can unify physical s
                           (length (node-values-nodes expr))))
       (loop :for subnode :in (node-values-nodes expr)
             :for comp-ty :in components
-            :do (tc:unify nil (typecheck-node subnode env) comp-ty))
+            :do (unify-codegen-types nil comp-ty (typecheck-node subnode env) env))
       (node-type expr)))
 
   (:method ((expr node-values-bind) env)

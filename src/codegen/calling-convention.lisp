@@ -719,11 +719,7 @@ the flattened leaf argument nodes to BODY-BUILDER."
   (assert (= (length arg-nodes) (length input-layouts)))
   ;; Fast path: no product inputs to unpack.
   (when (every #'tc:abi-leaf-p input-layouts)
-    (return-from build-unpack-inputs-ast
-      (funcall body-builder
-               (loop :for arg :in arg-nodes
-                     :for layout :in input-layouts
-                     :collect (copy-node arg (tc:abi-leaf-type layout))))))
+    (return-from build-unpack-inputs-ast (funcall body-builder arg-nodes)))
 
   ;; General path: preserve strict left-to-right argument evaluation order.
   (let ((temp-bindings nil)
@@ -734,7 +730,7 @@ the flattened leaf argument nodes to BODY-BUILDER."
           :do (if (node-local-variable-p arg)
                   (push (copy-node arg ty) eval-vars)
                   (let ((tmp (gensym "CALL-ARG-")))
-                    (push (cons tmp (copy-node (force-value-node arg) ty))
+                    (push (cons tmp (force-value-node arg))
                           temp-bindings)
                     (push (make-node-local-variable :type ty :value tmp)
                           eval-vars))))
@@ -1182,12 +1178,10 @@ preserving tail calls and eliminating constructor allocations at leaves."
                    (eq (tc:constructor-entry-name ctor)
                        (tc:abi-product-constructor output-layout))
                    (= (length args) (length (tc:abi-product-fields output-layout))))
+          ;; A field's FORALL is the type of its value, not the callable
+          ;; type of the abstraction that implements it (including dicts).
           (return-from unpack-output-node
-            (make-output-values-node
-             (loop :for arg :in args
-                   :for fl :in (tc:abi-product-fields output-layout)
-                   :collect (copy-node arg (tc:abi-leaf-type fl)))
-             target-type)))))
+            (make-output-values-node args target-type)))))
 
     ;; 3. Direct constructor leaf for ABI-SUM
     (when (tc:abi-sum-p output-layout)
@@ -1290,6 +1284,7 @@ preserving tail calls and eliminating constructor allocations at leaves."
         :expr (node-match-expr node)
         :branches (loop :for branch :in (node-match-branches node)
                         :collect (make-match-branch
+                                  :index-equalities (match-branch-index-equalities branch)
                                   :pattern (match-branch-pattern branch)
                                   :body (unpack-output-node
                                          (match-branch-body branch)

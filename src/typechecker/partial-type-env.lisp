@@ -12,6 +12,7 @@
    #:make-partial-type-env              ; CONSTRUCTOR
    #:partial-type-env-env               ; ACCESSOR
    #:partial-type-env-ty-table          ; ACCESSOR
+   #:partial-type-env-refinements       ; ACCESSOR
    #:partial-type-env-class-table       ; ACCESSOR
    #:partial-type-env-vars-table        ; ACCESSOR
    #:partial-type-env-add-var           ; FUNCTION
@@ -34,6 +35,7 @@
             (:copier nil))
   (env         (util:required 'env)         :type tc:environment :read-only t)
   (ty-table    (make-hash-table :test #'eq) :type hash-table     :read-only t)
+  (refinements nil                         :type tc:substitution-list :read-only t)
   (class-table (make-hash-table :test #'eq) :type hash-table     :read-only t))
 
 (defun partial-type-env-add-var (env var &optional (source-name var) (allow-result-p nil)
@@ -70,7 +72,10 @@ binder share a single type variable."
   (let ((ty (gethash var (partial-type-env-ty-table env))))
     (unless ty
       (tc-error "Unknown type variable"
-                (tc-note source "Unknown type variable ~S" var)))
+                (tc-note source "Unknown type variable ~S"
+                         (or (and (typep source 'parser:tyvar)
+                                  (parser:tyvar-source-name source))
+                             var))))
     ty))
 
 (defun partial-type-env-add-type (env name type)

@@ -400,6 +400,8 @@ Coalton type-checks each `coalton-toplevel` form before emitting code. It reject
 
 You can still work incrementally at the REPL. Common Lisp restarts let you choose `Continue anyway` or `Abort redefinition`, and `:auto-continue-redefinition` controls whether Coalton continues automatically with a warning. You can install the new definition and work through the callers one by one, with the diagnostics as your checklist.
 
+In development mode, redefining a GADT also checks the runtime representation and the type of each named constructor, including indices and hidden fields. Changing the constructor set can invalidate an exhaustive match even if the changed constructor was never mentioned. Coalton therefore reports these changes on compilation or FASL load even when it knows of no callers. Renaming quantified variables or reordering constructors does not change this contract. Aborting keeps the old definition; continuing does **not** migrate existing values or recompile old matches. Use a fresh image and recompile dependent code before relying on the new definition.
+
 ## Familiar syntax, different rules
 
 At the surface syntax level, keep these everyday differences in mind:

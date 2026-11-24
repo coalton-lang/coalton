@@ -26,6 +26,7 @@ weight: 70
 - **`:transparent`**:
   - Valid on `define-type` or `define-struct` when the type has exactly one constructor with exactly one field `(C τ)`.
   - Eliminates any runtime wrapper: the runtime representation of the type is identical to that of `τ`, the constructor `C` compiles to an inlined identity function, and struct field accessors compile to `id`.
+  - For an indexed type, the constructor's result determines which field type is known at a particular use. A hidden type remains unknown. In particular, a `LispArray` with an unknown element representation can contain a specialized array; its Lisp declaration does not require a general-element array.
 - **`:lisp`**:
   - Valid on `define-type`.
   - Guarantees a distinct heap-allocated class or structure (`T` and constructor subtypes `T/C`) across both development and release modes so values can be specialized in CLOS `cl:defmethod` definitions and tested with `cl:typep`.

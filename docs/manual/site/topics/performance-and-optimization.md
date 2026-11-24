@@ -83,6 +83,7 @@ In release mode, when a local binding is initialized across [`if`](/manual/opera
 
 - A two-variant sum (such as `Some`/`None` or `Ok`/`Err`) uses an unboxed `Boolean` tag that compiles to `cl:if`, while sums with three or more variants use an unboxed `UFix` tag.
 - Each distinct payload type is bound to a typed scalar local (e.g., `(type (unsigned-byte 64) ...)` or `(type double-float ...)`), eliminating both heap wrapper allocation (`Result`, `cl-optional`) and number boxing (`U64`, `F64`).
+- If a variant leaves a slot unused, the compiler needs an allocation-free placeholder of the slot's representation. For a transparent type it uses the field representation at the constructor's result indices. A fixed `Integer` field can therefore be unboxed even at an abstract index; if the field representation still depends on an unknown type, the compiler need not split the sum.
 - Branches that transfer control with `return`, `break`, `continue`, `throw`, or `error` do not prevent unboxing of the remaining constructor branches.
 - Even when an `Optional :a` value is not scalar-replaced (for example, when received as a function parameter), matching `(Some x)` when `:a` is statically disjoint from `Optional` binds `x` directly with its concrete Lisp type without calling a runtime unwrap helper:
 

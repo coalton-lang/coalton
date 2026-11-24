@@ -127,15 +127,15 @@
                 (error "Undefined key ~a" (tc:ty-predicate-class pred))))))))))
 
 
-(defun superclass-accessors (pred ctx-pred env)
+(defun superclass-accessors (pred ctx-pred env equations)
   (let ((class (tc:lookup-class env (tc:ty-predicate-class ctx-pred))))
     (loop :for super :in (tc:context-superclasses class ctx-pred)
           :for (nil . field) :in (tc:ty-class-superclass-dict class)
           :for accessor := (alexandria:format-symbol (symbol-package field) "CLASS/~A-~A"
                                                      (tc:ty-class-name class) field)
-          :thereis (lookup-pred pred super ctx-pred accessor env))))
+          :thereis (lookup-pred pred super ctx-pred accessor env equations))))
 
-(defun lookup-pred (pred ctx-pred sub-pred method-accessor env)
+(defun lookup-pred (pred ctx-pred sub-pred method-accessor env equations)
   "Search for PRED in CTX-PRED recursing through superclasses if necessary"
   (declare (type tc:ty-predicate pred)
            (type tc:ty-predicate ctx-pred)
@@ -144,14 +144,14 @@
            (type tc:environment env)
            (values list &optional))
 
-  (when (matching-context-predicate-p pred ctx-pred)
+  (when (tc:given-predicate= pred ctx-pred equations)
     (return-from lookup-pred (list (make-node-global-variable
                                     :type (tc:make-function-type
                                            (pred-type sub-pred env)
                                            (pred-type pred env))
                                     :value method-accessor))))
 
-  (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
+  (let ((superclass-ret (superclass-accessors pred ctx-pred env equations)))
 
     (when superclass-ret
       (cons
@@ -162,14 +162,14 @@
         :value method-accessor)
        superclass-ret))))
 
-(defun lookup-pred-base (pred ctx-pred ctx-name env)
-  (when (matching-context-predicate-p pred ctx-pred)
+(defun lookup-pred-base (pred ctx-pred ctx-name env equations)
+  (when (tc:given-predicate= pred ctx-pred equations)
     (return-from lookup-pred-base
       (list (make-node-local-variable
              :type (pred-type pred env)
              :value ctx-name))))
 
-  (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
+  (let ((superclass-ret (superclass-accessors pred ctx-pred env equations)))
     (when superclass-ret
       (cons
        (make-node-local-variable
@@ -193,32 +193,20 @@
        :name (node-variable-value (car args))
        :dict (build-call (cdr args)))))
 
-(defun matching-context-type-p (type ctx-type)
-  (declare (type tc:ty type ctx-type)
-           (values boolean &optional))
-  (tc:ty= type ctx-type))
-
-(defun matching-context-predicate-p (pred ctx-pred)
-  (declare (type tc:ty-predicate pred ctx-pred)
-           (values boolean &optional))
-  (and (eq (tc:ty-predicate-class pred)
-           (tc:ty-predicate-class ctx-pred))
-       (= (length (tc:ty-predicate-types pred))
-          (length (tc:ty-predicate-types ctx-pred)))
-       (every #'matching-context-type-p
-              (tc:ty-predicate-types pred)
-              (tc:ty-predicate-types ctx-pred))))
-
 (defun resolve-context-super (pred context env)
   "Search for PRED in all CONTEXT preds and return a node"
   (declare (type tc:ty-predicate pred)
            (type pred-context context)
            (values (or null node) &optional))
 
-  (loop :for (ctx-pred . ctx-sym) :in context :do
-    (let ((super (lookup-pred-base pred ctx-pred ctx-sym env)))
-      (when super
-        (return-from resolve-context-super (build-call (reverse super)))))))
+  (flet ((lookup (equations)
+           (loop :for (ctx-pred . ctx-sym) :in context
+                 :for path := (lookup-pred-base pred ctx-pred ctx-sym env equations)
+                 :when path :return (build-call (reverse path)))))
+    (or (lookup nil)
+        (when (find-if #'tc:pattern-given-p context :key #'car)
+          (let ((equations (tc:pattern-given-equations env (mapcar #'car context))))
+            (and equations (lookup equations)))))))
 
 (defun resolve-dict (pred context env)
   "Resolve PRED to a node"

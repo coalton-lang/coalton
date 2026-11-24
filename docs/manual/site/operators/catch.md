@@ -28,7 +28,7 @@ weight: 265
   - `((the ⟨exception-type⟩ ⟨var-or-_⟩) ...)`: matches every exception of `⟨exception-type⟩` and binds the exception value to `⟨var-or-_⟩` (which can be inspected or rethrown with [`throw`](/manual/operators/throw/)). For a `(repr :native ...)` exception, this also matches any Common Lisp condition subtype.
   - `(_ ...)`: catches every Common Lisp `cl:error`, including all Coalton exceptions and panics. (To catch only panics from `error`, `unwrap`, `unreachable`, and `assert`, use `((the Panic p) ...)`.)
   - `((= ⟨var⟩ ⟨catch-pattern⟩) ...)`: matches a constructor or wildcard `⟨catch-pattern⟩` and binds the caught exception object to `⟨var⟩` (with type `coalton/exception:LispError` when aliasing `_`).
-- Branch patterns (including subpatterns on constructor fields) are tested in source order at the point where the exception is signaled. If no branch matches, the exception propagates to outer handlers without unwinding the stack.
+- Branches are tested in source order at the point where the exception is signaled. Within a pattern, a field test that needs a GADT witness waits until that witness matches; independent tests keep their source order. If no branch matches, the exception propagates to outer handlers without unwinding the stack.
 - Once a branch matches, the stack unwinds to the `catch` expression (running any intervening [`protect`](/manual/operators/protect/) cleanup forms and restoring dynamic bindings) before the selected branch body executes.
 - In the selected branch:
   - Dynamic variables have the bindings in effect at the `catch` expression rather than at the [`throw`](/manual/operators/throw/) site.

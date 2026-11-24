@@ -17,6 +17,7 @@
    #:tyvar-source-name                  ; ACCESSOR
    #:tyvar-allow-result-p               ; ACCESSOR
    #:tyvar-rigid-p                      ; ACCESSOR
+   #:tyvar-existential-p                ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
    #:make-skolem                        ; FUNCTION
@@ -64,6 +65,7 @@
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
    #:ty=                                ; FUNCTION
+   #:union-tys                          ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
@@ -177,6 +179,8 @@
   ;; True when this variable is a rigid skolem constant that cannot be
   ;; bound during unification.
   (rigid-p        nil                   :type boolean            :read-only t)
+  ;; Diagnostic provenance, independent of the variable's identity and kind.
+  (existential-p  nil                   :type boolean            :read-only t)
   ;; The original programmer-written name, if this type variable originated
   ;; from source rather than anonymous inference state.
   (source-name    nil                   :type (or null symbol)   :read-only t))
@@ -235,11 +239,12 @@
                            (:kind kind)
                            (:source-name (or null symbol))
                            (:allow-result-p boolean)
-                           (:rigid-p boolean))
+                           (:rigid-p boolean)
+                           (:existential-p boolean))
                           tyvar)
                 make-variable))
 (declaim (inline make-variable))
-(defun make-variable (&key (kind +kstar+) source-name (allow-result-p nil) (rigid-p nil))
+(defun make-variable (&key (kind +kstar+) source-name (allow-result-p nil) (rigid-p nil) (existential-p nil))
   "Create a fresh type variable with optional KIND and source metadata.
 
 SOURCE-NAME preserves the programmer-written binder for later pretty
@@ -251,15 +256,17 @@ when KIND and SOURCE-NAME are the same."
                      :kind kind
                      :allow-result-p allow-result-p
                      :rigid-p rigid-p
+                     :existential-p existential-p
                      :source-name source-name)
     (incf *next-variable-id*)))
 
 (declaim (inline make-skolem))
-(defun make-skolem (&key (kind +kstar+) source-name (allow-result-p nil))
+(defun make-skolem (&key (kind +kstar+) source-name (allow-result-p nil) (existential-p nil))
   "Create a fresh rigid skolem type variable."
   (make-variable :kind kind
                  :source-name source-name
                  :allow-result-p allow-result-p
+                 :existential-p existential-p
                  :rigid-p t))
 
 (defun ensure-next-variable-id-at-least (minimum-id)
@@ -402,6 +409,7 @@ Throws an error if applied to a malformed type application.")
    :kind (apply-ksubstitution subs (tyvar-kind type))
    :allow-result-p (tyvar-allow-result-p type)
    :rigid-p (tyvar-rigid-p type)
+   :existential-p (tyvar-existential-p type)
    :source-name (tyvar-source-name type)))
 
 (defmethod apply-ksubstitution (subs (type tycon))
@@ -572,6 +580,12 @@ Examples:
   (:method (type1 type2)
     (declare (ignore type1 type2))
     nil))
+
+(defun union-tys (cl:&rest ty-lists)
+  "Calculate the union of ty lists, using ty=."
+  (declare (values ty-list))
+  (remove-duplicates (apply #'append ty-lists)
+                     :test #'ty=))
 
 ;;;
 ;;; Early types
@@ -971,10 +985,20 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (let ((value (gethash (tyvar-id tvar) *pprint-tyvar-dict*)))
     (or value
         (let* ((preferred-name (tyvar-source-name tvar))
+               (name (and preferred-name
+                          ;; A distinct variable with a taken source name keeps
+                          ;; that name with a suffix, e.g. :E and :E1.
+                          (loop :for suffix :from 0
+                                :for name := (if (zerop suffix)
+                                                 preferred-name
+                                                 (let ((text (format nil "~A~D" (symbol-name preferred-name) suffix))
+                                                       (package (symbol-package preferred-name)))
+                                                   (if package (intern text package) (make-symbol text))))
+                                :unless (pprint-variable-name-used-p name)
+                                  :return name)))
                (pretty-tyvar
-                 (if (and preferred-name
-                          (not (pprint-variable-name-used-p preferred-name)))
-                     (make-tycon :name preferred-name :kind (tyvar-kind tvar))
+                 (if name
+                     (make-tycon :name name :kind (tyvar-kind tvar))
                      (next-pprint-variable-as-tvar (tyvar-kind tvar)))))
           (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
                 pretty-tyvar)))))

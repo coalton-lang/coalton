@@ -1,0 +1,1247 @@
+(in-package #:coalton-native-tests)
+
+;;;
+;;; Type with One Arg w/ Single, Single-Arg Concrete Constructor
+;;;
+
+(coalton-toplevel
+
+  (define-type (Gadt4 :a)
+    (declare Gadt4-1 (Integer -> Gadt4 Integer)))
+
+  (declare gadt4-add1->int-match (Gadt4 :a -> Integer))
+  (define (gadt4-add1->int-match g)
+    (match g
+      ((Gadt4-1 x) (1+ x))))
+
+  (declare gadt4-add1->int-abstr (Gadt4 :a -> Integer))
+  (define (gadt4-add1->int-abstr (Gadt4-1 x))
+    (1+ x))
+
+  (declare gadt4-add1->gadt-match (Gadt4 :a -> Gadt4 :a))
+  (define (gadt4-add1->gadt-match g)
+    (match g
+      ((Gadt4-1 x) (Gadt4-1 (1+ x)))))
+
+  (declare gadt4-add1->gadt-abstr (Gadt4 :a -> Gadt4 :a))
+  (define (gadt4-add1->gadt-abstr (Gadt4-1 x))
+    (Gadt4-1 (1+ x)))
+
+  (declare gadt4-add1->gadt-int-match (Gadt4 Integer -> Gadt4 Integer))
+  (define (gadt4-add1->gadt-int-match g)
+    (match g
+      ((Gadt4-1 x) (Gadt4-1 (1+ x)))))
+
+  (declare gadt4-add1->gadt-int-abstr (Gadt4 Integer -> Gadt4 Integer))
+  (define (gadt4-add1->gadt-int-abstr (Gadt4-1 x))
+    (Gadt4-1 (1+ x)))
+  )
+
+(define-test test-gadt4-concrete-match ()
+  (let result = (gadt4-add1->int-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-concrete-abstr ()
+  (let result = (gadt4-add1->int-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-match ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-abstr ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-let ()
+  (let (Gadt4-1 result) = (Gadt4-1 0))
+  (is (== result 0)))
+
+(define-test test-gadt4-gadt-do ()
+  (let result =
+    (coalton/monad/identity:run-identity
+     (do
+      ((Gadt4-1 a) <- (pure (Gadt4-1 0)))
+      (let (Gadt4-1 b) = (Gadt4-1 (1+ a)))
+      (pure b))))
+  (is (== result 1)))
+
+(define-test test-gadt4-specifc-type-match ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-int-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-specific-type-abstr ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-int-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+;;;
+;;; Type with No Args w/ Multiple Single-Arg Constructors
+;;;
+
+(coalton-toplevel
+  (define-type Gadt5
+    (declare Gadt5-Int (Integer -> Gadt5))
+    (declare Gadt5-Str (String -> Gadt5))
+    (declare Gadt5-Any (:a -> Gadt5)))
+
+  (declare gadt5->int (Gadt5 -> Integer))
+  (define (gadt5->int g)
+    (match g
+      ((Gadt5-Int x) x)
+      ((Gadt5-Str s) (as Integer (string:length s)))
+      ((Gadt5-Any _) 0))))
+
+(define-test test-gadt5-match ()
+  (is (== 10 (gadt5->int (Gadt5-Int 10))))
+  (is (== 5 (gadt5->int (Gadt5-Str "12345"))))
+  (is (== 0 (gadt5->int (Gadt5-Any (Some 100))))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg, Concrete Constructors
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt6 :a)
+    (declare Gadt6-Int (Integer -> Gadt6 Integer))
+    (declare Gadt6-Str (String -> Gadt6 String)))
+
+  (declare gadt6-unwrap-int-abstr (Gadt6 Integer -> Integer))
+  (define (gadt6-unwrap-int-abstr (Gadt6-Int x))
+    x)
+
+  (declare gadt6-unwrap-int-match (Gadt6 Integer -> Integer))
+  (define (gadt6-unwrap-int-match g)
+    (match g
+      ((Gadt6-Int x) x)))
+
+  (declare gadt6->int (Gadt6 :a -> Integer))
+  (define (gadt6->int g)
+    (match g
+      ((Gadt6-Int x) x)
+      ((Gadt6-Str s) (as Integer (string:length s))))))
+
+(define-test test-gadt6-unwrap-abstr ()
+  (is (== 10 (gadt6-unwrap-int-abstr (Gadt6-Int 10)))))
+
+(define-test test-gadt6-unwrap-match ()
+  (is (== 10 (gadt6-unwrap-int-match (Gadt6-Int 10)))))
+
+(define-test test-gadt6-match-multiple-noinline ()
+  (is (== 10 (noinline (gadt6->int (Gadt6-Int 10)))))
+  (is (== 5 (noinline (gadt6->int (Gadt6-Str "12345"))))))
+
+(define-test test-gadt6-match-multiple-inline ()
+  (is (== 10 (inline (gadt6->int (Gadt6-Int 10)))))
+  (is (== 5 (inline (gadt6->int (Gadt6-Str "12345"))))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg Constructors, including one non-concrete
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt8 :a)
+    (declare Gadt8-Int (Integer -> Gadt8 Integer))
+    (declare Gadt8-Str (String -> Gadt8 String))
+    (declare Gadt8-Any (:a -> Gadt8 :a)))
+
+  (declare gadt8->int (Gadt8 :a -> Integer))
+  (define (gadt8->int g)
+    (match g
+      ((Gadt8-Int x) x)
+      ((Gadt8-Str s) (as Integer (string:length s)))
+      ((Gadt8-Any _) 0)))
+
+  (declare gadt8-unwrap-int (Gadt8 Integer -> Integer))
+  (define (gadt8-unwrap-int g)
+    (match g
+      ((Gadt8-Int x) x)
+      ((Gadt8-Any x) x))))
+
+(define-test test-gadt8-match-multiple ()
+  (is (== 10 (gadt8->int (Gadt8-Int 10))))
+  (is (== 5 (gadt8->int (Gadt8-Str "12345"))))
+  (is (== 0 (gadt8->int (Gadt8-Any 10)))))
+
+(define-test test-gadt8-unwrap-narrowed-type ()
+  (is (== 10 (gadt8-unwrap-int (Gadt8-Int 10))))
+  (is (== 10 (gadt8-unwrap-int (Gadt8-Any 10)))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg Concrete Constructors and Polymorphic Return
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt9 :a)
+    (declare Gadt9-Int (Integer -> Gadt9 Integer))
+    (declare Gadt9-Str (String -> Gadt9 String)))
+
+  (declare gadt9-unbox (Gadt9 :a -> :a))
+  (define (gadt9-unbox g)
+    (match g
+      ((Gadt9-Int x) x)
+      ((Gadt9-Str s) s))))
+
+(define-test test-gadt9-polymorphic-unbox ()
+  (is (== 10 (gadt9-unbox (Gadt9-Int 10))))
+  (is (== "abc" (gadt9-unbox (Gadt9-Str "abc")))))
+
+;;;
+;;; Type with Arg w/ Concrete and Generic Constructors
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt10 :a)
+    (declare Gadt10-Int (Integer -> Gadt10 Integer))
+    (declare Gadt10-Str (String -> Gadt10 String))
+    (declare Gadt10-Any (:a -> Gadt10 :a)))
+
+  (declare gadt10-unwrap-int-tagged (Gadt10 Integer -> (Tuple Integer Integer)))
+  (define (gadt10-unwrap-int-tagged g)
+    (match g
+      ((Gadt10-Int x) (Tuple 0 x))
+      ((Gadt10-Any x) (Tuple 1 x)))))
+
+(define-test test-gadt10-generic-plus-concrete ()
+  (let (Tuple tag1 value1) = (gadt10-unwrap-int-tagged (Gadt10-Int 10)))
+  (let (Tuple tag2 value2) = (gadt10-unwrap-int-tagged (Gadt10-Any 20)))
+  (is (== 0 tag1))
+  (is (== 10 value1))
+  (is (== 1 tag2))
+  (is (== 20 value2)))
+
+;;;
+;;; Type with Arg w/ Multi-Argument Constructor
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt11 :a)
+    (declare Gadt11-Multi (Integer * String * Boolean -> Gadt11 Integer)))
+
+  (declare gadt11-fields (Gadt11 Integer -> (Tuple3 Integer String Boolean)))
+  (define (gadt11-fields g)
+    (match g
+      ((Gadt11-Multi i s b) (Tuple3 i s b)))))
+
+(define-test test-gadt11-multi-argument-constructor ()
+  (let (Tuple3 i s b) = (gadt11-fields (Gadt11-Multi 7 "seven" True)))
+  (is (== 7 i))
+  (is (== "seven" s))
+  (is b))
+
+;;;
+;;; Nested GADT Pattern inside Tuple
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt12 :a)
+    (declare Gadt12-Int (Integer -> Gadt12 Integer))
+    (declare Gadt12-Str (String -> Gadt12 String)))
+
+  (declare gadt12-nested-tuple ((Tuple (Gadt12 Integer) (Gadt12 String)) -> (Tuple Integer Integer)))
+  (define (gadt12-nested-tuple pair)
+    (match pair
+      ((Tuple (Gadt12-Int i) (Gadt12-Str s))
+       (Tuple (1+ i) (as Integer (coalton/string:length s)))))))
+
+(define-test test-gadt12-nested-gadt-inside-tuple ()
+  (let (Tuple i len) = (gadt12-nested-tuple (Tuple (Gadt12-Int 10) (Gadt12-Str "abc"))))
+  (is (== 11 i))
+  (is (== 3 len)))
+
+;;;
+;;; Typed Expression Evaluator with If Constructor
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt13-Expr :a)
+    (declare Gadt13-Int (Integer -> Gadt13-Expr Integer))
+    (declare Gadt13-Bool (Boolean -> Gadt13-Expr Boolean))
+    (declare Gadt13-Str (String -> Gadt13-Expr String))
+    (declare Gadt13-If (Gadt13-Expr Boolean * Gadt13-Expr :a * Gadt13-Expr :a -> Gadt13-Expr :a)))
+
+  (declare gadt13-eval (Gadt13-Expr :a -> :a))
+  (define (gadt13-eval expr)
+    (match expr
+      ((Gadt13-Int i) i)
+      ((Gadt13-Bool b) b)
+      ((Gadt13-Str s) s)
+      ((Gadt13-If test then else)
+       (if (gadt13-eval test)
+           (gadt13-eval then)
+           (gadt13-eval else))))))
+
+(define-test test-gadt13-typed-expression-evaluator-if ()
+  (is (== 1
+          (gadt13-eval
+           (Gadt13-If (Gadt13-Bool True)
+                      (Gadt13-Int 1)
+                      (Gadt13-Int 2)))))
+  (is (== "right"
+          (gadt13-eval
+           (Gadt13-If (Gadt13-Bool False)
+                      (Gadt13-Str "left")
+                      (Gadt13-Str "right"))))))
+
+(coalton-toplevel
+  (define-type (SameIndex :a :b)
+    (declare SameRefl (SameIndex :x :x)))
+
+  (declare cast-with-witness (SameIndex :a :b * :a -> :b))
+  (define (cast-with-witness witness x)
+    (match witness ((SameRefl) x)))
+
+  (define-type (ValueTag :a)
+    (declare IntegerTag (ValueTag Integer))
+    (declare StringTag (ValueTag String)))
+
+  (repr :transparent)
+  (define-type ProofLeft (ProofLeft Integer))
+  (repr :transparent)
+  (define-type ProofRight (ProofRight Integer))
+  (define-type (ProofTag :a)
+    (declare LeftProof (ProofTag ProofLeft))
+    (declare RightProof (ProofTag ProofRight)))
+  (define-class (ProofValue :a) (proof-value :a))
+  (define-instance (ProofValue ProofLeft) (define proof-value (ProofLeft 42)))
+  (define-instance (ProofValue ProofRight) (define proof-value (ProofRight 17)))
+  (declare named-proof (ProofValue :b => ProofTag :a * :b * :a -> Optional :a))
+  (define (named-proof tag _ x)
+    (let ((result (match tag
+                    ((LeftProof) (Some proof-value))
+                    ((RightProof) (Some x)))))
+      result))
+  (declare local-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (local-proof tag y x)
+    (let ((declare inner (ProofValue :b => ProofTag :a * :b * :a -> :a))
+          (inner (fn (tag _ x)
+                   (let ((r (match tag ((LeftProof) proof-value) ((RightProof) x)))) r))))
+      (inner tag y x)))
+  (declare closure-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (closure-proof tag _ x)
+    (let ((result
+            (match tag
+              ((LeftProof) (let ((get (fn (_) proof-value))) (get Unit)))
+              ((RightProof) x))))
+      result))
+  (declare wildcard-proof (ProofValue :b => ProofTag :a * :b * :a -> :a))
+  (define (wildcard-proof tag _ x)
+    (let ((result (match tag ((LeftProof) proof-value) (_ x))))
+      result))
+  (declare use-rank-proof
+    ((forall (:a :b) (ProofValue :b => ProofTag :a * :b * :a -> :a)) -> ProofLeft))
+  (define (use-rank-proof f)
+    (f LeftProof (ProofRight 0) (ProofLeft 0)))
+  (declare rank-named-proof (Unit -> ProofLeft))
+  (define (rank-named-proof _)
+    (use-rank-proof
+     (fn (tag _b x)
+       (let ((result (match tag ((LeftProof) proof-value) ((RightProof) x))))
+         result))))
+  (declare rank-wildcard-proof (Unit -> ProofLeft))
+  (define (rank-wildcard-proof _)
+    (use-rank-proof
+     (fn (tag _b x)
+       (let ((result (match tag ((LeftProof) proof-value) (_ x))))
+         result))))
+  (declare bare-index-return (ValueTag :a -> :a))
+  (define (bare-index-return tag)
+    (return (match tag ((IntegerTag) 1) ((StringTag) "s"))))
+
+  (define-class (ConvertIndex :a :b)
+    (convert-index (:a -> :b)))
+  (define-instance (ConvertIndex Integer String)
+    (define (convert-index x) (into x)))
+  (define-instance (ConvertIndex String Integer)
+    (define (convert-index x) (into (coalton/string:length x))))
+  (define-instance (ConvertIndex Integer Boolean)
+    (define (convert-index x) (== x 42)))
+
+  (define-class (ConvertIndexFd :a :b (:a -> :b))
+    (convert-index-fd (:a -> :b)))
+  (define-instance (ConvertIndexFd Integer String)
+    (define (convert-index-fd x) (into x)))
+  (define-instance (ConvertIndexFd String Integer)
+    (define (convert-index-fd x) (into (coalton/string:length x))))
+
+  (declare convert-tagged (ConvertIndex :a :b => ValueTag :a * :a -> :b))
+  (define (convert-tagged tag x)
+    (let ((result (match tag ((IntegerTag) (convert-index x)) ((StringTag) (convert-index x)))))
+      result))
+  (declare convert-tagged-fd (ConvertIndexFd :a :b => ValueTag :a * :a -> :b))
+  (define (convert-tagged-fd tag x)
+    (let ((result (match tag ((StringTag) (convert-index-fd x)) ((IntegerTag) (convert-index-fd x)))))
+      result))
+  (declare convert-witness (ConvertIndex :c :b => SameIndex :a :c * :a -> :b))
+  (define (convert-witness w x)
+    (match w ((SameRefl) (convert-index x))))
+  (declare convert-witness-fd (ConvertIndexFd :a :b => SameIndex :a :c * :c -> :b))
+  (define (convert-witness-fd w x)
+    (match w ((SameRefl) (convert-index-fd x))))
+
+  (define-type TaggedValue
+    (declare PackTagged (ValueTag :a * :a -> TaggedValue)))
+
+  (declare tagged-string (TaggedValue -> String))
+  (define (tagged-string packed)
+    (match packed
+      ((PackTagged (StringTag) value) value)
+      ((PackTagged (IntegerTag) _) "integer")))
+
+  (declare nested-tagged-string (TaggedValue -> String))
+  (define (nested-tagged-string (PackTagged tag value))
+    (match tag
+      ((StringTag) (return value))
+      ((IntegerTag) "integer")))
+
+  (declare value-for-tag (ValueTag :a -> :a))
+  (define (value-for-tag tag)
+    (match tag ((IntegerTag) (return 42)) ((StringTag) "string")))
+
+  (declare correlated-tags ((Tuple (ValueTag :a) (ValueTag :a)) -> Boolean))
+  (define (correlated-tags pair)
+    (match pair
+      ((Tuple (IntegerTag) _) True)
+      ((Tuple _ (StringTag)) False)))
+
+  (repr :transparent)
+  (define-type (TaggedBox :a) (declare MkTaggedBox (:a -> TaggedBox :a)))
+  (define (tagged-box-value (MkTaggedBox x)) x)
+
+  (define-type LinkLeft (declare LeftLink (LinkRight -> LinkLeft)))
+  (define-type LinkRight LinkEnd (RightLink LinkLeft)))
+
+(define-test gadt-evidence-and-representation ()
+  (is (== "same" (cast-with-witness SameRefl "same")))
+  (is (== "inside" (tagged-string (PackTagged StringTag "inside"))))
+  (is (== "integer" (tagged-string (PackTagged IntegerTag 42))))
+  (is (== "returned" (nested-tagged-string (PackTagged StringTag "returned"))))
+  (is (== 42 (value-for-tag IntegerTag)))
+  (is (== "string" (value-for-tag StringTag)))
+  (is (correlated-tags (Tuple IntegerTag IntegerTag)))
+  (is (not (correlated-tags (Tuple StringTag StringTag))))
+  (is (== "field" (tagged-box-value (MkTaggedBox "field"))))
+  (is (match (LeftLink LinkEnd)
+        ((LeftLink (LinkEnd)) True)
+        ((LeftLink (RightLink _)) False))))
+
+(coalton-toplevel
+  (define-type-alias CountIndex Integer)
+  (define-type-alias (SignatureBoxAlias :a) (SignatureBox :a))
+  (define-type-alias SignatureCountBox (SignatureBox CountIndex))
+  (define-type-alias (SignatureBoxCtor :a) (:a -> SignatureBoxAlias :a))
+  (define-type (SignatureBox :a)
+    (declare ZeroCountBox SignatureCountBox)
+    (declare CountBox (CountIndex -> SignatureBoxAlias CountIndex))
+    (declare AnyBox (forall ((:a Type)) (SignatureBoxCtor :a))))
+  (define-type PackedApplication
+    (declare PackApplication ((:f :a) -> PackedApplication)))
+
+  (declare signature-count (SignatureBox Integer -> Integer))
+  (define (signature-count box)
+    (match box
+      ((ZeroCountBox) 0)
+      ((CountBox n) n)
+      ((AnyBox n) n))))
+
+(define-test gadt-constructor-signature-scope ()
+  (is (== 0 (signature-count ZeroCountBox)))
+  (is (== 11 (signature-count (CountBox 11))))
+  (is (== 12 (signature-count (AnyBox 12))))
+  (is (match (PackApplication (Some "value")) ((PackApplication _) True))))
+
+(coalton-toplevel
+  (define-type (DispatchTag :a)
+    (declare DispatchInt (DispatchTag Integer))
+    (declare DispatchBool (DispatchTag Boolean)))
+  (define-type (DispatchPair :a)
+    (declare DispatchPair (DispatchTag :a * :a -> DispatchPair :a)))
+
+  (declare dispatch-bool (DispatchPair :a -> Boolean))
+  (define (dispatch-bool pair)
+    (match pair
+      ((DispatchPair (DispatchInt) _) True)
+      ((DispatchPair (DispatchBool) b) (if b True False))))
+
+  (declare measure-tagged ((Tuple (ValueTag :a) :a) -> Integer))
+  (define (measure-tagged pair)
+    (match pair
+      ((Tuple (IntegerTag) n) (+ n 1))
+      ((Tuple (StringTag) text) (as Integer (coalton/string:length text)))))
+
+  (declare unbox-with-dictionary (Eq :a => Gadt9 :a -> :a))
+  (define (unbox-with-dictionary box)
+    (match box ((Gadt9-Int n) n) ((Gadt9-Str text) text)))
+  (monomorphize)
+  (declare unbox-string (Gadt9 String -> String))
+  (define (unbox-string box) (unbox-with-dictionary box)))
+
+(define-test gadt-shared-projection-types ()
+  (is (not (noinline (dispatch-bool (DispatchPair DispatchBool False)))))
+  (is (noinline (dispatch-bool (DispatchPair DispatchBool True))))
+  (is (== 3 (noinline (measure-tagged (Tuple StringTag "abc")))))
+  (is (== 12 (noinline (measure-tagged (Tuple IntegerTag 11))))))
+
+(define-test gadt-monomorphized-branch-result ()
+  (is (== "abc" (unbox-string (Gadt9-Str "abc")))))
+
+(coalton-toplevel
+  (declare integer-tag-only (SameIndex :a Integer * ValueTag :a -> Boolean))
+  (define (integer-tag-only (SameRefl) (IntegerTag)) True)
+  (declare integer-tag-last (ValueTag :a * SameIndex :a Integer -> Boolean))
+  (define (integer-tag-last (IntegerTag) (SameRefl)) True))
+
+(define-test gadt-joint-parameter-coverage ()
+  (is (integer-tag-only SameRefl IntegerTag))
+  (is (integer-tag-last IntegerTag SameRefl)))
+
+(coalton-toplevel
+  (declare equal-via-right (Eq :b => SameIndex :a :b * :a * :b -> Boolean))
+  (define (equal-via-right witness x y)
+    (match witness ((SameRefl) (== x y))))
+
+  (declare compare-successor ((Eq :a) (Num :b) => SameIndex :a :b * :a * :b -> Boolean))
+  (define (compare-successor (SameRefl) x y)
+    (== x (+ y 1)))
+
+  (declare keep-right (SameIndex :a :b * :b -> :b))
+  (define (keep-right witness y)
+    (let z = (match witness ((SameRefl) y)))
+    z)
+
+  (declare carry-through-two (SameIndex :a :b * SameIndex :b :c * :a -> Optional :c))
+  (define (carry-through-two p q x)
+    (let ((result (match p ((SameRefl) (match q ((SameRefl) (Some x)))))))
+      result))
+
+  (declare use-rank-witness ((forall (:a :b) SameIndex :a :b * :b -> :b) -> String))
+  (define (use-rank-witness f) (f SameRefl "rank"))
+
+  (declare scoped-tag-value (forall (:a) (ValueTag :a * :a -> :a)))
+  (define (scoped-tag-value tag value)
+    (match tag
+      ((IntegerTag) (the :a value))
+      ((StringTag) (let ((declare keep (:a -> :a))
+                         (keep (fn (x) (the :a x))))
+                     (keep value)))))
+
+  (define (optional-box-value box)
+    (match box ((MkTaggedBox (Some x)) x) ((MkTaggedBox (None)) 0)))
+
+  (declare boxed-firsts (List (TaggedBox (Tuple Integer String)) -> List Integer))
+  (define (boxed-firsts boxes)
+    (map (fn ((MkTaggedBox (Tuple x _))) x) boxes))
+
+  (declare describe-payload (ValueTag :a * :a -> String))
+  (define (describe-payload tag value)
+    (match (Tuple value tag)
+      ((Tuple "hello" (StringTag)) "greeting")
+      ((Tuple _ (StringTag)) "string")
+      ((Tuple _ (IntegerTag)) "int"))))
+
+(define-test gadt-equality-preserves-enclosing-dictionaries-and-results ()
+  (is (equal-via-right SameRefl "same" "same"))
+  (is (not (equal-via-right SameRefl "left" "right")))
+  (is (compare-successor SameRefl 3 2))
+  (is (not (compare-successor SameRefl 3 3)))
+  (is (== "right" (keep-right SameRefl "right")))
+  (is (== (Some "nested") (noinline (carry-through-two SameRefl SameRefl "nested"))))
+  (is (== (Some False) (noinline (carry-through-two SameRefl SameRefl False))))
+  (is (== "rank" (use-rank-witness (fn (w y) (let z = (match w ((SameRefl) y))) z)))))
+
+(coalton-toplevel
+  (declare pass-nested-optional-witness
+           (Optional (SameIndex :a :b) -> Optional (SameIndex :a :b)))
+  (define (pass-nested-optional-witness o)
+    (match o
+      ((Some w) (match w ((SameRefl) (Some SameRefl))))
+      ((None) None)))
+
+  (declare pass-conditional-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (pass-conditional-witness b w)
+    (cond
+      (b (match w ((SameRefl) (Some SameRefl))))
+      (True None)))
+
+  (declare pass-boolean-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (pass-boolean-witness b w)
+    (match b
+      ((True) (match w ((SameRefl) (Some SameRefl))))
+      ((False) None)))
+
+  (declare branch-compare (Eq :b => Boolean * SameIndex :a :b * :a * :b -> Boolean))
+  (define (branch-compare b w x y)
+    (cond (b (match w ((SameRefl) (== x y)))) (True False)))
+
+  (declare return-optional-witness
+           (Boolean * SameIndex :a :b -> Optional (SameIndex :a :b)))
+  (define (return-optional-witness b w)
+    (when b (return (Some (match w ((SameRefl) SameRefl)))))
+    None)
+
+  (declare return-witness-pair
+           (Boolean * SameIndex :a :b * :a -> SameIndex :a :b * :b))
+  (define (return-witness-pair b w x)
+    (when b (return (match w ((SameRefl) (values SameRefl x)))))
+    (match w ((SameRefl) (values SameRefl x))))
+
+  (declare return-zero
+           (Boolean * SameIndex :a :b * coalton/cell:Cell Integer -> Void))
+  (define (return-zero b w count)
+    (when b (return (match w ((SameRefl) (values)))))
+    (coalton/cell:write! count 1)
+    (values))
+
+  (declare nested-return-witness
+           (forall (:a :b) (Boolean * SameIndex :a :b -> Integer)))
+  (define (nested-return-witness b w)
+    (let inner = (the (Void -> Optional (SameIndex :a :b))
+                     (fn ()
+                       (when b (return (match w ((SameRefl) (Some SameRefl)))))
+                       None)))
+    (match (inner) ((Some (SameRefl)) 1) ((None) 0))))
+
+(define-test gadt-result-proofs-do-not-use-an-unrelated-dictionary ()
+  (is (match (noinline (named-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((Some (ProofLeft n)) (== n 42)) (_ False)))
+  (is (match (noinline (named-proof RightProof (ProofLeft 0) (ProofRight 23)))
+        ((Some (ProofRight n)) (== n 23)) (_ False)))
+  (is (match (noinline (local-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (noinline (closure-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (named-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((Some (ProofLeft n)) (== n 42)) (_ False)))
+  (is (match (local-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((ProofLeft n) (== n 42))))
+  (is (match (closure-proof LeftProof (ProofRight 0) (ProofLeft 0))
+        ((ProofLeft n) (== n 42))))
+  (is (== 1 (noinline (bare-index-return IntegerTag))))
+  (is (== "s" (noinline (bare-index-return StringTag)))))
+
+(define-test gadt-result-constraints-use-the-supplied-dictionary ()
+  (is (== "42" (noinline (convert-tagged IntegerTag (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-tagged StringTag "abc"))))
+  (is (noinline (convert-tagged IntegerTag (the Integer 42))))
+  (is (== "42" (noinline (convert-tagged-fd IntegerTag (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-tagged-fd StringTag "abc"))))
+  (is (== "42" (noinline (convert-witness SameRefl (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-witness SameRefl "abc"))))
+  (is (== "42" (noinline (convert-witness-fd SameRefl (the Integer 42)))))
+  (is (== (the Integer 3) (noinline (convert-witness-fd SameRefl "abc")))))
+
+(define-test gadt-result-proofs-stay-in-their-rank-and-pattern-scopes ()
+  (is (match (noinline (rank-named-proof Unit)) ((ProofLeft n) (== n 42))))
+  (is (match (noinline (rank-wildcard-proof Unit)) ((ProofLeft n) (== n 42))))
+  (is (match (rank-named-proof Unit) ((ProofLeft n) (== n 42))))
+  (is (match (rank-wildcard-proof Unit) ((ProofLeft n) (== n 42))))
+  (is (match (noinline (wildcard-proof LeftProof (ProofRight 0) (ProofLeft 0)))
+        ((ProofLeft n) (== n 42))))
+  (is (match (noinline (wildcard-proof RightProof (ProofLeft 0) (ProofRight 23)))
+        ((ProofRight n) (== n 23)))))
+
+(define-test gadt-nonlocal-return-checks-its-own-result ()
+  (is (match (noinline (return-optional-witness True (the (SameIndex String String) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (return-optional-witness False (the (SameIndex Integer Integer) SameRefl))
+        ((None) True) (_ False)))
+  (let (values proof value) = (return-witness-pair True SameRefl "pair"))
+  (is (match proof ((SameRefl) (== value "pair"))))
+  (let (values proof2 value2) = (return-witness-pair False SameRefl 7))
+  (is (match proof2 ((SameRefl) (== value2 7))))
+  (let count = (coalton/cell:new 0))
+  (return-zero True (the (SameIndex String String) SameRefl) count)
+  (is (== 0 (coalton/cell:read count)))
+  (return-zero False (the (SameIndex Integer Integer) SameRefl) count)
+  (is (== 1 (coalton/cell:read count)))
+  (is (== 1 (noinline (nested-return-witness True (the (SameIndex String String) SameRefl)))))
+  (is (== 0 (nested-return-witness False (the (SameIndex Integer Integer) SameRefl)))))
+
+(define-test gadt-ordinary-branches-check-nested-results ()
+  (is (match (noinline (pass-nested-optional-witness (the (Optional (SameIndex String String)) (Some SameRefl))))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-nested-optional-witness (the (Optional (SameIndex Integer String)) None))
+        ((None) True) (_ False)))
+  (is (match (noinline (pass-conditional-witness True (the (SameIndex String String) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-conditional-witness False (the (SameIndex Integer Integer) SameRefl))
+        ((None) True) (_ False)))
+  (is (match (noinline (pass-boolean-witness True (the (SameIndex Boolean Boolean) SameRefl)))
+        ((Some (SameRefl)) True) ((None) False)))
+  (is (match (pass-boolean-witness False (the (SameIndex String String) SameRefl))
+        ((None) True) (_ False)))
+  (is (branch-compare True SameRefl "same" "same"))
+  (is (not (branch-compare False SameRefl 1 1)))
+  (is (== "rank" (use-rank-witness
+                  (fn (w y) (cond (True (match w ((SameRefl) y)))))))))
+
+(define-test gadt-nested-patterns-and-scoped-annotations ()
+  (is (== 7 (scoped-tag-value IntegerTag 7)))
+  (is (== "word" (scoped-tag-value StringTag "word")))
+  (is (== 3 (optional-box-value (MkTaggedBox (Some 3)))))
+  (is (== 0 (optional-box-value (MkTaggedBox None))))
+  (is (== (the (List Integer) [4]) (boxed-firsts [(MkTaggedBox (Tuple 4 "x"))])))
+  (is (== "greeting" (describe-payload StringTag "hello")))
+  (is (== "string" (describe-payload StringTag "other")))
+  (is (== "int" (describe-payload IntegerTag 2))))
+
+(coalton-toplevel
+  (declare make-indexed-int (Integer -> Gadt9 Integer))
+  (define (make-indexed-int n) (Gadt9-Int n))
+  (declare make-indexed-string (String -> Gadt9 String))
+  (define (make-indexed-string s) (Gadt9-Str s))
+  (declare box-for-tag (ValueTag :a -> Gadt9 :a))
+  (define (box-for-tag tag)
+    (match tag
+      ((IntegerTag) (noinline (make-indexed-int 41)))
+      ((StringTag) (noinline (make-indexed-string "text")))))
+  (declare read-inlined-box (ValueTag :a -> :a))
+  (define (read-inlined-box tag)
+    (match (inline (box-for-tag tag))
+      ((Gadt9-Int n) n) ((Gadt9-Str s) s)))
+
+  (declare read-local-box (Gadt9 String -> String))
+  (define (read-local-box box)
+    (let ((declare pick (Gadt9 :a -> :a))
+          (pick (fn (b) (match b ((Gadt9-Int n) n) ((Gadt9-Str s) s)))))
+      (pick box)))
+
+  (define-type PackedConsumer (declare WithConsumer (:a * (:a -> String) -> PackedConsumer)))
+
+  (declare consume-packed (PackedConsumer -> String))
+  (define (consume-packed (WithConsumer x f)) (f x))
+
+  (declare consume-packed-let (PackedConsumer -> String))
+  (define (consume-packed-let p)
+    (let (WithConsumer x f) = p)
+    (f x))
+
+  (declare consume-packed-do (Monad :m => :m PackedConsumer -> :m String))
+  (define (consume-packed-do input)
+    (do
+      ((WithConsumer x f) <- input)
+      (pure (<> (f x) (f x)))))
+
+  (abi :unpacked)
+  (declare open-twice (Boolean -> String))
+  (define (open-twice choose-int)
+    (let p = (if choose-int
+                 (WithConsumer (the Integer 9) (fn (n) (if (== n 9) "i" "?")))
+                 (WithConsumer False (fn (b) (if b "t" "f")))))
+    (let first-use = (match p ((WithConsumer x f) (f x))))
+    (let second-use = (match p ((WithConsumer x f) (f x))))
+    (<> first-use second-use)))
+
+(define-test gadt-specialized-match-rewrites ()
+  (is (== 41 (read-inlined-box IntegerTag)))
+  (is (== "text" (read-inlined-box StringTag)))
+  (is (== "local" (read-local-box (make-indexed-string "local")))))
+
+(define-test gadt-existential-allocation-join ()
+  (is (== "ii" (noinline (open-twice True))))
+  (is (== "ff" (noinline (open-twice False)))))
+
+(define-test gadt-existential-consumers-across-binders ()
+  (let integer = (WithConsumer (the Integer 41) (fn (n) (into (+ n 1)))))
+  (let boolean = (WithConsumer False (fn (b) (if b "yes" "no"))))
+  (is (== "42" (noinline (consume-packed integer))))
+  (is (== "no" (noinline (consume-packed boolean))))
+  (is (== "42" (noinline (consume-packed-let integer))))
+  (is (== "no" (noinline (consume-packed-let boolean))))
+  (is (== (Some "4242") (noinline (consume-packed-do (Some integer)))))
+  (is (== (Some "nono") (noinline (consume-packed-do (Some boolean)))))
+  (is (== (the (List String) ["4242" "nono"])
+          (noinline (consume-packed-do [integer boolean])))))
+
+(coalton-toplevel
+  (define-type (AppTerm :r)
+    (declare TermValue (:r -> AppTerm :r))
+    (declare TermApply (AppTerm (:x -> :r) * AppTerm :x -> AppTerm :r)))
+  (declare interpret-term (forall (:r) AppTerm :r -> :r))
+  (define (interpret-term term)
+    (match term
+      ((TermValue val) (the :r val))
+      ((TermApply f x) ((interpret-term f) (interpret-term x)))))
+
+  (declare scoped-box (forall (:a) ValueTag :a -> Gadt9 :a))
+  (define (scoped-box tag)
+    (the (Gadt9 :a)
+      (progn (match tag ((IntegerTag) (Gadt9-Int 41)) ((StringTag) (Gadt9-Str "box"))))))
+
+  (declare repeat-value (ValueTag :a * :a * Integer -> :a))
+  (define (repeat-value tag value count)
+    (rec again ((n count))
+      (match tag
+        ((IntegerTag) (if (== n 0) value (again (1- n))))
+        ((StringTag) (if (== n 0) value (again (1- n)))))))
+
+  (declare known-int-value (Gadt4 :a -> :a))
+  (define (known-int-value v)
+    (let (Gadt4-1 n) = v)
+    n)
+  (declare known-int-action (Gadt4 :a -> :a))
+  (define (known-int-action v)
+    (coalton/monad/identity:run-identity
+     (id (do ((Gadt4-1 n) <- (pure v))
+             (let (Gadt4-1 m) = (Gadt4-1 n))
+             (pure m)))))
+
+  (declare compare-after-bind (Eq :b => SameIndex :a :b * :a * :b -> Boolean))
+  (define (compare-after-bind proof x y)
+    (let (SameRefl) = proof)
+    (== x y)))
+
+(define-test gadt-polymorphic-self-calls-and-results ()
+  (is (== "yes" (interpret-term (TermApply (TermValue (fn (b) (if b "yes" "no"))) (TermValue True)))))
+  (is (== "box" (gadt9-unbox (scoped-box StringTag))))
+  (is (== 41 (gadt9-unbox (scoped-box IntegerTag))))
+  (is (== 7 (repeat-value IntegerTag 7 4)))
+  (is (== "loop" (repeat-value StringTag "loop" 4))))
+
+(define-test gadt-binder-continuations ()
+  (is (== 17 (known-int-value (Gadt4-1 17))))
+  (is (== 23 (known-int-action (Gadt4-1 23))))
+  (is (compare-after-bind SameRefl "equal" "equal"))
+  (is (not (compare-after-bind SameRefl 1 2))))
+
+(define-test gadt-do-bind-effect-order ()
+  (let trace = (cell:new ""))
+  (let ((visit (fn (action)
+                 (do
+                   ((Gadt4-1 n) <- (progn (cell:update! (fn (s) (<> s "A")) trace) action))
+                   (let (Gadt4-1 m) = (progn (cell:update! (fn (s) (<> s "B")) trace)
+                                             (Gadt4-1 n)))
+                   (pure m)))))
+    (is (== None (visit None)))
+    (is (== "A" (cell:read trace)))
+    (is (== (Some 17) (visit (Some (Gadt4-1 17)))))
+    (is (== "AAB" (cell:read trace)))))
+
+;;;
+;;; Handler and resumption patterns: literals guarded by a sibling GADT tag
+;;;
+
+(coalton-toplevel
+  (define-type (HandlerView :a)
+    (declare HandlerIntView (HandlerView Integer))
+    (declare HandlerTextView (HandlerView String)))
+
+  (define-type (HandlerBox :a)
+    (HandlerBox :a))
+
+  (define-type HandlerPayload
+    (declare HandlerWrap (:a * HandlerView :a -> HandlerPayload))
+    (declare HandlerWrapFirst (HandlerView :a * :a -> HandlerPayload))
+    (declare HandlerWrapBox (HandlerBox :a * HandlerView :a -> HandlerPayload)))
+
+  (define-exception HandlerNotice
+    (HandlerNotify HandlerPayload))
+
+  (define-resumption (HandlerUse HandlerPayload))
+
+  (declare catch-payload (HandlerPayload -> String))
+  (define (catch-payload p)
+    (catch (throw (HandlerNotify p))
+      ((HandlerNotify (HandlerWrap "hello" (HandlerTextView))) "text")
+      ((HandlerNotify (HandlerWrapFirst (HandlerTextView) "hello")) "text-first")
+      ((HandlerNotify (HandlerWrapBox (HandlerBox "hello") (HandlerTextView))) "boxed-text")
+      ((HandlerNotify (HandlerWrapBox (HandlerBox 42) (HandlerIntView))) "boxed-int")
+      ((HandlerNotify _) "other")))
+
+  (declare handle-payload (HandlerPayload -> String))
+  (define (handle-payload p)
+    (handle (throw (HandlerNotify p))
+      ((HandlerNotify (= q (HandlerWrap 42 (HandlerIntView))))
+       (match q
+         ((HandlerWrap k (HandlerIntView)) (into (+ k 1)))
+         (_ "unreachable")))
+      ((HandlerNotify (HandlerWrap (= s "hello") (HandlerTextView))) (<> s "!"))
+      ((HandlerNotify _) "other")))
+
+  (declare resume-payload (HandlerPayload -> String))
+  (define (resume-payload p)
+    (resumable (resume-to (HandlerUse p))
+      ((HandlerUse (HandlerWrap "hello" (HandlerTextView))) "text")
+      ((HandlerUse (HandlerWrapBox (HandlerBox 42) (HandlerIntView))) "boxed-int")
+      ((HandlerUse _) "other"))))
+
+(define-test gadt-handler-patterns-test-tags-before-literals ()
+  ;; Each payload reaches literal patterns whose type is only justified by
+  ;; another constructor's tag, including ones to the right of the literal.
+  (is (== "other" (catch-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "text" (catch-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "other" (catch-payload (HandlerWrapFirst HandlerIntView 42))))
+  (is (== "text-first" (catch-payload (HandlerWrapFirst HandlerTextView "hello"))))
+  (is (== "boxed-int" (catch-payload (HandlerWrapBox (HandlerBox 42) HandlerIntView))))
+  (is (== "boxed-text" (catch-payload (HandlerWrapBox (HandlerBox "hello") HandlerTextView))))
+  (is (== "other" (catch-payload (HandlerWrapBox (HandlerBox 7) HandlerIntView))))
+  (is (== "43" (handle-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "other" (handle-payload (HandlerWrap 7 HandlerIntView))))
+  (is (== "hello!" (handle-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "other" (resume-payload (HandlerWrap 42 HandlerIntView))))
+  (is (== "text" (resume-payload (HandlerWrap "hello" HandlerTextView))))
+  (is (== "boxed-int" (resume-payload (HandlerWrapBox (HandlerBox 42) HandlerIntView))))
+  (is (== "other" (resume-payload (HandlerWrapBox (HandlerBox "hello") HandlerTextView)))))
+
+;;; A structural pattern on a hidden field is typed by the field's tag alone,
+;;; so its payload literal waits for the sibling witness on either side. A
+;;; transparent wrapper has no tag at all, so even its constant field type
+;;; proves nothing until the witness matches.
+
+(coalton-toplevel
+  (repr :transparent)
+  (define-type HiddenLabel (HiddenLabel String))
+
+  (define-type (HiddenShape :a)
+    (declare HiddenOptShape (HiddenShape (Optional String)))
+    (declare HiddenListShape (HiddenShape (List String)))
+    (declare HiddenBoolShape (HiddenShape Boolean))
+    (declare HiddenLabelShape (HiddenShape HiddenLabel))
+    (declare HiddenIntShape (HiddenShape Integer)))
+
+  (define-type HiddenPacket
+    (declare HiddenPair (:a * HiddenShape :a -> HiddenPacket))
+    (declare HiddenPairFirst (HiddenShape :a * :a -> HiddenPacket)))
+
+  (define-exception HiddenNotice
+    (HiddenRaised HiddenPacket))
+
+  (define-resumption (HiddenUse HiddenPacket))
+
+  (declare catch-hidden (HiddenPacket -> String))
+  (define (catch-hidden p)
+    (catch (throw (HiddenRaised p))
+      ((HiddenRaised (HiddenPair (Some "alpha") (HiddenOptShape))) "some")
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (Some "alpha"))) "some-first")
+      ((HiddenRaised (HiddenPair (None) (HiddenOptShape))) "none")
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (None))) "none-first")
+      ((HiddenRaised (HiddenPair (Cons "x" _) (HiddenListShape))) "cons")
+      ((HiddenRaised (HiddenPairFirst (HiddenListShape) (Cons "x" _))) "cons-first")
+      ((HiddenRaised (HiddenPair (Nil) (HiddenListShape))) "nil")
+      ((HiddenRaised (HiddenPairFirst (HiddenListShape) (Nil))) "nil-first")
+      ((HiddenRaised (HiddenPair (HiddenLabel "text") (HiddenLabelShape))) "label")
+      ((HiddenRaised (HiddenPairFirst (HiddenLabelShape) (HiddenLabel "text"))) "label-first")
+      ((HiddenRaised _) "other")))
+
+  (declare handle-hidden (HiddenPacket -> String))
+  (define (handle-hidden p)
+    (handle (throw (HiddenRaised p))
+      ((HiddenRaised (HiddenPairFirst (HiddenOptShape) (Some (= s "alpha")))) (<> s "!"))
+      ((HiddenRaised (HiddenPair (Cons "x" (Cons s (Nil))) (HiddenListShape))) s)
+      ((HiddenRaised (HiddenPair (HiddenLabel (= s "text")) (HiddenLabelShape))) (<> s "?"))
+      ((HiddenRaised _) "other")))
+
+  (declare resume-hidden (HiddenPacket -> String))
+  (define (resume-hidden p)
+    (resumable (resume-to (HiddenUse p))
+      ((HiddenUse (HiddenPair (Some "alpha") (HiddenOptShape))) "some")
+      ((HiddenUse (HiddenPairFirst (HiddenListShape) (Cons "x" _))) "cons-first")
+      ((HiddenUse (HiddenPair (HiddenLabel "text") (HiddenLabelShape))) "label")
+      ((HiddenUse _) "other"))))
+
+(define-test gadt-handler-patterns-type-hidden-structures-by-witness ()
+  (is (== "some" (catch-hidden (HiddenPair (Some "alpha") HiddenOptShape))))
+  (is (== "some-first" (catch-hidden (HiddenPairFirst HiddenOptShape (Some "alpha")))))
+  (is (== "other" (catch-hidden (HiddenPair (Some "beta") HiddenOptShape))))
+  (is (== "none" (catch-hidden (HiddenPair None HiddenOptShape))))
+  (is (== "none-first" (catch-hidden (HiddenPairFirst HiddenOptShape None))))
+  (is (== "cons" (catch-hidden (HiddenPair ["x" "y"] HiddenListShape))))
+  (is (== "cons-first" (catch-hidden (HiddenPairFirst HiddenListShape ["x"]))))
+  (is (== "other" (catch-hidden (HiddenPair ["y"] HiddenListShape))))
+  (is (== "nil" (catch-hidden (HiddenPair Nil HiddenListShape))))
+  (is (== "nil-first" (catch-hidden (HiddenPairFirst HiddenListShape Nil))))
+  ;; A wrong tag must skip the payload comparison entirely.
+  (is (== "other" (catch-hidden (HiddenPair True HiddenBoolShape))))
+  (is (== "other" (catch-hidden (HiddenPairFirst HiddenBoolShape False))))
+  (is (== "alpha!" (handle-hidden (HiddenPairFirst HiddenOptShape (Some "alpha")))))
+  (is (== "y" (handle-hidden (HiddenPair ["x" "y"] HiddenListShape))))
+  (is (== "other" (handle-hidden (HiddenPair True HiddenBoolShape))))
+  (is (== "other" (handle-hidden (HiddenPairFirst HiddenBoolShape True))))
+  (is (== "some" (resume-hidden (HiddenPair (Some "alpha") HiddenOptShape))))
+  (is (== "cons-first" (resume-hidden (HiddenPairFirst HiddenListShape ["x"]))))
+  (is (== "other" (resume-hidden (HiddenPair False HiddenBoolShape))))
+  (is (== "other" (resume-hidden (HiddenPairFirst HiddenBoolShape True))))
+  (is (== "label" (catch-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "label-first" (catch-hidden (HiddenPairFirst HiddenLabelShape (HiddenLabel "text")))))
+  (is (== "other" (catch-hidden (HiddenPair (HiddenLabel "note") HiddenLabelShape))))
+  (is (== "other" (catch-hidden (HiddenPair 7 HiddenIntShape))))
+  (is (== "other" (catch-hidden (HiddenPairFirst HiddenIntShape 7))))
+  (is (== "text?" (handle-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "other" (handle-hidden (HiddenPair 7 HiddenIntShape))))
+  (is (== "label" (resume-hidden (HiddenPair (HiddenLabel "text") HiddenLabelShape))))
+  (is (== "other" (resume-hidden (HiddenPair 7 HiddenIntShape)))))
+
+;;; Without a witness dependency, handler tests run in source order: a user
+;;; comparison to the left of a mismatching tag still runs.
+
+(coalton-toplevel
+  (define-type Tally (Tally Integer))
+
+  (declare tally-comparisons (cell:Cell Integer))
+  (define tally-comparisons (cell:new 0))
+
+  (declare tally-log (cell:Cell (List Integer)))
+  (define tally-log (cell:new Nil))
+
+  (define-instance (Eq Tally)
+    (define (== (Tally a) (Tally b))
+      (cell:update! (fn (n) (+ n 1)) tally-comparisons)
+      (cell:push! tally-log a)
+      (== a b)))
+
+  (define-instance (Num Tally)
+    (define (+ (Tally a) (Tally b)) (Tally (+ a b)))
+    (define (- (Tally a) (Tally b)) (Tally (- a b)))
+    (define (* (Tally a) (Tally b)) (Tally (* a b)))
+    (define (fromInt n) (Tally n)))
+
+  (define-type TallySide TallyLeft TallyRight)
+
+  (define-exception TallyNotice
+    (TallyRaised Tally TallySide))
+
+  (repr :transparent)
+  (define-type TallyBox (TallyBox Tally))
+
+  (define-type (TallyShape :a)
+    (declare TallyShapeBox (TallyShape TallyBox))
+    (declare TallyShapeInt (TallyShape Integer)))
+
+  (define-type TallyPacket
+    (declare TallyPair (:a * :a * TallyShape :a -> TallyPacket)))
+
+  (define-exception TallyPacketNotice
+    (TallyPacketRaised TallyPacket))
+
+  ;; Both literals wait for the same witness; they still compare left to
+  ;; right once it matches.
+  (declare catch-tally-packet (TallyPacket -> String))
+  (define (catch-tally-packet p)
+    (catch (throw (TallyPacketRaised p))
+      ((TallyPacketRaised (TallyPair (TallyBox 1) (TallyBox 2) (TallyShapeBox))) "box")
+      ((TallyPacketRaised _) "other")))
+
+  (declare catch-tally (Tally * TallySide -> String))
+  (define (catch-tally n side)
+    (catch (throw (TallyRaised n side))
+      ((TallyRaised 1 (TallyLeft)) "left")
+      ((TallyRaised _ _) "other"))))
+
+(define-test handler-patterns-compare-in-source-order ()
+  (cell:write! tally-comparisons 0)
+  (is (== "other" (catch-tally (Tally 1) TallyRight)))
+  (is (== 1 (cell:read tally-comparisons)))
+  (is (== "left" (catch-tally (Tally 1) TallyLeft)))
+  (is (== 2 (cell:read tally-comparisons)))
+  (cell:write! tally-log Nil)
+  (is (== "box" (catch-tally-packet (TallyPair (TallyBox (Tally 1))
+                                                (TallyBox (Tally 2))
+                                                TallyShapeBox))))
+  (is (== [2 1] (cell:read tally-log)))
+  (cell:write! tally-log Nil)
+  (is (== "other" (catch-tally-packet (TallyPair 1 2 TallyShapeInt))))
+  (is (== Nil (cell:read tally-log))))
+
+;;;
+;;; Coverage evidence shared between columns
+;;;
+
+(coalton-toplevel
+  (define-type (CoverShape :a)
+    (declare CoverPairShape (CoverShape (Tuple Integer Integer)))
+    (declare CoverBoolShape (CoverShape Boolean)))
+
+  (define-type (CoverOptShape :a)
+    (declare CoverOptional (CoverOptShape (Optional Integer)))
+    (declare CoverBoolean (CoverOptShape Boolean)))
+
+  (define-type (CoverSame :a :b)
+    (declare CoverRefl (CoverSame :x :x)))
+
+  (define-type (CoverView :a)
+    (declare CoverIntView (CoverView Integer))
+    (declare CoverTextView (CoverView String)))
+
+  (declare cover-input-first (:a * CoverShape :a -> Integer))
+  (define (cover-input-first v s)
+    (match (Tuple v s)
+      ((Tuple (Tuple x y) (CoverPairShape)) (+ x y))
+      ((Tuple (True) (CoverBoolShape)) 1)
+      ((Tuple (False) (CoverBoolShape)) 0)))
+
+  (declare cover-reachable-fallback (:a * CoverOptShape :a -> Integer))
+  (define (cover-reachable-fallback x tag)
+    (match (Tuple x tag)
+      ((Tuple (Some n) (CoverOptional)) n)
+      ((Tuple (None) (CoverOptional)) 0)
+      (_ 99)))
+
+  (declare cover-transitive (CoverView :a * CoverSame :b Integer * CoverSame :a :b -> Boolean))
+  (define (cover-transitive (CoverIntView) (CoverRefl) (CoverRefl))
+    True))
+
+(define-test gadt-coverage-shares-column-evidence ()
+  (is (== 3 (cover-input-first (Tuple 1 2) CoverPairShape)))
+  (is (== 1 (cover-input-first True CoverBoolShape)))
+  (is (== 0 (cover-input-first False CoverBoolShape)))
+  (is (== 5 (cover-reachable-fallback (Some 5) CoverOptional)))
+  (is (== 0 (cover-reachable-fallback None CoverOptional)))
+  (is (== 99 (cover-reachable-fallback True CoverBoolean)))
+  (is (cover-transitive CoverIntView CoverRefl CoverRefl)))
+
+;;;
+;;; Obligations on existential types are solved inside their pattern scope
+;;;
+
+(coalton-toplevel
+
+  (define-struct (HiddenFieldRecord :a)
+    (payload :a)
+    (label String))
+
+  (define-type HiddenFieldBox
+    (declare HiddenFieldBox (HiddenFieldRecord :a -> HiddenFieldBox)))
+
+  ;; LABEL is a String in every instantiation, so it does not mention the
+  ;; existential type.
+  (declare hidden-field-label (HiddenFieldBox -> String))
+  (define (hidden-field-label (HiddenFieldBox r))
+    (.label r))
+
+  (declare hidden-field-match-label (HiddenFieldBox -> String))
+  (define (hidden-field-match-label box)
+    (match box
+      ((HiddenFieldBox r) (.label r))))
+
+  ;; Resolving NESTED exposes the existential type in the struct of the
+  ;; outer accessor, which must then be resolved as well.
+  (define-struct (HiddenFieldOuter :a)
+    (nested (HiddenFieldRecord :a)))
+
+  (define-type HiddenNestedBox
+    (declare HiddenNestedBox (HiddenFieldOuter :a -> HiddenNestedBox)))
+
+  (declare hidden-nested-label (HiddenNestedBox -> String))
+  (define (hidden-nested-label (HiddenNestedBox r))
+    (.label (.nested r)))
+
+  (define-type (HiddenMarker :a)
+    HiddenMarker)
+
+  (define-class (HiddenDescribe :a)
+    (hidden-describe (:a -> String)))
+
+  (define-instance (HiddenDescribe String)
+    (define (hidden-describe s) s))
+
+  (define-instance (HiddenDescribe (HiddenMarker :a))
+    (define (hidden-describe _) "marker"))
+
+  (define-type (ObligationPair :x :y)
+    (ObligationPair :x :y))
+
+  (define-instance (HiddenDescribe :y => HiddenDescribe (ObligationPair :x :y))
+    (define (hidden-describe (ObligationPair _ y))
+      (<> "pair " (hidden-describe y))))
+
+  (define-type HiddenMarkerBox
+    (declare HiddenMarkerBox (HiddenMarker :a -> HiddenMarkerBox)))
+
+  (define-type HiddenValueBox
+    (declare HiddenValueBox (:a -> HiddenValueBox)))
+
+  ;; The instance for HiddenMarker holds for every index.
+  (declare hidden-marker-describe (HiddenMarkerBox -> String))
+  (define (hidden-marker-describe (HiddenMarkerBox m))
+    (hidden-describe m))
+
+  ;; The instance context mentions only the outer type, so it is required of
+  ;; the caller instead of being dropped.
+  (declare hidden-pair-describe (HiddenDescribe :y => HiddenValueBox * :y -> String))
+  (define (hidden-pair-describe (HiddenValueBox x) y)
+    (hidden-describe (ObligationPair x y)))
+
+  (define (hidden-pair-describe-inferred (HiddenValueBox x) y)
+    (hidden-describe (ObligationPair x y)))
+
+  (define-type (HiddenTag :a)
+    (declare HiddenIntTag (HiddenTag Integer))
+    (declare HiddenStringTag (HiddenTag String)))
+
+  (define-struct (HiddenTagged :a)
+    (tag (HiddenTag :a))
+    (value :a))
+
+  ;; The field accessor in the scrutinee is resolved before its branches
+  ;; refine the struct's index.
+  (declare hidden-tagged-bump (HiddenTagged :a -> :a))
+  (define (hidden-tagged-bump s)
+    (match (.tag s)
+      ((HiddenIntTag) (+ (.value s) 1))
+      ((HiddenStringTag) (.value s)))))
+
+(define-test gadt-existential-obligations ()
+  (is (== "label" (hidden-field-label (HiddenFieldBox (HiddenFieldRecord Unit "label")))))
+  (is (== "match" (hidden-field-match-label (HiddenFieldBox (HiddenFieldRecord 3 "match")))))
+  (is (== "nested" (hidden-nested-label
+                    (HiddenNestedBox (HiddenFieldOuter (HiddenFieldRecord #\x "nested"))))))
+  (is (== "marker" (hidden-marker-describe (HiddenMarkerBox (the (HiddenMarker Integer) HiddenMarker)))))
+  (is (== "pair outer" (hidden-pair-describe (HiddenValueBox 1) "outer")))
+  (is (== "pair inferred" (hidden-pair-describe-inferred (HiddenValueBox Unit) "inferred")))
+  (is (== 42 (hidden-tagged-bump (HiddenTagged HiddenIntTag 41))))
+  (is (== "same" (hidden-tagged-bump (HiddenTagged HiddenStringTag "same")))))
+
+;;;
+;;; Nested subpatterns that need evidence from a later sibling
+;;;
+
+(coalton-toplevel
+
+  (define-type (NestUnit :a)
+    (declare NestMeters (NestUnit Integer))
+    (declare NestLabel (NestUnit String)))
+
+  (define-type (NestEq :a :b)
+    (declare NestRefl (NestEq :x :x)))
+
+  (define-type (NestCell :a)
+    (NestCell :a))
+
+  ;; The unit tag sits inside a cell in the first field; only the second
+  ;; field says which index it has.
+  (define-type NestReading
+    (declare NestReading (NestCell (NestUnit :t) * :t * NestEq :t Integer -> NestReading)))
+
+  (declare nest-reading-total (NestReading -> Integer))
+  (define (nest-reading-total r)
+    (match r
+      ((NestReading (NestCell (NestMeters)) n (NestRefl)) (+ n 1000))))
+
+  (declare nest-cell-value (NestCell (NestUnit :t) * :t * NestEq :t String -> String))
+  (define (nest-cell-value (NestCell (NestLabel)) s (NestRefl))
+    s)
+
+  (define-type (NestLamp :a)
+    (declare NestOn (NestLamp Boolean))
+    (declare NestCount (NestLamp Integer)))
+
+  (define-type (NestShape :a)
+    (declare NestBoolShape (NestShape (NestLamp Boolean)))
+    (declare NestIntShape (NestShape (NestLamp Integer))))
+
+  ;; Each field holds the proof for the other field's lamp.
+  (define-type NestCrate
+    (declare NestCrate (Tuple :a (NestShape :b) * Tuple :b (NestShape :a) -> NestCrate)))
+
+  (declare nest-crate-tag (NestCrate -> String))
+  (define (nest-crate-tag c)
+    (match c
+      ((NestCrate (Tuple (NestOn) (NestIntShape)) (Tuple (NestCount) (NestBoolShape))) "crossed")
+      (_ "other"))))
+
+(define-test gadt-nested-subpattern-evidence ()
+  (is (== 1042 (nest-reading-total (NestReading (NestCell NestMeters) 42 NestRefl))))
+  (is (== "kept" (nest-cell-value (NestCell NestLabel) "kept" NestRefl)))
+  (is (== "crossed" (nest-crate-tag (NestCrate (Tuple NestOn NestIntShape) (Tuple NestCount NestBoolShape)))))
+  (is (== "other" (nest-crate-tag (NestCrate (Tuple NestCount NestBoolShape) (Tuple NestOn NestIntShape))))))

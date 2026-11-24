@@ -53,6 +53,8 @@
   (write-string (%class-name env symbol) stream))
 
 (defun %write-default-tyvar (stream ty)
+  (when (tyvar-existential-p ty)
+    (write-string "<existential " stream))
   (cond
     (*coalton-pretty-print-tyvars*
      (let ((name (tycon-name (pprint-tvar ty))))
@@ -63,7 +65,9 @@
           (write-string (symbol-name name) stream)))))
     (t
      (write-string "#T" stream)
-     (write (tyvar-id ty) :stream stream))))
+     (write (tyvar-id ty) :stream stream)))
+  (when (tyvar-existential-p ty)
+    (write-char #\> stream)))
 
 (defun %write-default-keyword-name (stream keyword)
   (format stream ":~(~A~)" (symbol-name keyword)))
@@ -360,9 +364,14 @@
     (write-type-object object)))
 
 (defun type-to-string (object &optional env)
-  (with-pprint-variable-context ()
-    (with-output-to-string (stream)
-      (render-type-object stream object :env env))))
+  (flet ((render ()
+           (with-output-to-string (stream)
+             (render-type-object stream object :env env))))
+    (if *shared-type-names*
+        (with-pprint-variable-scope ()
+          (render))
+        (with-pprint-variable-context ()
+          (render)))))
 
 (defun pprint-type-object (stream object)
   (%call-with-existing-or-fresh-tyvar-context

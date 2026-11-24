@@ -420,27 +420,15 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
 
 (defmethod write-object-body ((backend html-backend) (object coalton-type))
   (with-html-string
-    (tc:with-pprint-variable-context ()
-      (let ((ctors (coalton-type-constructors object)))
-        (when ctors
-          (:ul :class "constructors-list"
-           (dolist (ctor ctors)
-             (let* ((ctor-name (tc:constructor-entry-name ctor))
-                    (ctor-source-name (lookup-constructor-source-name ctor-name))
-                    (ctor-type (tc:lookup-value-type entry:*global-environment* ctor-name))
-                    (ctor-docstring (source:docstring ctor))
-                    (args (type-constructor-args object ctor-type)))
-               (:li
-                (:code
-                 (:raw
-                  (cond (args
-                         (format nil "(~A~{ ~A~})"
-                                 (html-entities:encode-entities ctor-source-name)
-                                 (mapcar #'coalton/doc/markdown::to-markdown args)))
-                        (t
-                         (html-entities:encode-entities ctor-source-name)))))
-                (when ctor-docstring
-                  (:span :class "docstring" (:br) " - " (html-entities:encode-entities ctor-docstring))))))))))
+    (let ((ctors (coalton-type-constructors object)))
+      (when ctors
+        (:ul :class "constructors-list"
+         (dolist (ctor ctors)
+           (let ((ctor-docstring (source:docstring ctor)))
+             (:li
+              (:code (:raw (coalton/doc/markdown::to-markdown ctor)))
+              (when ctor-docstring
+                (:span :class "docstring" (:br) " - " (html-entities:encode-entities ctor-docstring)))))))))
     (:raw (doc-html object))
     (:raw (instances-html object))))
 

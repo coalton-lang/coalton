@@ -10,6 +10,12 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:rename-type-variables
+   #:prune-impossible-match-branches
+   #:specialize-node
+   #:specialize-match
+   #:open-known-constructor
+   #:unwrap-known-constructor-branch
+   #:pattern-contains-gadt-p
    #:inlined-some-operand
    #:inlined-cons-operands
    #:node-variables
@@ -24,11 +30,137 @@
 
 (in-package #:coalton-impl/codegen/transformations)
 
+(defun pattern-contains-gadt-p (pat env)
+  (typecase pat
+    (pattern-binding (pattern-contains-gadt-p (pattern-binding-pattern pat) env))
+    (pattern-constructor
+     (or (tc:constructor-entry-gadt-p (tc:lookup-constructor env (pattern-constructor-name pat)))
+         (some (lambda (child) (pattern-contains-gadt-p child env))
+               (pattern-constructor-patterns pat))))))
+
+(defun specialized-branch-substitutions (branch scrutinee env subs)
+  "Return the equations that hold if this already-typed row matches, or NIL
+as the second value if they contradict each other. These facts describe the
+success edge; they are not evidence for reordering tests within the row."
+  (declare (type match-branch branch)
+           (type tc:ty scrutinee)
+           (type tc:environment env)
+           (type tc:substitution-list subs)
+           (values tc:substitution-list boolean &optional))
+  (labels ((equate (left right)
+             (handler-case (setf subs (tc:unify-given subs left right :all))
+               (tc:coalton-internal-type-error ()
+                 (return-from specialized-branch-substitutions (values nil nil)))))
+           (walk (pat expected)
+             (typecase pat
+               (pattern-binding (walk (pattern-binding-pattern pat) expected))
+               (pattern-constructor
+                (let* ((scheme (tc:lookup-value-type env (pattern-constructor-name pat)))
+                       (args (tc:ty-scheme-instantiation-types scheme)))
+                  ;; Use this occurrence's names for the opened arguments.
+                  ;; Otherwise a concrete result index constrains only a
+                  ;; throwaway fresh variable, not the field used by the body.
+                  (loop :for (index . var) :in (pattern-constructor-openings pat)
+                        :do (setf (nth index args) var))
+                  (let ((ctor (tc:qualified-ty-type (tc:fresh-inst scheme args))))
+                    (equate (tc:function-return-type ctor) expected)
+                    (mapc #'walk (pattern-constructor-patterns pat) (tc:function-type-arguments ctor))))))))
+    (loop :for (left right) :on (match-branch-index-equalities branch) :by #'cddr
+          :do (equate left right))
+    (walk (match-branch-pattern branch) scrutinee)
+    (values subs t)))
+
+(defun specialize-match (match expr env)
+  "Move the alternatives of MATCH to EXPR, retaining only feasible cases."
+  (let* ((from (node-type (node-match-expr match)))
+         (to (node-type expr))
+         (moved (make-node-match :type (node-type match) :expr expr
+                                 :branches (node-match-branches match))))
+    ;; On this path EXPR supplies the original scrutinee. For example,
+    ;; sinking into a GADT alternative can expose Integer where the parent
+    ;; returned :A. Transport the patterns, their dictionaries and the body
+    ;; together; the literal's type isn't evidence about its operand.
+    (let ((subs (unless (tc:ty= from to) (tc:unify-given nil from to :all))))
+      (specialize-node moved subs env))))
+
+(defun open-known-constructor (pattern fields body env)
+  "For a known constructor application, open PATTERN using its producer's
+operand types. Return (VALUES SUBPATTERNS BODY SUCCESS BINDINGS). If physical
+operand types don't identify the binders (e.g. a lowered forall), keep the match."
+  (let ((openings (pattern-constructor-openings pattern))
+        (children (pattern-constructor-patterns pattern)))
+    (unless openings (return-from open-known-constructor (values children body t)))
+    (unless env (return-from open-known-constructor (values nil nil nil)))
+    (let* ((scheme (tc:lookup-value-type env (pattern-constructor-name pattern)))
+           (args (tc:ty-scheme-instantiation-types scheme))
+           (ctor (tc:fresh-inst scheme args))
+           (subs (handler-case
+                     (tc:match-list (mapcar #'node-type fields)
+                                    (tc:function-type-arguments (tc:qualified-ty-type ctor)))
+                   (tc:coalton-internal-type-error ()
+                     (return-from open-known-constructor (values nil nil nil)))))
+           (bindings (loop :for (index . var) :in openings
+                           :for formal := (nth index args)
+                           :for sub := (find formal subs :key #'tc:substitution-from :test #'tc:ty=)
+                           :unless sub :do (return-from open-known-constructor (values nil nil nil))
+                           :collect (tc:make-substitution :from var :to (tc:substitution-to sub)))))
+      (values (loop :for child :in children
+                    :collect (map-pattern child
+                                          :type-function (lambda (ty) (tc:apply-substitution bindings ty))
+                                          :test-function (lambda (test) (specialize-node test bindings env))))
+              (specialize-node body bindings env) t bindings))))
+
+(defun unwrap-known-constructor-branch (branch fields env)
+  (multiple-value-bind (children body opened bindings)
+      (open-known-constructor (match-branch-pattern branch) fields (match-branch-body branch) env)
+    (when opened
+      (make-match-branch :index-equalities (tc:apply-substitution bindings (match-branch-index-equalities branch))
+                         :pattern (first children) :body body))))
+
+(defun prune-impossible-match-branches (node env &optional givens)
+  "Remove match bodies ruled out by GIVENS, keeping any observable tests."
+  (traverse
+   node
+   (list
+    (action (:traverse node-match match subs)
+      (let ((expr (funcall *traverse* (node-match-expr match) subs)))
+        (make-node-match
+         :type (node-type match)
+         :expr expr
+         :branches
+         (loop :for branch :in (node-match-branches match)
+               :append
+               (multiple-value-bind (branch-subs possible-p)
+                   (specialized-branch-substitutions branch (node-type expr) env subs)
+                 ;; Even an impossible row can run a comparison to the left
+                 ;; of its refuting witness. Keep its tests, not its body.
+                 (when (or possible-p (pattern-has-user-test-p (match-branch-pattern branch)))
+                   (list (make-match-branch
+                          :pattern (map-pattern
+                                    (match-branch-pattern branch)
+                                    :test-function (lambda (test) (funcall *traverse* test subs)))
+                          :index-equalities (match-branch-index-equalities branch)
+                          :body (if possible-p
+                                    (funcall *traverse* (match-branch-body branch) branch-subs)
+                                    (make-node-lisp :type (node-type match) :vars nil
+                                                    :form '((error "Reached an impossible match alternative.")))))))))))))
+   givens))
+
+(defun specialize-node (node subs env)
+  "Copy NODE at SUBS without retyping operations in impossible alternatives.
+Without ENV, alternatives cannot be checked and are all kept."
+  (let ((live (if env (prune-impossible-match-branches node env subs) node)))
+    (if subs (tc:apply-substitution subs live) live)))
+
 (defmethod tc:apply-substitution (subs (node node))
   "Substitute type variables in the tree of `node` with other types
 specified in `subs`."
   (declare (type tc:substitution-list subs)
            (values node &optional))
+  (substitute-node-types node subs #'identity))
+
+(defun substitute-node-types (node subs binder-function)
+  ;; Only an alpha-renaming rewrites a constructor's existential binders.
   (traverse
    node
    (list
@@ -50,8 +182,10 @@ specified in `subs`."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
+                     :index-equalities (tc:apply-substitution subs (match-branch-index-equalities branch))
                      ;; Embedded tests have already been visited by TRAVERSE.
                      :pattern (map-pattern (match-branch-pattern branch)
+                                           :binder-function binder-function
                                            :type-function (lambda (type) (tc:apply-substitution subs type)))
                      :body (match-branch-body branch)))
                   (node-match-branches node)))))))
@@ -74,7 +208,9 @@ specified in `subs`."
       (action (:after node-match node)
         (dolist (branch (node-match-branches node))
           (alexandria:unionf tyvars
-                             (tc:type-variables (match-branch-pattern branch))))
+                             (tc:type-variables (match-branch-pattern branch)))
+          (alexandria:unionf tyvars
+                             (tc:type-variables (match-branch-index-equalities branch))))
         (values))))
     tyvars))
 
@@ -85,13 +221,9 @@ function `renamer`, returning the new node tree."
            (type function renamer)
            (values node &optional))
   (alexandria:if-let ((old-type-variables (tc:type-variables node)))
-    (tc:apply-substitution
-     (mapcar (lambda (tyvar)
-               (tc:make-substitution
-                :from tyvar
-                :to (funcall renamer tyvar)))
-             old-type-variables)
-     node)
+    (let ((subs (loop :for var :in old-type-variables
+                      :collect (tc:make-substitution :from var :to (funcall renamer var)))))
+      (substitute-node-types node subs (lambda (var) (tc:apply-substitution subs var))))
     node))
 
 (defun inlined-some-operand (node)

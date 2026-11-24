@@ -33,6 +33,9 @@
 (defmethod object-name ((object tc:ty-class-instance))
   (type-object-name object))
 
+(defmethod object-name ((ctor tc:constructor-entry))
+  (constructor-signature-string ctor #'identity #'object-name))
+
 (defmethod object-aname ((ty tc:tycon))
   (let ((tcon-name (tc:tycon-name ty)))
     (package-qualified-anchor

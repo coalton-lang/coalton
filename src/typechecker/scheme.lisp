@@ -367,12 +367,12 @@ and pretty printing can recover the programmer-written binders."
   (:method ((ty ty))
     (to-scheme (qualify nil ty))))
 
-(defun fresh-inst (ty-scheme)
-  "Instantiate TY-SCHEME with fresh type variables that preserve binder names."
+(defun fresh-inst (ty-scheme &optional (types (ty-scheme-instantiation-types ty-scheme)))
+  "Instantiate TY-SCHEME using fresh variables in scheme binder order."
   (declare (type ty-scheme ty-scheme)
+           (type tyvar-list types)
            (values qualified-ty &optional))
-  (let ((types (ty-scheme-instantiation-types ty-scheme))
-        (*instantiate-origin-map* nil))
+  (let ((*instantiate-origin-map* nil))
     (instantiate types (ty-scheme-type ty-scheme))))
 
 (defun scheme-predicates (ty-scheme)

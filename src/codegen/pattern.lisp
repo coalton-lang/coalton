@@ -8,6 +8,7 @@
   (:export
    #:pattern                            ; STRUCT
    #:pattern-type                       ; ACCESSOR
+   #:pattern-test-order                 ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR
@@ -31,8 +32,10 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-openings       ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
+   #:pattern-has-user-test-p            ; FUNCTION
    #:patterns-exhaustive-p              ; FUNCTION
    #:map-pattern                       ; FUNCTION
    ))
@@ -42,7 +45,10 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (type (util:required 'type) :type tc:ty :read-only t))
+  (type (util:required 'type) :type tc:ty :read-only t)
+  ;; Source order after moving the witnesses an observable comparison
+  ;; needs. Specializing a copy of the pattern must preserve this order.
+  (test-order nil :type (or null fixnum) :read-only t))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -84,10 +90,19 @@
             (:include pattern)
             (:copier nil))
   (name     (util:required 'name)     :type symbol       :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list :read-only t))
+  (patterns (util:required 'patterns) :type pattern-list :read-only t)
+  (openings nil :type list :read-only t))
 
 (defun pattern-variables (pattern)
   (delete-duplicates (pattern-variables-generic% pattern) :test #'eq))
+
+(defun pattern-has-user-test-p (pat)
+  "Does matching PAT potentially call a user-defined comparison?"
+  (etypecase pat
+    (pattern-literal (pattern-literal-test pat))
+    (pattern-constructor (some #'pattern-has-user-test-p (pattern-constructor-patterns pat)))
+    (pattern-binding (pattern-has-user-test-p (pattern-binding-pattern pat)))
+    ((or pattern-wildcard pattern-var) nil)))
 
 (defgeneric pattern-variables-generic% (pattern)
   (:method ((pattern pattern-var))
@@ -120,7 +135,8 @@
 ;;; Methods
 ;;;
 
-(defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity))
+(defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity)
+                                 (order-function #'pattern-test-order) (binder-function #'identity))
   "Copy PATTERN, mapping its types and embedded literal tests."
   (labels ((walk (pat)
              (let ((type (funcall type-function (pattern-type pat))))
@@ -129,6 +145,7 @@
                  (pattern-wildcard (make-pattern-wildcard :type type))
                  (pattern-literal
                   (make-pattern-literal :type type :value (pattern-literal-value pat)
+                                        :test-order (funcall order-function pat)
                                         :test (and (pattern-literal-test pat)
                                                    (funcall test-function (pattern-literal-test pat)))))
                  (pattern-binding
@@ -136,6 +153,9 @@
                                         :pattern (walk (pattern-binding-pattern pat))))
                  (pattern-constructor
                   (make-pattern-constructor :type type :name (pattern-constructor-name pat)
+                                            :test-order (funcall order-function pat)
+                                            :openings (loop :for (index . var) :in (pattern-constructor-openings pat)
+                                                            :collect (cons index (funcall binder-function var)))
                                             :patterns (mapcar #'walk (pattern-constructor-patterns pat))))))))
     (walk pattern)))
 
@@ -152,6 +172,7 @@
   (make-pattern-literal
    :type (tc:apply-substitution subs (pattern-type pattern))
    :value (pattern-literal-value pattern)
+   :test-order (pattern-test-order pattern)
    :test (and (pattern-literal-test pattern)
               (tc:apply-substitution subs (pattern-literal-test pattern)))))
 
@@ -175,6 +196,8 @@
   (make-pattern-constructor
    :type (tc:apply-substitution subs (pattern-type pattern))
    :name (pattern-constructor-name pattern)
+   :openings (pattern-constructor-openings pattern)
+   :test-order (pattern-test-order pattern)
    :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))))
 
 (defmethod tc:type-variables ((pattern pattern-var))
@@ -193,9 +216,10 @@
   (tc:type-variables (pattern-type pattern)))
 
 (defmethod tc:type-variables ((pattern pattern-constructor))
-  (remove-duplicates (alexandria:mappend #'tc:type-variables
-                                         (cons (pattern-type pattern)
-                                               (pattern-constructor-patterns pattern)))))
+  (union (mapcar #'cdr (pattern-constructor-openings pattern))
+         (alexandria:mappend #'tc:type-variables (cons (pattern-type pattern)
+                                                       (pattern-constructor-patterns pattern)))
+         :test #'tc:ty=))
 
 (defun codegen-pattern->typechecker-pattern (pattern)
   "Convert codegen PATTERN into a typechecker pattern."
@@ -239,9 +263,9 @@
   (declare (type pattern-list patterns)
            (type tc:ty type)
            (type tc:environment env)
-           (ignore type)
            (values boolean &optional))
   (pe:exhaustive-patterns-p
    (mapcar #'pe:collapse-binding-patterns
            (mapcar #'codegen-pattern->typechecker-pattern patterns))
-   env))
+   env
+   type))

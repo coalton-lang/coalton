@@ -144,14 +144,15 @@
           (handler-case
               (setf subs (tc:unify subs (accessor-to accessor) field-type))
             (tc:coalton-internal-type-error ()
-              (tc-error "Accessor type mismatch"
-                        (tc-note accessor
-                                 "field '~A' has type '~A', but expected '~A'"
-                                 (accessor-field accessor)
-                                 (type-object-string
-                                  (tc:apply-substitution subs field-type)
-                                  env)
-                                 (type-object-string (accessor-to accessor) env))))))
+              (tc:with-shared-type-names ()
+                (tc-error "Accessor type mismatch"
+                          (tc-note accessor
+                                   "field '~A' has type '~A', but expected '~A'"
+                                   (accessor-field accessor)
+                                   (type-object-string
+                                    (tc:apply-substitution subs field-type)
+                                    env)
+                                   (type-object-string (accessor-to accessor) env)))))))
 
         (values t subs)))))
 
