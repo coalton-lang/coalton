@@ -113,6 +113,49 @@
       (overlap) (define-instance (Missing Integer => Pick Integer) (define (pick _) 2))")
     (signals tc:tc-error (overlap-eval "(pick (the Integer 42))"))))
 
+(deftest overlapping-instance-arguments-converge ()
+  (with-overlap-environment
+    (overlap-compile
+     "(define-class (MeetDepth :a :b)
+        (meet-depth (:a * :b -> Integer)))
+      (overlap)
+      (define-instance (MeetDepth (List (List :a)) (List :b) => MeetDepth :a :b)
+        (define (meet-depth x y)
+          (+ 1 (meet-depth (Cons (Cons x Nil) Nil) (Cons y Nil)))))
+      (overlap)
+      (define-instance (MeetDepth :same :same)
+        (define (meet-depth _ _) 0))")
+    (overlap-compile
+     "(declare meet-three (Integer * List (List (List Integer)) -> Integer))
+      (define (meet-three x y) (meet-depth x y))
+      (declare meet-four (Integer * List (List (List (List Integer))) -> Integer))
+      (define (meet-four x y) (meet-depth x y))")
+    (is (= 3 (overlap-eval "(meet-three 0 Nil)")))
+    (is (= 4 (overlap-eval "(meet-four 0 Nil)")))
+    (signals tc:tc-error
+      (overlap-compile
+       "(declare never-meet (Integer * List (List (List String)) -> Integer))
+        (define (never-meet x y) (meet-depth x y))"))))
+
+(deftest overlapping-instance-arguments-converge-through-another-class ()
+  (with-overlap-environment
+    ;; Packed compares the whole operands. Their shared first component gives
+    ;; them the same height even before their second components meet.
+    (overlap-compile
+     "(define-class (Packed :p) (packed? (:p -> Boolean)))
+      (define-class (Step :p))
+      (overlap)
+      (define-instance (Step :p => Packed :p) (define (packed? _) True))
+      (overlap)
+      (define-instance (Packed (Tuple :same :same)) (define (packed? _) True))
+      (define-instance
+        (Packed (Tuple (Tuple (List (List :pad)) (List (List :a)))
+                       (Tuple (List (List :pad)) (List :b)))
+         => Step (Tuple (Tuple :pad :a) (Tuple :pad :b))))
+      (declare meet-packed (Integer * List (List (List (List Integer))) -> Boolean))
+      (define (meet-packed x y) (packed? (Tuple (Tuple y x) (Tuple y y))))")
+    (is (overlap-eval "(meet-packed 0 Nil)"))))
+
 (deftest overlap-keeps-functional-dependencies-consistent ()
   (signals tc:tc-error
     (check-coalton-types
