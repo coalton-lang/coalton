@@ -7,7 +7,7 @@
 
 (coalton-toplevel
   (declare two-arg-double-float-add
-     (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (inline)
   (define (two-arg-double-float-add x y)
     (lisp (-> Double-Float) (x y) (cl:+ x y))))
@@ -23,13 +23,13 @@
 
 (coalton-toplevel
   (declare same-tu-inline-double-float-add
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (inline)
   (define (same-tu-inline-double-float-add x y)
     (lisp (-> Double-Float) (x y) (cl:+ x y)))
 
   (declare same-tu-inline-double-float-add-caller
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (define (same-tu-inline-double-float-add-caller x y)
     (same-tu-inline-double-float-add x y)))
 
@@ -50,12 +50,12 @@
 
 (coalton-toplevel
   (declare method-for-inline-test-caller
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (define (method-for-inline-test-caller x y)
     (method-for-inline-test x y))
 
   (declare method-for-inline-test-caller-callsite-noinline
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (define (method-for-inline-test-caller-callsite-noinline x y)
     (noinline (method-for-inline-test x y))))
 
@@ -64,12 +64,12 @@
 
 (coalton-toplevel
   (declare keyword-nullary-pointfree-target
-    (&key (:offset Integer) -> Integer))
+           (&key (:offset Integer) -> Integer))
   (define (keyword-nullary-pointfree-target &key (offset 10))
     offset)
 
   (declare keyword-nullary-pointfree-run
-    ((Void -> Integer) -> Integer))
+           ((Void -> Integer) -> Integer))
   (define (keyword-nullary-pointfree-run f)
     (f))
 
@@ -82,12 +82,12 @@
 
 (coalton-toplevel
   (declare constrained-keyword-nullary-pointfree-target
-    (Num :a => &key (:offset :a) -> :a))
+           (Num :a => &key (:offset :a) -> :a))
   (define (constrained-keyword-nullary-pointfree-target &key (offset 10))
     offset)
 
   (declare constrained-keyword-nullary-pointfree-run
-    ((Void -> Integer) -> Integer))
+           ((Void -> Integer) -> Integer))
   (define (constrained-keyword-nullary-pointfree-run f)
     (f))
 
@@ -107,7 +107,7 @@
     (define nullary-method-alias-inline vector:new))
 
   (declare nullary-method-alias-inline-regression
-    (Void -> (vector:Vector U8)))
+           (Void -> (vector:Vector U8)))
   (define (nullary-method-alias-inline-regression)
     (nullary-method-alias-inline)))
 
@@ -134,12 +134,12 @@
 
 (coalton-toplevel
   (declare same-tu-specialized-generic-for-inline
-    (Num :a => :a * :a -> :a))
+           (Num :a => :a * :a -> :a))
   (define (same-tu-specialized-generic-for-inline x y)
     (+ x y))
 
   (declare same-tu-specialized-double-float-add
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (inline)
   (define (same-tu-specialized-double-float-add x y)
     (lisp (-> Double-Float) (x y) (cl:+ x y)))
@@ -149,7 +149,7 @@
               (Double-Float * Double-Float -> Double-Float))
 
   (declare same-tu-specialized-double-float-add-caller
-    (Double-Float * Double-Float -> Double-Float))
+           (Double-Float * Double-Float -> Double-Float))
   (define (same-tu-specialized-double-float-add-caller x y)
     (same-tu-specialized-generic-for-inline x y))
 
@@ -165,7 +165,7 @@
 
 (coalton-toplevel
   (declare keyword-call-shape-target
-    (Integer &key (:offset Integer) -> Integer))
+           (Integer &key (:offset Integer) -> Integer))
   (define (keyword-call-shape-target x &key (offset 1))
     (+ x offset))
 
@@ -285,7 +285,7 @@
 
 ;; Callsite inlining
 
-(coalton-toplevel 
+(coalton-toplevel
   (declare callsite-inlined-foo (UFix -> UFix))
   (define (callsite-inlined-foo x)
     (- (* 23 (+ 2 (* 4 x))) 1)))
@@ -296,7 +296,7 @@
   (define (callsite-inlined-foo-inline-caller)
     (inline (callsite-inlined-foo 1))))
 
-(coalton-toplevel 
+(coalton-toplevel
   (declare callsite-noinlined-foo (UFix -> UFix))
   (inline)
   (define (callsite-noinlined-foo x)
@@ -333,6 +333,21 @@
   (is (== 17 (inliner-subst-test-caller (Some 0) 17)))
   (is (== "ok" (inliner-subst-test-caller None "ok"))))
 
+;; Inlining copies a function body without renaming the binders inside
+;; it, so one identifier can be bound several times in a single tree.
+;; Constant propagation is keyed by identifier, so every re-binding
+;; must hide an outer constant of the same name.
+(coalton-toplevel
+  (declare inlined-shadowed-scalar-constant
+           (Integer -> Result String (Tuple Integer Integer)))
+  (define (inlined-shadowed-scalar-constant n)
+    (do (x <- (Ok n))
+        (pure 7)
+        (y <- (Ok n))
+        (pure (Tuple x y)))))
+
+(define-test inlined-binders-shadow-constants ()
+  (matches (Ok (Tuple 3 3)) (inlined-shadowed-scalar-constant 3)))
 
 (in-package #:coalton-tests)
 
@@ -402,14 +417,14 @@
 
 (deftest function-inline-error ()
   (signals coalton-impl/parser:parse-error
-    (check-coalton-types
-     "(inline myfun)
+           (check-coalton-types
+            "(inline myfun)
       (define (myfun x) x)")))
 
 (deftest method-inline-error ()
   (signals coalton-impl/parser:parse-error
-    (check-coalton-types
-     "(define-class (C :a)
+           (check-coalton-types
+            "(define-class (C :a)
         (m (:a * :a -> :a)))
       (define-instance (m Double-Float)
         (inline m)
@@ -471,7 +486,7 @@
        (null (ast:node-abstraction-keyword-params node))
        (typep (ast:node-abstraction-subexpr node)
               '(or ast:node-application
-                   ast:node-direct-application))))
+                ast:node-direct-application))))
 
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
@@ -692,7 +707,7 @@ redefinition."
               (ast:match-branch-body
                (branch-second-branch
                 (abstraction-second-branch
-                node))))))
+                 node))))))
     (let ((locally-node-1
             (fact-to-locally
              (coalton:lookup-code caller)))
