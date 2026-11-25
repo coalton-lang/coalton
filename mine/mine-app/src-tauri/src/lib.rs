@@ -48,6 +48,41 @@ struct PtyState {
     resizer: Mutex<Option<Box<dyn PtyResizer>>>,
 }
 
+/// Put CHILD in a job object that Windows terminates when mine-app exits.
+/// Processes that CHILD starts, such as the runtime, join the job too. The
+/// job handle is deliberately left open: closing it is what ends the job.
+#[cfg(windows)]
+fn end_with_app(child: &std::process::Child) -> Result<(), String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        ) != 0;
+        if !configured || AssignProcessToJobObject(job, child.as_raw_handle()) == 0 {
+            let error = std::io::Error::last_os_error().to_string();
+            CloseHandle(job);
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 fn set_utf8_locale(cmd: &mut CommandBuilder) {
     cmd.env("LANG", "en_US.UTF-8");
@@ -115,6 +150,11 @@ fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Re
 
         let stdin = child.stdin.take().ok_or("failed to take child stdin")?;
         let stdout = child.stdout.take().ok_or("failed to take child stdout")?;
+
+        // If mine-app is killed (for example by an installer replacing the
+        // app), nothing tells mine-core that its window is gone, and it would
+        // keep running along with the runtime it started.
+        let _ = end_with_app(&child);
 
         // Wait for the child process to exit and close the app.
         // On Windows, pipe EOF alone may not fire reliably.
