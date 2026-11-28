@@ -1140,8 +1140,6 @@ so their expressions unpack to OUTPUT-LAYOUT."
   (traverse
    node
    (list
-    (action (:traverse node-abstraction subnode)
-      subnode)
     (action (:traverse node-block subnode)
       (if (eq block-name (node-block-name subnode))
           subnode

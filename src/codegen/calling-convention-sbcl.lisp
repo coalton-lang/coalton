@@ -95,7 +95,7 @@ FLAT-OUTPUT-TYPES benefits from SBCL's `SB-INT:SPECIALIZED-XEP` calling conventi
     (list arg-types ret-type)))
 
 (defun emit-sbcl-unboxed-pre-declarations (worker-sym worker-node env)
-  "Return compile-time registration forms for an `:UNBOXED` worker in an SCC."
+  "Return compile-time and load-time registration forms for an `:UNBOXED` worker in an SCC."
   (declare (type symbol worker-sym)
            (type node-abstraction worker-node)
            (type tc:environment env)
@@ -104,9 +104,16 @@ FLAT-OUTPUT-TYPES benefits from SBCL's `SB-INT:SPECIALIZED-XEP` calling conventi
                 (sbcl-specialized-xep-available-p)
                 settings:*emit-type-annotations*))
       nil
-      (let ((xep-spec (sbcl-specialized-xep-spec worker-node env))
-            (compiler-defun-sym (find-symbol "%COMPILER-DEFUN" "SB-C")))
-        (list `(,compiler-defun-sym ',worker-sym t nil nil ',xep-spec)))))
+      (let* ((xep-spec (sbcl-specialized-xep-spec worker-node env))
+             (specialized-xep-sym (sbcl-specialized-xep-symbol))
+             (xep-name `(,specialized-xep-sym ,worker-sym ,@xep-spec))
+             (compiler-defun-sym (find-symbol "%COMPILER-DEFUN" "SB-C")))
+        (list `(declaim (ftype (function ,(first xep-spec) ,(second xep-spec))
+                               ,xep-name))
+              `(eval-when (:compile-toplevel)
+                 (,compiler-defun-sym ',worker-sym t nil nil ',xep-spec))
+              `(eval-when (:execute)
+                 (,compiler-defun-sym ',worker-sym nil nil nil ',xep-spec))))))
 
 (defun emit-sbcl-unboxed-defun (name node env &key local-notinline-names)
   "Emit an SBCL `SB-INT:SPECIALIZED-XEP` unboxed register worker definition."

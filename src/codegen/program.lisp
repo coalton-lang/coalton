@@ -362,29 +362,23 @@ redefinition cleans ENV."
                                                      :subexpr (node-abstraction-subexpr node)))
                               :collect (make-ftype-declaim spec-sym spec-node env))
                         (list (make-ftype-declaim name node env)))))))
-         ;; Emit any convention-specific compile-time pre-declarations for workers in the SCC.
+         ;; Emit any convention-specific pre-declarations for workers in the SCC.
          (worker-pre-declarations
-           (let ((compile-time-registrations nil))
-             (loop :for (name . node) :in bindings
-                   :when (node-abstraction-p node)
-                     :do (let* ((entry (tc:lookup-function env name :no-error t))
-                                (primary (and entry (best-function-entrypoint entry)))
-                                (desc (and primary
-                                           (find-calling-convention
-                                            (tc:entrypoint-spec-convention primary)
-                                            :no-error t))))
-                           (when desc
-                             (let* ((worker-sym (tc:entrypoint-spec-symbol primary))
-                                    (worker-node (tc:lookup-code env worker-sym)))
-                               (dolist (form (funcall (calling-convention-descriptor-emit-pre-declarations-fn desc)
-                                                      worker-sym
-                                                      worker-node
-                                                      env))
-                                 (push form compile-time-registrations))))))
-             (when compile-time-registrations
-               (list
-                `(eval-when (:compile-toplevel)
-                   ,@(nreverse compile-time-registrations))))))
+           (loop :for (name . node) :in bindings
+                 :when (node-abstraction-p node)
+                   :append (let* ((entry (tc:lookup-function env name :no-error t))
+                                  (primary (and entry (best-function-entrypoint entry)))
+                                  (desc (and primary
+                                             (find-calling-convention
+                                              (tc:entrypoint-spec-convention primary)
+                                              :no-error t))))
+                             (when desc
+                               (let* ((worker-sym (tc:entrypoint-spec-symbol primary))
+                                      (worker-node (tc:lookup-code env worker-sym)))
+                                 (funcall (calling-convention-descriptor-emit-pre-declarations-fn desc)
+                                          worker-sym
+                                          worker-node
+                                          env))))))
          ;; Keep emitted definitions globally inline for Lisp callers, but
          ;; stop inline SCC members from recursively inlining each other while
          ;; their own bodies are compiled.
