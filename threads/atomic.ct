@@ -73,6 +73,7 @@ correct for values of any type."))
       (cl:prog1 (atomic-cell-value atom)
         (backend:acquire-fence))))
 
+  (inline)
   (declare swap! (Atomic :a * :a -> :a))
   (define (swap! atom data)
     "Replace the value of `atom` with `data`, returning the old value."
@@ -82,18 +83,21 @@ correct for values of any type."))
           (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old data))
             (cl:return old))))))
 
+  (inline)
   (declare write! (Atomic :a * :a -> :a))
   (define (write! atom data)
     "Set the value of `atom` to `data`, returning `data`."
     (swap! atom data)
     data)
 
+  (inline)
   (declare compare-and-swap! (Atomic :a * :a * :a -> Boolean))
   (define (compare-and-swap! atom expected replacement)
     "If the value of `atom` is identical to `expected`, replace it with `replacement` and return `True`. Otherwise return `False` without changing `atom`. Values are compared by identity, not with `==`."
     (lisp (-> Boolean) (atom expected replacement)
       (cl:eq expected (backend:compare-and-swap (atomic-cell-value atom) expected replacement))))
 
+  (inline)
   (declare update-swap! ((:a -> :a) * Atomic :a -> :a))
   (define (update-swap! f atom)
     "Replace the value of `atom` with the result of applying `f` to it, atomically, and return the old value. If other threads update `atom` concurrently, `f` may be called more than once, so it should not have side effects."
@@ -106,6 +110,7 @@ correct for values of any type."))
             (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old updated))
               (cl:return old)))))))
 
+  (inline)
   (declare update! ((:a -> :a) * Atomic :a -> :a))
   (define (update! f atom)
     "Replace the value of `atom` with the result of applying `f` to it, atomically, and return the new value. If other threads update `atom` concurrently, `f` may be called more than once, so it should not have side effects."
@@ -118,11 +123,13 @@ correct for values of any type."))
             (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old updated))
               (cl:return updated)))))))
 
+  (inline)
   (declare push! (Atomic (List :elt) * :elt -> List :elt))
   (define (push! atom elt)
     "Atomically push `elt` onto the front of the list in `atom`, returning the new list."
     (update! (fn (lst) (Cons elt lst)) atom))
 
+  (inline)
   (declare pop! (Atomic (List :elt) -> Optional :elt))
   (define (pop! atom)
     "Atomically remove and return the first element of the list in `atom`, or return `None` if the list is empty."
@@ -134,11 +141,13 @@ correct for values of any type."))
       ((Cons elt _) (Some elt))
       ((Nil) None)))
 
+  (inline)
   (declare increment! (Num :counter => Atomic :counter -> :counter))
   (define (increment! atom)
     "Atomically add one to the value of `atom`, returning the new value."
     (update! (fn (x) (+ x 1)) atom))
 
+  (inline)
   (declare decrement! (Num :counter => Atomic :counter -> :counter))
   (define (decrement! atom)
     "Atomically subtract one from the value of `atom`, returning the new value."
