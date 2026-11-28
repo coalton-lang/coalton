@@ -123,6 +123,73 @@ If not, returns NIL"
       x
       (subseq x 0 16)))
 
+(defun fold-inlined-integer-conversion-lisp-node (node lisp-var constant-node env)
+  "If NODE is an inlined `fromInt` or `unsafe-cast` (`into`) `node-lisp` form
+applied to integer literal CONSTANT-NODE, fold it to a `node-literal`."
+  (declare (type node-lisp node)
+           (type symbol lisp-var)
+           (type node constant-node)
+           (type tc:environment env)
+           (values (or null node-literal) &optional))
+  (when (and (node-literal-p constant-node)
+             (integerp (node-literal-value constant-node))
+             (= 1 (length (node-lisp-form node))))
+    (let* ((val (node-literal-value constant-node))
+           (target-ty (node-type node))
+           (form (first (node-lisp-form node)))
+           (lisp-ty (tc:lisp-type target-ty env)))
+      (cond
+        ;; (lisp (-> :to) (x) x) from unsafe-cast / into, or (cl:identity x) from Num Integer
+        ((or (eq form lisp-var)
+             (and (consp form)
+                  (= 2 (length form))
+                  (eq 'cl:identity (first form))
+                  (eq lisp-var (second form))))
+         (when (ignore-errors (typep val lisp-ty))
+           (make-node-literal :type target-ty :value val)))
+
+        ;; (cl:values (cl:mod x modulus)) or (cl:mod x modulus) from unsigned fromInt
+        ((let ((mod-form (if (and (consp form)
+                                  (= 2 (length form))
+                                  (eq 'cl:values (first form)))
+                             (second form)
+                             form)))
+           (and (consp mod-form)
+                (= 3 (length mod-form))
+                (eq 'cl:mod (first mod-form))
+                (eq lisp-var (second mod-form))
+                (integerp (third mod-form))
+                (plusp (third mod-form))
+                (let ((wrapped (mod val (third mod-form))))
+                  (when (ignore-errors (typep wrapped lisp-ty))
+                    (make-node-literal :type target-ty :value wrapped))))))
+
+        ;; (cl:ldb (cl:byte 1 0) x) from Num Bit fromInt
+        ((and (consp form)
+              (= 3 (length form))
+              (eq 'cl:ldb (first form))
+              (equal '(cl:byte 1 0) (second form))
+              (eq lisp-var (third form)))
+         (make-node-literal :type target-ty :value (ldb (byte 1 0) val)))
+
+        ;; (%handle-Nbit-overflow x) from signed fromInt when in-bounds
+        ((and (consp form)
+              (= 2 (length form))
+              (symbolp (first form))
+              (eq lisp-var (second form))
+              (member (symbol-name (first form))
+                      '("%HANDLE-8BIT-OVERFLOW"
+                        "%HANDLE-16BIT-OVERFLOW"
+                        "%HANDLE-32BIT-OVERFLOW"
+                        "%HANDLE-64BIT-OVERFLOW"
+                        "%HANDLE-FIXNUM-OVERFLOW")
+                      :test #'string=)
+              (ignore-errors (typep val lisp-ty)))
+         (make-node-literal :type target-ty :value val))
+
+        (t
+         nil)))))
+
 (defun propagate-constants (node env &aux (mutated-variables (node-mutated-variables node)))
   "Propagate constant values without eliminating bindings assigned in NODE."
   (declare (optimize debug))
@@ -138,6 +205,13 @@ If not, returns NIL"
                (if (not (null x))
                    x
                    node)))
+
+           (propagate-constants-node-locally (node constant-bindings)
+             (declare (type node-locally node)
+                      (ignore constant-bindings))
+             (if (node-literal-p (node-locally-subexpr node))
+                 (copy-node (node-locally-subexpr node) (node-type node))
+                 node))
 
            (propagate-constants-node-bind (node constant-bindings)
              (declare (type node-bind node))
@@ -227,18 +301,34 @@ If not, returns NIL"
                                          (cons new-coalton-var constant-value))
                             :else
                               :do (push (cons lisp-var coalton-var) new-lisp-vars))))
-               (if let-bindings
-                   (make-node-let
-                    :type (node-type node)
-                    :bindings let-bindings
-                    :subexpr (make-node-lisp
-                              :type (node-type node)
-                              :vars new-lisp-vars
-                              :form (node-lisp-form node)))
-                   (make-node-lisp
-                    :type (node-type node)
-                    :vars new-lisp-vars
-                    :form (node-lisp-form node)))))
+               (cond
+                 ((and (= 1 (length (node-lisp-vars node)))
+                       (= 1 (length let-bindings)))
+                  (or (fold-inlined-integer-conversion-lisp-node
+                       node
+                       (caar new-lisp-vars)
+                       (cdar let-bindings)
+                       env)
+                      (make-node-let
+                       :type (node-type node)
+                       :bindings let-bindings
+                       :subexpr (make-node-lisp
+                                 :type (node-type node)
+                                 :vars (nreverse new-lisp-vars)
+                                 :form (node-lisp-form node)))))
+                 (let-bindings
+                  (make-node-let
+                   :type (node-type node)
+                   :bindings let-bindings
+                   :subexpr (make-node-lisp
+                             :type (node-type node)
+                             :vars (nreverse new-lisp-vars)
+                             :form (node-lisp-form node))))
+                 (t
+                  (make-node-lisp
+                   :type (node-type node)
+                   :vars (nreverse new-lisp-vars)
+                   :form (node-lisp-form node))))))
 
            (direct-application-better-infer-types (node constant-bindings)
              (declare (type node-direct-application node)
@@ -274,5 +364,6 @@ If not, returns NIL"
       (action (:traverse node-bind) #'propagate-constants-node-bind)
       (action (:traverse node-let) #'propagate-constants-node-let)
       (action (:after node-lisp) #'propagate-constants-node-lisp)
+      (action (:after node-locally) #'propagate-constants-node-locally)
       (action (:after node-direct-application) #'direct-application-better-infer-types))
      nil)))

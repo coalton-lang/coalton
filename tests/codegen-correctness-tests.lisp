@@ -1088,7 +1088,76 @@
         (let ((binding-val (cdar (ast:node-let-bindings lisp-caller-body))))
           (is (ast:node-literal-p binding-val))
           (is (= 7 (ast:node-literal-value binding-val)))))
-      (is (= 17 (codegen-test-eval "(lisp-rel-const 10)"))))))
+      (is (= 17 (codegen-test-eval "(lisp-rel-const 10)")))
+      ;; Fixed-width integer constants (U64, U32, I64, etc.) fold to literals
+      ;; and propagate into inline callees in release mode.
+      (codegen-test-compile
+       "(declare rel-u64 U64)
+        (define rel-u64 #x123456789abcdef0)
+        (declare rel-u32 U32)
+        (define rel-u32 #x89abcdef)
+        (inline)
+        (declare add-rel-u64 (U64 -> U64))
+        (define (add-rel-u64 x)
+          (+ x rel-u64))
+        (declare call-add-rel-u64 (U64 -> U64))
+        (define (call-add-rel-u64 x)
+          (add-rel-u64 x))
+        (declare read-rel-u32 (Void -> U32))
+        (define (read-rel-u32)
+          rel-u32)")
+      (let ((u64-const (tc:lookup-code entry:*global-environment* (intern "REL-U64")))
+            (u32-body (ast:node-abstraction-subexpr
+                       (tc:lookup-code entry:*global-environment* (intern "READ-REL-U32")))))
+        (is (ast:node-literal-p u64-const))
+        (is (= #x123456789abcdef0 (ast:node-literal-value u64-const)))
+        (is (ast:node-literal-p u32-body))
+        (is (= #x89abcdef (ast:node-literal-value u32-body))))
+      (is (= (1+ #x123456789abcdef0)
+             (codegen-test-eval "(call-add-rel-u64 1)"))))))
+
+(deftest codegen-calling-convention-return-from-rec-and-transparent-fn ()
+  (with-codegen-test-environment
+    (dolist (abi '(":unpacked" ":unboxed"))
+      (codegen-test-compile
+       (format nil
+               "(abi ~A)
+                (declare find-in-rec (U64 * U64 -> Optional U64))
+                (define (find-in-rec start target)
+                  (rec step ((i start))
+                    (cond
+                      ((> i target) None)
+                      ((== i target) (return (Some (* i 10))))
+                      (True (step (+ i 1))))))
+
+                (abi ~A)
+                (declare pair-from-transparent-fn (U64 -> Tuple U64 U64))
+                (define (pair-from-transparent-fn x)
+                  (let ((bail (fn :transparent-to-return (y)
+                                (when (> y 10)
+                                  (return (Tuple y (* y 2))))
+                                0)))
+                    (let _ = (bail x))
+                    (Tuple x 1)))
+
+                (abi ~A)
+                (declare ping-unboxed (F64 -> F64))
+                (abi ~A)
+                (declare pong-unboxed (F64 -> F64))
+                (define (ping-unboxed x)
+                  (if (<= x 0.0d0) x (pong-unboxed (- x 1.0d0))))
+                (define (pong-unboxed x)
+                  (if (<= x 0.0d0) x (ping-unboxed (- x 1.0d0))))"
+               abi abi abi abi))
+      (is (eq coalton:True
+              (codegen-test-eval "(== (Some 50) (find-in-rec 0 5))")))
+      (is (eq coalton:True
+              (codegen-test-eval "(== None (find-in-rec 6 5))")))
+      (is (eq coalton:True
+              (codegen-test-eval "(== (Tuple 20 40) (pair-from-transparent-fn 20))")))
+      (is (eq coalton:True
+              (codegen-test-eval "(== (Tuple 5 1) (pair-from-transparent-fn 5))")))
+      (is (= 0.0d0 (codegen-test-eval "(ping-unboxed 4.0d0)"))))))
 
 (deftest codegen-constant-propagation-preserves-assigned-let-bindings ()
   (let ((ty tc:*integer-type*)
