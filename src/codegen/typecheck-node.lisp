@@ -187,6 +187,9 @@ rigid skolem flags so post-translation codegen typechecking can unify physical s
            (values tc:substitution-list &optional))
   (unify-codegen-types subs expected-type actual-type env))
 
+(defvar *codegen-block-types* nil
+  "Association list mapping active `node-block` names to their expected `tc:ty`.")
+
 (defgeneric typecheck-node (expr env)
   (:documentation "Check that EXPR is valid. Currently only verifies
   that applied functions match their arguments.")
@@ -386,7 +389,12 @@ rigid skolem flags so post-translation codegen typechecking can unify physical s
   (:method ((expr node-return-from) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (typecheck-node (node-return-from-expr expr) env)
+    (let ((expr-ty (typecheck-node (node-return-from-expr expr) env))
+          (block-entry (assoc (node-return-from-name expr)
+                              *codegen-block-types*
+                              :test #'eq)))
+      (when block-entry
+        (unify-codegen-types nil (cdr block-entry) expr-ty env)))
     (node-type expr))
 
   (:method ((node node-throw) env)
@@ -404,12 +412,16 @@ rigid skolem flags so post-translation codegen typechecking can unify physical s
   (:method ((expr node-block) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (unify-codegen-types
-     nil
-     (node-type expr)
-     (typecheck-node (node-block-body expr) env)
-     env)
-    (node-type expr))
+    (let ((*codegen-block-types*
+            (acons (node-block-name expr)
+                   (node-type expr)
+                   *codegen-block-types*)))
+      (unify-codegen-types
+       nil
+       (node-type expr)
+       (typecheck-node (node-block-body expr) env)
+       env)
+      (node-type expr)))
 
   (:method ((expr node-field) env)
     (declare (type tc:environment env)

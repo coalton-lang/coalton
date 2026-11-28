@@ -34,30 +34,35 @@ must not lock a mutex that it already holds."))
   (define-type Mutex
     "A lock that at most one thread can hold at a time.")
 
+  (inline)
   (declare new (&key (:name String) -> Mutex))
   (define (new &key (name "Coalton mutex"))
     "Create a mutex that no thread holds. The `name` shows up in debugging tools."
     (lisp (-> Mutex) (name)
       (backend:make-mutex :name name)))
 
+  (inline)
   (declare lock! (Mutex -> Void))
   (define (lock! mutex)
     "Acquire `mutex`, waiting for as long as another thread holds it."
     (lisp (-> Void) (mutex)
       (backend:acquire-mutex mutex)))
 
+  (inline)
   (declare unlock! (Mutex -> Void))
   (define (unlock! mutex)
     "Release `mutex`, which the calling thread must hold."
     (lisp (-> Void) (mutex)
       (backend:release-mutex mutex)))
 
+  (inline)
   (declare try-lock! (Mutex -> Boolean))
   (define (try-lock! mutex)
     "Acquire `mutex` and return `True` if no thread holds it; otherwise return `False` immediately."
     (lisp (-> Boolean) (mutex)
       (cl:and (backend:try-acquire-mutex mutex) cl:t)))
 
+  (inline)
   (declare with-lock (forall ((:result Values)) (Mutex * (Void -> :result) -> :result)))
   (define (with-lock mutex thunk)
     "Call `thunk` while holding `mutex`, and return its values. The mutex is released however `thunk` exits."

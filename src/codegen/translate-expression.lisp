@@ -730,27 +730,65 @@ Returns a `node'.")
                            :value val)))))
 
           ;; Avoid casting INTEGER literals with FROMINT at runtime
-          ;; when the type is known, We can do that at comptime.  This
-          ;; is a temporary hack to get an easy performance boost but
-          ;; should be solved later with proper constant folding.
+          ;; when the type is known and the literal can be folded
+          ;; without changing runtime overflow behavior.
           (if (not (tc:tycon-p ty))
               (make-full-call)
               (case (tc:tycon-name ty)
                 (coalton:Integer
                  (make-node-literal :type tc:*integer-type*
                                     :value val))
+                (coalton:Bit
+                 (make-node-literal :type ty
+                                    :value (ldb (byte 1 0) val)))
+                (coalton:U8
+                 (make-node-literal :type ty
+                                    :value (mod val (ash 1 8))))
+                (coalton:U16
+                 (make-node-literal :type ty
+                                    :value (mod val (ash 1 16))))
+                (coalton:U32
+                 (make-node-literal :type ty
+                                    :value (mod val (ash 1 32))))
+                (coalton:U64
+                 (make-node-literal :type ty
+                                    :value (mod val (ash 1 64))))
+                (coalton:I8
+                 (if (typep val '(signed-byte 8))
+                     (make-node-literal :type ty :value val)
+                     (make-full-call)))
+                (coalton:I16
+                 (if (typep val '(signed-byte 16))
+                     (make-node-literal :type ty :value val)
+                     (make-full-call)))
+                (coalton:I32
+                 (if (typep val '(signed-byte 32))
+                     (make-node-literal :type ty :value val)
+                     (make-full-call)))
+                (coalton:I64
+                 (if (typep val '(signed-byte 64))
+                     (make-node-literal :type ty :value val)
+                     (make-full-call)))
                 (coalton:IFix
-                 (make-node-literal :type tc:*ifix-type*
-                                    :value val))
+                 (if (typep val 'fixnum)
+                     (make-node-literal :type tc:*ifix-type*
+                                        :value val)
+                     (make-full-call)))
                 (coalton:UFix
-                 (make-node-literal :type tc:*ufix-type*
-                                    :value val))
+                 (if (and (typep val 'fixnum) (not (minusp val)))
+                     (make-node-literal :type tc:*ufix-type*
+                                        :value val)
+                     (make-full-call)))
                 (coalton:F32
-                 (make-node-literal :type tc:*single-float-type*
-                                    :value (coerce val 'single-float)))
+                 (alexandria:if-let ((f (ignore-errors (coerce val 'single-float))))
+                   (make-node-literal :type tc:*single-float-type*
+                                      :value f)
+                   (make-full-call)))
                 (coalton:F64
-                 (make-node-literal :type tc:*double-float-type*
-                                    :value (coerce val 'double-float)))
+                 (alexandria:if-let ((f (ignore-errors (coerce val 'double-float))))
+                   (make-node-literal :type tc:*double-float-type*
+                                      :value f)
+                   (make-full-call)))
                 (otherwise
                  (make-full-call))))))))
 

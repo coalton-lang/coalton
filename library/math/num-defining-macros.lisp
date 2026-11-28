@@ -26,6 +26,7 @@
   (:export
    #:+fixnum-bits+
    #:+unsigned-fixnum-bits+
+   #:%wrap-signed
    #:define-eq
    #:define-ord
    #:define-num-checked
@@ -345,28 +346,33 @@
   `(define-instance (bits:Bits ,type)
      (inline)
      (define (bits:and a b)
-       (lisp (-> ,type) (a b)
-         (cl:logand a b)))
+       (coalton++:unsafe
+         (lisp (-> ,type) (a b)
+           (cl:logand a b))))
 
      (inline)
      (define (bits:or a b)
-       (lisp (-> ,type) (a b)
-         (cl:logior a b)))
+       (coalton++:unsafe
+         (lisp (-> ,type) (a b)
+           (cl:logior a b))))
 
      (inline)
      (define (bits:xor a b)
-       (lisp (-> ,type) (a b)
-         (cl:logxor a b)))
+       (coalton++:unsafe
+         (lisp (-> ,type) (a b)
+           (cl:logxor a b))))
 
      (inline)
      (define (bits:not a)
-       (lisp (-> ,type) (a)
-         (cl:lognot a)))
+       (coalton++:unsafe
+         (lisp (-> ,type) (a)
+           (cl:lognot a))))
 
      (inline)
      (define (bits:shift k a)
-       (lisp (-> ,type) (k a)
-         (cl:ash a k)))))
+       (coalton++:unsafe
+         (lisp (-> ,type) (k a)
+           (cl:ash a k))))))
 
 ;;; The fixed-width bodies are written so that SBCL's modular arithmetic
 ;;; turns them into machine instructions, and the guards on the shift
@@ -393,35 +399,40 @@
     `(define-instance (bits:Bits ,type)
        (inline)
        (define (bits:and a b)
-         (lisp (-> ,type) (a b)
-           (cl:logand a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logand a b))))
 
        (inline)
        (define (bits:or a b)
-         (lisp (-> ,type) (a b)
-           (cl:logior a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logior a b))))
 
        (inline)
        (define (bits:xor a b)
-         (lisp (-> ,type) (a b)
-           (cl:logxor a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logxor a b))))
 
        (inline)
        (define (bits:not a)
-         (lisp (-> ,type) (a)
-           (cl:logxor a ,mask)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a)
+             (cl:logxor a ,mask))))
 
        (inline)
        (define (bits:shift k a)
-         (lisp (-> ,type) (k a)
-           ,(cl:if (cl:< width 64)
-                   `(cl:if (cl:< k 0)
-                           (cl:ash a (cl:max k ,(cl:- width)))
-                           (cl:logand (cl:ash a (cl:min k ,width)) ,mask))
-                   `(cl:cond
-                      ((cl:< k 0) (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) 0))
-                      ((cl:< k ,width) (cl:logand (cl:ash a k) ,mask))
-                      (cl:t 0))))))))
+         (coalton++:unsafe
+           (lisp (-> ,type) (k a)
+             ,(cl:if (cl:< width 64)
+                     `(cl:if (cl:<= k 0)
+                             (cl:ash a (cl:max k ,(cl:- width)))
+                             (cl:logand (cl:ash a (cl:min k ,width)) ,mask))
+                     `(cl:cond
+                        ((cl:<= k 0) (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) 0))
+                        ((cl:< k ,width) (cl:logand (cl:ash a k) ,mask))
+                        (cl:t 0)))))))))
 
 (cl:defmacro define-bits-signed (type width)
   "Define a total `Bits` instance for TYPE, the two's-complement signed integers of WIDTH bits."
@@ -429,42 +440,47 @@
     `(define-instance (bits:Bits ,type)
        (inline)
        (define (bits:and a b)
-         (lisp (-> ,type) (a b)
-           (cl:logand a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logand a b))))
 
        (inline)
        (define (bits:or a b)
-         (lisp (-> ,type) (a b)
-           (cl:logior a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logior a b))))
 
        (inline)
        (define (bits:xor a b)
-         (lisp (-> ,type) (a b)
-           (cl:logxor a b)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a b)
+             (cl:logxor a b))))
 
        (inline)
        (define (bits:not a)
-         (lisp (-> ,type) (a)
-           (cl:lognot a)))
+         (coalton++:unsafe
+           (lisp (-> ,type) (a)
+             (cl:lognot a))))
 
        ;; Left shifts are done on the unsigned bit pattern because SBCL
        ;; compiles a masked unsigned ASH to a single shift instruction,
        ;; whereas masking a signed ASH directly allocates a bignum.
        (inline)
        (define (bits:shift k a)
-         (lisp (-> ,type) (k a)
-           ,(cl:if (cl:< width 64)
-                   `(cl:if (cl:< k 0)
-                           (cl:ash a (cl:max k ,(cl:- 1 width)))
-                           (%wrap-signed ,width
-                                         (cl:logand (cl:ash (cl:logand a ,mask) (cl:min k ,width))
-                                                    ,mask)))
-                   `(cl:cond
-                      ((cl:< k 0)
-                       (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) (cl:ash a ,(cl:- 1 width))))
-                      ((cl:< k ,width)
-                       (%wrap-signed ,width (cl:logand (cl:ash (cl:logand a ,mask) k) ,mask)))
-                      (cl:t 0))))))))
+         (coalton++:unsafe
+           (lisp (-> ,type) (k a)
+             ,(cl:if (cl:< width 64)
+                     `(cl:if (cl:<= k 0)
+                             (cl:ash a (cl:max k ,(cl:- 1 width)))
+                             (%wrap-signed ,width
+                                           (cl:logand (cl:ash (cl:logand a ,mask) (cl:min k ,width))
+                                                      ,mask)))
+                     `(cl:cond
+                        ((cl:<= k 0)
+                         (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) (cl:ash a ,(cl:- 1 width))))
+                        ((cl:< k ,width)
+                         (%wrap-signed ,width (cl:logand (cl:ash (cl:logand a ,mask) k) ,mask)))
+                        (cl:t 0)))))))))
 
 ;;; Utility to define Default instances.
 (cl:defmacro define-default-num (type)
