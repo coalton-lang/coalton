@@ -22,6 +22,7 @@
    #:shift
    #:dpb
    #:ldb
+   #:bit-length
    #:ReverseBits
    #:reverse-bits
    #:reverse-n-bits))

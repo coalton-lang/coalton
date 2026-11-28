@@ -50,4 +50,43 @@ width of the type:
       (let ((mask (shift p field)))
         ;; Take the bits of the shifted NEW where MASK is set and the bits
         ;; of X elsewhere, without complementing MASK.
-        (xor x (and (xor (shift p new) x) mask))))))
+        (xor x (and (xor (shift p new) x) mask)))))
+
+  (inline)
+  (declare bit-length (coalton/math:Integral :a => :a -> UFix))
+  (define (bit-length x)
+    "The number of bits needed to represent `x` in two's complement without its sign bit:
+
+```
+(bit-length x) = (cl:integer-length (toInteger x))
+```
+
+For $x \\ge 0$, this is the smallest non-negative integer $k$ such that $x < 2^k$, so `(bit-length 0) = 0` and `(bit-length x) = 1 + (ilog 2 x)` for $x > 0$. For $x < 0$, `(bit-length x) = (bit-length (not x))`."
+    (let ((n (coalton/math:toInteger x)))
+      (coalton++:unsafe
+        (lisp (-> UFix) (n)
+          (cl:integer-length n))))))
+
+(cl:defmacro %define-bit-length-specialization (type)
+  (cl:let ((spec-name (alexandria:format-symbol cl:*package* "%~A-BIT-LENGTH" type)))
+    `(coalton-toplevel
+       (specialize bit-length ,spec-name (,type -> UFix))
+       (inline)
+       (declare ,spec-name (,type -> UFix))
+       (define (,spec-name x)
+         (coalton++:unsafe
+           (lisp (-> UFix) (x)
+             (cl:integer-length x)))))))
+
+(%define-bit-length-specialization Bit)
+(%define-bit-length-specialization U8)
+(%define-bit-length-specialization U16)
+(%define-bit-length-specialization U32)
+(%define-bit-length-specialization UFix)
+(%define-bit-length-specialization U64)
+(%define-bit-length-specialization I8)
+(%define-bit-length-specialization I16)
+(%define-bit-length-specialization I32)
+(%define-bit-length-specialization IFix)
+(%define-bit-length-specialization I64)
+(%define-bit-length-specialization Integer)

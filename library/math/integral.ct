@@ -10,6 +10,11 @@
    #:coalton/math/arith)
   (:import-from
    #:coalton/bits #:Bits)
+  (:import-from
+   #:coalton/math/num-defining-macros
+   #:+fixnum-bits+
+   #:+unsigned-fixnum-bits+
+   #:%wrap-signed)
   (:local-nicknames
    (#:bits #:coalton/bits))
   (:export
@@ -206,14 +211,17 @@ are floored and truncated division, respectively."
                                (cl:floor a n)))
          (values (fromInt d) m)))))
 
-(cl:defmacro %define-integral-native (type signed)
+(cl:defmacro %define-integral-native (type signed cl:&optional width)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
            (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
            (gcd (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-GCD")))
            (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
            (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^")))
            (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
-           (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
+           (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT")))
+           (lsh-ufix (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-UFIX-LSH")))
+           (rsh-ufix (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-UFIX-RSH")))
+           (mask (cl:and width (cl:1- (cl:ash 1 width)))))
     `(cl:progn 
        (%define-remainder-native ,type)
        
@@ -221,6 +229,49 @@ are floored and truncated division, respectively."
          (define-instance (Integral ,type)
            (inline)
            (define (toInteger x) (into x)))
+
+         (specialize lsh ,lsh-ufix (,type * UFix -> ,type))
+         (inline)
+         (declare ,lsh-ufix (,type * UFix -> ,type))
+         (define (,lsh-ufix x n)
+           (coalton++:unsafe
+             (lisp (-> ,type) (x n)
+               ,(cl:cond
+                  ((cl:null width)
+                   `(cl:ash x n))
+                  ((cl:not signed)
+                   (cl:if (cl:< width 64)
+                          `(cl:logand (cl:ash x (cl:min n ,width)) ,mask)
+                          `(cl:if (cl:< n ,width)
+                                  (cl:logand (cl:ash x n) ,mask)
+                                  0)))
+                  (cl:t
+                   (cl:if (cl:< width 64)
+                          `(%wrap-signed ,width
+                                         (cl:logand (cl:ash (cl:logand x ,mask) (cl:min n ,width))
+                                                    ,mask))
+                          `(cl:if (cl:< n ,width)
+                                  (%wrap-signed ,width
+                                                (cl:logand (cl:ash (cl:logand x ,mask) n) ,mask))
+                                  0)))))))
+
+         (specialize rsh ,rsh-ufix (,type * UFix -> ,type))
+         (inline)
+         (declare ,rsh-ufix (,type * UFix -> ,type))
+         (define (,rsh-ufix x n)
+           (coalton++:unsafe
+             (lisp (-> ,type) (x n)
+               ,(cl:cond
+                  ((cl:null width)
+                   `(cl:ash x (cl:- n)))
+                  (signed
+                   `(cl:ash x (cl:- (cl:min n ,(cl:1- width)))))
+                  ((cl:< width 64)
+                   `(cl:ash x (cl:- (cl:min n ,width))))
+                  (cl:t
+                   `(cl:if (cl:< n ,width)
+                           (cl:ash x (cl:- n))
+                           0))))))
 
          (specialize even? ,even? (,type -> Boolean))
          (inline)
@@ -289,17 +340,17 @@ are floored and truncated division, respectively."
                   (lisp (-> ,type) (a) (cl:isqrt a))))))))))
 
 (%define-integral-native Integer cl:t)
-(%define-integral-native I8 cl:t)
-(%define-integral-native I16 cl:t)
-(%define-integral-native I32 cl:t)
-(%define-integral-native I64 cl:t)
-(%define-integral-native IFix cl:t)
-(%define-integral-native Bit cl:nil)
-(%define-integral-native U8 cl:nil)
-(%define-integral-native U16 cl:nil)
-(%define-integral-native U32 cl:nil)
-(%define-integral-native U64 cl:nil)
-(%define-integral-native UFix cl:nil)
+(%define-integral-native I8 cl:t 8)
+(%define-integral-native I16 cl:t 16)
+(%define-integral-native I32 cl:t 32)
+(%define-integral-native I64 cl:t 64)
+(%define-integral-native IFix cl:t #.+fixnum-bits+)
+(%define-integral-native Bit cl:nil 1)
+(%define-integral-native U8 cl:nil 8)
+(%define-integral-native U16 cl:nil 16)
+(%define-integral-native U32 cl:nil 32)
+(%define-integral-native U64 cl:nil 64)
+(%define-integral-native UFix cl:nil #.+unsigned-fixnum-bits+)
 (%define-remainder-native Fraction)
 (%define-remainder-native F32)
 (%define-remainder-native F64)
